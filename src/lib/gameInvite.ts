@@ -2,6 +2,7 @@ import { hasTauri } from '../ipc/tauri'
 import { claimGameInvites, setGameInvite } from '../ipc/commands'
 import { useLobby } from '../state/lobbyMode'
 import { setScreen, showToast } from '../state/ui'
+import { t } from '../i18n'
 
 export function openGameCard(slug: string): void {
   useLobby.setState({ hubTarget: { pack: slug } })
@@ -13,7 +14,7 @@ export function openGameFromLink(slug: string, code: string): void {
   openGameCard(slug)
   if (!code) return
   void setGameInvite(slug, code).catch((e) =>
-    showToast('Не удалось сохранить код приглашения — открой ссылку ещё раз: ' + e, 'error'),
+    showToast(t('Не удалось сохранить код приглашения — открой ссылку ещё раз: {error}', { error: String(e) }), 'error'),
   )
 }
 

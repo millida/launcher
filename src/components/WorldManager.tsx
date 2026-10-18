@@ -19,19 +19,36 @@ import {
   worldDetails,
   type WorldInfo,
 } from '../ipc/commands'
+import { t, useT } from '../i18n'
 
 const MODE_NAMES: Record<string, string> = {
-  survival: 'Выживание',
-  creative: 'Творческий',
-  adventure: 'Приключение',
-  spectator: 'Наблюдатель',
+  get survival() {
+    return t('Выживание')
+  },
+  get creative() {
+    return t('Творческий')
+  },
+  get adventure() {
+    return t('Приключение')
+  },
+  get spectator() {
+    return t('Наблюдатель')
+  },
 }
 
 const DIFFICULTY_NAMES: Record<string, string> = {
-  peaceful: 'Мирная',
-  easy: 'Лёгкая',
-  normal: 'Обычная',
-  hard: 'Сложная',
+  get peaceful() {
+    return t('Мирная')
+  },
+  get easy() {
+    return t('Лёгкая')
+  },
+  get normal() {
+    return t('Обычная')
+  },
+  get hard() {
+    return t('Сложная')
+  },
 }
 
 interface Props {
@@ -48,6 +65,7 @@ interface Props {
 }
 
 export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport, onCount }: Props) {
+  const t = useT()
   const [worlds, setWorlds] = useState<WorldInfo[]>([])
   const [backups, setBackups] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -100,7 +118,7 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
 
   return (
     <>
-      {worlds.length === 0 ? empty ?? <p className="faint-note">Миров пока нет</p> : null}
+      {worlds.length === 0 ? empty ?? <p className="faint-note">{t('Миров пока нет')}</p> : null}
       <div className="wm-list">
         {worlds.map((w) => {
           const mine = backupsOf(w.folder)
@@ -114,9 +132,9 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                 <span className="wm-title">
                   <b>
                     {w.name}
-                    {w.hardcore ? <span className="wm-tag danger">Хардкор</span> : null}
-                    {w.cheats ? <span className="wm-tag">Читы</span> : null}
-                    {w.unreadable ? <span className="wm-tag danger">Файл мира повреждён</span> : null}
+                    {w.hardcore ? <span className="wm-tag danger">{t('Хардкор')}</span> : null}
+                    {w.cheats ? <span className="wm-tag">{t('Читы')}</span> : null}
+                    {w.unreadable ? <span className="wm-tag danger">{t('Файл мира повреждён')}</span> : null}
                   </b>
                   <span className="wm-meta">
                     {[
@@ -125,7 +143,7 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                       w.version,
                       fmtSize(w.sizeBytes),
                       agoText(w.lastPlayed),
-                      mine.length ? mine.length + ' бэкапов' : '',
+                      mine.length ? t('{n} бэкапов', { n: mine.length }) : '',
                     ]
                       .filter(Boolean)
                       .join(' · ')}
@@ -136,11 +154,11 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                   disabled={w.unreadable}
                   onClick={() => onPlay(w.folder, w.name)}
                 >
-                  <Icon id="i-play" /> Играть
+                  <Icon id="i-play" /> {t('Играть')}
                 </button>
                 <button
                   className="icon-btn"
-                  aria-label="Ещё"
+                  aria-label={t('Ещё')}
                   aria-expanded={expanded}
                   onClick={() => {
                     setOpen(expanded ? '' : w.folder)
@@ -157,29 +175,29 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                       <input
                         value={rename}
                         maxLength={64}
-                        placeholder="Название мира"
+                        placeholder={t('Название мира')}
                         onChange={(e) => setRename(e.target.value)}
                       />
                     </div>
                     <button
                       className="btn sm secondary"
                       disabled={busy === w.folder || !rename.trim() || rename.trim() === w.name || w.unreadable}
-                      onClick={() => run(w.folder, renameWorld(profile, w.folder, rename.trim()), 'Мир переименован')}
+                      onClick={() => run(w.folder, renameWorld(profile, w.folder, rename.trim()), t('Мир переименован'))}
                     >
-                      Переименовать
+                      {t('Переименовать')}
                     </button>
                   </div>
                   {w.seed ? (
                     <div className="wm-row">
-                      <span className="set-val">Сид: {w.seed}</span>
+                      <span className="set-val">{t('Сид: {seed}', { seed: w.seed })}</span>
                       <button
                         className="btn sm ghost"
                         onClick={() => {
                           void navigator.clipboard?.writeText(w.seed).catch(() => {})
-                          showToast('Сид скопирован', 'ok')
+                          showToast(t('Сид скопирован'), 'ok')
                         }}
                       >
-                        Скопировать
+                        {t('Скопировать')}
                       </button>
                     </div>
                   ) : null}
@@ -187,45 +205,45 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                     <button
                       className="btn sm secondary"
                       disabled={busy === w.folder}
-                      onClick={() => run(w.folder, backupWorld(profile, w.folder), 'Бэкап готов')}
+                      onClick={() => run(w.folder, backupWorld(profile, w.folder), t('Бэкап готов'))}
                     >
-                      <Icon id="i-download" /> Бэкап
+                      <Icon id="i-download" /> {t('Бэкап')}
                     </button>
                     <button
                       className="btn sm secondary"
                       disabled={busy === w.folder}
-                      onClick={() => run(w.folder, exportWorld(profile, w.folder), 'Мир сохранён в архив')}
+                      onClick={() => run(w.folder, exportWorld(profile, w.folder), t('Мир сохранён в архив'))}
                     >
-                      <Icon id="i-box2" /> В архив
+                      <Icon id="i-box2" /> {t('В архив')}
                     </button>
                     <button
                       className="btn sm secondary"
                       disabled={busy === w.folder}
-                      onClick={() => run(w.folder, duplicateWorld(profile, w.folder), 'Копия мира создана')}
+                      onClick={() => run(w.folder, duplicateWorld(profile, w.folder), t('Копия мира создана'))}
                     >
-                      <Icon id="i-copy" /> Копия
+                      <Icon id="i-copy" /> {t('Копия')}
                     </button>
                     <button className="btn sm ghost" onClick={() => void openWorldFolder(profile, w.folder)}>
-                      <Icon id="i-folder" /> Папка
+                      <Icon id="i-folder" /> {t('Папка')}
                     </button>
                     <button
                       className="btn sm danger"
                       disabled={busy === w.folder}
                       onClick={() => {
                         void uiConfirm(
-                          'Удалить мир «' + w.name + '» вместе со всем прогрессом? Отменить будет нельзя.',
-                          { title: 'Удаление мира', confirmLabel: 'Удалить' },
+                          t('Удалить мир «{name}» вместе со всем прогрессом? Отменить будет нельзя.', { name: w.name }),
+                          { title: t('Удаление мира'), confirmLabel: t('Удалить') },
                         ).then((ok) => {
-                          if (ok) run(w.folder, deleteWorld(profile, w.folder), 'Мир удалён')
+                          if (ok) run(w.folder, deleteWorld(profile, w.folder), t('Мир удалён'))
                         })
                       }}
                     >
-                      <Icon id="i-trash" /> Удалить
+                      <Icon id="i-trash" /> {t('Удалить')}
                     </button>
                   </div>
                   {mine.length ? (
                     <div className="wm-backups">
-                      <span className="cap">Бэкапы</span>
+                      <span className="cap">{t('Бэкапы')}</span>
                       {mine.map((b) => (
                         <div className="wm-row" key={b}>
                           <span className="set-val" style={{ flex: 1 }}>
@@ -235,15 +253,15 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                             className="btn sm secondary"
                             disabled={busy === b}
                             onClick={() =>
-                              run(b, restoreWorldBackup(profile, b), 'Бэкап восстановлен отдельным миром')
+                              run(b, restoreWorldBackup(profile, b), t('Бэкап восстановлен отдельным миром'))
                             }
                           >
-                            Восстановить
+                            {t('Восстановить')}
                           </button>
                           <button
                             className="icon-btn del"
-                            aria-label="Удалить бэкап"
-                            onClick={() => run(b, deleteWorldBackup(profile, b), 'Бэкап удалён')}
+                            aria-label={t('Удалить бэкап')}
+                            onClick={() => run(b, deleteWorldBackup(profile, b), t('Бэкап удалён'))}
                           >
                             <Icon id="i-trash" />
                           </button>
@@ -262,9 +280,9 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
           className="btn sm secondary"
           style={{ width: '100%', marginTop: '8px' }}
           disabled={busy === 'import'}
-          onClick={() => run('import', importWorld(profile), 'Мир внесён в сборку')}
+          onClick={() => run('import', importWorld(profile), t('Мир внесён в сборку'))}
         >
-          <Icon id="i-upload" /> Мир из архива
+          <Icon id="i-upload" /> {t('Мир из архива')}
         </button>
       )}
     </>

@@ -1,6 +1,7 @@
 import { pickWallpaper } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import type { CustomWp } from '../state/wallpaper'
+import { t } from '../i18n'
 
 const PREVIEW_SIDE = 1920
 
@@ -11,7 +12,7 @@ async function shrunk(file: File): Promise<string> {
   canvas.width = Math.round(bitmap.width * scale)
   canvas.height = Math.round(bitmap.height * scale)
   const g = canvas.getContext('2d')
-  if (!g) throw new Error('canvas недоступен')
+  if (!g) throw new Error(t('canvas недоступен'))
   g.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
   return canvas.toDataURL('image/jpeg', 0.85)

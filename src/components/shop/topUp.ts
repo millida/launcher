@@ -4,6 +4,7 @@ import { purchaseFlow } from '../../lib/purchaseTrack'
 import { uiConfirm } from '../../state/confirm'
 import { showToast } from '../../state/ui'
 import { word } from './rarity'
+import { intlTag, t } from '../../i18n'
 
 /**
  * «Докупить фрагменты»: одна покупка для итогов сундука, «Собираются»,
@@ -15,9 +16,9 @@ export async function topUpFragments(
   price: number,
 ): Promise<{ balance: number; granted: ItemRef[] } | null> {
   const result = purchaseFlow('fragments', item.code, price, 'rubies')
-  const ok = await uiConfirm(item.name + ': докупить недостающие фрагменты за ' + price.toLocaleString('ru-RU') + ' ' + word(price), {
-    title: 'Докупить фрагменты',
-    confirmLabel: 'Докупить',
+  const ok = await uiConfirm(t('{name}: докупить недостающие фрагменты за {price} {word}', { name: item.name, price: price.toLocaleString(intlTag()), word: word(price) }), {
+    title: t('Докупить фрагменты'),
+    confirmLabel: t('Докупить'),
     danger: false,
   })
   if (!ok) {
@@ -30,7 +31,7 @@ export async function topUpFragments(
     return res
   } catch (e) {
     result(false, 'error', e)
-    showToast(apiErrorText(e, 'Магазин не ответил, попробуй позже'), 'error')
+    showToast(apiErrorText(e, t('Магазин не ответил, попробуй позже')), 'error')
     return null
   }
 }

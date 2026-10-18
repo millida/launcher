@@ -4,6 +4,7 @@ import { fmtN } from '../../lib/format'
 import { ANARCHY } from '../../lib/ownServer'
 import { useAnarchy } from '../../lib/anarchy'
 import { ANARCHY_BANNER, ANARCHY_HERO, LAVA_STRIP, OBSIDIAN_TILE } from './anarchyArt'
+import { useT } from '../../i18n'
 
 /** The players line follows the shelf rule: a number only when it is live and at least 20. */
 export const anarchyOnlineShown = (online: number | null | undefined): online is number => typeof online === 'number' && online >= 20
@@ -25,6 +26,7 @@ export function AnarchyArt({ className }: { className?: string }) {
  * starts the game.
  */
 export function AnarchyTile({ online, on, index, onClick }: { online: number | null; on?: boolean; index: number; onClick: () => void }) {
+  const t = useT()
   const an = useAnarchy()
   return (
     <button
@@ -35,7 +37,7 @@ export function AnarchyTile({ online, on, index, onClick }: { online: number | n
       data-pos={index}
       data-src="mode"
       aria-pressed={on}
-      aria-label={'Играть: ' + an.fullName}
+      aria-label={t('Играть: {name}', { name: an.fullName })}
       style={{ '--px-img': 'url("' + OBSIDIAN_TILE + '")' } as CSSProperties}
       onClick={onClick}
     >
@@ -46,19 +48,19 @@ export function AnarchyTile({ online, on, index, onClick }: { online: number | n
       <span className="an-head">
         <span className="an-co">MCRU.ME × Millida</span>
         <b className="an-title">
-          Полная
+          {t('Полная')}
           <br />
-          <em>анархия</em>
+          <em>{t('анархия')}</em>
         </b>
       </span>
       <span className="an-foot">
         <span className="an-play" aria-hidden="true">
-          <Icon id="i-play" /> Играть
+          <Icon id="i-play" /> {t('Играть')}
         </span>
         {anarchyOnlineShown(online) ? (
           <span className="an-on">
             <span className="ph-dot" aria-hidden="true"></span>
-            {fmtN(online)} играют
+            {t('{n} играют', { n: fmtN(online) })}
           </span>
         ) : null}
       </span>

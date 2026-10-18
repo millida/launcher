@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import type { SnapshotServer } from '../../lib/snapshot'
 import { loadFeedPage, type FeedSort } from './data'
+import { useT } from '../../i18n'
 
 /**
  * Бесконечная лента серверов рейтинга (правка владельца 23.09.2026, 19:42):
@@ -34,6 +35,7 @@ export function ServerFeed({
   /** Первая страница пришла: сколько всего нашлось (для аналитики поиска). */
   onFirstPage?: (total: number, search: string) => void
 }) {
+  const t = useT()
   const [list, setList] = useState<SnapshotServer[]>([])
   const [offset, setOffset] = useState(0)
   const [total, setTotal] = useState<number | null>(null)
@@ -97,12 +99,12 @@ export function ServerFeed({
         : null}
       {!busy && !failed && search && !list.length ? (
         <span className="hs-none">
-          <Icon id="i-search" /> Ничего не нашли
+          <Icon id="i-search" /> {t('Ничего не нашли')}
         </span>
       ) : null}
       {failed ? (
         <button className="btn md secondary ph-feed-retry" data-track="retry" onClick={() => more(offset)}>
-          <Icon id="i-restart" /> Повторить
+          <Icon id="i-restart" /> {t('Повторить')}
         </button>
       ) : null}
       <div ref={tail} className="ph-feed-tail" aria-hidden="true"></div>

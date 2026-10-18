@@ -1,6 +1,7 @@
 import { Icon } from '../Icon'
 import { priceLabel, type PremiumPack } from '../../lib/premium'
 import { useLobby } from '../../state/lobbyMode'
+import { useT } from '../../i18n'
 
 /*
  * «Другие популярные премиум-сборки» внизу премиум-страницы (владелец 06.10.2026):
@@ -26,6 +27,7 @@ const rank = (p: PremiumPack) => {
 }
 
 export function PremiumMore({ current }: { current: string }) {
+  const t = useT()
   const all = useLobby((s) => s.premium)
   const list = all
     .filter((p) => p.slug && p.slug !== current && p.coverUrl)
@@ -35,9 +37,9 @@ export function PremiumMore({ current }: { current: string }) {
     .map((x) => x.p)
   if (!list.length) return null
   return (
-    <section className="ppx-more" aria-label="Другие премиум-сборки">
+    <section className="ppx-more" aria-label={t('Другие премиум-сборки')}>
       <h2 className="ppx-more-h">
-        <Icon id="i-crown" /> Ещё популярные премиум-сборки
+        <Icon id="i-crown" /> {t('Ещё популярные премиум-сборки')}
       </h2>
       <div className="ppx-more-row">
         {list.map((p) => {
@@ -59,13 +61,13 @@ export function PremiumMore({ current }: { current: string }) {
                 <img src={p.coverUrl!} alt="" loading="lazy" draggable={false} />
                 {own ? null : (
                   <span className="ppx-more-ru">
-                    <Icon id="i-check" /> Полностью на русском
+                    <Icon id="i-check" /> {t('Полностью на русском')}
                   </span>
                 )}
               </span>
               <span className="ppx-more-body">
                 <b>{p.title}</b>
-                <small>{own ? 'Своя сборка студии' : 'Перевод, настройка и запуск в 1 клик'}</small>
+                <small>{own ? t('Своя сборка студии') : t('Перевод, настройка и запуск в 1 клик')}</small>
                 {price ? <em>{price}</em> : null}
               </span>
             </button>

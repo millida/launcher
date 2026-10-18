@@ -3,6 +3,7 @@ import { playSound } from '../../lib/sound'
 import { RARITY_NAMES, type ShopCard } from '../../lib/rubies'
 import { Countdown, ItemArt, leadCls, leadSpans, Price, toneStyle } from './parts'
 import { BuyBtn, type BuyProps } from './Storefront'
+import { useT } from '../../i18n'
 
 const KEY = 'm-night-flipped'
 
@@ -31,6 +32,7 @@ function saveFlipped(endsAt: string, codes: string[]) {
  * по очереди подпрыгивают с бликом. Слева — крупный таймер до конца рынка.
  */
 export function NightMarket({ endsAt, cards, onEnd, ...p }: { endsAt: string; cards: ShopCard[]; onEnd?: () => void } & BuyProps) {
+  const t = useT()
   const [flipped, setFlipped] = useState<string[]>(() => readFlipped(endsAt))
   const flip = (code: string) => {
     setFlipped((was) => {
@@ -47,12 +49,12 @@ export function NightMarket({ endsAt, cards, onEnd, ...p }: { endsAt: string; ca
     <div className="card sh-block sh-night" data-section="night_market">
       <div className="sh-grid">
         <div className={'sh-lead sh-night-lead ' + leadCls(cards.length)} style={leadSpans(cards.length)}>
-          <span className="sh-night-title">Ночной рынок</span>
+          <span className="sh-night-title">{t('Ночной рынок')}</span>
           <span className="sh-night-clock">
             <b>
               <Countdown to={endsAt} onEnd={onEnd} />
             </b>
-            <span>до закрытия</span>
+            <span>{t('до закрытия')}</span>
           </span>
           {closed.length > 1 ? (
             <button
@@ -65,10 +67,10 @@ export function NightMarket({ endsAt, cards, onEnd, ...p }: { endsAt: string; ca
                 playSound('success')
               }}
             >
-              Открыть все
+              {t('Открыть все')}
             </button>
           ) : (
-            <span className="sh-note">Скидки только для тебя</span>
+            <span className="sh-note">{t('Скидки только для тебя')}</span>
           )}
         </div>
         {cards.map((c, i) => {
@@ -84,9 +86,9 @@ export function NightMarket({ endsAt, cards, onEnd, ...p }: { endsAt: string; ca
               style={{ ...toneStyle(c.item), '--nc-i': Math.max(0, order), '--nc-n': Math.max(1, closed.length) } as CSSProperties}
             >
               <div className="sh-nc-in">
-                <button className="sh-nc-back" data-track="night_flip" onClick={() => flip(c.item.code)} aria-label="Открыть карту" tabIndex={open ? -1 : 0}>
+                <button className="sh-nc-back" data-track="night_flip" onClick={() => flip(c.item.code)} aria-label={t('Открыть карту')} tabIndex={open ? -1 : 0}>
                   <span className="sh-nc-glint" aria-hidden="true" />
-                  <span className="sh-nc-cta">Открыть</span>
+                  <span className="sh-nc-cta">{t('Открыть')}</span>
                 </button>
                 <div className="sh-nc-face" aria-hidden={!open}>
                   <span className="sh-off big">−{c.discountPct}%</span>

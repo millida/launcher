@@ -9,6 +9,7 @@ import type { HubPack, LiveMode } from './data'
 import type { SnapshotServer } from '../../lib/snapshot'
 import { hoursText } from './Hours'
 import { track } from '../../lib/telemetry'
+import { useT } from '../../i18n'
 
 /**
  * Поиск серверов вкладки «Мои серверы»: имя или адрес. Серверы — из
@@ -41,7 +42,7 @@ const NO_MODES: LiveMode[] = []
 export function HubSearch({
   packs = NO_PACKS,
   modes = NO_MODES,
-  placeholder = 'Сервер, сборка или режим',
+  placeholder,
   onServer,
   onMode,
   onPack,
@@ -53,6 +54,7 @@ export function HubSearch({
   onMode?: (cat: string) => void
   onPack?: (p: HubPack) => void
 }) {
+  const t = useT()
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const [servers, setServers] = useState<SnapshotServer[] | null>(null)
@@ -117,7 +119,7 @@ export function HubSearch({
         <Icon id="i-search" />
         <input
           value={q}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('Сервер, сборка или режим')}
           maxLength={80}
           onChange={(e) => {
             setQ(e.target.value)
@@ -130,13 +132,13 @@ export function HubSearch({
           }}
         />
         {q ? (
-          <button type="button" className="hs-clear" aria-label="Очистить" data-track="search_clear" onClick={() => setQ('')}>
+          <button type="button" className="hs-clear" aria-label={t('Очистить')} data-track="search_clear" onClick={() => setQ('')}>
             <Icon id="i-x" />
           </button>
         ) : null}
         {addr ? (
           <button type="button" className="btn md primary hs-go" data-sound="open" data-track="join_address" data-kind="address" data-src="server_search" onClick={() => pick(() => onServer(addrMode(addr)))}>
-            <Icon id="i-play" /> Зайти
+            <Icon id="i-play" /> {t('Зайти')}
           </button>
         ) : null}
       </label>
@@ -147,7 +149,7 @@ export function HubSearch({
               <span className="hs-ic">
                 <Icon id="i-server" />
               </span>
-              <b>Зайти на {addr}</b>
+              <b>{t('Зайти на {addr}', { addr })}</b>
             </button>
           ) : null}
           {servers === null ? (
@@ -169,7 +171,7 @@ export function HubSearch({
                 onClick={() => pick(() => onServer(serverMode(s)))}>
                 <span className="hs-ic">{s.logo ? <img src={s.logo} alt="" draggable={false} /> : <Icon id="i-server" />}</span>
                 <b>{s.name}</b>
-                <span className="hs-kind">Сервер</span>
+                <span className="hs-kind">{t('Сервер')}</span>
                 {s.isOnline && s.online >= 20 ? (
                   <span className="hs-meta">
                     <span className="ph-dot" aria-hidden="true"></span>
@@ -194,7 +196,7 @@ export function HubSearch({
                 <Icon id="i-grid" />
               </span>
               <b>{m.def.title}</b>
-              <span className="hs-kind">Режим</span>
+              <span className="hs-kind">{t('Режим')}</span>
             </button>
           ))}
           {foundPacks.map((p, i) => (
@@ -210,12 +212,12 @@ export function HubSearch({
               onClick={() => pick(() => onPack?.(p))}>
               <span className="hs-ic">{p.coverUrl ? <img src={p.coverUrl} alt="" draggable={false} /> : <Icon id="i-box2" />}</span>
               <b>{p.title}</b>
-              <span className="hs-kind">Сборка</span>
+              <span className="hs-kind">{t('Сборка')}</span>
             </button>
           ))}
           {nothing ? (
             <span className="hs-none">
-              <Icon id="i-search" /> Ничего не нашли
+              <Icon id="i-search" /> {t('Ничего не нашли')}
             </span>
           ) : null}
         </div>
@@ -230,7 +232,7 @@ export function HubSearch({
  */
 export function MyServers({
   skip,
-  title = 'Мои серверы',
+  title,
   limit = 6,
   onPlay,
 }: {
@@ -240,6 +242,7 @@ export function MyServers({
   limit?: number
   onPlay: (m: LobbyMode) => void
 }) {
+  const t = useT()
   const list = usePlayStats((s) => s.stats.servers)
   // Сервер из «Продолжить» здесь не повторяем.
   const recent = useMemo(
@@ -250,7 +253,7 @@ export function MyServers({
   return (
     <section className="ph-shelf ms">
       <div className="ph-shelf-head">
-        <h2>{title}</h2>
+        <h2>{title ?? t('Мои серверы')}</h2>
       </div>
       <div className={'ms-row' + (limit > 6 ? ' all' : '')} data-section="my_servers" data-src="my_servers">
         {recent.map((s, i) => (

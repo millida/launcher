@@ -3,6 +3,7 @@ import { api, hasMillidaAccount } from '../lib/api'
 import { encodeInvite } from '../lib/invite'
 import { openChat, openRoomChat } from './friends'
 import { setScreen, showToast } from './ui'
+import { t } from '../i18n'
 
 /**
  * «Позвать играть» (владелец 24.09.2026, 13:33): есть свой сервер Millida —
@@ -63,7 +64,7 @@ export async function loadMyServers(maxAgeMs = 60_000): Promise<MyServer[]> {
 export const inviteServer = (list: MyServer[]): MyServer | null =>
   list.find((x) => x.address && x.status === 'RUNNING') || list.find((x) => x.address) || null
 
-export const serverTitle = (s: MyServer) => s.name || 'Мой сервер'
+export const serverTitle = (s: MyServer) => s.name || t('Мой сервер')
 
 async function postInvite(t: InviteTarget, s: MyServer) {
   const text = encodeInvite(s.address || '', serverTitle(s).slice(0, 48), s.version)
@@ -75,16 +76,16 @@ async function postInvite(t: InviteTarget, s: MyServer) {
 
 const openTarget = (t: InviteTarget) => void (t.room ? openRoomChat(t.id, t.nick) : openChat(t.id, t.nick))
 
-export async function sendServerInvite(t: InviteTarget, s: MyServer): Promise<boolean> {
+export async function sendServerInvite(target: InviteTarget, s: MyServer): Promise<boolean> {
   try {
-    await postInvite(t, s)
+    await postInvite(target, s)
   } catch {
-    showToast('Приглашение не ушло — попробуй ещё раз', 'error')
+    showToast(t('Приглашение не ушло — попробуй ещё раз'), 'error')
     return false
   }
-  showToast('Позвали ' + t.nick + ' на «' + serverTitle(s) + '»', 'ok', undefined, {
-    label: 'Открыть чат',
-    run: () => openTarget(t),
+  showToast(t('Позвали {nick} на «{server}»', { nick: target.nick, server: serverTitle(s) }), 'ok', undefined, {
+    label: t('Открыть чат'),
+    run: () => openTarget(target),
   })
   return true
 }

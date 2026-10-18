@@ -7,6 +7,7 @@ import { copyPicture, savePictureAs, type PictureRef } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
+import { t, useT } from '../i18n'
 
 interface LightboxState {
   src: string
@@ -33,12 +34,12 @@ const clamp = (v: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, v))
 export async function copyPictureTo(ref: PictureRef) {
   if (!hasTauri()) {
     const ok = ref.url ? await copyText(ref.url) : false
-    showToast(ok ? 'Ссылка на картинку скопирована' : 'Не удалось скопировать', ok ? 'ok' : 'error')
+    showToast(ok ? t('Ссылка на картинку скопирована') : t('Не удалось скопировать'), ok ? 'ok' : 'error')
     return
   }
   try {
     await copyPicture(ref)
-    showToast('Картинка скопирована', 'ok')
+    showToast(t('Картинка скопирована'), 'ok')
   } catch (e) {
     showToast('' + e, 'error')
   }
@@ -47,7 +48,7 @@ export async function copyPictureTo(ref: PictureRef) {
 export async function savePictureTo(ref: PictureRef) {
   try {
     const out = await savePictureAs(ref)
-    if (out) showToast('Сохранено: ' + out, 'ok')
+    if (out) showToast(t('Сохранено: {path}', { path: out }), 'ok')
   } catch (e) {
     showToast('' + e, 'error')
   }
@@ -57,12 +58,12 @@ export async function savePictureTo(ref: PictureRef) {
 /// its right-click menu must not drift apart.
 export function pictureMenuItems(ref: PictureRef): ContextItem[] {
   const items: ContextItem[] = [
-    { id: 'copy', label: 'Копировать картинку', icon: 'i-copy', onPick: () => void copyPictureTo(ref) },
+    { id: 'copy', label: t('Копировать картинку'), icon: 'i-copy', onPick: () => void copyPictureTo(ref) },
   ]
   if (hasTauri()) {
     items.push({
       id: 'save',
-      label: 'Сохранить как…',
+      label: t('Сохранить как…'),
       icon: 'i-download',
       onPick: () => void savePictureTo(ref),
     })
@@ -70,11 +71,11 @@ export function pictureMenuItems(ref: PictureRef): ContextItem[] {
   if (ref.url) {
     items.push({
       id: 'link',
-      label: 'Копировать ссылку',
+      label: t('Копировать ссылку'),
       icon: 'i-link',
       onPick: () => {
         void copyText(ref.url || '').then((ok) =>
-          showToast(ok ? 'Ссылка скопирована' : 'Не удалось скопировать', ok ? 'ok' : 'error'),
+          showToast(ok ? t('Ссылка скопирована') : t('Не удалось скопировать'), ok ? 'ok' : 'error'),
         )
       },
     })
@@ -83,6 +84,7 @@ export function pictureMenuItems(ref: PictureRef): ContextItem[] {
 }
 
 export function ImageLightbox() {
+  const t = useT()
   const src = useLightbox((s) => s.src)
   const pic = useLightbox((s) => s.ref)
   const close = useLightbox((s) => s.close)
@@ -131,18 +133,18 @@ export function ImageLightbox() {
     >
       <div className="lightbox-top" onClick={(e) => e.stopPropagation()}>
         <div className="lightbox-bar">
-          <button className="lightbox-btn" aria-label="Отдалить" onClick={() => zoomTo(scale / STEP)}>
+          <button className="lightbox-btn" aria-label={t('Отдалить')} onClick={() => zoomTo(scale / STEP)}>
             <Icon id="i-minus" />
           </button>
           <span className="lightbox-zoom">{Math.round(scale * 100) + '%'}</span>
-          <button className="lightbox-btn" aria-label="Приблизить" onClick={() => zoomTo(scale * STEP)}>
+          <button className="lightbox-btn" aria-label={t('Приблизить')} onClick={() => zoomTo(scale * STEP)}>
             <Icon id="i-plus" />
           </button>
         </div>
         <div className="lightbox-bar">
           <button
             className="lightbox-btn"
-            aria-label="Копировать картинку (Ctrl+C)"
+            aria-label={t('Копировать картинку (Ctrl+C)')}
             onClick={() => void copyPictureTo(pic)}
           >
             <Icon id="i-copy" />
@@ -150,16 +152,16 @@ export function ImageLightbox() {
           {hasTauri() ? (
             <button
               className="lightbox-btn"
-              aria-label="Сохранить как… (Ctrl+S)"
+              aria-label={t('Сохранить как… (Ctrl+S)')}
               onClick={() => void savePictureTo(pic)}
             >
               <Icon id="i-download" />
             </button>
           ) : null}
         </div>
-        <button className="lightbox-close" aria-label="Закрыть (Esc)" data-sound="close" onClick={close}>
+        <button className="lightbox-close" aria-label={t('Закрыть (Esc)')} data-sound="close" onClick={close}>
           <Icon id="i-x" />
-          <span>Закрыть</span>
+          <span>{t('Закрыть')}</span>
         </button>
       </div>
       <img

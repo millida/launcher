@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { intlTag, t, useT } from '../../i18n'
 import { Select } from '../../components/Select'
 import { showToast } from '../../state/ui'
 import { Empty, Loading, Toggle } from './kit'
@@ -8,14 +9,14 @@ import type { HostingSchedule, ScheduleKind } from './api'
 
 // Times are Moscow time, same as on the backend.
 
-const KINDS: [ScheduleKind, string][] = [
-  ['restart', 'Перезапуск'],
-  ['backup', 'Резервная копия'],
-  ['stop', 'Остановка'],
-  ['command', 'Команда'],
+const KINDS = (): [ScheduleKind, string][] => [
+  ['restart', t('Перезапуск')],
+  ['backup', t('Резервная копия')],
+  ['stop', t('Остановка')],
+  ['command', t('Команда')],
 ]
 
-const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+const DAYS = () => [t('Пн'), t('Вт'), t('Ср'), t('Чт'), t('Пт'), t('Сб'), t('Вс')]
 
 const ALL_DAYS = 127
 
@@ -31,6 +32,7 @@ const parseTime = (v: string, fallback: number) => {
 }
 
 export function TabSchedule({ serverId }: { serverId: string }) {
+  const t = useT()
   const [list, setList] = useState<HostingSchedule[] | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -66,7 +68,7 @@ export function TabSchedule({ serverId }: { serverId: string }) {
       const saved = await host.saveSchedules(serverId, list)
       setList(Array.isArray(saved) ? saved : list)
       setDirty(false)
-      showToast('Расписание сохранено')
+      showToast(t('Расписание сохранено'))
     } catch (e) {
       showToast(errText(e), 'error')
     } finally {
@@ -78,13 +80,13 @@ export function TabSchedule({ serverId }: { serverId: string }) {
     <div className="card" style={{ padding: '18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
         <div className="side-cap" style={{ padding: 0, flex: 1 }}>
-          Расписание · время МСК
+          {t('Расписание · время МСК')}
         </div>
         <button className="btn sm secondary" onClick={add} disabled={(list || []).length >= 10}>
-          <Icon id="i-plus" /> Добавить
+          <Icon id="i-plus" /> {t('Добавить')}
         </button>
         <button className="btn sm primary" style={{ marginLeft: '8px' }} disabled={!dirty || saving} onClick={() => void save()}>
-          Сохранить
+          {t('Сохранить')}
         </button>
       </div>
 
@@ -98,7 +100,7 @@ export function TabSchedule({ serverId }: { serverId: string }) {
                 <Toggle on={s.enabled} onChange={(v) => patch(s.id, { enabled: v })} />
                 <Select
                   value={s.kind}
-                  options={KINDS.map(([v, l]) => ({ value: v, label: l }))}
+                  options={KINDS().map(([v, l]) => ({ value: v, label: l }))}
                   width={180}
                   onChange={(v) => patch(s.id, { kind: v as ScheduleKind })}
                 />
@@ -114,12 +116,12 @@ export function TabSchedule({ serverId }: { serverId: string }) {
                   />
                 </div>
                 <span style={{ flex: 1 }}></span>
-                <button className="btn sm ghost" aria-label="Удалить задачу" data-tip="Удалить задачу" onClick={() => remove(s.id)}>
+                <button className="btn sm ghost" aria-label={t('Удалить задачу')} data-tip={t('Удалить задачу')} onClick={() => remove(s.id)}>
                   <Icon id="i-trash" />
                 </button>
               </div>
               <div className="host-sched-days">
-                {DAYS.map((d, i) => {
+                {DAYS().map((d, i) => {
                   const on = (s.days & (1 << i)) !== 0
                   return (
                     <button
@@ -132,27 +134,27 @@ export function TabSchedule({ serverId }: { serverId: string }) {
                   )
                 })}
                 <button className="host-day wide" onClick={() => patch(s.id, { days: ALL_DAYS })}>
-                  Каждый день
+                  {t('Каждый день')}
                 </button>
               </div>
               {s.kind === 'command' ? (
                 <div className="input sm" style={{ marginTop: '8px' }}>
                   <span style={{ color: 'var(--m-fg-faint)', fontWeight: 700 }}>/</span>
                   <input
-                    placeholder="say сервер перезагрузится через 5 минут"
+                    placeholder={t('say сервер перезагрузится через 5 минут')}
                     defaultValue={s.command || ''}
                     onBlur={(e) => patch(s.id, { command: e.target.value })}
                   />
                 </div>
               ) : null}
               {s.lastRunAt ? (
-                <div className="host-sched-last">Последний запуск: {new Date(s.lastRunAt).toLocaleString('ru-RU')}</div>
+                <div className="host-sched-last">{t('Последний запуск: {date}', { date: new Date(s.lastRunAt).toLocaleString(intlTag()) })}</div>
               ) : null}
             </div>
           ))}
         </div>
       ) : (
-        <Empty icon="i-clock" text="Задач нет" />
+        <Empty icon="i-clock" text={t('Задач нет')} />
       )}
     </div>
   )

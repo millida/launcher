@@ -17,7 +17,7 @@ import {
   withPreset,
   setMilliAccountTierSource,
 } from '../lib/milli'
-import type { MilliError, MilliGreeting, MilliGreetingChip, MilliMessage, MilliPack, MilliPlans, MilliProgressEvent, MilliSessionHead, MilliStatus } from '../lib/milli'
+import type { MilliError, MilliGreeting, MilliGreetingChip, MilliMessage, MilliPack, MilliPlans, MilliProgressEvent, MilliSendAction, MilliSessionHead, MilliStatus } from '../lib/milli'
 import { benchBuildId, benchSettled, setBenchProgress, useBench } from './milliBench'
 import type { BenchStage } from './milliBench'
 import type { AiPreset } from '../lib/aiBuilder'
@@ -46,6 +46,7 @@ interface MilliState {
   error: MilliError | null
   /** Текст запроса, который упал: «Повторить» шлёт его снова. */
   failedText: string
+  failedAction: MilliSendAction | null
   failedId: string
   history: MilliSessionHead[] | null
   historyFailed: boolean
@@ -80,6 +81,7 @@ export const useMilli = create<MilliState>(() => ({
   pending: false,
   error: null,
   failedText: '',
+  failedAction: null,
   failedId: '',
   history: null,
   historyFailed: false,
@@ -189,7 +191,7 @@ export function newMilliChat() {
   stopProgress()
   useBench.getState().setHead(null)
   clearTimeout(moodTimer)
-  set((s) => ({ view: 'chat', sessionId: null, messages: [], error: null, failedText: '', pending: false, mood: 'idle', focusSeq: s.focusSeq + 1 }))
+  set((s) => ({ view: 'chat', sessionId: null, messages: [], error: null, failedText: '', failedAction: null, pending: false, mood: 'idle', focusSeq: s.focusSeq + 1 }))
 }
 
 export async function showMilliHistory() {
@@ -271,6 +273,7 @@ function savedSize(): number | null {
 export interface SendMilliOpts {
   /** Размер из чипа «Сколько модов взять?» — главнее запомненного. */
   size?: number
+  action?: MilliSendAction
 }
 
 export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
@@ -278,7 +281,7 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
   const st = get()
   if (!text || st.pending) return
   if (!hasMillidaAccount()) {
-    set({ error: milliError('http 401'), failedText: text })
+    set({ error: milliError('http 401'), failedText: text, failedAction: opts.action ?? null })
     return
   }
   const first = !st.sessionId && !st.messages.length
@@ -292,7 +295,7 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
     suggestions: [],
   }
   clearTimeout(moodTimer)
-  set((s) => ({ messages: [...s.messages, local], pending: true, error: null, failedText: '', mood: 'think' }))
+  set((s) => ({ messages: [...s.messages, local], pending: true, error: null, failedText: '', failedAction: null, mood: 'think' }))
   // Милли откликается на тон игрока (спасибо → сердечки, «вылетает» → сочувствие), потом думает.
   milliHear(text)
   // Только длина — сам текст не уходит.
@@ -321,7 +324,7 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
     let r: Awaited<ReturnType<typeof milliSend>> | null = null
     for (let attempt = 0; ; attempt++) {
       try {
-        r = await milliSend(sent, sid, milliEnhancedOn(get().status, get().enhanced), { buildId, size, sizeSaved, pc, local: facts })
+        r = await milliSend(sent, sid, milliEnhancedOn(get().status, get().enhanced), { buildId, size, sizeSaved, pc, local: facts, action: opts.action })
         break
       } catch (e) {
         const kind = milliError(e).kind
@@ -359,6 +362,7 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
       pending: false,
       error,
       failedText: text,
+      failedAction: opts.action ?? null,
       failedId: local.id,
       mood: 'idle',
     })
@@ -397,10 +401,10 @@ export function cancelMilli() {
 }
 
 export function retryMilli() {
-  const { failedText, failedId } = get()
+  const { failedText, failedAction, failedId } = get()
   if (!failedText) return
   set((s) => ({ messages: s.messages.filter((m) => m.id !== failedId), failedId: '' }))
-  void sendMilli(failedText)
+  void sendMilli(failedText, failedAction ? { action: failedAction } : {})
 }
 
 // ─── Прогресс хода: long-poll /progress ──────────────────────────────────────

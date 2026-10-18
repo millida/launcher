@@ -6,6 +6,8 @@
  */
 
 /** Файл материала в том виде, в каком его рисует страница (Millida, Modrinth, CurseForge, читы). */
+import { formatFixed, t } from '../../i18n'
+
 export interface VerFile {
   id: string
   name: string
@@ -81,9 +83,9 @@ export function spanOf(versions: string[]): string | null {
 /** «2,4 МБ» — размер файла коротко. */
 export function sizeLabel(bytes: number): string {
   if (!bytes || bytes < 0) return ''
-  if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + ' КБ'
+  if (bytes < 1024 * 1024) return t('{n} КБ', { n: Math.max(1, Math.round(bytes / 1024)) })
   const mb = bytes / (1024 * 1024)
-  return (mb >= 100 ? Math.round(mb).toString() : mb.toFixed(1).replace('.', ',')) + ' МБ'
+  return t('{n} МБ', { n: mb >= 100 ? Math.round(mb).toString() : formatFixed(mb, 1) })
 }
 
 /* ── Заглушка обложки: блок Minecraft на цвете раздела ─────────────── */
@@ -110,103 +112,3 @@ export const blockFor = (key: string): number => FALLBACK_BLOCKS[hashOf(key) % F
 export const SERVER_TINTS = ['#2f5d3a', '#3b4f7a', '#6a3f7a', '#7a4a2f', '#2f6a6a', '#7a3f4f', '#5a5a2f', '#3f3f6a']
 
 export const serverTint = (key: string): string => SERVER_TINTS[hashOf(key) % SERVER_TINTS.length]!
-
-/* ── Читы: справка к кураторскому разделу ───────────────────────────
- * У `/catalog/curated/cheats` в ответе только slug и файлы. Название,
- * описание и официальный сайт — из редакционного справочника сайта
- * (`millida-web/src/lib/forum-cheats.ts`, сверка 11.09.2026), только
- * клиенты, чьи файлы лежат в кураторском разделе.
- */
-
-export interface CheatInfo {
-  name: string
-  kind: string
-  summary: string
-  features: string[]
-  tags: string[]
-  officialUrl: string
-}
-
-export const CHEATS: Record<string, CheatInfo> = {
-  wurst: {
-    name: 'Wurst Client',
-    kind: 'Мод под Fabric',
-    summary:
-      'Один из самых известных открытых чит-клиентов, обновляется почти каждую неделю под свежие версии игры. Ставится как обычный мод Fabric рядом с другими модами. Держит очень широкий набор функций — от X-Ray до автостроительства — и подходит скорее для одиночной игры и экспериментов, чем для современных анархий с сильным античитом.',
-    features: ['X-Ray', 'Полёт и скорость', 'Автоатака и Killaura', 'AutoBuild и Nuker', 'Более 200 модулей'],
-    tags: ['Открытый код', 'Fabric', 'Универсальный'],
-    officialUrl: 'https://www.wurstclient.net/',
-  },
-  'meteor-client': {
-    name: 'Meteor Client',
-    kind: 'Мод под Fabric',
-    summary:
-      'Открытый утилитарный клиент под свежие версии Fabric, ставший заменой Impact и SalHack для игроков анархий вроде 2b2t. Тесно дружит с Baritone (автопоиск пути и автодобыча). Активно поддерживается сообществом, поэтому быстро выходит под новые версии игры.',
-    features: ['Совместимость с Baritone', 'ESP и трейсеры', 'Авто-тоталы (Crystal PvP)', 'Дюп-хелперы', 'Гибкий модуль-менеджер'],
-    tags: ['Открытый код', 'Fabric', 'Анархия', 'Утилита'],
-    officialUrl: 'https://meteorclient.com/',
-  },
-  baritone: {
-    name: 'Baritone',
-    kind: 'Мод-утилита (Forge / Fabric)',
-    summary:
-      'Строго говоря, не чит, а система автопилота: Baritone умеет сам прокладывать путь по миру, копать заданную руду и идти к координатам. Его встраивают в другие клиенты (Impact, Meteor) или подключают отдельным модом. Полезен и в честной одиночной игре — например для автоматической добычи ресурсов.',
-    features: ['Автопоиск пути', 'Автодобыча руды', 'Следование за координатами', 'Автостроительство по схеме'],
-    tags: ['Открытый код', 'Утилита', 'Автопилот'],
-    officialUrl: 'https://github.com/cabaletta/baritone',
-  },
-  liquidbounce: {
-    name: 'LiquidBounce',
-    kind: 'Клиент / мод (Fabric / Forge)',
-    summary:
-      'Бесплатный открытый клиент на базе mixin от команды CCBlueX, известный акцентом на обходы античитов и настройку под конкретные сервера. Поддерживает как старые версии (1.8), так и современные. Есть отдельный лаунчер LiquidLauncher для запуска.',
-    features: ['Обходы античитов (bypass)', 'KillAura и Velocity', 'Scaffold и Speed', 'Скриптовый API на модули', 'Собственный лаунчер'],
-    tags: ['Открытый код', 'PvP', 'Bypass'],
-    officialUrl: 'https://liquidbounce.net/',
-  },
-  'kami-blue': {
-    name: 'KAMI Blue',
-    kind: 'Мод под Forge',
-    summary:
-      'Открытый утилитарный клиент под 1.12.2, выросший из оригинального KAMI и популярный на 2b2t. Официально архивирован (разработка остановлена), но исходники и релизы остаются доступны на GitHub, а код лёг в основу многих более новых проектов.',
-    features: ['Инструменты для анархий', 'Автодобыча с Baritone', 'ESP и трейсеры', 'Командный интерфейс'],
-    tags: ['Открытый код', '1.12.2', 'Анархия', 'Архив'],
-    officialUrl: 'https://github.com/kami-blue/client',
-  },
-  forgehax: {
-    name: 'ForgeHax',
-    kind: 'Мод под Forge',
-    summary:
-      'Открытый Forge-мод для продвинутых пользователей: настраивается почти целиком командами, без удобного меню. Прославился генератором книг (дюп- и бан-книги на анархиях). Скорее инструмент для тех, кто понимает, что делает, чем клиент «поставил и играешь».',
-    features: ['Управление командами (без GUI)', 'Book Writer (генерация книг)', 'Автодобыча', 'ESP'],
-    tags: ['Открытый код', '1.12.2', 'Утилита'],
-    officialUrl: 'https://github.com/fr1kin/ForgeHax',
-  },
-  bleachhack: {
-    name: 'BleachHack',
-    kind: 'Мод под Fabric',
-    summary:
-      'Открытый бесплатный клиент под Fabric с чистым интерфейсом и набором стандартных модулей. Актуален для версий 1.14–1.17; на более свежих версиях сообщество перешло на другие проекты. Хороший пример аккуратного open-source клиента.',
-    features: ['Модульная система', 'ESP и трейсеры', 'Автоатака', 'Совместимость с Baritone'],
-    tags: ['Открытый код', 'Fabric'],
-    officialUrl: 'https://github.com/BleachDrinker420/BleachHack',
-  },
-}
-
-/** Имя чита: из справочника, иначе — из slug («kami-blue» → «Kami Blue»). */
-export function cheatName(slug: string): string {
-  const known = CHEATS[slug]
-  if (known) return known.name
-  return slug
-    .split('-')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-}
-
-/** Описание материала — markdown для `renderMarkdown`: читам — описание и список функций. */
-export function cheatBody(slug: string): string {
-  const c = CHEATS[slug]
-  if (!c) return ''
-  return c.summary + '\n\n## Что умеет\n\n' + c.features.map((f) => '- ' + f).join('\n')
-}

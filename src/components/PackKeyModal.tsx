@@ -14,6 +14,7 @@ import { PlanButtons } from './premium/PremiumBuy'
 import { LOADER, gb, loadPackDownloads, loadPackView, modsFromText, packPluses, plusIcon } from './premium/packView'
 import type { PackView } from './premium/packView'
 import '../styles/pixel/packkey.css'
+import { useT } from '../i18n'
 
 interface Props {
   slug: string
@@ -46,6 +47,7 @@ interface Fact {
 }
 
 export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: () => void }) {
+  const t = useT()
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -53,7 +55,7 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
   const submit = () => {
     if (busy || code.trim().length < 8) return
     if (!hasTauri()) {
-      setError('Ключ активируется в приложении')
+      setError(t('Ключ активируется в приложении'))
       return
     }
     setBusy(true)
@@ -71,8 +73,8 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
           <input
             value={code}
             spellCheck={false}
-            placeholder="Ввести ключ"
-            aria-label="Ключ доступа"
+            placeholder={t('Ввести ключ')}
+            aria-label={t('Ключ доступа')}
             onChange={(e) => {
               setCode(e.target.value)
               if (error) setError('')
@@ -81,7 +83,7 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
           />
         </div>
         <button className="btn md secondary" disabled={busy || code.trim().length < 8} data-track="pack_key_activate" data-kind="premium" data-id={slug} onClick={submit}>
-          <Icon id="i-key" /> {busy ? 'Проверяем…' : 'Активировать'}
+          <Icon id="i-key" /> {busy ? t('Проверяем…') : t('Активировать')}
         </button>
       </div>
       {error ? <span className="pkb-err">{error}</span> : null}
@@ -100,6 +102,7 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
  * затемнение кита позиционируется по ближайшему предку.
  */
 export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
+  const t = useT()
   const [view, setView] = useState<PackView | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [downloads, setDownloads] = useState<number | null>(null)
@@ -144,10 +147,10 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
   const dl = downloads ?? (lobbyPack?.downloads && lobbyPack.downloads > 0 ? lobbyPack.downloads : null)
 
   const facts: Fact[] = []
-  if (mods) facts.push({ value: fmtN(mods), label: 'модов' })
-  if (game) facts.push({ value: game, label: loader || 'версия' })
-  if (client && client.size > 0) facts.push({ value: gb(client.size), label: 'скачать' })
-  if (dl) facts.push({ value: fmtN(dl), label: 'скачиваний' })
+  if (mods) facts.push({ value: fmtN(mods), label: t('модов') })
+  if (game) facts.push({ value: game, label: loader || t('версия') })
+  if (client && client.size > 0) facts.push({ value: gb(client.size), label: t('скачать') })
+  if (dl) facts.push({ value: fmtN(dl), label: t('скачиваний') })
   const pluses = packPluses(view?.description)
 
   const buy = () => {
@@ -162,9 +165,9 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
         <div className="pkb-art">
           {cover ? <img src={cover} alt="" draggable={false} /> : <span className="pkb-art-ph skel" aria-hidden="true"></span>}
           <span className="pkb-tag">
-            <Icon id="i-crown" /> Премиум
+            <Icon id="i-crown" /> {t('Премиум')}
           </span>
-          <button className="btn sm secondary pkb-x" aria-label="Закрыть" data-track="pack_key_close" onClick={onClose}>
+          <button className="btn sm secondary pkb-x" aria-label={t('Закрыть')} data-track="pack_key_close" onClick={onClose}>
             <Icon id="i-x" />
           </button>
         </div>
@@ -220,7 +223,7 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
               {price ? <span className="pkb-price">{price}</span> : null}
               {buyUrl ? (
                 <button className="btn lg primary pkb-cta" data-sound="open" data-track="pack_key_buy" data-kind="premium" data-id={slug} onClick={buy}>
-                  Купить <Icon id="i-ext" />
+                  {t('Купить')} <Icon id="i-ext" />
                 </button>
               ) : null}
             </div>
@@ -229,7 +232,7 @@ export function PackKeyModal({ slug, title, onClose, onUnlocked }: Props) {
           {keyEntry ? (
           <div className="pkb-key">
             <span className="pkb-key-why">
-              <Icon id="i-lock" /> На этом аккаунте доступа нет
+              <Icon id="i-lock" /> {t('На этом аккаунте доступа нет')}
             </span>
             <PackKeyField
               slug={slug}

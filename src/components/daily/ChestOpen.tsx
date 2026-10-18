@@ -14,6 +14,7 @@ import { CaseReveal } from '../chest/CaseReveal'
 import '../../styles/pixel/chestopen.css'
 import { topUpFragments } from '../shop/topUp'
 import { wearNow } from '../../state/wearIntent'
+import { intlTag, useT } from '../../i18n'
 
 /*
  * Открытие сундука как в Brawl Stars (жалоба владельца 24.09.2026, 16:48:
@@ -108,6 +109,7 @@ const TIER_TONE: Record<ChestTier, string> = {
  * взрыв, награды по одной, итог. Фрагменты в итоге можно докупить.
  */
 function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: number; onDone: () => void; onNext: () => void }) {
+  const t = useT()
   const tier = chest.tier
   const [drops, setDrops] = useState<ChestDrop[]>([])
   const [bought, setBought] = useState<Set<number>>(() => new Set())
@@ -134,27 +136,27 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
   }
   return (
     <CaseReveal
-      title={CHEST_NAME[tier] + ' сундук'}
+      title={t('{tier} сундук', { tier: CHEST_NAME[tier] })}
       tier={tier}
       color={TIER_TONE[tier]}
       hits={need}
       request={request}
       onFail={(e) => {
         playSound('error')
-        showToast(e instanceof Error ? e.message : 'Сундук не открылся, попробуй позже', 'error')
+        showToast(e instanceof Error ? e.message : t('Сундук не открылся, попробуй позже'), 'error')
         onDone()
       }}
       onDone={() => undefined}
       onClose={onDone}
       onWear={() => wear()}
-      again={left > 0 ? { primary: true, onClick: onNext, node: <>Следующий · ещё {left}</> } : undefined}
+      again={left > 0 ? { primary: true, onClick: onNext, node: <>{t('Следующий · ещё {n}', { n: left })}</> } : undefined}
       extra={(_r, i) => {
         const d = drops[i]
         const topUp = d && d.kind === 'FRAGMENTS' && d.item && !d.completed && d.topUp ? d.topUp : 0
         if (!d || d.kind !== 'FRAGMENTS' || !topUp) return null
         return bought.has(i) ? (
           <span className="co-topup-done">
-            <Icon id="i-check" /> Твоя
+            <Icon id="i-check" /> {t('Твоя')}
           </span>
         ) : (
           <button
@@ -169,7 +171,7 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
               if (res) setBought((was) => new Set(was).add(i))
             }}
           >
-            Докупить <Ruby size={14} /> {topUp.toLocaleString('ru-RU')}
+            {t('Докупить')} <Ruby size={14} /> {topUp.toLocaleString(intlTag())}
           </button>
         )
       }}

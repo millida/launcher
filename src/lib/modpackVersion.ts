@@ -1,5 +1,6 @@
 // Picks a Modrinth modpack version for the needed game version. The version list comes through our API (/launcher/mr), no token.
 import { MODRINTH_API } from './api'
+import { t } from '../i18n'
 
 export interface MrPackVersion {
   id: string
@@ -16,9 +17,9 @@ export function pickPackVersion(list: MrPackVersion[], game: string): string | n
 
 export async function modpackVersionFor(slug: string, game: string): Promise<string> {
   const r = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug) + '/version').catch(() => null)
-  if (!r || !r.ok) throw new Error('Не удалось получить версии сборки — проверь интернет и попробуй ещё раз')
+  if (!r || !r.ok) throw new Error(t('Не удалось получить версии сборки — проверь интернет и попробуй ещё раз'))
   const list = (await r.json()) as unknown
   const id = Array.isArray(list) ? pickPackVersion(list as MrPackVersion[], game) : null
-  if (!id) throw new Error('У сборки нет версии под Minecraft ' + game + ' — сними фильтр версии или выбери её во вкладке «Версии»')
+  if (!id) throw new Error(t('У сборки нет версии под Minecraft {version} — сними фильтр версии или выбери её во вкладке «Версии»', { version: game }))
   return id
 }

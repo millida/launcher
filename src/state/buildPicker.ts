@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { t } from '../i18n'
 
 export interface PickOpts {
   title?: string
@@ -27,7 +28,7 @@ interface State {
 
 export const useBuildPicker = create<State>((set, get) => ({
   open: false,
-  kindLabel: 'контент',
+  kindLabel: t('контент'),
   title: '',
   sub: '',
   wanted: [],
@@ -60,10 +61,10 @@ export const pickBuild = (kindLabel: string, opts?: PickOpts): Promise<string | 
   useBuildPicker.getState().show(kindLabel, opts)
 
 export const pickBuildForJoin = (serverName: string, wanted: string[]): Promise<string | null> =>
-  useBuildPicker.getState().show('сборку', {
-    title: 'Чем зайти на «' + serverName + '»?',
+  useBuildPicker.getState().show(t('сборку'), {
+    title: t('Чем зайти на «{server}»?', { server: serverName }),
     sub: wanted.length
-      ? 'Сервер работает на ' + wanted.join(', ') + ' — выбери сборку этой версии.'
-      : 'Версию сервера узнать не удалось — выбери сборку сам.',
+      ? t('Сервер работает на {versions} — выбери сборку этой версии.', { versions: wanted.join(', ') })
+      : t('Версию сервера узнать не удалось — выбери сборку сам.'),
     wanted,
   })

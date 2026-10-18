@@ -46,6 +46,7 @@ import type { BuildTarget, Compat } from './projectView'
 import { cachedTranslation, depProjects, saveLang, savedLang, translateProject, trErrorText } from './projectTranslate'
 import type { DepProject, TrView } from './projectTranslate'
 import { ProjectRuBody, TrMark, ruDescription, ruGallery, ruVersionName, useRuVersions } from './ProjectRuBody'
+import { intlTag, t, useLocale, useT } from '../i18n'
 import '../styles/pixel/project-modal.css'
 
 /*
@@ -118,9 +119,11 @@ function CompatMark({ c }: { c: Compat }) {
   )
 }
 
-const TYPE_RU: Record<string, string> = { beta: 'Бета', alpha: 'Альфа' }
+const typeRu = (): Record<string, string> => ({ beta: t('Бета'), alpha: t('Альфа') })
 
 export function ProjectModal() {
+  const t = useT()
+  const locale = useLocale()
   const modal = useUi((s) => s.modals.pjModal)
   const pj = useProject()
   const tasks = useInstalls((s) => s.tasks)
@@ -158,9 +161,9 @@ export function ProjectModal() {
     )
   const isDone = (key: string): boolean => !!doneKeys[key] || (key === packKey && inBuild)
   const label = (key: string, idle: string): string => {
-    const t = tasks[key]
-    if (t && t.state === 'run') return t.pct > 0 ? t.label + ' ' + Math.round(t.pct) + '%' : t.label
-    return isDone(key) ? 'Установлено' : idle
+    const task = tasks[key]
+    if (task && task.state === 'run') return task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label
+    return isDone(key) ? t('Установлено') : idle
   }
   /// «Установлено» — это состояние, а не кнопка: повторное нажатие качало тот же
   /// файл заново и ничего не меняло на экране. Сменить версию можно во вкладке
@@ -169,9 +172,10 @@ export function ProjectModal() {
     if (!isDone(key)) return false
     showToast(
       pj.kind === 'modpack'
-        ? 'Сборка уже установлена — во вкладке «Версии» можно поставить другую версию'
-        : 'Уже в сборке' + (selectedBuild ? ' «' + selectedBuild + '»' : '') +
-          ' — другую версию можно выбрать во вкладке «Версии»',
+        ? t('Сборка уже установлена — во вкладке «Версии» можно поставить другую версию')
+        : selectedBuild
+          ? t('Уже в сборке «{name}» — другую версию можно выбрать во вкладке «Версии»', { name: selectedBuild })
+          : t('Уже в сборке — другую версию можно выбрать во вкладке «Версии»'),
       'ok',
       false,
     )
@@ -182,12 +186,12 @@ export function ProjectModal() {
   // or finished task must not paint every version row as if it were the one
   // in progress — only the row for the version that task actually targets.
   const versionLabel = (key: string, versionId: string, idle: string): string => {
-    const t = tasks[key]
-    if (t && t.state === 'run') {
-      if (t.versionId !== versionId) return idle
-      return t.pct > 0 ? t.label + ' ' + Math.round(t.pct) + '%' : t.label
+    const task = tasks[key]
+    if (task && task.state === 'run') {
+      if (task.versionId !== versionId) return idle
+      return task.pct > 0 ? task.label + ' ' + Math.round(task.pct) + '%' : task.label
     }
-    return doneVersion[key] === versionId ? 'Установлено' : idle
+    return doneVersion[key] === versionId ? t('Установлено') : idle
   }
   const [shot, setShot] = useState(0)
   const [verMode, setVerMode] = useState<'auto' | 'fit' | 'all'>('auto')
@@ -212,7 +216,8 @@ export function ProjectModal() {
   }, [projectKey])
   // Перевод описания: только Modrinth (сервер берёт текст сам) и только чужой язык.
   // RU — по умолчанию: английский виден лишь после «Оригинал» (ProjectRuBody.tsx).
-  const canTranslate = pj.source === 'modrinth' && !!pj.slug && !!pj.body && desc.foreign
+  const ruReader = locale === 'ru'
+  const canTranslate = ruReader && pj.source === 'modrinth' && !!pj.slug && !!pj.body && desc.foreign
   useEffect(() => {
     if (!modal.open || lang !== 'ru' || !canTranslate || pj.loading) return
     if (trKey.current === projectKey) return
@@ -319,30 +324,27 @@ export function ProjectModal() {
     runInstall({
       key: keyContent('cf', prof, 'world', pj.cfid),
       title: pj.title,
-      running: force ? 'Ставим всё равно…' : 'Скачивание…',
+      running: force ? t('Ставим всё равно…') : t('Скачивание…'),
       run: () => cfInstallWorld(pj.cfid, prof, force),
       keepOpen: (r) => !r.folder,
       onDone: (r) => {
         if (!r.folder) {
           const pr = useProfiles.getState().profiles.find((x) => x.name === prof)
           void uiConfirm(
-            'Карта «' +
-              pj.title +
-              '» рассчитана на ' +
-              (r.mismatch || 'другие версии') +
-              ', а у сборки «' +
-              prof +
-              '» версия ' +
-              ((pr && pr.version) || '—') +
-              '. Мир может не открыться или сломаться. Поставить всё равно?',
-            { title: 'Версия не совпадает', confirmLabel: 'Поставить', danger: false },
+            t('Карта «{map}» рассчитана на {versions}, а у сборки «{pack}» версия {version}. Мир может не открыться или сломаться. Поставить всё равно?', {
+              map: pj.title,
+              versions: r.mismatch || t('другие версии'),
+              pack: prof,
+              version: (pr && pr.version) || '—',
+            }),
+            { title: t('Версия не совпадает'), confirmLabel: t('Поставить'), danger: false },
           ).then((ok) => {
             if (ok) installWorld(prof, true)
           })
           return
         }
         installed()
-        showToast('Карта «' + r.folder + '» → «' + prof + '»: заходи в одиночную игру', 'ok', 'install')
+        showToast(t('Карта «{map}» → «{pack}»: заходи в одиночную игру', { map: r.folder ?? '', pack: prof }), 'ok', 'install')
       },
     })
   }
@@ -353,7 +355,7 @@ export function ProjectModal() {
     runInstall({
       key: packKey,
       title: pj.title || pj.slug,
-      running: 'Скачивание…',
+      running: t('Скачивание…'),
       versionId: isCf ? (fileId !== undefined ? 'cf' + fileId : undefined) : mrVersionId,
       run: () =>
         isCf
@@ -374,7 +376,7 @@ export function ProjectModal() {
         installed()
         useProfiles.getState().setSelected(p.name)
         void useProfiles.getState().refresh()
-        showToast('Сборка «' + p.name + '» готова — жми «Играть»', 'ok', 'achievement')
+        showToast(t('Сборка «{name}» готова — жми «Играть»', { name: p.name }), 'ok', 'achievement')
       },
       onError: (err) => {
         trackTimed(
@@ -397,7 +399,7 @@ export function ProjectModal() {
   const install = (fileId?: number) => {
     if (fileId === undefined && alreadyDone(packKey)) return
     if (!hasTauri()) {
-      showToast('Установка доступна в приложении')
+      showToast(t('Установка доступна в приложении'))
       return
     }
     if (isMl) {
@@ -448,12 +450,12 @@ export function ProjectModal() {
 
   const installVer = (v: ProjectVersion) => {
     if (!hasTauri()) {
-      showToast('Доступно в приложении')
+      showToast(t('Доступно в приложении'))
       return
     }
     // Ставить другую версию поверх — обычное дело; ту же самую — уже стоит.
     if (doneVersion[packKey] === v.id) {
-      showToast('Эта версия уже стоит' + (selectedBuild ? ' в «' + selectedBuild + '»' : ''), 'ok', false)
+      showToast(selectedBuild ? t('Эта версия уже стоит в «{name}»', { name: selectedBuild }) : t('Эта версия уже стоит'), 'ok', false)
       return
     }
     if (isMl) {
@@ -482,7 +484,7 @@ export function ProjectModal() {
           void useMods.getState().refreshInstalled()
           installExtras(prof, pj.kind, extras)
           installed()
-          showToast('В «' + prof + '»: ' + r.file + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install')
+          showToast(t('В «{pack}»: {file}', { pack: prof, file: r.file }) + (r.warning ? ' · ' + r.warning : ''), 'ok', 'install')
         },
       })
     })
@@ -510,7 +512,7 @@ export function ProjectModal() {
   const hero = pj.gallery.length ? pj.gallery[0].url : ''
   const tint = pj.color !== null ? '#' + pj.color.toString(16).padStart(6, '0') : ''
   const done = !!doneKeys[packKey]
-  const idleLabel = pj.kind === 'modpack' ? 'Установить' : pj.kind === 'world' ? 'Добавить карту' : 'Добавить в сборку'
+  const idleLabel = pj.kind === 'modpack' ? t('Установить') : pj.kind === 'world' ? t('Добавить карту') : t('Добавить в сборку')
   const shotN = pj.gallery.length ? Math.min(shot, pj.gallery.length - 1) : 0
   const cur = pj.gallery[shotN]
 
@@ -534,12 +536,12 @@ export function ProjectModal() {
 
   const ctaNote: { text: string; sub?: string; warn?: boolean } | null =
     pj.kind === 'modpack'
-      ? { text: 'Поставится отдельной сборкой' }
+      ? { text: t('Поставится отдельной сборкой') }
       : !selectedBuild
-        ? { text: 'Сборку выберешь при установке' }
+        ? { text: t('Сборку выберешь при установке') }
         : noFit
-          ? { text: 'Нет версии под ' + buildText, warn: true }
-          : { text: 'в «' + selectedBuild + '»', sub: isContent ? buildText : '' }
+          ? { text: t('Нет версии под {build}', { build: buildText }), warn: true }
+          : { text: t('в «{name}»', { name: selectedBuild }), sub: isContent ? buildText : '' }
 
   const retry = () => {
     if (isCf) void openCfProject(pj.cfid, pj.kind, pj.title)
@@ -580,29 +582,29 @@ export function ProjectModal() {
   }
 
   const tabs: [string, string, number][] = [
-    ['desc', 'Описание', 0],
-    ['gallery', 'Галерея', pj.gallery.length],
-    ['versions', 'Версии', pj.versions.length],
+    ['desc', t('Описание'), 0],
+    ['gallery', t('Галерея'), pj.gallery.length],
+    ['versions', t('Версии'), pj.versions.length],
   ]
 
   const stats = (
     <>
       {pj.downloads !== null ? (
-        <span className="pjx-stat dl" title={pj.downloads.toLocaleString('ru-RU') + ' скачиваний'}>
+        <span className="pjx-stat dl" title={t('{n} скачиваний', { n: pj.downloads.toLocaleString(intlTag()) })}>
           <PxIcon name="download" size={11} />
           {fmtNum(pj.downloads)}
         </span>
       ) : null}
       {pj.followers !== null ? (
-        <span className="pjx-stat fl" title={pj.followers.toLocaleString('ru-RU') + ' подписчиков'}>
+        <span className="pjx-stat fl" title={t('{n} подписчиков', { n: pj.followers.toLocaleString(intlTag()) })}>
           <PxIcon name="heart" size={11} />
           {fmtNum(pj.followers)}
         </span>
       ) : null}
       {pj.updated ? (
-        <span className="pjx-stat up" title={'Обновлён ' + new Date(pj.updated).toLocaleDateString('ru-RU')}>
+        <span className="pjx-stat up" title={t('Обновлён {date}', { date: new Date(pj.updated).toLocaleDateString(intlTag()) })}>
           <PxIcon name="clock" size={11} />
-          обновлён {agoLabel(pj.updated)}
+          {t('обновлён {when}', { when: agoLabel(pj.updated) })}
         </span>
       ) : null}
     </>
@@ -636,7 +638,7 @@ export function ProjectModal() {
           <div className="pjx-glow" aria-hidden="true">
             {hero ? <img src={hero} alt="" referrerPolicy="no-referrer" /> : tint ? <i style={{ background: tint }} /> : null}
           </div>
-          <button className="pjx-x" id="pjClose" aria-label="Закрыть" data-sound="close" data-track="close" onClick={close}>
+          <button className="pjx-x" id="pjClose" aria-label={t('Закрыть')} data-sound="close" data-track="close" onClick={close}>
             <PxIcon name="x" size={12} />
           </button>
           <div className="pjx-id">
@@ -657,17 +659,17 @@ export function ProjectModal() {
                 {ctx ? (
                   <span className={'pjx-milli-tag' + (ctx.inPack ? '' : ' out')}>
                     <PxIcon name={ctx.inPack ? 'check' : 'minus'} size={9} />
-                    {ctx.inPack ? 'В сборке Милли' : 'Убран из сборки'}
+                    {ctx.inPack ? t('В сборке Милли') : t('Убран из сборки')}
                   </span>
                 ) : null}
               </div>
               <h2 id="pjTitle" className="pjx-title" title={pj.title}>
-                {pj.loading && (!pj.title || pj.title === 'Загружаем…') ? <span className="skel pjx-title-skel" /> : pj.title}
+                {pj.loading && (!pj.title || pj.title === t('Загружаем…')) ? <span className="skel pjx-title-skel" /> : pj.title}
               </h2>
               <div className="pjx-meta" id="pjSub">
                 {pj.author ? (
                   <span className="pjx-by">
-                    от{' '}
+                    {t('от')}{' '}
                     {pj.authorUrl ? (
                       <a
                         href={pj.authorUrl}
@@ -700,7 +702,7 @@ export function ProjectModal() {
                 ctx.locked ? (
                   <span className="pjx-locked">
                     <PxIcon name="lock" size={11} />
-                    Нужен для запуска
+                    {t('Нужен для запуска')}
                   </span>
                 ) : (
                   <button
@@ -711,7 +713,7 @@ export function ProjectModal() {
                     onClick={toggleMilli}
                   >
                     <PxIcon name={ctx.inPack ? 'minus' : 'plus'} size={12} />
-                    {ctx.inPack ? 'Убрать из сборки' : 'Вернуть в сборку'}
+                    {ctx.inPack ? t('Убрать из сборки') : t('Вернуть в сборку')}
                   </button>
                 )
               ) : (
@@ -729,7 +731,7 @@ export function ProjectModal() {
                       закрывает это же окно — игрок оставался с бегущим процентом. */}
                   <PauseInstall task={task} className="btn md secondary pjx-cancel" />
                   {running ? (
-                    <button className="btn md secondary pjx-cancel" aria-label="Отменить установку" data-track="install_cancel" onClick={() => stopInstall(packKey)}>
+                    <button className="btn md secondary pjx-cancel" aria-label={t('Отменить установку')} data-track="install_cancel" onClick={() => stopInstall(packKey)}>
                       <PxIcon name="x" size={12} />
                     </button>
                   ) : null}
@@ -738,7 +740,7 @@ export function ProjectModal() {
               {ctx ? (
                 ctx.onBack ? (
                   <button className="pjx-note pjx-back" data-track="milli_back" onClick={backToMilli}>
-                    <PxIcon name="arrow-l" size={10} />К сборке{ctx.packTitle ? ' «' + ctx.packTitle + '»' : ' Милли'}
+                    <PxIcon name="arrow-l" size={10} />{ctx.packTitle ? t('К сборке «{name}»', { name: ctx.packTitle }) : t('К сборке Милли')}
                   </button>
                 ) : null
               ) : ctaNote && !running ? (
@@ -758,7 +760,7 @@ export function ProjectModal() {
                 <LoaderChip key={l} id={l} />
               ))}
               {span ? (
-                <span className="pjx-chip ver" title={'Версии игры: ' + pj.gameVersions.slice(-12).join(', ')}>
+                <span className="pjx-chip ver" title={t('Версии игры: {list}', { list: pj.gameVersions.slice(-12).join(', ') })}>
                   <PxIcon name="blocks" size={10} />
                   {span.replace(' — ', '–')}
                 </span>
@@ -773,7 +775,7 @@ export function ProjectModal() {
             </div>
           ) : null}
           <nav className="pjx-tabs">
-            <div className="segs" role="tablist" aria-label="Разделы">
+            <div className="segs" role="tablist" aria-label={t('Разделы')}>
               {tabs
                 // Пустая вкладка — лишний клик в «Галереи нет»: прячем, пока открыта не она.
                 .filter(([k]) => k !== 'gallery' || pj.loading || pj.gallery.length > 0 || pj.tab === 'gallery')
@@ -804,28 +806,28 @@ export function ProjectModal() {
           {pj.failed ? (
             <div className="pjx-empty">
               <PxIcon name="alert" size={28} />
-              <b>Страница не загрузилась</b>
-              <span>Проверь интернет и попробуй ещё раз.</span>
+              <b>{t('Страница не загрузилась')}</b>
+              <span>{t('Проверь интернет и попробуй ещё раз.')}</span>
               <button className="btn md secondary" data-track="project_retry" onClick={retry}>
                 <PxIcon name="restart" size={12} />
-                Повторить
+                {t('Повторить')}
               </button>
             </div>
           ) : null}
 
           <div id="pjDesc" className="pjx-pane pjx-desc" role="tabpanel" hidden={pj.tab !== 'desc' || pj.failed}>
-            <article className="pjx-art" aria-label="Описание">
+            <article className="pjx-art" aria-label={t('Описание')}>
               <div className="pjx-art-h">
                 <PxIcon name="book" size={11} />
                 <span className="pjx-art-t">
-                  Описание автора
-                  {!trOn && desc.foreign ? ' · на английском' : ''}
+                  {t('Описание автора')}
+                  {!trOn && desc.foreign && ruReader ? t(' · на английском') : ''}
                 </span>
                 {canTranslate && (desc.foreign || trOn) ? (
-                  <div className="pjx-lang" role="group" aria-label="Язык описания">
+                  <div className="pjx-lang" role="group" aria-label={t('Язык описания')}>
                     {trOn && !tr.err ? <TrMark view={tr.view} busy={tr.busy} /> : null}
                     <button className={'pjx-lang-b' + (!trOn ? ' on' : '')} aria-pressed={!trOn} data-track="pj_lang_en" onClick={() => pickLang('en')}>
-                      Оригинал
+                      {t('Оригинал')}
                     </button>
                     <button className={'pjx-lang-b ru' + (trOn ? ' on' : '')} aria-pressed={trOn} data-track="pj_lang_ru" onClick={() => pickLang('ru')}>
                       RU
@@ -841,13 +843,13 @@ export function ProjectModal() {
                 ) : desc.nodes ? (
                   desc.nodes
                 ) : (
-                  <p className="faint-note">{pj.summary || 'Автор не написал описание'}</p>
+                  <p className="faint-note">{pj.summary || t('Автор не написал описание')}</p>
                 )}
               </div>
             </article>
             <aside className="pjx-aside">
               {ctx && ctx.why ? (
-                <Plate className="pjx-milli" title={ctx.packTitle ? 'Сборка «' + ctx.packTitle + '»' : 'Сборка Милли'}>
+                <Plate className="pjx-milli" title={ctx.packTitle ? t('Сборка «{name}»', { name: ctx.packTitle }) : t('Сборка Милли')}>
                   {ctx.why ? (
                     <p className="pjx-why">
                       <PxIcon name="sparkle" size={11} />
@@ -857,27 +859,27 @@ export function ProjectModal() {
                 </Plate>
               ) : null}
               {isContent && (build || side || span) ? (
-                <Plate title="Совместимость">
+                <Plate title={t('Совместимость')}>
                   {build && versionsKnown ? (
                     <div className={'pjx-fit' + (noFit ? ' no' : ' ok')}>
                       <PxIcon name={noFit ? 'alert' : 'check'} size={11} />
                       <span>
-                        {noFit ? 'Нет версии под ' : 'Есть версия под '}
+                        {noFit ? t('Нет версии под') : t('Есть версия под')}{' '}
                         <b>{buildText}</b>
                       </span>
                     </div>
                   ) : null}
-                  {span ? <Fact k="Версии игры">{span}</Fact> : null}
-                  {side ? <Fact k="Где нужен">{side}</Fact> : null}
+                  {span ? <Fact k={t('Версии игры')}>{span}</Fact> : null}
+                  {side ? <Fact k={t('Где нужен')}>{side}</Fact> : null}
                 </Plate>
               ) : null}
               {showDeps ? (
-                <Plate className="pjx-deps" title="Зависимости">
-                  {depVer && depGroups.length ? <span className="pjx-deps-v">для версии {depVer.number || depVer.name}</span> : null}
+                <Plate className="pjx-deps" title={t('Зависимости')}>
+                  {depVer && depGroups.length ? <span className="pjx-deps-v">{t('для версии {version}', { version: depVer.number || depVer.name })}</span> : null}
                   {depGroups.map((g) => (
                     <div className={'pjx-dg ' + g.type} key={g.type}>
                       <span className="pjx-dg-h">
-                        {g.type === 'required' ? 'Требует' : g.type === 'optional' ? 'Дружит с' : 'Несовместим с'}
+                        {g.type === 'required' ? t('Требует') : g.type === 'optional' ? t('Дружит с') : t('Несовместим с')}
                       </span>
                       <div className="pjx-dg-list">
                         {g.list.slice(0, 8).map((d) => {
@@ -889,7 +891,7 @@ export function ProjectModal() {
                               data-track="project_dep_open"
                               data-id={p ? p.slug : d.id}
                               disabled={!p}
-                              title={p ? 'Открыть «' + p.title + '»' : undefined}
+                              title={p ? t('Открыть «{name}»', { name: p.title }) : undefined}
                               onClick={() => {
                                 if (p) void openProject(p.slug, p.type)
                               }}
@@ -905,12 +907,12 @@ export function ProjectModal() {
                   ))}
                   {neededBy.length ? (
                     <div className="pjx-dg needed">
-                      <span className="pjx-dg-h">Нужен для</span>
+                      <span className="pjx-dg-h">{t('Нужен для')}</span>
                       <div className="pjx-dg-list">
-                        {neededBy.slice(0, 8).map((t) => (
-                          <span className="pjx-dep static" key={t}>
+                        {neededBy.slice(0, 8).map((dep) => (
+                          <span className="pjx-dep static" key={dep}>
                             <i className="pjx-dep-ph" />
-                            <span>{t}</span>
+                            <span>{dep}</span>
                           </span>
                         ))}
                         {neededBy.length > 8 ? <span className="pjx-dg-more">+{neededBy.length - 8}</span> : null}
@@ -920,15 +922,15 @@ export function ProjectModal() {
                   {!depGroups.length && !neededBy.length ? (
                     <span className="pjx-deps-none">
                       <PxIcon name="check" size={10} />
-                      Работает сам, ничего не требует
+                      {t('Работает сам, ничего не требует')}
                     </span>
                   ) : null}
                 </Plate>
               ) : null}
-              <Plate title="О проекте">
-                {pj.author ? <Fact k="Автор">{pj.author}</Fact> : null}
+              <Plate title={t('О проекте')}>
+                {pj.author ? <Fact k={t('Автор')}>{pj.author}</Fact> : null}
                 {lic ? (
-                  <Fact k="Лицензия">
+                  <Fact k={t('Лицензия')}>
                     {pj.license && pj.license.url ? (
                       <a
                         href={pj.license.url}
@@ -943,16 +945,16 @@ export function ProjectModal() {
                     ) : (
                       <span title={pj.license ? pj.license.id : undefined}>{lic.text}</span>
                     )}
-                    {lic.open ? <em className="pjx-open">открытый код</em> : null}
+                    {lic.open ? <em className="pjx-open">{t('открытый код')}</em> : null}
                   </Fact>
                 ) : null}
-                {pj.published ? <Fact k="Вышел">{agoLabel(pj.published)}</Fact> : null}
-                {pj.updated ? <Fact k="Обновлён">{agoLabel(pj.updated)}</Fact> : null}
-                {pj.downloads !== null ? <Fact k="Скачиваний">{pj.downloads.toLocaleString('ru-RU')}</Fact> : null}
+                {pj.published ? <Fact k={t('Вышел')}>{agoLabel(pj.published)}</Fact> : null}
+                {pj.updated ? <Fact k={t('Обновлён')}>{agoLabel(pj.updated)}</Fact> : null}
+                {pj.downloads !== null ? <Fact k={t('Скачиваний')}>{pj.downloads.toLocaleString(intlTag())}</Fact> : null}
                 {pj.loading ? skelLines([80, 60, 70]) : null}
               </Plate>
               {pj.links.length ? (
-                <Plate title="Ссылки">
+                <Plate title={t('Ссылки')}>
                   <div className="pjx-links">
                     {pj.links.map((l) => (
                       <button key={l.kind + l.url} className={'pjx-link ' + l.kind} data-track={'project_link_' + l.kind} onClick={() => openExt(l.url)} title={l.url}>
@@ -975,7 +977,7 @@ export function ProjectModal() {
                   <button
                     className="pjx-stage-img"
                     data-track="pj_shot_zoom"
-                    aria-label="Открыть картинку на весь экран"
+                    aria-label={t('Открыть картинку на весь экран')}
                     onClick={() => openImage(cur.raw || cur.url)}
                   >
                     <img key={cur.url} src={cur.url} alt={cur.title || ''} referrerPolicy="no-referrer" />
@@ -988,10 +990,10 @@ export function ProjectModal() {
                   </span>
                   {pj.gallery.length > 1 ? (
                     <>
-                      <button className="pjx-nav prev" aria-label="Предыдущая" data-track="pj_shot_prev" onClick={() => setShot((shotN - 1 + pj.gallery.length) % pj.gallery.length)}>
+                      <button className="pjx-nav prev" aria-label={t('Предыдущая')} data-track="pj_shot_prev" onClick={() => setShot((shotN - 1 + pj.gallery.length) % pj.gallery.length)}>
                         <PxIcon name="chev-l" size={14} />
                       </button>
-                      <button className="pjx-nav next" aria-label="Следующая" data-track="pj_shot_next" onClick={() => setShot((shotN + 1) % pj.gallery.length)}>
+                      <button className="pjx-nav next" aria-label={t('Следующая')} data-track="pj_shot_next" onClick={() => setShot((shotN + 1) % pj.gallery.length)}>
                         <PxIcon name="chev-r" size={14} />
                       </button>
                     </>
@@ -1004,7 +1006,7 @@ export function ProjectModal() {
                   </div>
                 ) : null}
                 {pj.gallery.length > 1 ? (
-                  <div className="pjx-strip" ref={stripRef} role="listbox" aria-label="Картинки">
+                  <div className="pjx-strip" ref={stripRef} role="listbox" aria-label={t('Картинки')}>
                     {pj.gallery.map((g, i) => (
                       <button
                         key={g.url + i}
@@ -1012,7 +1014,7 @@ export function ProjectModal() {
                         data-on={i === shotN ? '1' : undefined}
                         role="option"
                         aria-selected={i === shotN}
-                        aria-label={g.title || 'Картинка ' + (i + 1)}
+                        aria-label={g.title || t('Картинка {n}', { n: i + 1 })}
                         onClick={() => setShot(i)}
                       >
                         <img src={g.url} alt="" loading="lazy" referrerPolicy="no-referrer" />
@@ -1026,8 +1028,8 @@ export function ProjectModal() {
             ) : (
               <div className="pjx-empty">
                 <PxIcon name="image" size={28} />
-                <b>Галереи нет</b>
-                <span>Автор не добавил картинок.</span>
+                <b>{t('Галереи нет')}</b>
+                <span>{t('Автор не добавил картинок.')}</span>
               </div>
             )}
           </div>
@@ -1037,38 +1039,38 @@ export function ProjectModal() {
               <>
                 <div className="pjx-vbar">
                   {build ? (
-                    <div className="segs" role="group" aria-label="Какие версии показать">
+                    <div className="segs" role="group" aria-label={t('Какие версии показать')}>
                       <button className={'seg' + (mode === 'fit' ? ' on' : '')} data-track="pj_ver_fit" onClick={() => setVerMode('fit')}>
                         <span className="pjx-fitdot" aria-hidden="true" />
-                        Для «{selectedBuild}»
+                        {t('Для «{name}»', { name: selectedBuild })}
                         <span className="pjx-n">{fit.length}</span>
                       </button>
                       <button className={'seg' + (mode === 'all' ? ' on' : '')} data-track="pj_ver_all" onClick={() => setVerMode('all')}>
-                        Все
+                        {t('Все')}
                         <span className="pjx-n">{rows.length}</span>
                       </button>
                     </div>
                   ) : (
                     <span className="pjx-vbar-t">
-                      {rows.length} {rows.length === 1 ? 'версия' : rows.length < 5 ? 'версии' : 'версий'}
+                      {rows.length} {rows.length === 1 ? t('версия') : rows.length < 5 ? t('версии') : t('версий')}
                     </span>
                   )}
                   {build ? <span className="pjx-vbar-build">{buildText}</span> : null}
                 </div>
                 {shown.length ? (
-                  <div className={'pjx-table' + (build ? ' has-cm' : '')} role="table" aria-label="Версии">
+                  <div className={'pjx-table' + (build ? ' has-cm' : '')} role="table" aria-label={t('Версии')}>
                     <div className="pjx-tr pjx-th" role="row">
-                      {build ? <span role="columnheader" aria-label="Совместимость" /> : null}
-                      <span role="columnheader">Версия</span>
-                      <span role="columnheader">Игра</span>
-                      <span role="columnheader">Загрузчик</span>
-                      <span role="columnheader">Вышла</span>
-                      <span role="columnheader" className="r">Размер</span>
-                      <span role="columnheader" aria-label="Действие" />
+                      {build ? <span role="columnheader" aria-label={t('Совместимость')} /> : null}
+                      <span role="columnheader">{t('Версия')}</span>
+                      <span role="columnheader">{t('Игра')}</span>
+                      <span role="columnheader">{t('Загрузчик')}</span>
+                      <span role="columnheader">{t('Вышла')}</span>
+                      <span role="columnheader" className="r">{t('Размер')}</span>
+                      <span role="columnheader" aria-label={t('Действие')} />
                     </div>
                     {shown.slice(0, verLimit).map(({ v, c }) => {
-                      const vl = versionLabel(packKey, v.id, pj.kind === 'modpack' ? 'Установить' : 'Добавить')
-                      const vdone = vl === 'Установлено'
+                      const vl = versionLabel(packKey, v.id, pj.kind === 'modpack' ? t('Установить') : t('Добавить'))
+                      const vdone = vl === t('Установлено')
                       const ls = (v.loaders || []).filter((l) => l !== 'minecraft')
                       return (
                         <div className={'pjx-tr' + (c === 'ok' ? ' fit' : c === 'unknown' ? '' : ' miss')} role="row" key={v.id}>
@@ -1076,7 +1078,7 @@ export function ProjectModal() {
                           <span className="pjx-vname" role="cell">
                             <b title={trOn ? undefined : v.name}>{trOn ? ruVersionName(ruNames, v) : v.name}</b>
                             <span>
-                              {v.type && TYPE_RU[v.type] ? <i className={'pjx-type ' + v.type}>{TYPE_RU[v.type]}</i> : null}
+                              {v.type && typeRu()[v.type] ? <i className={'pjx-type ' + v.type}>{typeRu()[v.type]}</i> : null}
                               {v.number && v.number !== v.name ? <span className="pjx-vnum">{v.number}</span> : null}
                             </span>
                           </span>
@@ -1086,7 +1088,7 @@ export function ProjectModal() {
                           <span role="cell" className="pjx-vld">
                             {ls.length ? ls.slice(0, 3).map((l) => (l === ls[0] ? '' : ', ') + (loaderLabel(l) === l ? RU_LOADER(l) : loaderLabel(l))) : '—'}
                           </span>
-                          <span role="cell" className="pjx-vdate" title={v.date ? new Date(v.date).toLocaleDateString('ru-RU') : undefined}>
+                          <span role="cell" className="pjx-vdate" title={v.date ? new Date(v.date).toLocaleDateString(intlTag()) : undefined}>
                             {agoLabel(v.date, Date.now(), true) || '—'}
                           </span>
                           <span role="cell" className="pjx-vsize r">{v.size ? sizeLabel(v.size) : ''}</span>
@@ -1102,7 +1104,7 @@ export function ProjectModal() {
                             </button>
                             {running && task.versionId === v.id ? <PauseInstall task={task} className="btn sm ghost" /> : null}
                             {running && task.versionId === v.id ? (
-                              <button className="btn sm ghost" aria-label="Отменить установку" data-track="install_cancel" onClick={() => stopInstall(packKey)}>
+                              <button className="btn sm ghost" aria-label={t('Отменить установку')} data-track="install_cancel" onClick={() => stopInstall(packKey)}>
                                 <PxIcon name="x" size={10} />
                               </button>
                             ) : null}
@@ -1112,28 +1114,28 @@ export function ProjectModal() {
                     })}
                     {shown.length > verLimit ? (
                       <button className="btn sm secondary pjx-more" data-track="pj_ver_more" onClick={() => setVerLimit((n) => n + VER_PAGE)}>
-                        Показать ещё {Math.min(VER_PAGE, shown.length - verLimit)}
+                        {t('Показать ещё {n}', { n: Math.min(VER_PAGE, shown.length - verLimit) })}
                       </button>
                     ) : null}
                   </div>
                 ) : (
                   <div className="pjx-empty">
                     <PxIcon name="alert" size={28} />
-                    <b>Под «{selectedBuild}» версий нет</b>
-                    <span>{buildText ? 'Нужна ' + buildText + '. ' : ''}Можно поставить другую версию на свой страх.</span>
+                    <b>{t('Под «{name}» версий нет', { name: selectedBuild })}</b>
+                    <span>{buildText ? t('Нужна {build}. Можно поставить другую версию на свой страх.', { build: buildText }) : t('Можно поставить другую версию на свой страх.')}</span>
                     <button className="btn md secondary" onClick={() => setVerMode('all')}>
-                      Показать все версии
+                      {t('Показать все версии')}
                     </button>
                   </div>
                 )}
               </>
-            ) : pj.loading || (!pj.failed && pj.title === 'Загружаем…') ? (
+            ) : pj.loading || (!pj.failed && pj.title === t('Загружаем…')) ? (
               skelLines([100, 100, 100, 100], '40px')
             ) : (
               <div className="pjx-empty">
                 <PxIcon name="box" size={28} />
-                <b>Версий нет</b>
-                <span>Автор пока не выложил файлы.</span>
+                <b>{t('Версий нет')}</b>
+                <span>{t('Автор пока не выложил файлы.')}</span>
               </div>
             )}
           </div>

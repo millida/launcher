@@ -1,0 +1,8 @@
+.acc-choice { display: grid; gap: 10px; width: 100%; }
+:root:root .acc-choice .btn.lg { width: 100%; justify-content: center; }
+:root:root .acc-choice .acc-choice-licence { height: auto; min-height: 60px; gap: 12px; font-size: 18px; }
+:root:root .acc-choice .acc-choice-offline { height: auto; min-height: 52px; padding-block: 9px; flex-direction: column; gap: 2px; }
+.acc-choice-offline b { font-size: 15px; font-weight: 650; }
+.acc-choice-offline span { font-size: 12px; font-weight: 500; color: var(--m-fg-subtle); }
+.acc-choice-buy { justify-self: center; margin-top: 4px; font-size: 13px; color: var(--m-fg-muted); text-decoration: underline; text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .acc-choice-buy:hover { color: var(--m-fg); } }

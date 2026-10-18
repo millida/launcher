@@ -26,10 +26,11 @@ import { cancelGo, usePartyFlow } from '../../state/partyFlow'
 import { TIER_SERVER } from '../../state/tiers'
 import { setScreen, showToast } from '../../state/ui'
 import '../../styles/pixel/party-panel.css'
+import { t, useMarketOffers, useT } from '../../i18n'
 
 const CHAT_MAX = 300
 /** Быстрые фразы: договориться в один клик, без набора текста (как командный чат в Brawl Stars). */
-const QUICK = ['Го PvP', 'Го выживание', 'Я готов', 'Минуту', 'Не могу']
+const quickPhrases = () => [t('Го PvP'), t('Го выживание'), t('Я готов'), t('Минуту'), t('Не могу')]
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -57,7 +58,9 @@ export interface Where {
 const PVP_MODE: LobbyMode = {
   kind: 'server',
   slug: 'millida-pvp',
-  name: 'PvP-дуэли',
+  get name() {
+    return t('PvP-дуэли')
+  },
   ip: TIER_SERVER.ip,
   logo: null,
   banner: null,
@@ -70,6 +73,8 @@ const PVP_MODE: LobbyMode = {
  * серверы рейтинга. Остальное выбирается в каталоге и возвращается сюда первой плашкой.
  */
 export function useWhere(mode: LobbyMode | null, modeTitle: string): Where[] {
+  const t = useT()
+  const partners = useMarketOffers('partners')
   const servers = useLobby((s) => s.servers)
   const list: Where[] = []
   const seen = new Set<string>()
@@ -80,9 +85,8 @@ export function useWhere(mode: LobbyMode | null, modeTitle: string): Where[] {
     list.push(w)
   }
   if (mode) add({ key: 'mine', title: modeTitle, mode, hot: true })
-  add({ key: 'pvp', title: 'PvP-дуэли', mode: PVP_MODE })
-  const an = anarchyMode()
-  add({ key: 'anarchy', title: 'Анархия', mode: an })
+  add({ key: 'pvp', title: t('PvP-дуэли'), mode: PVP_MODE })
+  if (partners) add({ key: 'anarchy', title: t('Анархия'), mode: anarchyMode() })
   for (const s of servers.filter((x) => x.isOnline).slice(0, 2)) {
     add({
       key: 'srv:' + s.slug,
@@ -94,6 +98,7 @@ export function useWhere(mode: LobbyMode | null, modeTitle: string): Where[] {
 }
 
 function Offer({ party, me, offer, now }: { party: Party; me: string; offer: PartyProposal; now: number }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const by = party.members.find((m) => m.userId === offer.byId)
   const mine = offer.byId === me
@@ -107,8 +112,8 @@ function Offer({ party, me, offer, now }: { party: Party; me: string; offer: Par
     setBusy(false)
   }
   return (
-    <div className={'pty-offer' + (said ? ' wait' : '')} role="group" aria-label="Предложение">
-      <span className="pty-offer-who">{mine ? 'Ты зовёшь' : (by?.nickname || 'Игрок') + ' зовёт'}</span>
+    <div className={'pty-offer' + (said ? ' wait' : '')} role="group" aria-label={t('Предложение')}>
+      <span className="pty-offer-who">{mine ? t('Ты зовёшь') : t('{nick} зовёт', { nick: by?.nickname || t('Игрок') })}</span>
       <b className="pty-offer-title">{offer.target.title}</b>
       <span className="pty-offer-votes">
         {party.members.map((m) => (
@@ -120,15 +125,15 @@ function Offer({ party, me, offer, now }: { party: Party; me: string; offer: Par
       </span>
       {said ? (
         <button className="btn sm secondary pty-offer-no" disabled={busy} onClick={() => void answer(false)}>
-          {mine ? 'Отменить' : 'Передумал'}
+          {mine ? t('Отменить') : t('Передумал')}
         </button>
       ) : (
         <span className="pty-offer-acts">
           <button className="btn sm primary" data-track="party_offer_yes" disabled={busy} onClick={() => void answer(true)}>
-            Идём
+            {t('Идём')}
           </button>
           <button className="btn sm secondary" data-track="party_offer_no" disabled={busy} onClick={() => void answer(false)}>
-            Нет
+            {t('Нет')}
           </button>
         </span>
       )}
@@ -140,6 +145,7 @@ function Offer({ party, me, offer, now }: { party: Party; me: string; offer: Par
 }
 
 function MemberRow({ party, m, me, leader }: { party: Party; m: PartyMember; me: string; leader: boolean }) {
+  const t = useT()
   const parts = useCall((s) => s.parts)
   const callRoom = useCall((s) => s.roomId)
   const iSpeak = useCall((s) => s.speaking)
@@ -151,7 +157,7 @@ function MemberRow({ party, m, me, leader }: { party: Party; m: PartyMember; me:
   const speaking = mine ? inVoice && iSpeak : !!part && part.speaking
   const muted = mine ? iMuted : part ? part.muted : !!party.voice.find((v) => v.userId === m.userId)?.muted
   const ready = m.role === 'leader' || (m.ready && !!party.target && sameIdentity(m.have, party.target))
-  const nick = m.nickname || 'Игрок'
+  const nick = m.nickname || t('Игрок')
   return (
     <div className={'pty-mate' + (speaking ? ' speaking' : '')}>
       <Head nick={nick} src={m.avatarUrl} size={28} className="pty-mate-head" />
@@ -167,10 +173,10 @@ function MemberRow({ party, m, me, leader }: { party: Party; m: PartyMember; me:
             {leader ? (
               <button
                 className="pty-ico"
-                aria-label={'Исключить ' + nick}
+                aria-label={t('Исключить {nick}', { nick })}
                 data-track="party_kick"
                 onClick={() =>
-                  void uiConfirm('Исключить ' + nick + ' из пати?', { confirmLabel: 'Исключить', danger: true }).then((ok) => {
+                  void uiConfirm(t('Исключить {nick} из пати?', { nick }), { confirmLabel: t('Исключить'), danger: true }).then((ok) => {
                     if (ok) void kickFromParty(m.userId)
                   })
                 }
@@ -180,7 +186,7 @@ function MemberRow({ party, m, me, leader }: { party: Party; m: PartyMember; me:
             ) : null}
             <button
               className="pty-ico"
-              aria-label={'Пожаловаться на ' + nick}
+              aria-label={t('Пожаловаться на {nick}', { nick })}
               onClick={() => usePartyStore.getState().set({ reportAsk: { userId: m.userId, nick, context: 'party' } })}
             >
               <Icon id="i-flag" />
@@ -194,6 +200,7 @@ function MemberRow({ party, m, me, leader }: { party: Party; m: PartyMember; me:
 
 /** Свой голос — на своей строке: подключиться, открыть микрофон, заглушить всех. */
 function MyVoice({ party }: { party: Party }) {
+  const t = useT()
   const status = useCall((s) => s.status)
   const room = useCall((s) => s.roomId)
   const muted = useCall((s) => s.muted)
@@ -208,13 +215,13 @@ function MyVoice({ party }: { party: Party }) {
         className="pty-mini"
         data-track="party_voice_join"
         onClick={() => {
-          if (PARTY_SHOWCASE) return showToast('В показе голоса нет', 'error')
-          if (!hasTauri()) return showToast('Голос работает в приложении', 'error')
+          if (PARTY_SHOWCASE) return showToast(t('В показе голоса нет'), 'error')
+          if (!hasTauri()) return showToast(t('Голос работает в приложении'), 'error')
           void joinPartyVoice(party.id, true)
         }}
       >
         <Icon id="i-headset" />
-        Голос
+        {t('Голос')}
       </button>
     )
   }
@@ -223,18 +230,18 @@ function MyVoice({ party }: { party: Party }) {
       <button
         className={'pty-mini' + (muted ? '' : ' on')}
         aria-pressed={!muted}
-        aria-label={muted ? 'Включить микрофон' : 'Выключить микрофон'}
+        aria-label={muted ? t('Включить микрофон') : t('Выключить микрофон')}
         data-track={muted ? 'party_mic_on' : 'party_mic_off'}
         disabled={status !== 'active' || deafened}
         onClick={toggleMute}
       >
         <Icon id={muted ? 'i-mic-off' : 'i-mic'} />
-        {muted ? 'Микрофон' : 'Говорю'}
+        {muted ? t('Микрофон') : t('Говорю')}
       </button>
       <button
         className={'pty-ico pty-deaf' + (deafened ? ' off' : '')}
         aria-pressed={deafened}
-        aria-label={deafened ? 'Включить звук' : 'Выключить звук'}
+        aria-label={deafened ? t('Включить звук') : t('Выключить звук')}
         onClick={toggleDeafen}
       >
         <Icon id={deafened ? 'i-mute' : 'i-volume'} />
@@ -244,6 +251,7 @@ function MyVoice({ party }: { party: Party }) {
 }
 
 function Chat({ party, me }: { party: Party; me: string }) {
+  const t = useT()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const strangers = usePartyFlow((s) => s.strangers)
@@ -277,7 +285,7 @@ function Chat({ party, me }: { party: Party; me: string }) {
 
   return (
     <>
-      <div className="pty-chat" ref={box} role="log" aria-label="Чат пати">
+      <div className="pty-chat" ref={box} role="log" aria-label={t('Чат пати')}>
         {lines.map((l) =>
           l.system ? (
             <span key={l.id} className="pty-line sys">
@@ -285,14 +293,14 @@ function Chat({ party, me }: { party: Party; me: string }) {
             </span>
           ) : (
             <span key={l.id} className={'pty-line' + (l.userId === me ? ' mine' : '')}>
-              <b>{l.nickname || 'Игрок'}</b>
+              <b>{l.nickname || t('Игрок')}</b>
               {l.text}
             </span>
           ),
         )}
       </div>
-      <div className="pty-quick" role="group" aria-label="Быстрые фразы">
-        {QUICK.map((q) => (
+      <div className="pty-quick" role="group" aria-label={t('Быстрые фразы')}>
+        {quickPhrases().map((q) => (
           <button key={q} className="pty-q" data-track="party_quick" disabled={busy} onClick={() => void quick(q)}>
             {q}
           </button>
@@ -310,12 +318,12 @@ function Chat({ party, me }: { party: Party; me: string }) {
           className="pty-input"
           value={text}
           maxLength={CHAT_MAX}
-          placeholder="Сообщение"
-          aria-label="Сообщение в чат пати"
+          placeholder={t('Сообщение')}
+          aria-label={t('Сообщение в чат пати')}
           data-private
           onChange={(e) => setText(e.target.value)}
         />
-        <button className="pty-send" type="submit" aria-label="Отправить" disabled={busy || !text.trim()}>
+        <button className="pty-send" type="submit" aria-label={t('Отправить')} disabled={busy || !text.trim()}>
           <Icon id="i-send" />
         </button>
       </form>
@@ -331,6 +339,7 @@ function Chat({ party, me }: { party: Party; me: string }) {
  * предложение «куда идём» → чат.
  */
 export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMode | null; modeTitle: string }) {
+  const t = useT()
   const party = usePartyStore((s) => s.party)
   const me = usePartyStore((s) => s.me)
   const searching = useMateSearch((s) => s.searching)
@@ -348,17 +357,17 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
 
   if (party && waiting) {
     return (
-      <aside className="pty pty-search" aria-label="Комната">
+      <aside className="pty pty-search" aria-label={t('Комната')}>
         <span className="party-dots pty-dots" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
-        <b className="pty-search-title">{party.target?.title || 'Комната'}</b>
-        <span className="pty-search-time">Ждём игроков · {clock(now - (party.room?.since || now))}</span>
+        <b className="pty-search-title">{party.target?.title || t('Комната')}</b>
+        <span className="pty-search-time">{t('Ждём игроков · {time}', { time: clock(now - (party.room?.since || now)) })}</span>
         <button className="btn sm secondary pty-cancel" data-sound="close" data-track="party_room_close" onClick={() => void closeRoom()}>
           <Icon id="i-x" />
-          Закрыть комнату
+          {t('Закрыть комнату')}
         </button>
       </aside>
     )
@@ -366,17 +375,17 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
 
   if (!party || !together) {
     return (
-      <aside className="pty pty-search" aria-label="Поиск пати">
+      <aside className="pty pty-search" aria-label={t('Поиск пати')}>
         <span className="party-dots pty-dots" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
-        <b className="pty-search-title">Ищем пати</b>
+        <b className="pty-search-title">{t('Ищем пати')}</b>
         <span className="pty-search-time">{clock(now - since)}</span>
         <button className="btn sm secondary pty-cancel" data-sound="close" data-track="party_search_cancel" onClick={() => void stopMateSearch()}>
           <Icon id="i-x" />
-          Отмена
+          {t('Отмена')}
         </button>
       </aside>
     )
@@ -396,16 +405,16 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
       if (target) await proposeToParty(target)
     } catch (e) {
       console.error('[party] propose', e)
-      showToast('Не удалось предложить', 'error')
+      showToast(t('Не удалось предложить'), 'error')
     } finally {
       setAsking('')
     }
   }
 
   return (
-    <aside className="pty" aria-label="Пати">
+    <aside className="pty" aria-label={t('Пати')}>
       <div className="pty-head">
-        <b>Пати</b>
+        <b>{t('Пати')}</b>
         <span className="pty-count">
           {party.members.length}/{party.capacity}
         </span>
@@ -417,7 +426,7 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
             onClick={() => void (party.room!.open ? closeRoom() : openRoom(party.target!, true))}
           >
             <Icon id={party.room.open ? 'i-users' : 'i-lock'} />
-            {party.room.open ? 'Открытая' : 'Закрытая'}
+            {party.room.open ? t('Открытая') : t('Закрытая')}
           </button>
         ) : null}
         {searching && !full ? (
@@ -427,16 +436,16 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
               <i />
               <i />
             </span>
-            ищем ещё
+            {t('ищем ещё')}
           </span>
         ) : null}
       </div>
 
       {/* Что будет дальше — тремя шагами: зашёл, отметился, общий старт. */}
-      <ol className="pty-steps" aria-label="Что дальше">
-        <li className="done">Зашёл</li>
-        <li className={stepReady ? 'done' : 'now'}>{leader ? 'Все готовы' : 'Жми «Готов»'}</li>
-        <li className={launchAt ? 'now' : ''}>Старт</li>
+      <ol className="pty-steps" aria-label={t('Что дальше')}>
+        <li className="done">{t('Зашёл')}</li>
+        <li className={stepReady ? 'done' : 'now'}>{leader ? t('Все готовы') : t('Жми «Готов»')}</li>
+        <li className={launchAt ? 'now' : ''}>{t('Старт')}</li>
       </ol>
 
       <div className="pty-mates">
@@ -449,11 +458,11 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
         <Offer party={party} me={me} offer={offer} now={now} />
       ) : party.target ? (
         <div className={'pty-going' + (launchAt ? ' count' : '')}>
-          <span>{launchAt ? (launchAt > now ? 'Старт через ' + Math.max(1, Math.ceil((launchAt - now) / 1000)) : leader ? 'Запускаем' : 'Ждём лидера') : 'Идём'}</span>
+          <span>{launchAt ? (launchAt > now ? t('Старт через {n}', { n: Math.max(1, Math.ceil((launchAt - now) / 1000)) }) : leader ? t('Запускаем') : t('Ждём лидера')) : t('Идём')}</span>
           <b>{party.target.title}</b>
           {launchAt ? (
             <button className="pty-mini" data-sound="close" data-track="party_launch_cancel" onClick={cancelGo}>
-              Отмена
+              {t('Отмена')}
             </button>
           ) : null}
         </div>
@@ -462,11 +471,11 @@ export function PartyPanel({ on, mode, modeTitle }: { on: boolean; mode: LobbyMo
       {chatOn ? <Chat party={party} me={me} /> : null}
 
       {chatOn && !offer && (leader || !party.room?.open) ? (
-        <div className="pty-where" role="group" aria-label="Куда идём">
+        <div className="pty-where" role="group" aria-label={t('Куда идём')}>
           <span className="pty-where-cap">
-            Куда идём?
+            {t('Куда идём?')}
             <button className="pty-other" data-sound="open" data-track="party_propose_other" onClick={() => setScreen('playhub')}>
-              Другое
+              {t('Другое')}
               <Icon id="i-chev-r" />
             </button>
           </span>

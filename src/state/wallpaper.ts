@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { convertFileSrc } from '../ipc/commands'
 import { stillOf } from '../lib/wallpaper'
 import { showToast } from './ui'
+import { t } from '../i18n'
 
 const VIDS = ['bg1', 'bg2', 'bg3', 'bg4']
 // Legacy canvas scenes were dropped; fall back if one is still stored.
@@ -104,14 +105,14 @@ export const useWallpaper = create<WallpaperState>((set) => ({
     localStorage.setItem('m-wp', id)
     localStorage.setItem('m-wp-mode', 'fixed')
     set({ wpCur: id, wpMode: 'fixed' })
-    showToast('Фон: ' + name)
+    showToast(t('Фон: {name}', { name }))
   },
   setCustom: (c) => {
     localStorage.setItem('m-wp-custom', JSON.stringify(c))
     localStorage.setItem('m-wp', 'custom')
     localStorage.setItem('m-wp-mode', 'fixed')
     set({ custom: c, wpCur: 'custom', wpMode: 'fixed' })
-    showToast('Фон: ' + (c.name || 'свой фон'))
+    showToast(t('Фон: {name}', { name: c.name || t('свой фон') }))
   },
   addCustom: (c) =>
     set((s) => {
@@ -120,7 +121,7 @@ export const useWallpaper = create<WallpaperState>((set) => ({
       localStorage.setItem('m-wp-custom', JSON.stringify(c))
       localStorage.setItem('m-wp', 'custom')
       localStorage.setItem('m-wp-mode', 'fixed')
-      showToast('Свой фон установлен')
+      showToast(t('Свой фон установлен'))
       return { gallery, custom: c, wpCur: 'custom', wpMode: 'fixed' }
     }),
   removeCustom: (path) =>
@@ -147,7 +148,7 @@ export const useWallpaper = create<WallpaperState>((set) => ({
     if (m === 'random') {
       const id = ['bg1', 'bg2', 'bg3', 'bg4'][Math.floor(Math.random() * 4)]
       set({ wpMode: m, wpCur: id })
-      showToast('Фон теперь случайный при каждом запуске')
+      showToast(t('Фон теперь случайный при каждом запуске'))
     } else {
       set({ wpMode: m })
     }

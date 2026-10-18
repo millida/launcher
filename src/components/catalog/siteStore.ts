@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
-import { MR_PAGE, loadCf, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
+import { ALL_CATEGORIES, ANY_LOADER, ANY_VERSION, MR_PAGE, loadCf, loadMr, mrSearchUrl, mrToHit, useMods } from '../../state/mods'
 import { OWN_PACKS_KEY, PER_PAGE, PREMIUM_KEY, SITE_SECTIONS, displayName, facetsKey, isRuPack, isTranslation, listingKey, loadFacets, loadListing, loadOwnPacks, loadPremiumPacks, premiumCard, ruCard, sectionByKind, sectionBySlug, translationIndex } from './site'
 import type { SiteCard, SiteFacets, SiteListing, SiteSlug } from './site'
 import { peekCatalog, staleCatalog } from '../../lib/catalogCache'
@@ -11,6 +11,7 @@ import { foreignTailAllowed } from './sections'
 import type { CatalogSortId, EditionFilter, PriceFilter, SideFilter } from './sections'
 import { inTime } from '../../lib/deadline'
 import { hasTauri } from '../../ipc/tauri'
+import { getMarket, marketOffers } from '../../i18n'
 
 /*
  * Состояние каталога сайта в лаунчере: раздел и фильтры — как адрес страницы
@@ -89,13 +90,13 @@ async function loadMrPage(
   const data = await loadMr(
     mrSearchUrl({
       tab: target.type,
-      ver: st.version || 'любая',
-      loader: loaderFacet || 'любой',
-      cat: target.category || 'все',
+      ver: st.version || ANY_VERSION,
+      loader: loaderFacet || ANY_LOADER,
+      cat: target.category || ALL_CATEGORIES,
       cats: shaderLoader,
       side: 'any',
       openSource: false,
-      sort: st.sort === 'new' ? 'Новые' : st.sort === 'updated' ? 'Обновлённые' : st.sort === 'follows' ? 'По рейтингу' : 'Популярные',
+      sort: st.sort === 'new' ? 'newest' : st.sort === 'updated' ? 'updated' : st.sort === 'follows' ? 'follows' : 'downloads',
       query: q,
       offset,
     }),
@@ -171,7 +172,7 @@ function createSiteStore(linked: boolean): SiteStore {
       // Вид установки «Ресурсов» — только у разделов, которые ставятся в сборку:
       // «Все», читы, скины и прочее ставятся своим путём и modTab не трогают.
       if (linked && SITE_SECTIONS.includes(sec)) {
-        useMods.getState().set({ modTab: sec.kind, fCats: [], fCat: 'все', count: '' })
+        useMods.getState().set({ modTab: sec.kind, fCats: [], fCat: ALL_CATEGORIES, count: '' })
         void useMods.getState().refreshInstalled()
       }
       const scope = (linked && scopeFor && scopeFor(s)) || { version: null, loader: null }
@@ -291,7 +292,8 @@ function createSiteStore(linked: boolean): SiteStore {
         lastStale = stale
         const paid = new Map(premium.map((p) => [p.slug, p]))
         const mine = new Map(own.map((p) => [p.slug, p]))
-        const ru = packs ? own.filter(isRuPack) : []
+        const ruMarket = marketOffers(getMarket(), 'ru-content')
+        const ru = packs && ruMarket ? own.filter(isRuPack) : []
         // Подмена оригинала переводом — только для переводов студии, не для русских авторов.
         const translationOf = translationIndex(ru.filter(isTranslation))
         let got = listing.items.map((c) => {
@@ -304,7 +306,7 @@ function createSiteStore(linked: boolean): SiteStore {
           const tr = ru.length ? translationOf(c) : undefined
           return tr ? ruCard(tr, c) : marked
         })
-        got = got.filter((c, i) => got.findIndex((x) => x.slug === c.slug) === i)
+        got = got.filter((c, i) => got.findIndex((x) => x.slug === c.slug) === i && (ruMarket || !c.ru))
         if (packs && st.access === 'premium') {
           const only = premiumOnly(premium, st, q)
           set({ items: only, total: only.length, page: 1, pages: 1, ...MR_EMPTY, busy: stale, stale, ruShelf: [], ruTotal: ru.length })

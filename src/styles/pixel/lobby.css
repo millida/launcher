@@ -768,11 +768,15 @@
 .lobby-rec.lobby-an.lobby-chat.is-discord { --an-night: #2a2f86; --an-lava: #5865f2; --an-lava-hover: #6d78f5; background: #2a2f86; }
 .lobby-rec.lobby-an.lobby-chat.is-telegram { --an-night: #0b4a6e; --an-lava: #2aabee; --an-lava-hover: #47b9f2; background: #0b4a6e; }
 .lobby-chat .lan-title em { color: #fff; }
+.lobby-rec.lobby-an.lobby-chat.is-invite { --an-night: var(--m-inset); --an-lava: var(--m-rarity-legendary); --an-lava-hover: var(--m-warning); --an-ink: var(--m-bg); background: var(--m-inset); }
+.lobby-chat.is-invite .lan-title em { color: var(--m-rarity-legendary); }
 .lobby-chat .lan-title { color: rgba(255, 255, 255, 0.92); }
 .lobby-chat.is-discord .lan-title em { color: #b9c0ff; }
 .lobby-chat.is-telegram .lan-title em { color: #9fdcff; }
 .lch-logo { right: 12px; top: 40px; z-index: 1; width: 84px; height: 84px; pointer-events: none; transition: translate 220ms var(--m-ease-move); }
 .lch-logo .px-icon { width: 100%; height: 100%; display: block; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.3)); }
+.lobby-chat.is-invite .lch-logo { top: auto; bottom: 30px; height: 40px; display: flex; align-items: center; justify-content: center; }
+.lch-logo .pmark { filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.3)); }
 .lobby-rec.lobby-an.lobby-smp { --an-night: #2a1606; --an-lava: #f07a18; --an-lava-hover: #ff8f33; --an-ink: #1a0d05; background: #2a1606; }
 .lsmp-rig { right: -14px; top: 30px; height: 142px; image-rendering: pixelated; }
 .lobby-pack .pr-co { max-width: 70%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

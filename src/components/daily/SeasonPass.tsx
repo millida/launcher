@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
 import { PlusMark } from '../premium/PlusMark'
-import { rubles } from '../../lib/rubies'
 import { CYCLE_DAYS, TRACK_DAYS, timerText, type CellState, type PassCol, type Row, type TrackReward } from './track'
 import { useRail } from './useRail'
 import { rarityTone, rewardLabel, rewardTitle, RewardArt } from './rewards'
 import '../../styles/pixel/pass.css'
+import { intlTag, useT } from '../../i18n'
+import { plusPrice } from '../../lib/regionalPrices'
 
 /**
  * Пропуск сезона v4 (06.10.2026, «как в Brawl Stars и на Majestic»):
@@ -106,6 +107,7 @@ function Card({
   onClaim: (el: HTMLElement) => void
   onLocked: () => void
 }) {
+  const t = useT()
   const list = row === 'free' ? col.free : col.plus
   const first = list[0]
   const style = first ? ({ '--ra-tone': rarityTone(first) } as CSSProperties) : undefined
@@ -124,7 +126,7 @@ function Card({
         ))}
       </span>
       {state === 'ready' ? (
-        <b className="bp-take">Забрать</b>
+        <b className="bp-take">{t('Забрать')}</b>
       ) : soon ? (
         <b className="bp-tag soon">
           <Icon id="i-clock" />
@@ -144,7 +146,7 @@ function Card({
       ) : null}
     </>
   )
-  const aria = (row === 'plus' ? 'PLUS, ' : '') + 'день ' + col.n + ': ' + title
+  const aria = row === 'plus' ? t('PLUS, день {n}: {title}', { n: col.n, title }) : t('день {n}: {title}', { n: col.n, title })
   const slot = 'bp-slot ' + row + ' ' + state
   if (state === 'ready' || state === 'locked') {
     return (
@@ -153,7 +155,7 @@ function Card({
           type="button"
           className={cls}
           style={style}
-          aria-label={(state === 'ready' ? 'Забрать — ' : 'Только с PLUS — ') + aria}
+          aria-label={state === 'ready' ? t('Забрать — {what}', { what: aria }) : t('Только с PLUS — {what}', { what: aria })}
           data-track={state === 'ready' ? 'daily_claim_cell' : 'daily_locked_cell'}
           data-kind="pass_cell"
           data-id={row + ':' + col.n}
@@ -263,6 +265,7 @@ export function SeasonPass({
   onClose?: () => void
   below?: ReactNode
 }) {
+  const t = useT()
   const { ref, edge, page } = useRail(focus, 3 * (compact ? 136 : 152), '.bp-col.focus')
   const { launch, layer } = useFlights()
   const ready = cols.flatMap((c) => [
@@ -276,7 +279,7 @@ export function SeasonPass({
   const total = cols.length || TRACK_DAYS
   const can = ready.length > 0 || !!extra
   const end = endsAt ? new Date(endsAt) : null
-  const endText = end && Number.isFinite(end.getTime()) ? end.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : ''
+  const endText = end && Number.isFinite(end.getTime()) ? end.toLocaleDateString(intlTag(), { day: 'numeric', month: 'long' }) : ''
 
   const claimCell = (day: number, row: Row, el: HTMLElement) => {
     if (busy) return
@@ -312,8 +315,8 @@ export function SeasonPass({
       <div className="bp-hero">
         <div className="bp-hero-main">
           <span className="bp-kicker">
-            Сезон
-            {endText ? <i>до {endText}</i> : null}
+            {t('Сезон')}
+            {endText ? <i>{t('до {date}', { date: endText })}</i> : null}
             {streak > 0 ? (
               <i className="bp-streak">
                 <Icon id="i-flame" />
@@ -321,8 +324,8 @@ export function SeasonPass({
               </i>
             ) : null}
           </span>
-          <h2 className="bp-title">Пропуск сезона</h2>
-          <div className="bp-progress" aria-label={'Открыто дней: ' + open + ' из ' + total}>
+          <h2 className="bp-title">{t('Пропуск сезона')}</h2>
+          <div className="bp-progress" aria-label={t('Открыто дней: {n} из {total}', { n: open, total })}>
             <b className="bp-progress-n">
               {open}
               <small>/{total}</small>
@@ -349,7 +352,7 @@ export function SeasonPass({
           {can ? (
             <button className="btn lg primary bp-claim" disabled={busy || !!extra?.busy} data-track="daily_claim" onClick={claimAll}>
               <PxIcon name="gift" size={24} />
-              Забрать
+              {t('Забрать')}
               {ready.length > 1 ? <b className="bp-count">{ready.length}</b> : null}
             </button>
           ) : (
@@ -361,13 +364,13 @@ export function SeasonPass({
           {!own ? (
             <button className="bp-plus" data-track="plus_subscribe" onClick={onPlus}>
               <Icon id="i-crown" />
-              <span>Открыть PLUS</span>
-              {price ? <small>{rubles(price)}/мес</small> : null}
+              <span>{t('Открыть PLUS')}</span>
+              {price ? <small>{t('{price}/мес', { price: plusPrice('PLUS', price) ?? '' })}</small> : null}
             </button>
           ) : null}
         </div>
         {onClose ? (
-          <button className="icon-btn bp-x" aria-label="Закрыть" data-track="close" onClick={onClose}>
+          <button className="icon-btn bp-x" aria-label={t('Закрыть')} data-track="close" onClick={onClose}>
             <Icon id="i-x" />
           </button>
         ) : null}
@@ -425,10 +428,10 @@ export function SeasonPass({
               })}
             </div>
           </div>
-          <button type="button" className="bp-arrow l" aria-label="Раньше" disabled={!edge.l} onClick={() => page(-1)}>
+          <button type="button" className="bp-arrow l" aria-label={t('Раньше')} disabled={!edge.l} onClick={() => page(-1)}>
             <Icon id="i-chev-l" />
           </button>
-          <button type="button" className="bp-arrow r" aria-label="Дальше" disabled={!edge.r} onClick={() => page(1)}>
+          <button type="button" className="bp-arrow r" aria-label={t('Дальше')} disabled={!edge.r} onClick={() => page(1)}>
             <Icon id="i-chev-r" />
           </button>
         </div>

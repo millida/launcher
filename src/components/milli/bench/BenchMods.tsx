@@ -22,6 +22,8 @@ import { useFlashWindow } from '../motion'
 import type { VirtualHandle } from './VirtualList'
 import '../../../styles/pixel/milli-pack.css'
 import '../../../styles/pixel/milli-mods.css'
+import { t, useT } from '../../../i18n'
+import { plural } from '../../../lib/format'
 
 /*
  * Вкладка «Моды» в карточке сборки (маленький чат, ~408px; игрок 12–14 лет —
@@ -36,12 +38,17 @@ import '../../../styles/pixel/milli-mods.css'
  */
 
 const FILTERS: { id: BenchFilter; ru: string; icon: string }[] = [
-  { id: 'all', ru: 'Все', icon: 'grid' },
-  { id: 'changed', ru: 'Изменённые', icon: 'sparkle' },
-  { id: 'off', ru: 'Выключенные', icon: 'power' },
-  { id: 'warn', ru: 'С проблемами', icon: 'alert' },
+  { id: 'all', get ru() { return t('Все') }, icon: 'grid' },
+  { id: 'changed', get ru() { return t('Изменённые') }, icon: 'sparkle' },
+  { id: 'off', get ru() { return t('Выключенные') }, icon: 'power' },
+  { id: 'warn', get ru() { return t('С проблемами') }, icon: 'alert' },
 ]
-const SIDE_RU: Record<string, string> = { client: 'клиент', server: 'сервер', both: 'клиент + сервер', single: 'одиночная' }
+const SIDE_RU: Record<string, string> = {
+  get client() { return t('клиент') },
+  get server() { return t('сервер') },
+  get both() { return t('клиент + сервер') },
+  get single() { return t('одиночная') },
+}
 /** Пиксельная картинка категории в заголовке группы. */
 const CAT_PX: Record<MilliCat, string> = {
   perf: 'fps_torch',
@@ -259,10 +266,11 @@ const sameRowProps = (a: RowProps, b: RowProps) =>
   a.fns === b.fns &&
   sameRow(a.row, b.row)
 
-const libWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'лишняя библиотека' : 'лишние библиотеки')
+const libWord = (n: number) => plural(n, t('лишняя библиотека'), t('лишние библиотеки'), t('лишние библиотеки'))
 
 /** Строка списка. memo по смыслу строки: при прокрутке, кликах и новой ревизии перерисовываются только изменившиеся. */
 const Row = memo(function Row({ row, modder, selected, selecting, picked, en, flash, back, fns }: RowProps) {
+  const t = useT()
   if (row.kind === 'group') {
     const n = row.ids?.length ?? 0
     const cat = (row.group ?? '') as MilliCat
@@ -273,7 +281,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
             className={'chk mbl-gsel' + (picked === n ? ' on' : picked ? ' part' : '')}
             role="checkbox"
             aria-checked={picked === n ? true : picked ? 'mixed' : false}
-            aria-label="Выбрать группу"
+            aria-label={t('Выбрать группу')}
             onClick={(e) => (e.stopPropagation(), fns.groupSelect(row.ids!))}
           />
         ) : null}
@@ -297,9 +305,9 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
           {modder ? <i>{few(list.map((m) => m.title))}</i> : null}
         </span>
         <button type="button" className="btn sm secondary" data-track="milli_orphans_drop" tabIndex={-1} onClick={() => fns.dropOrphans(list)}>
-          Убрать
+          {t('Убрать')}
         </button>
-        <button type="button" className="mpc-x" aria-label="Оставить" tabIndex={-1} onClick={fns.hideOrphans}>
+        <button type="button" className="mpc-x" aria-label={t('Оставить')} tabIndex={-1} onClick={fns.hideOrphans}>
           <PxIcon name="x" size={10} />
         </button>
       </div>
@@ -319,7 +327,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
       {row.warn}
     </span>
   ) : lib && row.needFor?.length ? (
-    <span className="mbl-why">для {few(row.needFor)}</span>
+    <span className="mbl-why">{t('для {list}', { list: few(row.needFor) })}</span>
   ) : modder && en && m.description ? (
     <span className="mbl-why" lang="en">
       {m.description}
@@ -330,11 +338,11 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
 
   const markTag =
     row.mark === '+' ? (
-      <i className={'mbl-mk ' + (back ? 'back' : 'add')} title={back ? 'Вернулся' : 'Новый'} aria-label={back ? 'Вернулся' : 'Новый'}>
+      <i className={'mbl-mk ' + (back ? 'back' : 'add')} title={back ? t('Вернулся') : t('Новый')} aria-label={back ? t('Вернулся') : t('Новый')}>
         <PxIcon name={back ? 'reply' : 'plus'} size={8} />
       </i>
     ) : row.mark === '~' ? (
-      <i className="mbl-mk chg" title="Обновлён" aria-label="Обновлён">
+      <i className="mbl-mk chg" title={t('Обновлён')} aria-label={t('Обновлён')}>
         <PxIcon name="arrow-up" size={8} />
       </i>
     ) : null
@@ -363,12 +371,12 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
             className={'chk mbl-sel' + (selected ? ' on' : '')}
             role="checkbox"
             aria-checked={selected}
-            aria-label="Выбрать"
+            aria-label={t('Выбрать')}
             onClick={(e) => (e.stopPropagation(), fns.select(m.projectId, e.shiftKey))}
           />
         ) : null}
         {m.pinned && !locked ? (
-          <span className="mpc-lock" title="Закреплён">
+          <span className="mpc-lock" title={t('Закреплён')}>
             <PxIcon name="lock" size={8} />
           </span>
         ) : null}
@@ -377,7 +385,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
         <span className="mbl-name">
           <span className="mbl-t">{m.title}</span>
           {m.ruInGame ? (
-            <i className="mbl-ru" title="Есть русский в игре" aria-label="Есть русский в игре">
+            <i className="mbl-ru" title={t('Есть русский в игре')} aria-label={t('Есть русский в игре')}>
               RU
             </i>
           ) : null}
@@ -391,7 +399,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
                 {fns.ver(m.version)}
               </span>
             ) : null}
-            <button type="button" className="mbl-slug" tabIndex={-1} title="Скопировать slug" onClick={(e) => (e.stopPropagation(), fns.copy(m.slug))}>
+            <button type="button" className="mbl-slug" tabIndex={-1} title={t('Скопировать slug')} onClick={(e) => (e.stopPropagation(), fns.copy(m.slug))}>
               {m.slug}
             </button>
             {m.side ? <span className="mbl-side">{SIDE_RU[m.side] || m.side}</span> : null}
@@ -402,7 +410,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
                 className={'mbl-en' + (en ? ' on' : '')}
                 tabIndex={-1}
                 aria-pressed={en}
-                title="Оригинал описания"
+                title={t('Оригинал описания')}
                 onClick={(e) => (e.stopPropagation(), fns.en(m.projectId))}
               >
                 EN
@@ -412,7 +420,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
         ) : null}
       </span>
       {locked ? (
-        <span className="mbl-locked" title="Нужен всегда" aria-label="Нужен всегда">
+        <span className="mbl-locked" title={t('Нужен всегда')} aria-label={t('Нужен всегда')}>
           <PxIcon name="lock" size={12} />
         </span>
       ) : (
@@ -420,7 +428,7 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
           type="button"
           role="switch"
           aria-checked={on}
-          aria-label={on ? 'Выключить' : 'Включить'}
+          aria-label={on ? t('Выключить') : t('Включить')}
           className={'mbl-sw ' + (on ? 'mbl-box' : 'mbl-back')}
           data-track={on ? 'milli_mod_toggle' : 'milli_mod_restore'}
           data-id={m.slug}
@@ -439,15 +447,16 @@ const Row = memo(function Row({ row, modder, selected, selecting, picked, en, fl
 const SUG_SHOW = 3
 
 const Suggest = memo(function Suggest({ items }: { items: MilliItem[] }) {
+  const t = useT()
   const [all, setAll] = useState(false)
   if (!items.length) return null
   const shown = all ? items.slice(0, 18) : items.slice(0, SUG_SHOW)
   const more = items.length - SUG_SHOW
   return (
-    <section className="mbl-add" aria-label="Можно добавить">
+    <section className="mbl-add" aria-label={t('Можно добавить')}>
       <h4 className="mbl-tail-h">
         <PxIcon name="plus" size={10} />
-        Можно добавить
+        {t('Можно добавить')}
       </h4>
       <div className="mbl-chips">
         {shown.map((m, i) => (
@@ -470,7 +479,7 @@ const Suggest = memo(function Suggest({ items }: { items: MilliItem[] }) {
         ))}
         {more > 0 ? (
           <button type="button" className="mbl-chip more" aria-expanded={all} onClick={() => setAll((v) => !v)}>
-            {all ? 'Скрыть' : 'ещё ' + more}
+            {all ? t('Скрыть') : t('ещё {n}', { n: more })}
           </button>
         ) : null}
       </div>
@@ -479,12 +488,13 @@ const Suggest = memo(function Suggest({ items }: { items: MilliItem[] }) {
 })
 
 const Excluded = memo(function Excluded({ list }: { list: MilliExcluded[] }) {
+  const t = useT()
   if (!list.length) return null
   return (
     <details className="mbl-excl">
       <summary>
         <PxIcon name="chev-r" size={10} className="px-icon mbl-chev" />
-        Не вошли в сборку
+        {t('Не вошли в сборку')}
         <i>{list.length}</i>
       </summary>
       <ul>
@@ -530,6 +540,7 @@ let revealDone = 0
 const EMPTY_SET: ReadonlySet<string> = new Set()
 
 export function BenchMods() {
+  const t = useT()
   const t0 = useRef(false)
   if (!t0.current) {
     t0.current = true
@@ -710,7 +721,7 @@ export function BenchMods() {
       select,
       tipShow: tip.show,
       tipHide: tip.hide,
-      copy: (slug) => void copyText(slug).then((ok) => showToast(ok ? 'slug скопирован' : 'Не удалось скопировать', ok ? 'ok' : 'error')),
+      copy: (slug) => void copyText(slug).then((ok) => showToast(ok ? t('slug скопирован') : t('Не удалось скопировать'), ok ? 'ok' : 'error')),
       en: (id) =>
         setEnOn((s) => {
           const n = new Set(s)
@@ -798,7 +809,7 @@ export function BenchMods() {
   }
   const askMilli = () => {
     const titles = selIds.map((id) => (mods.find((m) => m.projectId === id) ?? removed.find((m) => m.projectId === id))?.title).filter(Boolean) as string[]
-    const text = 'Про моды ' + few(titles, 6) + ': '
+    const text = t('Про моды {list}: ', { list: few(titles, 6) })
     useMilli.setState((s) => ({ restore: { text, seq: s.restore.seq + 1 }, focusSeq: s.focusSeq + 1 }))
     setSelected(new Set())
   }
@@ -829,8 +840,8 @@ export function BenchMods() {
             data-bench-search=""
             className="input sm"
             type="search"
-            placeholder="Найти мод"
-            aria-label="Найти мод"
+            placeholder={t('Найти мод')}
+            aria-label={t('Найти мод')}
             value={query}
             spellCheck={false}
             onChange={(e) => setUi({ query: e.target.value })}
@@ -845,7 +856,7 @@ export function BenchMods() {
             }}
           />
         </label>
-        <div className="mbl-filters" role="radiogroup" aria-label="Фильтр">
+        <div className="mbl-filters" role="radiogroup" aria-label={t('Фильтр')}>
           {FILTERS.map((f) => {
             const n = out.counts[f.id]
             if (f.id !== 'all' && !n && filter !== f.id) return null
@@ -878,7 +889,7 @@ export function BenchMods() {
           keyOf={rowKey}
           pidOf={rowPid}
           scrollKey="mods"
-          label="Моды сборки"
+          label={t('Моды сборки')}
           className="mbl-list"
           maxH={MODS_MAX_H}
           restoreTop={useBench.getState().ui.scroll.mods ?? 0}
@@ -909,42 +920,42 @@ export function BenchMods() {
       ) : (
         <div className="mbl-empty" data-bench-scroll="mods">
           <McItem name="barrier" size={24} />
-          <b>{query ? 'Ничего не нашлось' : filter === 'off' ? 'Всё включено' : filter === 'warn' ? 'Проблем нет' : filter === 'changed' ? 'Изменений нет' : 'Модов пока нет'}</b>
+          <b>{query ? t('Ничего не нашлось') : filter === 'off' ? t('Всё включено') : filter === 'warn' ? t('Проблем нет') : filter === 'changed' ? t('Изменений нет') : t('Модов пока нет')}</b>
           {query ? (
             <button
               type="button"
               className="btn sm secondary"
               onClick={() => {
-                useMilli.setState((s) => ({ restore: { text: 'Добавь мод: ' + query, seq: s.restore.seq + 1 }, focusSeq: s.focusSeq + 1 }))
+                useMilli.setState((s) => ({ restore: { text: t('Добавь мод: {name}', { name: query }), seq: s.restore.seq + 1 }, focusSeq: s.focusSeq + 1 }))
               }}
             >
-              Спросить Милли
+              {t('Спросить Милли')}
             </button>
           ) : filter !== 'all' ? (
             <button type="button" className="btn sm secondary" onClick={() => setUi({ filter: 'all' })}>
-              Показать все
+              {t('Показать все')}
             </button>
           ) : null}
         </div>
       )}
 
       {selecting ? (
-        <div className="bulk-float mbl-bulk" role="toolbar" aria-label="Выбранные моды">
+        <div className="bulk-float mbl-bulk" role="toolbar" aria-label={t('Выбранные моды')}>
           <b>{selected.size}</b>
           {selOn.length ? (
             <button type="button" className="btn sm secondary" data-track="milli_bulk_remove" onClick={bulkRemove}>
-              Выключить
+              {t('Выключить')}
             </button>
           ) : null}
           {selOff.length ? (
             <button type="button" className="btn sm secondary" data-track="milli_bulk_restore" onClick={bulkRestore}>
-              Включить
+              {t('Включить')}
             </button>
           ) : null}
           <button type="button" className="btn sm primary" data-track="milli_bulk_ask" onClick={askMilli}>
-            Спросить Милли
+            {t('Спросить Милли')}
           </button>
-          <button type="button" className="mpc-x" aria-label="Снять выбор" onClick={() => setSelected(new Set())}>
+          <button type="button" className="mpc-x" aria-label={t('Снять выбор')} onClick={() => setSelected(new Set())}>
             <PxIcon name="x" size={12} />
           </button>
         </div>

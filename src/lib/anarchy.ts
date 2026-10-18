@@ -7,6 +7,7 @@ import { showToast } from '../state/ui'
 import { useMemo } from 'react'
 import { anarchyServer, withAnarchyPromo, type AnarchyServer } from './ownServer'
 import { usePromo } from '../state/promo'
+import { t } from '../i18n'
 
 /**
  * A 1.21.4 build fits the 1.21 line for an ordinary server, but the anarchy
@@ -16,12 +17,12 @@ import { usePromo } from '../state/promo'
 export async function playAnarchy(): Promise<void> {
   const an = anarchyServer()
   if (!hasTauri()) {
-    showToast('Подключение к серверу доступно в приложении', 'error')
+    showToast(t('Подключение к серверу доступно в приложении'), 'error')
     return
   }
   const build = await ensureVersionBuild(an.version, { fps: versionFps(an.version) })
   if (!build) {
-    showToast('Не получилось подготовить Minecraft ' + an.version + '. Нажми «Играть» ещё раз.', 'error')
+    showToast(t('Не получилось подготовить Minecraft {version}. Нажми «Играть» ещё раз.', { version: an.version }), 'error')
     return
   }
   useProfiles.getState().setSelected(build)

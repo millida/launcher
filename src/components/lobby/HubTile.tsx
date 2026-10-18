@@ -6,6 +6,7 @@ import { track } from '../../lib/telemetry'
 import { useUi } from '../../state/ui'
 import { openPvp } from '../../state/pvp'
 import '../../styles/pixel/hubtile.css'
+import { useT } from '../../i18n'
 
 /**
  * Плитка раздела под сундуком лобби (23.09.2026, «сделайте всё остальное
@@ -71,6 +72,7 @@ export interface HubTileDaily {
 }
 
 export function HubTile({ kind, className, daily }: { kind: HubTileKind; className?: string; daily?: HubTileDaily }) {
+  const t = useT()
   const shopGiftRaw = useShopGiftReady()
   const shop = kind === 'shop'
   // Ежедневный бонус внутри магазина: не забран — «!» и «Бонус ждёт».
@@ -100,21 +102,21 @@ export function HubTile({ kind, className, daily }: { kind: HubTileKind; classNa
   // Хостинг продаётся через друзей (владелец 24.09.2026, 13:33): плитка зовёт
   // играть вместе, а не «Мои серверы». Друзья в сети — живым числом.
   const pvp = kind === 'pvp'
-  const title = daily ? daily.title : pvp ? 'Тиры PvP' : skin ? 'Мой скин' : shop ? 'Магазин' : 'Играть с друзьями'
+  const title = daily ? daily.title : pvp ? t('Тиры PvP') : skin ? t('Мой скин') : shop ? t('Магазин') : t('Играть с друзьями')
   const sub = daily
     ? daily.sub
     : skin
       ? skinNew
-        ? 'Загрузи свой'
+        ? t('Загрузи свой')
         : null
       : shop
       ? bonus
-        ? 'Бонус ждёт'
+        ? t('Бонус ждёт')
         : gift
-          ? 'Есть новое'
+          ? t('Есть новое')
           : null
       : null
-  const ribbon = pvp ? 'Новое' : daily || skin || shop ? null : servers ? null : 'Бесплатно'
+  const ribbon = pvp ? t('Новое') : daily || skin || shop ? null : servers ? null : t('Бесплатно')
   return (
     <button
       type="button"

@@ -41,6 +41,12 @@
     10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px), 0 10px, 10px 10px, 10px 0,
     13px 3px, 13px 13px, 3px 13px, 3px calc(100% - 13px), 13px calc(100% - 13px), 13px calc(100% - 3px), calc(100% - 13px) calc(100% - 3px), calc(100% - 13px) calc(100% - 13px), calc(100% - 3px) calc(100% - 13px), calc(100% - 3px) 13px, calc(100% - 13px) 13px, calc(100% - 13px) 3px, 13px 3px
   );
+  /* 2px ring on the 5px cut. Background stripes snap to device pixels while clip-path
+     does not, so at a fractional position the striped outline steps apart from the cut. */
+  --px-ring-5: polygon(evenodd,
+    5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 5px, 5px 5px, 5px 0,
+    7px 2px, 7px 7px, 2px 7px, 2px calc(100% - 7px), 7px calc(100% - 7px), 7px calc(100% - 2px), calc(100% - 7px) calc(100% - 2px), calc(100% - 7px) calc(100% - 7px), calc(100% - 2px) calc(100% - 7px), calc(100% - 2px) 7px, calc(100% - 7px) 7px, calc(100% - 7px) 2px, 7px 2px
+  );
   /* Тёмный текст на акценте: белый на этом зелёном даёт 2,6:1. */
   --px-on-accent: #06200e;
   /* Цвета граней для ступенчатой рамки (см. «Ступенчатая рамка»). */
@@ -186,9 +192,9 @@
   /* rail.css */
   .rail-inner, .sidebar.rail .rail-inner, .tb-back, .tb-icon, .tb-rubies, .topbar .account,
   /* settings.css */
-  .s2-plate, .s2-hero, .s2-sw, .s2-sw.on, .s2-sw.custom, .s2-wp-tile.add, .s2-dot, .s2-dot.on, .s2-kbd,
+  .s2-plate, .s2-hero, .s2-sw, .s2-sw.on, .s2-sw.custom, .s2-dot, .s2-dot.on, .s2-kbd,
   /* shell.css */
-  .acc-menu, .ava.is-plus, .acc-item.on, .acc-add-btn, .acc-opt, .acc-buy, .acc-code, .upd-banner, :is(.hero-cta .btn.glass, .hero-cta .btn.running, .hero-cta .btn.danger), .hero-cta .btn.glass.on, .hero-cta .btn.running, .hero-cta .btn.danger,
+  .acc-menu, .ava.is-plus, .acc-item.on, .acc-add-btn, .acc-opt, .acc-code, .upd-banner, :is(.hero-cta .btn.glass, .hero-cta .btn.running, .hero-cta .btn.danger), .hero-cta .btn.glass.on, .hero-cta .btn.running, .hero-cta .btn.danger,
   /* shop.css */
   .sh-bal, .sh-tag, .sh-art, .sh-work-how, .sh-src, .sh-wp-hero, .sh-owned, .sh-card, .sh-feat, .sh-deal, .sh-bundle-item, .sh-nc-back, .sh-nc-face, .sh-xray-stage, .sh-wish-item, .sh-meter-bar, .card.sh-weekly.is-ready, .sh-pick, .sh-pick.on, .sh-ach-row, .sh-prize, .card.sh-plus2, .sh-plus2-item, .sh-mig, .sh-pack, .sh-bar, .sh-chest,
   /* sets.css */

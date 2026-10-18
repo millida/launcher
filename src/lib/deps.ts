@@ -1,4 +1,5 @@
 import type { AuditIssue, DepAudit, DepNode, DepPlan, PlanItem } from '../ipc/commands'
+import { t } from '../i18n'
 
 export const planItem = (n: DepNode): PlanItem => ({
   source: n.source,
@@ -34,15 +35,15 @@ export const autoItems = (p: DepPlan): PlanItem[] => p.required.map(planItem)
 
 export function depSummary(p: DepPlan): string {
   const parts: string[] = []
-  if (p.required.length) parts.push('зависимостей: ' + p.required.length)
-  if (p.optional.length) parts.push('по желанию: ' + p.optional.length)
-  if (p.missing.length) parts.push('не найдено: ' + p.missing.length)
-  if (p.conflicts.length) parts.push('конфликтов: ' + p.conflicts.length)
+  if (p.required.length) parts.push(t('зависимостей: {n}', { n: p.required.length }))
+  if (p.optional.length) parts.push(t('по желанию: {n}', { n: p.optional.length }))
+  if (p.missing.length) parts.push(t('не найдено: {n}', { n: p.missing.length }))
+  if (p.conflicts.length) parts.push(t('конфликтов: {n}', { n: p.conflicts.length }))
   return parts.join(' · ')
 }
 
 export function fmtBytes(n: number): string {
   if (!n) return ''
   const mb = n / 1048576
-  return mb >= 1 ? mb.toFixed(1) + ' МБ' : Math.max(1, Math.round(n / 1024)) + ' КБ'
+  return mb >= 1 ? t('{n} МБ', { n: mb.toFixed(1) }) : t('{n} КБ', { n: Math.max(1, Math.round(n / 1024)) })
 }

@@ -10,9 +10,11 @@ import { backdropClose } from '../lib/dismiss'
 import { track } from '../lib/telemetry'
 import { batchSummary, candidateMeta, confirmText, contentText, errorText, launchersText, rowVerdict } from '../lib/moves'
 import type { RowResult } from '../lib/moves'
+import { useT } from '../i18n'
 
 /** The core copies and checks worlds and mods against the source; the build in the other launcher is never changed. */
 export function MovePanel() {
+  const t = useT()
   const [list, setList] = useState<MoveCandidate[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [picked, setPicked] = useState<Record<string, boolean>>({})
@@ -42,8 +44,8 @@ export function MovePanel() {
   const run = async () => {
     if (!selected.length || busy) return
     const yes = await uiConfirm(confirmText(selected), {
-      title: 'Скопировать в Millida',
-      confirmLabel: 'Скопировать',
+      title: t('Скопировать в Millida'),
+      confirmLabel: t('Скопировать'),
       danger: false,
     })
     if (!yes) return
@@ -69,12 +71,12 @@ export function MovePanel() {
     showToast(sum.text, sum.kind, sum.kind === 'ok' ? 'achievement' : undefined)
   }
 
-  if (failed) return <p className="faint-note">Не получилось поискать сборки Prism и Modrinth App</p>
+  if (failed) return <p className="faint-note">{t('Не получилось поискать сборки Prism и Modrinth App')}</p>
   if (list === null)
     return (
       <p className="faint-note onb-scan">
         <span className="spin"></span>
-        Ищем сборки Prism и Modrinth App
+        {t('Ищем сборки Prism и Modrinth App')}
       </p>
     )
   if (!list.length) return null
@@ -99,15 +101,15 @@ export function MovePanel() {
                 <small>{candidateMeta(c) + ' · ' + contentText(c)}</small>
                 {r?.kind === 'error' ? <small>{r.text}</small> : null}
               </span>
-              <span className="pill">{busy === c.path ? 'Переносим…' : r ? rowVerdict(r) : 'К переносу'}</span>
+              <span className="pill">{busy === c.path ? t('Переносим…') : r ? rowVerdict(r) : t('К переносу')}</span>
             </label>
           )
         })}
       </div>
       <div className="onb-inline">
-        <span className="faint-note">Закрой {where} перед переносом</span>
+        <span className="faint-note">{t('Закрой {where} перед переносом', { where })}</span>
         <button className="btn sm primary" onClick={() => void run()} disabled={!selected.length || !!busy}>
-          <Icon id="i-download" /> {busy ? 'Переносим…' : 'Перенести (' + selected.length + ')'}
+          <Icon id="i-download" /> {busy ? t('Переносим…') : t('Перенести ({n})', { n: selected.length })}
         </button>
       </div>
     </>
@@ -115,18 +117,19 @@ export function MovePanel() {
 }
 
 export function MoveBuildsModal() {
+  const t = useT()
   const modal = useUi((s) => s.modals.mvModal)
   if (!modal.open) return null
   const close = () => closeModal('mvModal')
   return (
     <div className={'modal-bg' + (modal.open ? ' open' : '') + (modal.vis ? ' vis' : '')} id="mvModal" {...backdropClose(close)}>
       <div className="modal mw-md">
-        <h3>Перенести всё в Millida</h3>
-        <div className="sub">Миры, моды, настройки, скриншоты и серверы переедут вместе со сборкой</div>
+        <h3>{t('Перенести всё в Millida')}</h3>
+        <div className="sub">{t('Миры, моды, настройки, скриншоты и серверы переедут вместе со сборкой')}</div>
         <MovePanel />
         <div style={{ display: 'flex', marginTop: '14px', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" data-sound="close" onClick={close}>
-            Закрыть
+            {t('Закрыть')}
           </button>
         </div>
       </div>

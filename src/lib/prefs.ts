@@ -1,5 +1,4 @@
 import { hasTauri } from '../ipc/tauri'
-import { setUiPref, uiPrefs } from '../ipc/commands'
 
 // localStorage in the webview is committed to disk lazily, and quitting through
 // the tray kills the process before the commit lands, so the last change a user
@@ -44,6 +43,8 @@ const DURABLE = [
   'm-ptheme-auto',
   'm-ptheme-user',
   'm-app-icon',
+  'm-lang',
+  'm-first-run',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]
@@ -84,6 +85,7 @@ export async function flushPrefs(): Promise<void> {
   if (!hasTauri() || !pending.size) return
   const batch = [...pending]
   pending.clear()
+  const { setUiPref } = await ipc()
   await Promise.all(
     batch.map(([key, value]) =>
       setUiPref(key, value).catch(() => {
@@ -94,6 +96,9 @@ export async function flushPrefs(): Promise<void> {
   schedule()
 }
 
+// i18n reads prefs and the IPC layer reaches i18n through state/ui, so a static import here would close an import cycle.
+const ipc = () => import('../ipc/commands')
+
 const timeout = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export async function hydratePrefs(): Promise<void> {
@@ -103,6 +108,7 @@ export async function hydratePrefs(): Promise<void> {
 
 async function load(): Promise<void> {
   try {
+    const { uiPrefs } = await ipc()
     const stored = await uiPrefs()
     DURABLE.forEach((key) => {
       const v = stored[key]

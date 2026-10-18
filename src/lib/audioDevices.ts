@@ -1,4 +1,5 @@
 import { storedNoiseMode, type NoiseMode } from './call/mic-worklet'
+import { t } from '../i18n'
 
 export const MIC_KEY = 'm-audio-in'
 export const OUT_KEY = 'm-audio-out'
@@ -79,12 +80,12 @@ export async function applyOutput(el: HTMLMediaElement): Promise<void> {
 export function micErrorText(error: unknown): string {
   const name = (error as { name?: string } | null)?.name
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return 'Система не дала доступ к микрофону — разреши его лаунчеру в настройках приватности и перезапусти лаунчер'
+    return t('Система не дала доступ к микрофону — разреши его лаунчеру в настройках приватности и перезапусти лаунчер')
   }
   if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-    return 'Микрофон не найден — подключи устройство и выбери его в списке'
+    return t('Микрофон не найден — подключи устройство и выбери его в списке')
   }
-  return 'Микрофон недоступен — проверь, не занят ли он другой программой'
+  return t('Микрофон недоступен — проверь, не занят ли он другой программой')
 }
 
 export interface MicProcessing {

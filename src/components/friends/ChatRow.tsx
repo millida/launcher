@@ -7,6 +7,7 @@ import { nickInRooms } from '../../state/rooms'
 import type { Friend } from '../../state/friends'
 import type { Room } from '../../state/rooms'
 import { statusText } from './FriendRow'
+import { useT } from '../../i18n'
 
 export const openChatItem = (i: OverlayChatItem) =>
   void (i.room ? openRoomChat(i.id, i.title) : openChat(i.id, i.title))
@@ -31,10 +32,11 @@ export function ChatRow({
   me: string
   active: boolean
 }) {
+  const t = useT()
   const inside = room?.voice || []
   const line = room
     ? inside.length
-      ? 'В разговоре: ' + inside.map((v) => nickInRooms(v.userId) || '…').join(', ')
+      ? t('В разговоре: {names}', { names: inside.map((v) => nickInRooms(v.userId) || '…').join(', ') })
       : room.members
           .filter((m) => m.userId !== me)
           .map((m) => m.nickname)

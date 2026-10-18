@@ -10,6 +10,7 @@ import { RarityChip } from './rarityUi'
 import { DayClock, OffBadge, useRailEdges } from './SetsV2'
 import { SceneBack, usePlayerSkin } from './ShopStage'
 import '../../styles/pixel/shop-motion.css'
+import { intlTag, useT } from '../../i18n'
 
 /**
  * «Сегодня» (ТЗ v3 + решение 06.10.2026: витрина дня — крючок ежедневного
@@ -71,6 +72,7 @@ export interface TodayActs {
  * имя, кнопка цены. Вещь дня — первая, в золотой рамке.
  */
 function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: ShopSource; acts: TodayActs; timer?: boolean; i?: number }) {
+  const t = useT()
   const buy = () => acts.onBuy(card, source)
   return (
     <div
@@ -89,18 +91,18 @@ function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: Sh
             <DayClock to={card.leavesAt} />
           </span>
         ) : null}
-        {source === 'forYou' ? <span className="td-you">для тебя</span> : null}
+        {source === 'forYou' ? <span className="td-you">{t('для тебя')}</span> : null}
       </button>
       <b className="sv-card-name">{card.item.name}</b>
       {card.owned ? (
         <button className="btn md secondary sv-pbtn" data-track="shop_wear" onClick={() => acts.onWear(card.item)}>
-          Надеть
+          {t('Надеть')}
         </button>
       ) : (
         <button className={'btn md ' + (card.price > acts.balance ? 'secondary' : 'primary') + ' sv-pbtn'} disabled={acts.busy === card.item.code} data-track={'shop_buy_' + source} onClick={buy}>
           <Ruby size={16} />
-          {card.price.toLocaleString('ru-RU')}
-          {card.basePrice > card.price ? <s className="sv-was">{card.basePrice.toLocaleString('ru-RU')}</s> : null}
+          {card.price.toLocaleString(intlTag())}
+          {card.basePrice > card.price ? <s className="sv-was">{card.basePrice.toLocaleString(intlTag())}</s> : null}
         </button>
       )}
     </div>
@@ -111,6 +113,7 @@ const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: redu
 
 /** Лента карточек как у наборов: один ряд, прокрутка вбок, стрелки по краям. */
 function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][]; acts: TodayActs; label: string; /** Сама листает по карточке раз в 4 с (пауза под мышью). */ auto?: boolean }) {
+  const t = useT()
   const rail = useRef<HTMLDivElement>(null)
   const hold = useRef(false)
   const [live, setLive] = useState(false)
@@ -120,7 +123,7 @@ function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][
     let seen = true
     const io = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((es) => setLive((seen = es.some((e) => e.isIntersecting))))
     io?.observe(el)
-    const t = window.setInterval(() => {
+    const timer = window.setInterval(() => {
       if (hold.current || !seen || document.hidden) return
       // Ровно к началу следующей карточки: шаг «ширина + зазор» копил
       // ошибку, и лента вставала с обрезанной карточкой слева.
@@ -131,7 +134,7 @@ function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][
       else el.scrollTo({ left: next.offsetLeft - base, behavior: 'smooth' })
     }, 4000)
     return () => {
-      window.clearInterval(t)
+      window.clearInterval(timer)
       io?.disconnect()
     }
   }, [auto, cards.length])
@@ -151,12 +154,12 @@ function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][
         ))}
       </div>
       {edge.l ? (
-        <button className="sv-rail-btn is-l" aria-label="Назад" data-track="today_prev" onClick={() => scroll(-1)}>
+        <button className="sv-rail-btn is-l" aria-label={t('Назад')} data-track="today_prev" onClick={() => scroll(-1)}>
           <Icon id="i-arrow-l" />
         </button>
       ) : null}
       {edge.r ? (
-        <button className="sv-rail-btn is-r" aria-label="Дальше" data-track="today_next" onClick={() => scroll(1)}>
+        <button className="sv-rail-btn is-r" aria-label={t('Дальше')} data-track="today_next" onClick={() => scroll(1)}>
           <Icon id="i-arrow-r" />
         </button>
       ) : null}
@@ -165,6 +168,7 @@ function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][
 }
 
 export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayActs; onEnd?: () => void }) {
+  const t = useT()
   const d = day.day
   const wished = new Set(day.wishlist)
   const wishes = shopCards(day).filter(([c]) => wished.has(c.item.code) && !c.owned)
@@ -178,18 +182,18 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
     <>
       <section id="shop-day" className="sv-sec" data-section="today_items">
         <div className="sh-head">
-          <h2>Скидки дня</h2>
+          <h2>{t('Скидки дня')}</h2>
           <DayClock to={d.refreshAt} onEnd={onEnd} />
         </div>
-        {cards.length ? <CardRail cards={cards} acts={acts} label="Скидки дня" auto /> : null}
+        {cards.length ? <CardRail cards={cards} acts={acts} label={t('Скидки дня')} auto /> : null}
       </section>
       {day.nightMarket && day.nightMarket.cards.length ? (
         <section className="sv-sec" data-section="night_market">
           <div className="sh-head">
-            <h2>Ночной рынок</h2>
+            <h2>{t('Ночной рынок')}</h2>
             <DayClock to={day.nightMarket.endsAt} onEnd={onEnd} />
           </div>
-          <CardRail cards={day.nightMarket.cards.map((c) => [c, 'night'])} acts={acts} label="Ночной рынок" />
+          <CardRail cards={day.nightMarket.cards.map((c) => [c, 'night'])} acts={acts} label={t('Ночной рынок')} />
         </section>
       ) : null}
       {/* «Хочу» — только когда в нём что-то есть (владелец 06.10.2026). */}
@@ -198,10 +202,10 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
           <div className="sh-head td-wish-head">
             <h2>
               <Icon id="i-heart" />
-              Хочу
+              {t('Хочу')}
             </h2>
           </div>
-          <CardRail cards={wishes} acts={acts} label="Хочу" />
+          <CardRail cards={wishes} acts={acts} label={t('Хочу')} />
         </section>
       ) : null}
     </>

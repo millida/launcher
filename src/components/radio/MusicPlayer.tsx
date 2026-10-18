@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Slider } from '../Slider'
-import { Row, Toggle, useMatch } from '../SetKit'
+import { Row, Toggle, searchWords, useMatch } from '../SetKit'
 import { plural } from '../../lib/format'
 import { radioOn, useMusic } from '../../state/music'
+import { useT } from '../../i18n'
 
 interface Entry {
   key: string
@@ -26,7 +27,8 @@ function Source({
   entries: Entry[]
   children: ReactNode
 }) {
-  const shown = useMatch(title + ' ' + keys + ' ' + hint)
+  const t = useT()
+  const shown = useMatch(title + ' ' + searchWords(keys) + ' ' + hint)
   if (!shown) return null
   return (
     <div className="s2-mus-src">
@@ -37,11 +39,11 @@ function Source({
         <div className="s2-mus-list" role="list">
           {entries.map((e) => (
             <span key={e.key} role="listitem" className={'s2-mus-item' + (e.playing ? ' on' : '')}>
-              <button className="s2-mus-play" aria-label={'Играть ' + e.title} onClick={e.onPlay}>
+              <button className="s2-mus-play" aria-label={t('Играть {title}', { title: e.title })} onClick={e.onPlay}>
                 <Icon id={e.playing ? 'i-music' : 'i-play'} />
                 <span>{e.title}</span>
               </button>
-              <button className="s2-mus-x" aria-label={'Убрать ' + e.title} onClick={e.onRemove}>
+              <button className="s2-mus-x" aria-label={t('Убрать {title}', { title: e.title })} onClick={e.onRemove}>
                 <Icon id="i-x" />
               </button>
             </span>
@@ -53,6 +55,7 @@ function Source({
 }
 
 export function MusicPlayer() {
+  const t = useT()
   const level = useMusic((s) => s.level)
   const setVolume = useMusic((s) => s.setVolume)
   const tracks = useMusic((s) => s.tracks)
@@ -74,16 +77,16 @@ export function MusicPlayer() {
   return (
     <>
       <Row
-        title="Плеер"
+        title={t('Плеер')}
         hint={cur ? (live?.title || cur.title) + ' · ' + (live?.author || cur.author || 'Millida') : undefined}
         keys="музыка громкость плеер трек"
       >
         {cur ? (
           <>
-            <button className="btn sm ghost" aria-label="Предыдущий трек" disabled={single} onClick={prev}>
+            <button className="btn sm ghost" aria-label={t('Предыдущий трек')} disabled={single} onClick={prev}>
               <Icon id="i-chev-l" />
             </button>
-            <button className="btn sm ghost" aria-label="Следующий трек" disabled={single} onClick={next}>
+            <button className="btn sm ghost" aria-label={t('Следующий трек')} disabled={single} onClick={next}>
               <Icon id="i-chev-r" />
             </button>
           </>
@@ -95,19 +98,19 @@ export function MusicPlayer() {
       </Row>
 
       <Row
-        title="Радио Millida"
-        hint={radio ? 'Играет вместе со своей музыкой' : 'Выключено, только своя музыка'}
+        title={t('Радио Millida')}
+        hint={radio ? t('Играет вместе со своей музыкой') : t('Выключено, только своя музыка')}
         keys="музыка радио плеер"
       >
-        <Toggle on={radio} label="Радио Millida" onChange={() => setRadio(!radio)} />
+        <Toggle on={radio} label={t('Радио Millida')} onChange={() => setRadio(!radio)} />
       </Row>
 
       <Source
-        title="Своя музыка"
+        title={t('Своя музыка')}
         hint={
           own.length
-            ? own.length + ' ' + plural(own.length, 'трек', 'трека', 'треков')
-            : 'mp3, ogg, wav, m4a или flac до 100 МБ — будут играть по кругу'
+            ? plural(own.length, t('{n} трек', { n: own.length }), t('{n} трека', { n: own.length }), t('{n} треков', { n: own.length }))
+            : t('mp3, ogg, wav, m4a или flac до 100 МБ — будут играть по кругу')
         }
         keys="музыка треки файлы плеер"
         entries={own.map((t) => ({
@@ -120,16 +123,16 @@ export function MusicPlayer() {
       >
         <button className="btn sm primary" data-track="music_add" onClick={() => void addOwn()}>
           <Icon id="i-plus" />
-          Добавить треки
+          {t('Добавить треки')}
         </button>
-        <button className="btn sm secondary" aria-label="Открыть папку с музыкой" data-track="music_folder" onClick={openFolder}>
+        <button className="btn sm secondary" aria-label={t('Открыть папку с музыкой')} data-track="music_folder" onClick={openFolder}>
           <Icon id="i-folder" />
         </button>
       </Source>
 
       <Source
-        title="По ссылке"
-        hint={links.length ? links.length + ' ' + plural(links.length, 'плейлист', 'плейлиста', 'плейлистов') : ''}
+        title={t('По ссылке')}
+        hint={links.length ? plural(links.length, t('{n} плейлист', { n: links.length }), t('{n} плейлиста', { n: links.length }), t('{n} плейлистов', { n: links.length })) : ''}
         keys="музыка плейлист ссылка youtube soundcloud плеер"
         entries={links.map((l) => ({
           key: l.key,
@@ -141,8 +144,8 @@ export function MusicPlayer() {
       >
         <span className="input sm s2-mus-url">
           <input
-            aria-label="Ссылка на плейлист"
-            placeholder="YouTube или SoundCloud"
+            aria-label={t('Ссылка на плейлист')}
+            placeholder={t('YouTube или SoundCloud')}
             value={url}
             maxLength={2048}
             spellCheck={false}
@@ -152,7 +155,7 @@ export function MusicPlayer() {
             }}
           />
         </span>
-        <button className="btn sm secondary" aria-label="Добавить плейлист по ссылке" data-track="music_link_add" disabled={!url.trim()} onClick={submitLink}>
+        <button className="btn sm secondary" aria-label={t('Добавить плейлист по ссылке')} data-track="music_link_add" disabled={!url.trim()} onClick={submitLink}>
           <Icon id="i-plus" />
         </button>
       </Source>

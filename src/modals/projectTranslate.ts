@@ -1,6 +1,7 @@
 import { api, apiHeaders, LAUNCHER_API, MODRINTH_API, mirrorAsset } from '../lib/api'
 import { hasTauri } from '../ipc/tauri'
 import { tidyBody } from './projectView'
+import { t } from '../i18n'
 
 /*
  * Перевод описания мода и карта зависимостей для окна мода.
@@ -248,7 +249,7 @@ export async function translateProject(
     if (!alive()) return view
     if (view.done) break
     if (Date.now() - started > FOREGROUND_MS) {
-      if (!view.blocks.length) throw new TrError('Перевод занял слишком долго', 504)
+      if (!view.blocks.length) throw new TrError(t('Перевод занял слишком долго'), 504)
       // Что успело — показываем, остальное доспрашиваем реже.
       view = { ...view, done: true, engine: { ai: false, draft: false, queued: 0, ...view.engine, retryInSec: 30 } }
       break
@@ -352,13 +353,13 @@ export async function translateChangelog(id: string, onUpdate: (c: TrChangelog) 
 /** Что окно пишет, когда перевод не вышел. */
 export function trErrorText(e: unknown): string {
   if (e instanceof TrError) {
-    if (e.status === 503) return 'Перевод временно недоступен'
-    if (e.status === 404) return 'Для этого мода перевода нет'
-    if (e.status === 429) return 'Лимит переводов на сегодня исчерпан'
-    if (e.status === 401) return 'Войди в аккаунт Millida, чтобы переводить'
+    if (e.status === 503) return t('Перевод временно недоступен')
+    if (e.status === 404) return t('Для этого мода перевода нет')
+    if (e.status === 429) return t('Лимит переводов на сегодня исчерпан')
+    if (e.status === 401) return t('Войди в аккаунт Millida, чтобы переводить')
     return e.message
   }
-  return 'Перевод не загрузился'
+  return t('Перевод не загрузился')
 }
 
 const LANG_KEY = 'm-pj-lang'
@@ -430,11 +431,11 @@ export async function blockSuggestions(projectId: string, blockId: string): Prom
 /** Ошибка правки словами. */
 export function suggestErrorText(e: unknown): string {
   if (e instanceof TrError) {
-    if (e.status === 429) return 'Слишком часто — попробуй позже'
-    if (e.status === 400 || e.status === 422) return e.message && !/^http /.test(e.message) ? e.message : 'Правка не прошла проверку'
-    if (e.status === 503) return 'Правки временно не принимаются'
+    if (e.status === 429) return t('Слишком часто — попробуй позже')
+    if (e.status === 400 || e.status === 422) return e.message && !/^http /.test(e.message) ? e.message : t('Правка не прошла проверку')
+    if (e.status === 503) return t('Правки временно не принимаются')
   }
-  return 'Не отправилось — проверь интернет'
+  return t('Не отправилось — проверь интернет')
 }
 
 /* ── Геометрия описания: блоки, как их режет сервер, для заглушек ── */

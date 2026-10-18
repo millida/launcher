@@ -3,6 +3,7 @@ import { textureSource } from './textureSource'
 import { gpuLite, noteContextCreated } from './gpuLite'
 import { releaseEngine } from './characterStage'
 import { withSnapshotGl, type GlHolder } from './glPool'
+import { t } from '../i18n'
 
 export const BODY_W = 300
 export const BODY_H = 480
@@ -84,8 +85,8 @@ async function ensureEngine(): Promise<any> {
   }
   if (engine) return engine
   // Лёгкая графика после сбоя видеокарты: превью рисуют плоские заглушки.
-  if (gpuLite()) throw new Error('лёгкая графика: 3D-превью выключено')
-  if (engineFailedAt && Date.now() - engineFailedAt < ENGINE_RETRY_MS) throw new Error('3D-превью недоступно')
+  if (gpuLite()) throw new Error(t('лёгкая графика: 3D-превью выключено'))
+  if (engineFailedAt && Date.now() - engineFailedAt < ENGINE_RETRY_MS) throw new Error(t('3D-превью недоступно'))
   try {
     const m3d = await loadMine3d()
     const canvas = document.createElement('canvas')
@@ -164,7 +165,7 @@ function loadTexture(url: string): Promise<HTMLImageElement> {
         if (!/^(data|blob):/i.test(src)) img.crossOrigin = 'anonymous'
         const timer = window.setTimeout(() => {
           img.src = ''
-          reject(new Error('текстура не загрузилась: ' + url))
+          reject(new Error(t('текстура не загрузилась: {url}', { url })))
         }, TEXTURE_TIMEOUT)
         img.onload = () => {
           window.clearTimeout(timer)
@@ -172,7 +173,7 @@ function loadTexture(url: string): Promise<HTMLImageElement> {
         }
         img.onerror = () => {
           window.clearTimeout(timer)
-          reject(new Error('текстура недоступна: ' + url))
+          reject(new Error(t('текстура недоступна: {url}', { url })))
         }
         img.src = src
       }),
@@ -211,7 +212,7 @@ export function renderSkinBody(url: string, model: BodyModel = 'auto-detect', ya
       e.renderFrame()
       e.setPlayerYaw(0)
       // Контекст отобрали посреди кадра — картинка пустая, в кеш её не кладём.
-      if (contextLost(e)) throw new Error('3D-превью потеряло контекст')
+      if (contextLost(e)) throw new Error(t('3D-превью потеряло контекст'))
       const data = e.canvas.toDataURL('image/png')
       remember(key, data)
       return data

@@ -6,6 +6,7 @@ import { openChestFlow, useChestOpen } from './ChestOpen'
 import { ChestLive } from './ChestLive'
 import { CHEST_NAME } from './rewards'
 import { useRail } from './useRail'
+import { intlTag, t, useT } from '../../i18n'
 
 /** Ширина клетки ленты + зазор: стрелка листает на одну клетку. */
 const CELL = 128 + 8
@@ -20,29 +21,29 @@ const TIER_TONE: Record<ChestTier, string> = {
 
 /** «24 сен» по Москве: подпись, когда служба не прислала клетку бонуса. */
 const shortDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'Europe/Moscow' }).replace('.', '')
+  new Date(iso).toLocaleDateString(intlTag(), { day: 'numeric', month: 'short', timeZone: 'Europe/Moscow' }).replace('.', '')
 
 /** Откуда сундук — два-три слова: «Бонус · день 4», «Код автора», «250 ч игры». */
 export function chestSource(c: PendingChest): string {
   const src = (c.source || '').trim()
   const hours = /^playtime:hours(\d+)$/i.exec(src)
-  if (hours) return hours[1] + ' ч игры'
+  if (hours) return t('{n} ч игры', { n: hours[1] ?? '' })
   switch (src.toUpperCase()) {
     case 'DAILY':
-      return c.day ? 'Бонус · день ' + c.day : 'Бонус · ' + shortDate(c.createdAt)
+      return c.day ? t('Бонус · день {n}', { n: c.day }) : t('Бонус · {date}', { date: shortDate(c.createdAt) })
     case 'DAILY_PLUS':
-      return c.day ? 'PLUS · день ' + c.day : 'PLUS · ' + shortDate(c.createdAt)
+      return c.day ? t('PLUS · день {n}', { n: c.day }) : 'PLUS · ' + shortDate(c.createdAt)
     case 'CREATOR':
     case 'CREATOR_CODE':
-      return 'Код автора'
+      return t('Код автора')
     case 'PROMO':
-      return 'Промокод'
+      return t('Промокод')
     case 'REFERRAL':
-      return 'Приглашённый друг'
+      return t('Приглашённый друг')
     case 'STREAK':
-      return 'Серия входов'
+      return t('Серия входов')
     case 'XRAY':
-      return 'Рентген'
+      return t('Рентген')
     default:
       return shortDate(c.createdAt)
   }
@@ -50,6 +51,7 @@ export function chestSource(c: PendingChest): string {
 
 /** Клетка ленты: один сундук, арт своего уровня, подпись «откуда». Клик — открыть его. */
 function Cell({ chest, i, busy }: { chest: PendingChest; i: number; busy: boolean }) {
+  const t = useT()
   const tier = chest.tier
   const name = CHEST_NAME[tier]
   return (
@@ -62,7 +64,7 @@ function Cell({ chest, i, busy }: { chest: PendingChest; i: number; busy: boolea
       data-kind="chest"
       data-id={tier}
       data-pos={i}
-      aria-label={'Открыть: ' + name.toLowerCase() + ' сундук, ' + chestSource(chest)}
+      aria-label={t('Открыть: {tier} сундук, {source}', { tier: name.toLowerCase(), source: chestSource(chest) })}
       onClick={() => openChestFlow([chest])}
     >
       {tier !== 'COMMON' ? (
@@ -90,6 +92,7 @@ function Cell({ chest, i, busy }: { chest: PendingChest; i: number; busy: boolea
  * шапке. Лента листается колесом, перетаскиванием и стрелками.
  */
 export function MyChests() {
+  const t = useT()
   const status = useDaily((s) => s.status)
   const pending = useDaily((s) => s.pending)
   const busy = useChestOpen((s) => s.queue.length > 0)
@@ -104,13 +107,13 @@ export function MyChests() {
   const { ref, edge, page } = useRail(null, CELL)
   if (!chests.length) return null
   return (
-    <section className="mc" aria-label="Мои сундуки">
+    <section className="mc" aria-label={t('Мои сундуки')}>
       <div className="mc-head">
-        <h4>Мои сундуки</h4>
+        <h4>{t('Мои сундуки')}</h4>
         <b className="mc-count">{chests.length}</b>
         {chests.length > 1 ? (
           <button type="button" className="btn sm secondary mc-all" disabled={busy} data-track="chest_open_all" onClick={() => openChestFlow(chests)}>
-            Открыть все
+            {t('Открыть все')}
           </button>
         ) : null}
       </div>
@@ -124,10 +127,10 @@ export function MyChests() {
         </div>
         {edge.l || edge.r ? (
           <>
-            <button type="button" className="dp2-arrow l" aria-label="Раньше" disabled={!edge.l} onClick={() => page(-1)}>
+            <button type="button" className="dp2-arrow l" aria-label={t('Раньше')} disabled={!edge.l} onClick={() => page(-1)}>
               <Icon id="i-chev-l" />
             </button>
-            <button type="button" className="dp2-arrow r" aria-label="Дальше" disabled={!edge.r} onClick={() => page(1)}>
+            <button type="button" className="dp2-arrow r" aria-label={t('Дальше')} disabled={!edge.r} onClick={() => page(1)}>
               <Icon id="i-chev-r" />
             </button>
           </>

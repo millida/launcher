@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { api, hasMillidaAccount } from './api'
 import { DUO_INVITES_DEFAULT, isDuoInvites, type DuoInvites } from './duoEmotes'
+import { t } from '../i18n'
 
 /// Приватность профиля — серверная настройка, общая с сайтом: переключатель в
 /// лаунчере и на millida.net правят одни и те же поля у текущего пользователя.
@@ -110,13 +111,13 @@ export const usePrivacy = create<PrivacyState>((set, get) => ({
       writeMirror(s)
       set({ settings: s, loaded: true, loading: false })
     } catch {
-      set({ loading: false, error: 'Не удалось загрузить настройки приватности' })
+      set({ loading: false, error: t('Не удалось загрузить настройки приватности') })
     }
   },
   /// Переключаем только по ответу сервера: при ошибке тумблер остаётся
   /// в прежнем положении и не «прыгает».
   patch: async (part) => {
-    if (!hasMillidaAccount()) throw new Error('нужен аккаунт Millida')
+    if (!hasMillidaAccount()) throw new Error(t('нужен аккаунт Millida'))
     const field = (Object.keys(part)[0] || null) as keyof PrivacySettings | null
     set({ saving: field, error: '' })
     try {
@@ -124,7 +125,7 @@ export const usePrivacy = create<PrivacyState>((set, get) => ({
       writeMirror(s)
       set({ settings: s, loaded: true, saving: null })
     } catch (e) {
-      set({ saving: null, error: 'Не удалось сохранить — попробуй ещё раз' })
+      set({ saving: null, error: t('Не удалось сохранить — попробуй ещё раз') })
       throw e
     }
   },

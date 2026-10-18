@@ -1,13 +1,16 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import '../styles/pixel/plus.css'
 import { Icon } from '../components/Icon'
+import { intlTag, t, useT } from '../i18n'
+import { plural } from '../lib/format'
 import { Ruby } from '../components/Ruby'
 import { Shard } from '../components/shop/parts'
 import { ChestLive } from '../components/daily/ChestLive'
 import { Milli } from '../components/milli/Milli'
 import { seasonCell, TRACK_DAYS } from '../components/daily/track'
 import { api, hasMillidaAccount } from '../lib/api'
-import { DEFAULT_PLUS_OFFERS, loadPlusEconomy, loadRules, rubles, type PlusEconomy, type Reward, type Rules } from '../lib/rubies'
+import { DEFAULT_PLUS_OFFERS, loadPlusEconomy, loadRules, type PlusEconomy, type Reward, type Rules } from '../lib/rubies'
+import { plusPrice, rubyPackPrice, rubyWorthPrice, useRegionalPrices } from '../lib/regionalPrices'
 import { loadCosmeticCatalog } from '../lib/gameProfile'
 import { getAccount, isMillidaKind, useAccounts } from '../state/accounts'
 import { useGameNick } from '../state/gameNick'
@@ -43,19 +46,19 @@ const REFERRAL = [
   { friends: 5, days: 14 },
   { friends: 10, days: 30 },
 ]
-const REFERRAL_NOTE = REFERRAL.map((r) => r.friends + ' — ' + r.days + ' дн.').join(' · ')
-const EXTRA_LABEL: Record<string, string> = {
-  shaders: 'Шейдеры',
-  resourcepacks: 'Ресурспаки',
-  maps: 'Карты',
-  seeds: 'Сиды',
-  skins: 'Скины',
-  server: 'На сервер',
-}
+const REFERRAL_NOTE = () => REFERRAL.map((r) => t('{friends} — {days} дн.', { friends: r.friends, days: r.days })).join(' · ')
+const EXTRA_LABEL = (): Record<string, string> => ({
+  shaders: t('Шейдеры'),
+  resourcepacks: t('Ресурспаки'),
+  maps: t('Карты'),
+  seeds: t('Сиды'),
+  skins: t('Скины'),
+  server: t('На сервер'),
+})
 /* Режим «думает дольше и проверяет» делает соседняя ветка: карточка встанет
    сама, когда служба отдаст его в plusModes. */
 const DEEP_MODES = ['deep', 'thorough', 'think', 'thinking', 'enhanced', 'pro']
-const PROMPTS = ['Хоррор с зомби на 1.20.1', 'Техно и заводы', 'Уютная ферма с едой', 'Магия и данжи']
+const PROMPTS = () => [t('Хоррор с зомби на 1.20.1'), t('Техно и заводы'), t('Уютная ферма с едой'), t('Магия и данжи')]
 const OTHERS = ['Kirill_2011', 'dasha_mc', 'Nagibator', 'xX_Pro_Xx', 'SanyaCraft']
 const API = 'https://api.millida.net/v2'
 
@@ -78,14 +81,7 @@ function totals(row: Row) {
 }
 const FREE = totals('free')
 const PLUS = totals('plus')
-const n = (v: number) => v.toLocaleString('ru-RU')
-const pl = (v: number, one: string, few: string, many: string) => {
-  const m10 = v % 10
-  const m100 = v % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
+const n = (v: number) => v.toLocaleString(intlTag())
 
 interface MilliLimits {
   free: { day: number; month: number }
@@ -108,6 +104,18 @@ function Badge({ size = 16 }: { size?: number }) {
   return <img className="lp-mc-badge" src="/plus/badge-plus.png" alt="PLUS" width={size} height={size} draggable={false} />
 }
 
+function Em({ text }: { text: string }) {
+  const m = /^(.*)\[(.+)\](.*)$/.exec(text)
+  if (!m) return <>{text}</>
+  return (
+    <>
+      {m[1]}
+      <em>{m[2]}</em>
+      {m[3]}
+    </>
+  )
+}
+
 function Block({ title, sub, children, foot, dark }: { title: ReactNode; sub?: ReactNode; children: ReactNode; foot?: ReactNode; dark?: boolean }) {
   return (
     <div className={'card lp-block' + (dark ? ' is-dark' : '')}>
@@ -122,6 +130,8 @@ function Block({ title, sub, children, foot, dark }: { title: ReactNode; sub?: R
 }
 
 export function Plus({ on }: { on: boolean }) {
+  const t = useT()
+  useRegionalPrices()
   const [plus, setPlus] = useState<PlusEconomy | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [milli, setMilli] = useState<MilliLimits | null>(null)
@@ -191,7 +201,7 @@ export function Plus({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (!on || hold || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const id = window.setInterval(() => setPrompt((v) => (v + 1) % PROMPTS.length), 2800)
+    const id = window.setInterval(() => setPrompt((v) => (v + 1) % PROMPTS().length), 2800)
     return () => window.clearInterval(id)
   }, [on, hold])
 
@@ -205,12 +215,12 @@ export function Plus({ on }: { on: boolean }) {
     const hi = Math.max(...pct)
     return lo === hi ? lo + ' %' : lo + '–' + hi + ' %'
   }, [rules])
-  const extras = (milli?.plusExtras || []).filter((k) => EXTRA_LABEL[k])
+  const extras = (milli?.plusExtras || []).filter((k) => EXTRA_LABEL()[k])
   const packExtras = extras.filter((k) => k !== 'server')
   const deep = (milli?.plusModes || []).some((m) => DEEP_MODES.includes(m.toLowerCase()))
   const active = !!plus?.active
   const until = plus?.paidUntil
-    ? new Date(plus.paidUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+    ? new Date(plus.paidUntil).toLocaleDateString(intlTag(), { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
     : ''
   const offers = plus?.offers?.length ? plus.offers : DEFAULT_PLUS_OFFERS
   const offer = (tier: 'PLUS' | 'DIAMOND') => offers.find((o) => o.tier === tier) || DEFAULT_PLUS_OFFERS.find((o) => o.tier === tier)!
@@ -220,33 +230,33 @@ export function Plus({ on }: { on: boolean }) {
   const cta = active ? (
     <span className="lp-active">
       <Icon id="i-check" />
-      {plus?.canceled ? 'PLUS до ' + until + ' · без продления' : 'PLUS активен до ' + until}
+      {plus?.canceled ? t('PLUS до {date} · без продления', { date: until }) : t('PLUS активен до {date}', { date: until })}
     </span>
   ) : (
     <button className="btn lg primary lp-cta" disabled={busy === 'plus'} data-track={waiting ? 'plus_open_payment' : 'plus_subscribe'} onClick={() => buy('PLUS')}>
       <Icon id="i-crown" />
-      {waiting ? 'Открыть оплату' : 'Оформить PLUS'}
+      {waiting ? t('Открыть оплату') : t('Оформить PLUS')}
     </button>
   )
 
   const chips: { art: ReactNode; title: string; sub: string }[] = [
-    { art: <Ruby size={34} />, title: n(PLUS.rubies) + ' рубинов', sub: 'За 28 дней входа' },
-    { art: <ChestLive ready={false} tier="LEGEND" size={34} />, title: PLUS.chests + ' ' + pl(PLUS.chests, 'сундук', 'сундука', 'сундуков'), sub: 'Легендарный — в конце' },
-    ...(milli ? [{ art: <Milli size={34} />, title: 'Милли: ' + milli.plus.day + ' в день', sub: 'Вместо ' + milli.free.day }] : []),
-    { art: <Shard size={30} />, title: 'Осколки ×' + SHARD_BOOST, sub: SHARD_LIMIT_PLUS + ' в день вместо ' + SHARD_LIMIT },
-    ...(whole && loot[0] ? [{ art: <img src={loot[0].preview} alt="" draggable={false} />, title: 'Целая вещь', sub: whole + ' из сундука' }] : []),
-    { art: <img src="/plus/badge-plus@8x.png" alt="" draggable={false} className="px" />, title: 'Значок PLUS', sub: 'В табе и над головой' },
+    { art: <Ruby size={34} />, title: t('{n} рубинов', { n: n(PLUS.rubies) }), sub: t('За 28 дней входа') },
+    { art: <ChestLive ready={false} tier="LEGEND" size={34} />, title: plural(PLUS.chests, t('{n} сундук', { n: PLUS.chests }), t('{n} сундука', { n: PLUS.chests }), t('{n} сундуков', { n: PLUS.chests })), sub: t('Легендарный — в конце') },
+    ...(milli ? [{ art: <Milli size={34} />, title: t('Милли: {n} в день', { n: milli.plus.day }), sub: t('Вместо {n}', { n: milli.free.day }) }] : []),
+    { art: <Shard size={30} />, title: t('Осколки ×{n}', { n: SHARD_BOOST }), sub: t('{limit} в день вместо {base}', { limit: SHARD_LIMIT_PLUS, base: SHARD_LIMIT }) },
+    ...(whole && loot[0] ? [{ art: <img src={loot[0].preview} alt="" draggable={false} />, title: t('Целая вещь'), sub: t('{chance} из сундука', { chance: whole }) }] : []),
+    { art: <img src="/plus/badge-plus@8x.png" alt="" draggable={false} className="px" />, title: t('Значок PLUS'), sub: t('В табе и над головой') },
   ].slice(0, 6)
 
   const cmp: [string, string, string, boolean][] = [
-    ['Рубины за 28 дней', n(FREE.rubies), n(FREE.rubies + PLUS.rubies), true],
-    ['Сундуки за 28 дней', String(FREE.chests), String(FREE.chests + PLUS.chests), true],
-    ...(whole ? [['Целая вещь из сундука', 'Нет', whole, false] as [string, string, string, boolean]] : []),
-    ['Осколки в день', String(SHARD_LIMIT), SHARD_LIMIT_PLUS + ', ×' + SHARD_BOOST, true],
-    ...(milli ? [['Милли в день', String(milli.free.day), String(milli.plus.day), true] as [string, string, string, boolean]] : []),
-    ...(packExtras.length ? [['Шейдеры и карты от Милли', 'Нет', 'Да', false] as [string, string, string, boolean]] : []),
-    ...(extras.includes('server') ? [['Сборка на сервер', 'Нет', 'Да', false] as [string, string, string, boolean]] : []),
-    ['Значок PLUS', 'Нет', 'Да', false],
+    [t('Рубины за 28 дней'), n(FREE.rubies), n(FREE.rubies + PLUS.rubies), true],
+    [t('Сундуки за 28 дней'), String(FREE.chests), String(FREE.chests + PLUS.chests), true],
+    ...(whole ? [[t('Целая вещь из сундука'), t('Нет'), whole, false] as [string, string, string, boolean]] : []),
+    [t('Осколки в день'), String(SHARD_LIMIT), SHARD_LIMIT_PLUS + ', ×' + SHARD_BOOST, true],
+    ...(milli ? [[t('Милли в день'), String(milli.free.day), String(milli.plus.day), true] as [string, string, string, boolean]] : []),
+    ...(packExtras.length ? [[t('Шейдеры и карты от Милли'), t('Нет'), t('Да'), false] as [string, string, string, boolean]] : []),
+    ...(extras.includes('server') ? [[t('Сборка на сервер'), t('Нет'), t('Да'), false] as [string, string, string, boolean]] : []),
+    [t('Значок PLUS'), t('Нет'), t('Да'), false],
   ]
 
   return (
@@ -255,13 +265,13 @@ export function Plus({ on }: { on: boolean }) {
       <div className="lp-hero">
         <span className="lp-hero-grid" aria-hidden="true" />
         <div className="lp-hero-head">
-          <span className="lp-eyebrow">Подписка Millida</span>
+          <span className="lp-eyebrow">{t('Подписка Millida')}</span>
           <h1>
             Millida <em>PLUS</em>
           </h1>
-          {price ? <p>{rubles(price)} / 28 дней · отмена в любой день</p> : <span className="skel lp-price-skel" aria-hidden="true" />}
+          {price ? <p>{t('{price} / 28 дней · отмена в любой день', { price: plusPrice('PLUS', price) ?? '' })}</p> : <span className="skel lp-price-skel" aria-hidden="true" />}
           <div className="lp-hero-cta">{cta}</div>
-          {waiting && !active ? <small className="lp-note">Ждём оплату в браузере</small> : null}
+          {waiting && !active ? <small className="lp-note">{t('Ждём оплату в браузере')}</small> : null}
         </div>
         <div className="lp-stage">
           <div className="lp-chips is-left">
@@ -277,7 +287,7 @@ export function Plus({ on }: { on: boolean }) {
           </div>
           <div className="lp-rig">
             <span className="lp-rig-light" aria-hidden="true" />
-            <img src="/plus/hero-gold.webp" alt="Игрок в золотой броне с копьём" draggable={false} />
+            <img src="/plus/hero-gold.webp" alt={t('Игрок в золотой броне с копьём')} draggable={false} />
           </div>
           <div className="lp-chips is-right">
             {chips.slice(3).map((c) => (
@@ -296,27 +306,25 @@ export function Plus({ on }: { on: boolean }) {
       {/* Рубины */}
       <Block
         title={
-          <>
-            <em>{n(PLUS.rubies)}</em> рубинов в месяц
-          </>
+          <Em text={t('[{n}] рубинов в месяц', { n: n(PLUS.rubies) })} />
         }
-        sub={small ? '«' + small.title + '» за ' + rubles(small.kopecks) + ' — ' + n(small.rubies) : undefined}
+        sub={small ? t('«{title}» за {price} — {n}', { title: small.title, price: rubyPackPrice(small.code, small.kopecks) ?? '', n: n(small.rubies) }) : undefined}
       >
         <div className="lp-ruby-row">
           <div>
             <Ruby size={34} />
             <b className="is-gold">{n(PLUS.rubies)}</b>
-            <small>за 28 дней входа</small>
+            <small>{t('за 28 дней входа')}</small>
           </div>
           {rate ? (
             <div>
-              <b>{rubles(Math.round(PLUS.rubies / rate) * 100)}</b>
-              <small>по цене магазина</small>
+              <b>{rubyWorthPrice(Math.round(PLUS.rubies / rate) * 100)}</b>
+              <small>{t('по цене магазина')}</small>
             </div>
           ) : null}
           <div>
             <b>+{n(FREE.rubies)}</b>
-            <small>бесплатная строка остаётся</small>
+            <small>{t('бесплатная строка остаётся')}</small>
           </div>
         </div>
         {shop.length ? (
@@ -339,29 +347,27 @@ export function Plus({ on }: { on: boolean }) {
       {milli ? (
         <Block
           title={
-            <>
-              Милли собирает <em>больше</em>
-            </>
+            <Em text={t('Милли собирает [больше]')} />
           }
-          sub="ИИ-сборщик в каталоге и на сайте"
+          sub={t('ИИ-сборщик в каталоге и на сайте')}
         >
           <div className="lp-ai-wrap">
             <div className="lp-aib">
               <div className="lp-aib-head">
                 <Milli size={64} mode="talk" />
                 <div>
-                  <b>Милли с PLUS</b>
-                  <i>Опиши, во что хочешь играть</i>
+                  <b>{t('Милли с PLUS')}</b>
+                  <i>{t('Опиши, во что хочешь играть')}</i>
                 </div>
               </div>
               <div className="lp-aib-field" aria-live="polite">
-                <span>{PROMPTS[prompt]}</span>
-                <span className="lp-aib-go">Собрать</span>
+                <span>{PROMPTS()[prompt]}</span>
+                <span className="lp-aib-go">{t('Собрать')}</span>
               </div>
               <div className="lp-aib-chips">
-                {PROMPTS.map((t, i) => (
+                {PROMPTS().map((p, i) => (
                   <button
-                    key={t}
+                    key={p}
                     className={'lp-aib-chip' + (i === prompt ? ' on' : '')}
                     aria-pressed={i === prompt}
                     onClick={() => {
@@ -369,7 +375,7 @@ export function Plus({ on }: { on: boolean }) {
                       setPrompt(i)
                     }}
                   >
-                    {t}
+                    {p}
                   </button>
                 ))}
               </div>
@@ -377,11 +383,11 @@ export function Plus({ on }: { on: boolean }) {
             <div className="lp-aiex">
               <div className="lp-aiex-card is-on">
                 <b>
-                  {milli.plus.day} {pl(milli.plus.day, 'запрос', 'запроса', 'запросов')} в день
+                  {plural(milli.plus.day, t('{n} запрос в день', { n: milli.plus.day }), t('{n} запроса в день', { n: milli.plus.day }), t('{n} запросов в день', { n: milli.plus.day }))}
                 </b>
                 <div className="lp-bars">
                   <span style={{ '--w': Math.max(4, (milli.free.day / milli.plus.day) * 100) + '%' } as CSSProperties}>
-                    <i>Без PLUS</i>
+                    <i>{t('Без PLUS')}</i>
                     <em>{milli.free.day}</em>
                   </span>
                   <span className="is-plus" style={{ '--w': '100%' } as CSSProperties}>
@@ -390,32 +396,32 @@ export function Plus({ on }: { on: boolean }) {
                   </span>
                 </div>
                 <small>
-                  <strong>{n(milli.plus.month)} в месяц</strong> · без PLUS — {milli.free.month}
+                  <strong>{t('{n} в месяц', { n: n(milli.plus.month) })}</strong> · {t('без PLUS — {n}', { n: milli.free.month })}
                 </small>
               </div>
               {packExtras.length ? (
                 <div className="lp-aiex-card">
-                  <b>В сборке не только моды</b>
+                  <b>{t('В сборке не только моды')}</b>
                   <div className="lp-kinds">
                     {packExtras.map((k) => (
-                      <span key={k}>{EXTRA_LABEL[k]}</span>
+                      <span key={k}>{EXTRA_LABEL()[k]}</span>
                     ))}
                   </div>
                 </div>
               ) : null}
               {extras.includes('server') ? (
                 <div className="lp-aiex-card">
-                  <b>Сборка на сервер</b>
+                  <b>{t('Сборка на сервер')}</b>
                   <small>
-                    <strong>Одной кнопкой</strong> · на Millida Hosting
+                    <strong>{t('Одной кнопкой')}</strong> · {t('на Millida Hosting')}
                   </small>
                 </div>
               ) : null}
               {deep ? (
                 <div className="lp-aiex-card">
-                  <b>Думает дольше</b>
+                  <b>{t('Думает дольше')}</b>
                   <small>
-                    <strong>Проверяет сборку</strong> · перед тем как отдать
+                    <strong>{t('Проверяет сборку')}</strong> · {t('перед тем как отдать')}
                   </small>
                 </div>
               ) : null}
@@ -427,9 +433,7 @@ export function Plus({ on }: { on: boolean }) {
       {/* Сундуки */}
       <Block
         title={
-          <>
-            Сундуки и <em>целые вещи</em>
-          </>
+          <Em text={t('Сундуки и [целые вещи]')} />
         }
         foot={cta}
       >
@@ -441,10 +445,10 @@ export function Plus({ on }: { on: boolean }) {
               <ChestLive ready={false} tier="EPIC" size={64} />
             </div>
             <b>
-              {PLUS.chests} {pl(PLUS.chests, 'сундук', 'сундука', 'сундуков')}
+              {plural(PLUS.chests, t('{n} сундук', { n: PLUS.chests }), t('{n} сундука', { n: PLUS.chests }), t('{n} сундуков', { n: PLUS.chests }))}
             </b>
             <small>
-              {PLUS.rare} редких · {PLUS.epic} эпических · {PLUS.legend} легендарный
+              {t('{rare} редких · {epic} эпических · {legend} легендарный', { rare: PLUS.rare, epic: PLUS.epic, legend: PLUS.legend })}
             </small>
           </div>
           {whole ? (
@@ -454,8 +458,8 @@ export function Plus({ on }: { on: boolean }) {
                   <img key={l.id} src={l.preview} alt={l.name} draggable={false} />
                 ))}
               </div>
-              <b>Целая вещь {whole}</b>
-              <small>Без PLUS — только фрагменты</small>
+              <b>{t('Целая вещь {chance}', { chance: whole })}</b>
+              <small>{t('Без PLUS — только фрагменты')}</small>
             </div>
           ) : null}
           <div className="lp-cardx">
@@ -463,9 +467,9 @@ export function Plus({ on }: { on: boolean }) {
               <Shard size={72} />
               <strong className="lp-x">×{SHARD_BOOST}</strong>
             </div>
-            <b>Осколки ×{SHARD_BOOST}</b>
+            <b>{t('Осколки ×{n}', { n: SHARD_BOOST })}</b>
             <small>
-              {SHARD_LIMIT_PLUS} в день вместо {SHARD_LIMIT}
+              {t('{limit} в день вместо {base}', { limit: SHARD_LIMIT_PLUS, base: SHARD_LIMIT })}
             </small>
           </div>
         </div>
@@ -474,11 +478,9 @@ export function Plus({ on }: { on: boolean }) {
       {/* Значок в игре */}
       <Block
         title={
-          <>
-            Значок PLUS <em>в игре</em>
-          </>
+          <Em text={t('Значок PLUS [в игре]')} />
         }
-        sub="так тебя видят на сервере"
+        sub={t('так тебя видят на сервере')}
       >
         <div className="lp-mc">
           <img className="lp-mc-bg" src="/plus/scene.webp" alt="" draggable={false} />
@@ -503,71 +505,67 @@ export function Plus({ on }: { on: boolean }) {
           </div>
           {['dasha_mc', 'Nagibator'].map((p, i) => (
             <div key={p} className={'lp-mc-fig is-other ' + (i === 0 ? 'is-left' : 'is-right')} aria-hidden="true">
-              {i === 0 ? <span className="lp-mc-note">Все остальные</span> : null}
+              {i === 0 ? <span className="lp-mc-note">{t('Все остальные')}</span> : null}
               <span className="lp-mc-plate">{p}</span>
               <img className="lp-mc-body" src={API + '/heads/body3d/' + encodeURIComponent(p) + '.webp?size=256'} alt="" draggable={false} />
             </div>
           ))}
           <div className="lp-mc-fig is-you">
             <span className="lp-mc-light" aria-hidden="true" />
-            <span className="lp-mc-note is-gold">{mine ? 'Это ты' : 'Так выглядит твой ник'}</span>
+            <span className="lp-mc-note is-gold">{mine ? t('Это ты') : t('Так выглядит твой ник')}</span>
             <span className="lp-mc-plate">
               <Badge size={20} />
               {shown}
             </span>
-            <img key={shown} className="lp-mc-body" src={API + '/heads/body3d/' + encodeURIComponent(shown) + '.webp?size=384'} alt={'Скин игрока ' + shown} draggable={false} />
+            <img key={shown} className="lp-mc-body" src={API + '/heads/body3d/' + encodeURIComponent(shown) + '.webp?size=384'} alt={t('Скин игрока {nick}', { nick: shown })} draggable={false} />
           </div>
         </div>
         <div className="lp-where">
           <span>
-            <Badge size={16} />В табе
+            <Badge size={16} />{t('В табе')}
           </span>
-          <span>Над головой</span>
-          <span>В профиле на millida.net</span>
-          {stats ? <span>Видят {n(stats.downloads)} скачавших лаунчер</span> : null}
+          <span>{t('Над головой')}</span>
+          <span>{t('В профиле на millida.net')}</span>
+          {stats ? <span>{t('Видят {n} скачавших лаунчер', { n: n(stats.downloads) })}</span> : null}
         </div>
       </Block>
 
       {/* Как это работает */}
       <Block
         title={
-          <>
-            Как это <em>работает</em>
-          </>
+          <Em text={t('Как это [работает]')} />
         }
       >
         <div className="lp-path">
           {[
-            ['Оформи PLUS', price ? rubles(price) + ' / 28 дней' : 'Раз в 28 дней'],
-            ['Заходи в лаунчер', 'Клетка наград за день'],
-            ['Забирай', 'Рубины, сундуки, осколки'],
-          ].map(([t, s], i, all) => (
-            <Fragment key={t}>
+            [t('Оформи PLUS'), price ? t('{price} / 28 дней', { price: plusPrice('PLUS', price) ?? '' }) : t('Раз в 28 дней')],
+            [t('Заходи в лаунчер'), t('Клетка наград за день')],
+            [t('Забирай'), t('Рубины, сундуки, осколки')],
+          ].map(([title, s], i, all) => (
+            <Fragment key={title}>
               <div className="lp-path-card">
                 <span>{i + 1}</span>
-                <b>{t}</b>
+                <b>{title}</b>
                 <small>{s}</small>
               </div>
               {i < all.length - 1 ? <Icon id="i-chev-r" /> : null}
             </Fragment>
           ))}
         </div>
-        <div className="lp-foot-note">Отмена в профиле — оплаченные дни остаются</div>
+        <div className="lp-foot-note">{t('Отмена в профиле — оплаченные дни остаются')}</div>
       </Block>
 
       {/* Сравнение */}
       <Block
         title={
-          <>
-            Без PLUS и <em>с PLUS</em>
-          </>
+          <Em text={t('Без PLUS и [с PLUS]')} />
         }
-        sub="бесплатная строка остаётся у всех"
+        sub={t('бесплатная строка остаётся у всех')}
       >
         <div className="lp-cmp" role="table">
           <div className="lp-cmp-row is-head" role="row">
             <span role="columnheader" />
-            <span role="columnheader">Бесплатно</span>
+            <span role="columnheader">{t('Бесплатно')}</span>
             <span role="columnheader">
               <em className="lp-cmp-plus">
                 <Icon id="i-crown" />
@@ -592,19 +590,17 @@ export function Plus({ on }: { on: boolean }) {
       {/* Оформить */}
       <Block
         title={
-          <>
-            Оформить <em>PLUS</em>
-          </>
+          <Em text={t('Оформить [PLUS]')} />
         }
-        sub="или получить за друзей"
+        sub={t('или получить за друзей')}
       >
         <div className="lp-buy">
           {(['PLUS', 'DIAMOND'] as const).map((tier) => (
             <div key={tier} className={'lp-buy-card' + (tier === 'PLUS' ? ' is-main' : ' is-diamond')}>
               <div>
                 <b>{tier === 'PLUS' ? 'PLUS' : 'PLUS Diamond'}</b>
-                <strong className="lp-buy-price">{rubles(offer(tier).priceKopecks)} / 28 дней</strong>
-                {tier === 'DIAMOND' ? <small>Все награды пропуска сразу</small> : <small>Награды каждый день</small>}
+                <strong className="lp-buy-price">{t('{price} / 28 дней', { price: plusPrice(tier, offer(tier).priceKopecks) ?? '' })}</strong>
+                {tier === 'DIAMOND' ? <small>{t('Все награды пропуска сразу')}</small> : <small>{t('Награды каждый день')}</small>}
               </div>
               {active ? (
                 cta
@@ -616,19 +612,19 @@ export function Plus({ on }: { on: boolean }) {
                   onClick={() => buy(tier)}
                 >
                   <Icon id="i-crown" />
-                  {waiting ? 'Открыть оплату' : 'Оформить'}
+                  {waiting ? t('Открыть оплату') : t('Оформить')}
                 </button>
               )}
             </div>
           ))}
           <div className="lp-buy-card">
             <div>
-              <b>За друзей</b>
-              <small>{REFERRAL_NOTE}</small>
+              <b>{t('За друзей')}</b>
+              <small>{REFERRAL_NOTE()}</small>
             </div>
             <button className="btn lg" data-track="plus_invite" onClick={() => useUi.getState().setScreen('friends')}>
               <Icon id="i-users" />
-              Пригласить
+              {t('Пригласить')}
             </button>
           </div>
         </div>
@@ -637,21 +633,19 @@ export function Plus({ on }: { on: boolean }) {
       {/* Вопросы */}
       <Block
         title={
-          <>
-            Частые <em>вопросы</em>
-          </>
+          <Em text={t('Частые [вопросы]')} />
         }
       >
         <div className="lp-faq">
           {[
-            ['Сколько стоит?', (price ? rubles(price) : '299 ₽') + ' за 28 дней. Автопродление выключается на millida.net в профиле, оплаченные дни остаются.'],
-            ['Как приходят рубины и сундуки?', 'Каждый день входа открывает клетку наград в бонусе за вход: за 28 дней это ' + n(PLUS.rubies) + ' рубинов и ' + PLUS.chests + ' сундуков сверх бесплатных. Сундуки ждут в «Моих сундуках».'],
-            ['Что, если пропустить день?', 'Клетка открывается за день входа, пропуск клетку не добавляет. Забранное остаётся.'],
+            [t('Сколько стоит?'), t('{price} за 28 дней. Автопродление выключается на millida.net в профиле, оплаченные дни остаются.', { price: plusPrice('PLUS', price || 29900) ?? '' })],
+            [t('Как приходят рубины и сундуки?'), t('Каждый день входа открывает клетку наград в бонусе за вход: за 28 дней это {rubies} рубинов и {chests} сундуков сверх бесплатных. Сундуки ждут в «Моих сундуках».', { rubies: n(PLUS.rubies), chests: PLUS.chests })],
+            [t('Что, если пропустить день?'), t('Клетка открывается за день входа, пропуск клетку не добавляет. Забранное остаётся.')],
             ...(milli
-              ? [['Что даёт PLUS в Милли?', milli.plus.day + ' запросов в день и ' + n(milli.plus.month) + ' в месяц вместо ' + milli.free.day + ' и ' + milli.free.month + '. Милли кладёт в сборку шейдеры, ресурспаки и карты и ставит её на сервер одной кнопкой.']]
+              ? [[t('Что даёт PLUS в Милли?'), t('{day} запросов в день и {month} в месяц вместо {freeDay} и {freeMonth}. Милли кладёт в сборку шейдеры, ресурспаки и карты и ставит её на сервер одной кнопкой.', { day: milli.plus.day, month: n(milli.plus.month), freeDay: milli.free.day, freeMonth: milli.free.month })]]
               : []),
-            ['Можно получить бесплатно?', 'Да, за друзей: первый приглашённый — 3 дня PLUS, пять друзей — ещё 14 дней, десять — 30. Друг засчитывается после двух часов игры.'],
-            ['Что остаётся после отмены?', 'Рубины, сундуки, фрагменты и вещи, которые ты забрал. Гаснут клетки PLUS, осколки ×1,5, лимиты Милли и значок.'],
+            [t('Можно получить бесплатно?'), t('Да, за друзей: первый приглашённый — 3 дня PLUS, пять друзей — ещё 14 дней, десять — 30. Друг засчитывается после двух часов игры.')],
+            [t('Что остаётся после отмены?'), t('Рубины, сундуки, фрагменты и вещи, которые ты забрал. Гаснут клетки PLUS, осколки ×1,5, лимиты Милли и значок.')],
           ].map(([q, a]) => (
             <details key={q} name="lp-faq" className="lp-faq-item">
               <summary>

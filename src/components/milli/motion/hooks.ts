@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RefCallback } from 'react'
 import { reducedMotion } from './reduced'
+import { formatNumber } from '../../../i18n'
 
 /*
  * Мелкие хуки микро-анимаций Милли (MOTION.md §2). Без зависимостей,
@@ -74,8 +75,7 @@ export function useSegIndicator(index: number): RefCallback<HTMLElement> {
   return setEl
 }
 
-const nf = typeof Intl !== 'undefined' ? new Intl.NumberFormat('ru-RU') : null
-const fmt = (n: number) => (nf ? nf.format(n) : String(n))
+const fmt = (n: number) => formatNumber(n)
 
 /**
  * Тикающий счётчик без перерисовки родителя: элемент рендерится БЕЗ детей,

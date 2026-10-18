@@ -5,6 +5,7 @@ import { MATE_TAGS, mateToAsk, partyFull, pickMate, type LfgCard } from '../lib/
 import { isRealtimeLive } from '../lib/realtime'
 import { loadParty, partyWithOthers, usePartyStore } from './party'
 import { showToast } from './ui'
+import { t } from '../i18n'
 
 /** Двое нажали «Найти пати» — сойтись должны за пару секунд (владелец 12.10.2026: «сразу же подключают»). */
 const POLL_MS = 2000
@@ -87,7 +88,7 @@ export async function startMateSearch(): Promise<void> {
     return
   }
   if (st.safety.newAccount) {
-    showToast('Искать напарников можно через неделю после регистрации', 'error')
+    showToast(t('Искать напарников можно через неделю после регистрации'), 'error')
     return
   }
   useMateSearch.getState().set({ searching: true, since: Date.now() })
@@ -101,7 +102,7 @@ export async function startMateSearch(): Promise<void> {
     await api('/party/lfg', { method: 'POST', body: JSON.stringify({ tags: MATE_TAGS }) })
   } catch (e) {
     useMateSearch.getState().set({ searching: false })
-    showToast(apiErrorText(e, 'Поиск не запустился'), 'error')
+    showToast(apiErrorText(e, t('Поиск не запустился')), 'error')
     return
   }
   window.clearInterval(timer)

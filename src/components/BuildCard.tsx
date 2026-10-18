@@ -12,6 +12,7 @@ import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { hasTauri } from '../ipc/tauri'
 import { deleteProfile, openProfileFolder, type PlayStats } from '../ipc/commands'
+import { useT } from '../i18n'
 
 type Profile = ReturnType<typeof useProfiles.getState>['profiles'][number]
 
@@ -24,6 +25,7 @@ export function BuildCard({
   hours: PlayStats['builds'][number] | null
   withLast?: boolean
 }) {
+  const t = useT()
   const selected = useProfiles((s) => s.selected)
   const setSelected = useProfiles((s) => s.setSelected)
   const refresh = useProfiles((s) => s.refresh)
@@ -37,24 +39,24 @@ export function BuildCard({
 
   const remove = () => {
     void uiConfirm(
-      'Сборка «' + p.name + '» удалится с модами, мирами и часами игры. Вернуть нельзя. Введи её название, чтобы удалить.',
-      { title: 'Удаление сборки', confirmLabel: 'Удалить', typeToConfirm: p.name },
+      t('Сборка «{name}» удалится с модами, мирами и часами игры. Вернуть нельзя. Введи её название, чтобы удалить.', { name: p.name }),
+      { title: t('Удаление сборки'), confirmLabel: t('Удалить'), typeToConfirm: p.name },
     ).then((ok) => {
       if (!ok) return
       if (!hasTauri()) {
-        showToast('Доступно в приложении', 'error')
+        showToast(t('Доступно в приложении'), 'error')
         return
       }
       deleteProfile(p.name)
         .then(() => {
           if (useProfiles.getState().selected === p.name) setSelected(null)
           void refresh()
-          showToast('Сборка удалена', 'ok', 'delete')
+          showToast(t('Сборка удалена'), 'ok', 'delete')
         })
         .catch((e) => {
           void refresh()
           console.error('[build-delete]', e)
-          showToast('Не удалось удалить сборку', 'error', false, { label: 'Повторить', run: remove })
+          showToast(t('Не удалось удалить сборку'), 'error', false, { label: t('Повторить'), run: remove })
         })
     })
   }
@@ -68,39 +70,39 @@ export function BuildCard({
 
   const guarded = useGuarded(p.name)
   const allItems: ContextItem[] = [
-    { id: 'play', label: running ? 'Запустить ещё копию' : 'Играть', icon: 'i-play', onPick: () => play() },
-    { id: 'rename', label: 'Переименовать', icon: 'i-edit', separated: true, onPick: () => go('opts', true) },
+    { id: 'play', label: running ? t('Запустить ещё копию') : t('Играть'), icon: 'i-play', onPick: () => play() },
+    { id: 'rename', label: t('Переименовать'), icon: 'i-edit', separated: true, onPick: () => go('opts', true) },
     {
       id: 'share',
-      label: 'Поделиться',
+      label: t('Поделиться'),
       icon: 'i-link',
       onPick: () => {
         setSelected(p.name)
         openBuildShare(p.name)
       },
     },
-    { id: 'content', label: 'Контент', icon: 'i-blocks', onPick: () => go('content') },
-    { id: 'worlds', label: 'Миры и серверы', icon: 'i-server', onPick: () => go('worlds') },
-    { id: 'shots', label: 'Скриншоты', icon: 'i-image', onPick: () => go('shots') },
-    { id: 'logs', label: 'Логи', icon: 'i-list', onPick: () => go('logs') },
-    { id: 'opts', label: 'Параметры', icon: 'i-settings', onPick: () => go('opts') },
+    { id: 'content', label: t('Контент'), icon: 'i-blocks', onPick: () => go('content') },
+    { id: 'worlds', label: t('Миры и серверы'), icon: 'i-server', onPick: () => go('worlds') },
+    { id: 'shots', label: t('Скриншоты'), icon: 'i-image', onPick: () => go('shots') },
+    { id: 'logs', label: t('Логи'), icon: 'i-list', onPick: () => go('logs') },
+    { id: 'opts', label: t('Параметры'), icon: 'i-settings', onPick: () => go('opts') },
     {
       id: 'folder',
-      label: 'Папка сборки',
+      label: t('Папка сборки'),
       icon: 'i-folder',
       separated: true,
       onPick: () => {
         if (!hasTauri()) {
-          showToast('Доступно в приложении', 'error')
+          showToast(t('Доступно в приложении'), 'error')
           return
         }
         openProfileFolder(p.name).catch((e) => {
           console.error('[build-folder]', e)
-          showToast('Не удалось открыть папку', 'error')
+          showToast(t('Не удалось открыть папку'), 'error')
         })
       },
     },
-    { id: 'delete', label: 'Удалить сборку', icon: 'i-trash', danger: true, separated: true, onPick: remove },
+    { id: 'delete', label: t('Удалить сборку'), icon: 'i-trash', danger: true, separated: true, onPick: remove },
   ]
   const items = guarded ? allItems.filter((i) => i.id !== 'folder') : allItems
 
@@ -130,12 +132,12 @@ export function BuildCard({
           setMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        <span className="build-cover" data-nosound aria-label={running ? 'Запустить ещё одну копию' : 'Играть'}>
+        <span className="build-cover" data-nosound aria-label={running ? t('Запустить ещё одну копию') : t('Играть')}>
           <BuildIcon icon={p.icon} name={p.name} size={56} />
           {running ? (
             <span className="build-run">
               <span className="run-dot"></span>
-              Запущено
+              {t('Запущено')}
             </span>
           ) : null}
           <span className="mini-play" aria-hidden="true">

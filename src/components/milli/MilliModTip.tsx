@@ -10,6 +10,7 @@ import { ruDescription } from './milliPackTree'
 import { copyText } from '../../lib/clipboard'
 import { Milli } from './Milli'
 import { showToast } from '../../state/ui'
+import { formatFixed, t, useT } from '../../i18n'
 
 /*
  * Подсказка мода в карточке сборки (04.10.2026) — всплывающее описание
@@ -95,60 +96,60 @@ const LOADER_RU: Record<string, string> = {
 
 /** Категории Modrinth по-русски: из них — строка описания, когда русского нет. */
 const CAT_RU: Record<string, string> = {
-  optimization: 'Оптимизация',
-  library: 'Библиотека для других модов',
-  worldgen: 'Генерация мира',
-  adventure: 'Приключения',
-  decoration: 'Декор и блоки',
-  utility: 'Полезные мелочи',
-  technology: 'Техника',
-  magic: 'Магия',
-  mobs: 'Новые мобы',
-  equipment: 'Оружие и броня',
-  food: 'Еда',
-  storage: 'Хранение вещей',
-  transportation: 'Транспорт',
-  economy: 'Экономика',
-  'game-mechanics': 'Игровые механики',
-  management: 'Управление сервером',
-  minigame: 'Мини-игры',
-  social: 'Общение',
-  cursed: 'Безумные идеи',
-  combat: 'Бой',
-  challenging: 'Хардкор',
-  multiplayer: 'Для игры с друзьями',
-  quests: 'Квесты',
-  lightweight: 'Лёгкая',
-  'kitchen-sink': 'Всё и сразу',
-  atmosphere: 'Атмосфера',
-  realistic: 'Реализм',
-  'semi-realistic': 'Почти реализм',
-  'vanilla-like': 'В духе ванилы',
-  fantasy: 'Фэнтези',
-  cartoon: 'Мультяшный стиль',
-  audio: 'Звуки',
-  blocks: 'Блоки',
-  entities: 'Существа',
-  environment: 'Окружение',
-  gui: 'Интерфейс',
-  items: 'Предметы',
-  locale: 'Перевод',
-  models: 'Модели',
-  tweaks: 'Небольшие правки',
-  simplistic: 'Простой стиль',
-  themed: 'Тематический',
-  fonts: 'Шрифты',
-  shadows: 'Тени',
-  reflections: 'Отражения',
-  'colored-lighting': 'Цветное освещение',
-  foliage: 'Живая листва',
-  'path-tracing': 'Трассировка лучей',
-  pbr: 'PBR-материалы',
-  bloom: 'Свечение',
-  potato: 'Для слабых ПК',
-  low: 'Для слабых ПК',
-  high: 'Для мощных ПК',
-  screenshot: 'Для скриншотов',
+  get optimization() { return t('Оптимизация') },
+  get library() { return t('Библиотека для других модов') },
+  get worldgen() { return t('Генерация мира') },
+  get adventure() { return t('Приключения') },
+  get decoration() { return t('Декор и блоки') },
+  get utility() { return t('Полезные мелочи') },
+  get technology() { return t('Техника') },
+  get magic() { return t('Магия') },
+  get mobs() { return t('Новые мобы') },
+  get equipment() { return t('Оружие и броня') },
+  get food() { return t('Еда') },
+  get storage() { return t('Хранение вещей') },
+  get transportation() { return t('Транспорт') },
+  get economy() { return t('Экономика') },
+  get 'game-mechanics'() { return t('Игровые механики') },
+  get management() { return t('Управление сервером') },
+  get minigame() { return t('Мини-игры') },
+  get social() { return t('Общение') },
+  get cursed() { return t('Безумные идеи') },
+  get combat() { return t('Бой') },
+  get challenging() { return t('Хардкор') },
+  get multiplayer() { return t('Для игры с друзьями') },
+  get quests() { return t('Квесты') },
+  get lightweight() { return t('Лёгкая') },
+  get 'kitchen-sink'() { return t('Всё и сразу') },
+  get atmosphere() { return t('Атмосфера') },
+  get realistic() { return t('Реализм') },
+  get 'semi-realistic'() { return t('Почти реализм') },
+  get 'vanilla-like'() { return t('В духе ванилы') },
+  get fantasy() { return t('Фэнтези') },
+  get cartoon() { return t('Мультяшный стиль') },
+  get audio() { return t('Звуки') },
+  get blocks() { return t('Блоки') },
+  get entities() { return t('Существа') },
+  get environment() { return t('Окружение') },
+  get gui() { return t('Интерфейс') },
+  get items() { return t('Предметы') },
+  get locale() { return t('Перевод') },
+  get models() { return t('Модели') },
+  get tweaks() { return t('Небольшие правки') },
+  get simplistic() { return t('Простой стиль') },
+  get themed() { return t('Тематический') },
+  get fonts() { return t('Шрифты') },
+  get shadows() { return t('Тени') },
+  get reflections() { return t('Отражения') },
+  get 'colored-lighting'() { return t('Цветное освещение') },
+  get foliage() { return t('Живая листва') },
+  get 'path-tracing'() { return t('Трассировка лучей') },
+  get pbr() { return t('PBR-материалы') },
+  get bloom() { return t('Свечение') },
+  get potato() { return t('Для слабых ПК') },
+  get low() { return t('Для слабых ПК') },
+  get high() { return t('Для мощных ПК') },
+  get screenshot() { return t('Для скриншотов') },
 }
 
 /** «Оптимизация · Полезные мелочи» — до двух категорий; библиотека — одной фразой. */
@@ -162,7 +163,7 @@ export function catLine(cats: string[]): string {
 }
 
 /** «A, B, C и ещё 2» — длинные названия модов не разворачивают плашку на полэкрана. */
-const few = (a: string[]) => (a.length > 3 ? a.slice(0, 3).join(', ') + ' и ещё ' + (a.length - 3) : a.join(', '))
+const few = (a: string[]) => (a.length > 3 ? t('{names} и ещё {n}', { names: a.slice(0, 3).join(', '), n: a.length - 3 }) : a.join(', '))
 
 const isRu = (s: string) => /[а-яё]/i.test(s)
 
@@ -234,8 +235,8 @@ export function useModMeta(m: MilliItem | null): ModInfo | null {
 }
 
 export function fmtCount(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace('.', ',') + ' млн'
-  if (n >= 1_000) return Math.round(n / 1_000) + ' тыс.'
+  if (n >= 1_000_000) return t('{n} млн', { n: formatFixed(n / 1_000_000, n >= 10_000_000 ? 0 : 1) })
+  if (n >= 1_000) return t('{n} тыс.', { n: Math.round(n / 1_000) })
   return String(n)
 }
 
@@ -339,6 +340,7 @@ export function MilliModTip({
   onToggle: () => void
   onOpen: () => void
 }) {
+  const t = useT()
   const panel = tip.el.closest('.ml-panel') as HTMLElement | null
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<Pos | null>(null)
@@ -383,14 +385,14 @@ export function MilliModTip({
   const m = tip.m
   const kindLabel =
     tip.kind === 'shader'
-      ? 'Шейдер'
+      ? t('Шейдер')
       : tip.kind === 'resourcepack'
-        ? 'Ресурс-пак'
+        ? t('Ресурс-пак')
         : m.base && rel.needFor.length && !tip.locked
-          ? 'Библиотека'
+          ? t('Библиотека')
           : m.base
-            ? 'Основа сборки'
-            : 'Мод'
+            ? t('Основа сборки')
+            : t('Мод')
   const ru = ruDescription(m)
   const en = meta?.description && meta.description !== ru ? meta.description : ''
   const lore = ru || catLine(meta?.categories || [])
@@ -448,15 +450,15 @@ export function MilliModTip({
       {rel.broken.length || rel.needFor.length || rel.needs.length ? (
         <p className="mtip-rel">
           {rel.broken.length ? (
-            <span className="warn">Убрана — не запустятся: {few(rel.broken)}</span>
+            <span className="warn">{t('Убрана — не запустятся: {list}', { list: few(rel.broken) })}</span>
           ) : rel.needFor.length ? (
             <span className="lib">
-              <i>Нужен для:</i> {few(rel.needFor)}
+              <i>{t('Нужен для:')}</i> {few(rel.needFor)}
             </span>
           ) : null}
           {rel.needs.length ? (
             <span>
-              <i>Требует:</i> {few(rel.needs)}
+              <i>{t('Требует:')}</i> {few(rel.needs)}
             </span>
           ) : null}
         </p>
@@ -464,7 +466,7 @@ export function MilliModTip({
 
       <span className="mtip-tags">
         {meta?.downloads != null ? (
-          <span className="mtip-dl" title="Скачиваний на Modrinth">
+          <span className="mtip-dl" title={t('Скачиваний на Modrinth')}>
             <Art px="hopper" size={12}>
               <PxIcon name="download" size={10} />
             </Art>
@@ -472,8 +474,8 @@ export function MilliModTip({
           </span>
         ) : null}
         {m.risk === 'proven' ? (
-          <i className="mtip-tag ok" title="Эта версия уже запускалась до главного меню">
-            проверен запуском
+          <i className="mtip-tag ok" title={t('Эта версия уже запускалась до главного меню')}>
+            {t('проверен запуском')}
           </i>
         ) : null}
         {mc ? <i className="mtip-tag v">{mc}</i> : null}
@@ -488,7 +490,7 @@ export function MilliModTip({
       {m.risk === 'risky' ? (
         <p className="mtip-risk">
           <PxIcon name="alert" size={10} />
-          <span>{m.riskNote || 'У этой версии была проблема — Милли её обошла'}</span>
+          <span>{m.riskNote || t('У этой версии была проблема — Милли её обошла')}</span>
         </p>
       ) : null}
 
@@ -504,12 +506,12 @@ export function MilliModTip({
           <Art px="compass" size={16}>
             <PxIcon name="ext" size={10} />
           </Art>
-          Открыть мод
+          {t('Открыть мод')}
         </button>
         {tip.locked ? (
           <span className="mtip-base">
             <PxIcon name="lock" size={10} />
-            Нужен для запуска
+            {t('Нужен для запуска')}
           </span>
         ) : tip.canToggle ? (
           <button
@@ -527,7 +529,7 @@ export function MilliModTip({
             ) : (
               <PxIcon name="plus" size={10} />
             )}
-            {tip.on ? 'Убрать из сборки' : 'Вернуть в сборку'}
+            {tip.on ? t('Убрать из сборки') : t('Вернуть в сборку')}
           </button>
         ) : null}
       </div>
@@ -535,14 +537,14 @@ export function MilliModTip({
         <button
           type="button"
           className="mtip-idl"
-          title="Скопировать id проекта Modrinth"
-          onClick={() => void copyText(m.projectId).then((ok) => ok && showToast('id скопирован', 'ok'))}
+          title={t('Скопировать id проекта Modrinth')}
+          onClick={() => void copyText(m.projectId).then((ok) => ok && showToast(t('id скопирован'), 'ok'))}
         >
           {[m.slug, m.version, m.projectId].filter(Boolean).join(' · ')}
         </button>
         {en ? (
           <button type="button" className="mtip-orig-btn" aria-pressed={orig} data-track="milli_mod_orig" onClick={() => setOrig((v) => !v)}>
-            {orig ? 'Скрыть оригинал' : 'Оригинал'}
+            {orig ? t('Скрыть оригинал') : t('Оригинал')}
           </button>
         ) : null}
       </span>

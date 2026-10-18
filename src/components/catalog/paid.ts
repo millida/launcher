@@ -8,6 +8,8 @@
  * вердикт узнаётся и по коду статуса (браузер), и по тексту (приложение).
  */
 
+import { intlTag, rubleGoodsPrice, t } from '../../i18n'
+
 export type Pricing = 'FREE' | 'ONE_TIME' | 'SUBSCRIPTION'
 
 export type AccessState = 'unknown' | 'locked' | 'open'
@@ -29,8 +31,8 @@ export interface CatalogFile {
 export function rubles(kopecks: number): string {
   const value = Math.round(kopecks || 0) / 100
   const text = Number.isInteger(value)
-    ? value.toLocaleString('ru-RU')
-    : value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    ? value.toLocaleString(intlTag())
+    : value.toLocaleString(intlTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return text + ' ₽'
 }
 
@@ -41,11 +43,12 @@ export function isPaid(pricing: string | null | undefined, kopecks: number | nul
 /** Цена на строке: «300 ₽» за покупку навсегда, «300 ₽/мес» за подписку, пусто у бесплатного. */
 export function priceTag(pricing: string | null | undefined, kopecks: number | null | undefined): string {
   if (!isPaid(pricing, kopecks)) return ''
-  return rubles(kopecks as number) + (pricing === 'SUBSCRIPTION' ? '/мес' : '')
+  const price = rubleGoodsPrice(kopecks as number, rubles)
+  return pricing === 'SUBSCRIPTION' ? t('{price}/мес', { price }) : price
 }
 
 /** Подпись главной кнопки платного материала без доступа. */
-export const buyLabel = (pricing: string | null | undefined): string => (pricing === 'SUBSCRIPTION' ? 'Подписаться' : 'Купить')
+export const buyLabel = (pricing: string | null | undefined): string => (pricing === 'SUBSCRIPTION' ? t('Подписаться') : t('Купить'))
 
 /* ── Ответ /catalog/items/:slug/access ── */
 
@@ -108,19 +111,19 @@ export function paidVerdict(e: unknown): PaidVerdict {
 export function verdictText(v: PaidVerdict): string | null {
   switch (v.kind) {
     case 'login':
-      return 'Войди в аккаунт Millida'
+      return t('Войди в аккаунт Millida')
     case 'funds':
-      return 'Не хватает денег на балансе'
+      return t('Не хватает денег на балансе')
     case 'price-changed':
-      return 'Цена изменилась — проверь и подтверди'
+      return t('Цена изменилась — проверь и подтверди')
     case 'no-access':
-      return 'Сначала купи — потом установка'
+      return t('Сначала купи — потом установка')
     case 'owned':
-      return 'Уже куплено'
+      return t('Уже куплено')
     case 'frozen':
-      return 'Баланс заморожен — напиши в поддержку'
+      return t('Баланс заморожен — напиши в поддержку')
     case 'busy':
-      return 'Покупка уже идёт — подожди минуту'
+      return t('Покупка уже идёт — подожди минуту')
     default:
       return null
   }

@@ -3,6 +3,7 @@ import { Ruby } from '../Ruby'
 import { openExt } from '../../lib/api'
 import { discordLinkUrl, type DiscordReward } from '../../lib/rubies'
 import { showToast } from '../../state/ui'
+import { t, useT } from '../../i18n'
 
 const inviteOk = (u: string): string | null => {
   try {
@@ -20,7 +21,7 @@ async function openLink() {
     if (url && url.startsWith('https://discord.com/')) openExt(url)
     else throw new Error('bad url')
   } catch {
-    showToast('Не получилось открыть привязку Discord, попробуй ещё раз', 'error')
+    showToast(t('Не получилось открыть привязку Discord, попробуй ещё раз'), 'error')
   }
 }
 
@@ -30,6 +31,7 @@ async function openLink() {
  * Discord к аккаунту → зайти на сервер → «Проверить».
  */
 export function DiscordRewardBlock({ view, busy, onClaim }: { view: DiscordReward | null; busy: boolean; onClaim: () => void }) {
+  const t = useT()
   if (!view || view.claimed || !view.available || !(view.amount > 0)) return null
   const invite = inviteOk(view.inviteUrl)
   return (
@@ -38,23 +40,23 @@ export function DiscordRewardBlock({ view, busy, onClaim }: { view: DiscordRewar
         <div className="sh-prize sh-quest">
           <Ruby size={40} />
           <span className="sh-prize-body">
-            <b>Вступи в Discord Millida</b>
-            <span className="sh-meter-cap">{view.linked ? 'Зайди на сервер и нажми «Проверить»' : 'Сначала привяжи Discord к аккаунту'}</span>
+            <b>{t('Вступи в Discord Millida')}</b>
+            <span className="sh-meter-cap">{view.linked ? t('Зайди на сервер и нажми «Проверить»') : t('Сначала привяжи Discord к аккаунту')}</span>
           </span>
           <span className="sh-prize-n">+{view.amount}</span>
           {view.linked ? (
             <>
               <button className="btn sm" data-track="dc_reward_join" disabled={!invite} onClick={() => invite && openExt(invite)}>
                 <Icon id="i-users" />
-                Вступить
+                {t('Вступить')}
               </button>
               <button className="btn sm primary" disabled={busy} data-track="dc_reward_claim" onClick={onClaim}>
-                Проверить
+                {t('Проверить')}
               </button>
             </>
           ) : (
             <button className="btn sm primary" data-track="dc_reward_link" onClick={() => void openLink()}>
-              Привязать Discord
+              {t('Привязать Discord')}
             </button>
           )}
         </div>

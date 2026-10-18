@@ -4,6 +4,8 @@
  * размер задаёт `svg.icon`, и галки вписывались бы в квадрат с полями.
  * Сетка 12×6 клеток, одна клетка = 1,5 px (на Retina ровно 3 пикселя экрана).
  */
+import { useT } from '../i18n'
+
 const ONE = ['.......c', '......cc', 'c....cc.', 'cc..cc..', '.cccc...', '..cc....']
 const TWO = ['.......c...c', '......cc..cc', 'c....cc..cc.', 'cc..cc..cc..', '.cccc..cc...', '..cc..cc....']
 
@@ -22,6 +24,7 @@ function rows(art: string[]) {
 }
 
 export function Ticks({ state, read }: { state?: 'sending' | 'failed'; read: boolean }) {
+  const t = useT()
   const sending = state === 'sending'
   const art = sending ? ONE : TWO
   return (
@@ -32,7 +35,7 @@ export function Ticks({ state, read }: { state?: 'sending' | 'failed'; read: boo
       viewBox={'0 0 ' + art[0].length + ' 6'}
       shapeRendering="crispEdges"
     >
-      <title>{sending ? 'Отправляется' : read ? 'Прочитано' : 'Доставлено'}</title>
+      <title>{sending ? t('Отправляется') : read ? t('Прочитано') : t('Доставлено')}</title>
       {rows(art).map((r, i) => (
         <rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill="currentColor" />
       ))}

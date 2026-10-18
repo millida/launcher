@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { openImage } from '../ImageLightbox'
+import { useT } from '../../i18n'
 
 /**
  * Кадры сборки: ручная карусель со стрелками по краям и точками-счётчиком —
@@ -9,6 +10,7 @@ import { openImage } from '../ImageLightbox'
  * фиксирована пропорцией 16:9 — кадры разной формы не двигают страницу.
  */
 export function Carousel({ shots }: { shots: string[] }) {
+  const t = useT()
   const [i, setI] = useState(0)
   const n = shots.length
   useEffect(() => setI(0), [shots.join('|')])
@@ -32,10 +34,10 @@ export function Carousel({ shots }: { shots: string[] }) {
       </div>
       {n > 1 ? (
         <>
-          <button className="ph-car-arr l" aria-label="Назад" data-track="shot_prev" onClick={() => go(-1)}>
+          <button className="ph-car-arr l" aria-label={t('Назад')} data-track="shot_prev" onClick={() => go(-1)}>
             <Icon id="i-chev-l" />
           </button>
-          <button className="ph-car-arr r" aria-label="Дальше" data-track="shot_next" onClick={() => go(1)}>
+          <button className="ph-car-arr r" aria-label={t('Дальше')} data-track="shot_next" onClick={() => go(1)}>
             <Icon id="i-chev-r" />
           </button>
           {n > 10 ? (
@@ -49,7 +51,7 @@ export function Carousel({ shots }: { shots: string[] }) {
               <button
                 key={s}
                 className={'ph-car-dot' + (k === i ? ' on' : '')}
-                aria-label={'Кадр ' + (k + 1)}
+                aria-label={t('Кадр {n}', { n: k + 1 })}
                 data-track="shot_dot"
                 onClick={() => setI(k)}
               ></button>

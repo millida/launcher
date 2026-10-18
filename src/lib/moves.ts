@@ -1,19 +1,20 @@
 import type { MoveCandidate, MoveOutcome } from '../ipc/commands'
 import { LOADER_NAME, plural } from './format'
+import { formatFixed, t } from '../i18n'
 
 const GB = 1024 * 1024 * 1024
 const MB = 1024 * 1024
 
 export function sizeText(bytes: number): string {
-  if (!bytes || bytes < 0) return '0 МБ'
-  if (bytes >= GB) return (bytes / GB).toFixed(bytes < 10 * GB ? 1 : 0).replace('.', ',') + ' ГБ'
-  return Math.max(1, Math.round(bytes / MB)) + ' МБ'
+  if (!bytes || bytes < 0) return t('0 МБ')
+  if (bytes >= GB) return t('{n} ГБ', { n: formatFixed(bytes / GB, bytes < 10 * GB ? 1 : 0) })
+  return t('{n} МБ', { n: Math.max(1, Math.round(bytes / MB)) })
 }
 
 export function contentText(c: Pick<MoveCandidate, 'bytes' | 'worlds' | 'mods'>): string {
   const parts = [sizeText(c.bytes)]
-  if (c.worlds) parts.push(c.worlds + ' ' + plural(c.worlds, 'мир', 'мира', 'миров'))
-  if (c.mods) parts.push(c.mods + ' ' + plural(c.mods, 'мод', 'мода', 'модов'))
+  if (c.worlds) parts.push(c.worlds + ' ' + plural(c.worlds, t('мир'), t('мира'), t('миров')))
+  if (c.mods) parts.push(c.mods + ' ' + plural(c.mods, t('мод'), t('мода'), t('модов')))
   return parts.join(' · ')
 }
 
@@ -26,7 +27,7 @@ export function candidateMeta(c: Pick<MoveCandidate, 'launcher' | 'loader' | 've
 export function launchersText(list: Pick<MoveCandidate, 'launcher'>[]): string {
   const names = [...new Set(list.map((x) => x.launcher))]
   if (names.length <= 1) return names[0] || ''
-  return names.slice(0, -1).join(', ') + ' и ' + names[names.length - 1]
+  return t('{list} и {last}', { list: names.slice(0, -1).join(', '), last: names[names.length - 1] ?? '' })
 }
 
 export function totalBytes(list: Pick<MoveCandidate, 'bytes'>[]): number {
@@ -35,32 +36,31 @@ export function totalBytes(list: Pick<MoveCandidate, 'bytes'>[]): number {
 
 /** Вопрос перед переносом: что уедет и что станет с исходником. */
 export function confirmText(list: MoveCandidate[]): string {
-  const n = list.length + ' ' + plural(list.length, 'сборку', 'сборки', 'сборок')
+  const n = list.length + ' ' + plural(list.length, t('сборку'), t('сборки'), t('сборок'))
   const where = launchersText(list)
-  const head = 'Перенесём ' + n + ' (' + sizeText(totalBytes(list)) + ') из ' + where + ' в Millida: миры, моды, настройки, скриншоты и серверы.'
-  return head + ' В ' + where + ' всё останется как есть.'
+  return t('Перенесём {count} ({size}) из {from} в Millida: миры, моды, настройки, скриншоты и серверы. В {from} всё останется как есть.', { count: n, size: sizeText(totalBytes(list)), from: where })
 }
 
 export type RowResult = { kind: 'ok'; outcome: MoveOutcome } | { kind: 'error'; text: string }
 
 /** Короткая отметка строки после переноса. */
 export function rowVerdict(r: RowResult): string {
-  if (r.kind === 'error') return 'Не перенесли'
-  return 'Скопировали'
+  if (r.kind === 'error') return t('Не перенесли')
+  return t('Скопировали')
 }
 
 /** Итог пачки: сколько перенесли и что делать с остальными. */
 export function batchSummary(results: RowResult[]): { text: string; kind: 'ok' | 'error' } {
   const ok = results.filter((r) => r.kind === 'ok').length
   const failed = results.length - ok
-  if (!ok) return { text: 'Не получилось перенести — причина под каждой сборкой', kind: 'error' }
-  const head = 'Перенесли ' + ok + ' ' + plural(ok, 'сборку', 'сборки', 'сборок') + ' — играй в «Моих сборках»'
+  if (!ok) return { text: t('Не получилось перенести — причина под каждой сборкой'), kind: 'error' }
+  const head = t('Перенесли {count} — играй в «Моих сборках»', { count: ok + ' ' + plural(ok, t('сборку'), t('сборки'), t('сборок')) })
   if (!failed) return { text: head, kind: 'ok' }
-  return { text: head + '. Не вышло: ' + failed + ' — причина под сборкой', kind: 'error' }
+  return { text: t('{head}. Не вышло: {n} — причина под сборкой', { head, n: failed }), kind: 'error' }
 }
 
 /** Ядро отвечает строкой ошибки; из Error берём сообщение, остальное — как есть. */
 export function errorText(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err ?? '')
-  return text.trim() || 'Перенос прервался. Сборка не тронута — повтори'
+  return text.trim() || t('Перенос прервался. Сборка не тронута — повтори')
 }

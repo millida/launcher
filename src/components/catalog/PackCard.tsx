@@ -2,6 +2,7 @@ import { Icon } from '../Icon'
 import { fmt } from '../../lib/format'
 import { priceLabel } from '../../lib/premium'
 import type { HubPack } from '../playhub/data'
+import { useT } from '../../i18n'
 
 /*
  * Плитка готовой сборки в разделе «Сборки» каталога Millida: та же форма, что
@@ -10,6 +11,7 @@ import type { HubPack } from '../playhub/data'
  * без ярлыков «платные / сливы» (владелец 24.09.2026).
  */
 export function PackCard({ p, onOpen }: { p: HubPack; onOpen: () => void }) {
+  const t = useT()
   const price = priceLabel(p)
   const facts = [p.loader, p.mcVersion].filter(Boolean).join(' · ')
   return (
@@ -42,7 +44,7 @@ export function PackCard({ p, onOpen }: { p: HubPack; onOpen: () => void }) {
             onOpen()
           }}
         >
-          Открыть
+          {t('Открыть')}
         </button>
       </div>
     </article>

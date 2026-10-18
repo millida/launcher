@@ -4,6 +4,7 @@ import { fmtVoiceTime } from '../lib/voice'
 import { isOwnMediaUrl } from '../lib/ownMedia'
 import { applyOutput } from '../lib/audioDevices'
 import type { ChatAttachment } from '../state/friends'
+import { t, useT } from '../i18n'
 
 /// One element for the whole app: two voice messages playing at once is never
 /// what the user meant.
@@ -14,13 +15,13 @@ let current: HTMLAudioElement | null = null
 function mediaErrorText(err: MediaError | null): string {
   switch (err?.code) {
     case MediaError.MEDIA_ERR_NETWORK:
-      return 'сеть'
+      return t('сеть')
     case MediaError.MEDIA_ERR_DECODE:
-      return 'битый файл'
+      return t('битый файл')
     case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-      return 'не открылся'
+      return t('не открылся')
     default:
-      return 'ошибка'
+      return t('ошибка')
   }
 }
 
@@ -43,6 +44,7 @@ function downsample(peaks: number[] | undefined, count: number): number[] {
 }
 
 export function VoiceMessage({ att, me }: { att: ChatAttachment; me?: boolean }) {
+  const t = useT()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
   const [at, setAt] = useState(0)
@@ -64,7 +66,7 @@ export function VoiceMessage({ att, me }: { att: ChatAttachment; me?: boolean })
   const toggle = () => {
     let a = audioRef.current
     if (!a && !isOwnMediaUrl(att.url)) {
-      setFailed('Файл не из хранилища Millida')
+      setFailed(t('Файл не из хранилища Millida'))
       return
     }
     if (!a) {
@@ -94,7 +96,7 @@ export function VoiceMessage({ att, me }: { att: ChatAttachment; me?: boolean })
       el
         .play()
         .then(() => setPlaying(true))
-        .catch((e: Error) => setFailed(e.name === 'NotAllowedError' ? 'нет доступа' : 'не играет')),
+        .catch((e: Error) => setFailed(e.name === 'NotAllowedError' ? t('нет доступа') : t('не играет'))),
     )
   }
 
@@ -116,7 +118,7 @@ export function VoiceMessage({ att, me }: { att: ChatAttachment; me?: boolean })
       <button
         className={'voice-play' + (playing ? '' : ' is-play')}
         onClick={toggle}
-        title={playing ? 'Пауза' : 'Слушать'}
+        title={playing ? t('Пауза') : t('Слушать')}
       >
         <Icon id={playing ? 'i-pause' : 'i-play'} />
       </button>

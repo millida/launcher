@@ -4,6 +4,7 @@ import type { OverlayCard } from '../ipc/commands'
 import { setScreen } from '../state/ui'
 import { openChat, openRoomChat } from '../state/friends'
 import { restoreLauncher } from './window'
+import { t } from '../i18n'
 
 /// A click on an overlay card that the core decided the launcher should answer:
 /// the window is already coming up natively, the webview only has to land on
@@ -16,7 +17,7 @@ function handle(card: OverlayCard) {
   }
   setScreen('friends')
   if (card.open === 'room' && card.uid) {
-    void openRoomChat(card.uid, card.nick || 'Группа').catch(() => {})
+    void openRoomChat(card.uid, card.nick || t('Группа')).catch(() => {})
     return
   }
   if (card.open === 'chat' && card.uid) void openChat(card.uid, card.nick || '').catch(() => {})

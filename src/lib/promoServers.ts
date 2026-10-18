@@ -3,6 +3,7 @@ import { hasTauri } from '../ipc/tauri'
 import { isGameRunning } from '../state/game'
 import { useProfiles } from '../state/profiles'
 import { usePromo, type ListedServer } from '../state/promo'
+import { getMarket, marketOffers } from '../i18n'
 
 const APPLIED_KEY = 'm-promo-servers'
 
@@ -67,7 +68,7 @@ let again = false
 
 async function apply(): Promise<void> {
   const list = usePromo.getState().promo.serverList
-  if (!list.length) return
+  if (!list.length || !marketOffers(getMarket(), 'partners')) return
   const applied = readApplied()
   for (const { profile, server } of pendingAdds(useProfiles.getState().profiles, list, applied, isGameRunning)) {
     try {

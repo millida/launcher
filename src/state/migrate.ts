@@ -3,6 +3,7 @@ import { migratePlan } from '../ipc/commands'
 import type { MigratePlan } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { openModal, showToast } from './ui'
+import { t } from '../i18n'
 
 interface MigrateState {
   profile: string
@@ -29,7 +30,7 @@ export const useMigrate = create<MigrateState>((set, get) => ({
   set: (p) => set(p),
   open: (profile, version, loader) => {
     if (!hasTauri()) {
-      showToast('Перенос сборки доступен в приложении', 'error')
+      showToast(t('Перенос сборки доступен в приложении'), 'error')
       return
     }
     set({ profile, version, loader, plan: null, loading: false, error: '' })

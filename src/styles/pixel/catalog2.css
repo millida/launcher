@@ -395,6 +395,7 @@
 .mr-titleline { display: flex; align-items: baseline; gap: 8px; min-width: 0; height: 24px; }
 .mr-title { margin: 0; min-width: 0; flex: 0 1 auto; font: 700 18px/24px var(--m-font); letter-spacing: -0.01em; color: var(--m-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mr-by { flex: 0 1 auto; min-width: 0; font-size: 14px; font-weight: 500; color: var(--m-fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-src { color: var(--m-fg-faint); font-weight: 400; }
 .mr-desc { margin: 0; height: 40px; font-size: 14px; line-height: 20px; color: var(--m-fg-muted); overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .mr-tags { display: flex; align-items: center; gap: 4px 16px; height: 24px; margin: 4px 0 0; padding: 0; list-style: none; overflow: hidden; flex-wrap: wrap; }
 .mr-tag { display: inline-flex; align-items: center; gap: 4px; height: 24px; font-size: 13px; font-weight: 600; color: var(--m-fg-subtle); white-space: nowrap; }
@@ -533,8 +534,6 @@
 .mr-galgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1199px) { .mr-galgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .mr-galgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
-.mr-cheat-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--m-fg-muted); }
-.mr-cheat-note .icon { flex-shrink: 0; margin-top: 2px; color: var(--m-warning); }
 .card.mr-gal { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 0; overflow: hidden; background-color: var(--m-surface); cursor: pointer; transition: background-color var(--m-t-fast) ease; }
 .card.mr-gal:hover { background-color: var(--m-surface-2); }
 .card.mr-gal.cat-skel { cursor: default; }
@@ -609,7 +608,7 @@
    та же шкала читаемости ≥4,5:1 на тёмном фоне. */
 .mr-cat, .hub-cat, .hub-cats, .fy-grid {
   --m-sec-all: #b8c2cc; --m-sec-mods: #8fce74; --m-sec-modpacks: #c99af5; --m-sec-server-packs: #86a8f0;
-  --m-sec-plugins: #6fc6de; --m-sec-data-packs: #e8c05a; --m-sec-addons: #5fd4c0; --m-sec-cheats: #f09474;
+  --m-sec-plugins: #6fc6de; --m-sec-data-packs: #e8c05a; --m-sec-addons: #5fd4c0;
   --m-sec-texture-packs: #f3a06f; --m-sec-shaders: #f5c542; --m-sec-maps: #7fb2f0; --m-sec-seeds: #9ed8a4;
   --m-sec-skins: #e3a8cf; --m-sec-capes: #b49af0; --m-sec-heads: #f09a9a;
 }
