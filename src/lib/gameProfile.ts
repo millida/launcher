@@ -3,6 +3,7 @@ import { idbGet, idbSet } from './idbCache'
 import { api, hasMillidaAccount } from './api'
 import type { Quote } from './money'
 import { getAccount } from '../state/accounts'
+import { getLocale } from '../i18n'
 
 export type SkinSource = 'millida' | 'mojang'
 
@@ -304,16 +305,18 @@ const CATALOG_FRESH_MS = 60 * 60_000
 const CATALOG_REFRESH_DELAY_MS = 8000
 
 type Catalog = { items: CosmeticItem[] }
-let catalogAsk: { at: number; p: Promise<Catalog> } | null = null
-let catalogRefresh: Promise<Catalog> | null = null
+let catalogAsk: { at: number; locale: string; p: Promise<Catalog> } | null = null
+let catalogRefresh: { locale: string; p: Promise<Catalog> } | null = null
 let catalogRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
-const CATALOG_KEY = 'cosmetics-catalog-v1'
+/** Item names come in the interface language, so every language keeps its own copy. */
+export const catalogStoreKey = (locale: string): string => 'cosmetics-catalog-v1:' + locale
+export const catalogPath = (locale: string): string => '/cosmetics/catalog?lang=' + encodeURIComponent(locale)
 
-async function fetchCatalogRaw(): Promise<Catalog> {
-  const once = () => api<Catalog>('/cosmetics/catalog')
+async function fetchCatalogRaw(locale: string): Promise<Catalog> {
+  const once = () => api<Catalog>(catalogPath(locale))
   const r = await once().catch(() => new Promise<void>((ok) => setTimeout(ok, 1500)).then(once))
-  if (r && Array.isArray(r.items) && r.items.length) void idbSet(CATALOG_KEY, r)
+  if (r && Array.isArray(r.items) && r.items.length) void idbSet(catalogStoreKey(locale), r)
   return r
 }
 
@@ -321,15 +324,16 @@ const expanded = (r: Catalog) => ({ ...r, items: expandCatalog(r.items || []) })
 
 /** Свежий каталог из сети подменяет ответ для следующих запросов; параллельные просьбы ждут один запрос. */
 export function refreshCosmeticCatalog(): Promise<Catalog> {
-  if (catalogRefresh) return catalogRefresh
-  const p = fetchCatalogRaw().then((r) => {
+  const locale = getLocale()
+  if (catalogRefresh && catalogRefresh.locale === locale) return catalogRefresh.p
+  const p = fetchCatalogRaw(locale).then((r) => {
     const fresh = expanded(r)
-    if (fresh.items.length) catalogAsk = { at: Date.now(), p: Promise.resolve(fresh) }
+    if (fresh.items.length && getLocale() === locale) catalogAsk = { at: Date.now(), locale, p: Promise.resolve(fresh) }
     return fresh
   })
-  catalogRefresh = p
+  catalogRefresh = { locale, p }
   const done = () => {
-    if (catalogRefresh === p) catalogRefresh = null
+    if (catalogRefresh?.p === p) catalogRefresh = null
   }
   p.then(done, done)
   return p
@@ -348,21 +352,22 @@ function refreshCatalogLater() {
  * 3-12 секунд ожидания 1,5 МБ. Свежая копия сети не просит, старая — догоняется
  * в фоне после показа экрана.
  */
-async function fetchCatalog(): Promise<{ at: number; value: Catalog }> {
-  const cached = await idbGet<Catalog>(CATALOG_KEY)
+async function fetchCatalog(locale: string): Promise<{ at: number; value: Catalog }> {
+  const cached = await idbGet<Catalog>(catalogStoreKey(locale))
   if (cached && Array.isArray(cached.value.items) && cached.value.items.length) {
     return { at: cached.at, value: expanded(cached.value) }
   }
-  return { at: Date.now(), value: expanded(await fetchCatalogRaw()) }
+  return { at: Date.now(), value: expanded(await fetchCatalogRaw(locale)) }
 }
 
 export function loadCosmeticCatalog(): Promise<Catalog> {
-  if (catalogAsk) {
+  const locale = getLocale()
+  if (catalogAsk && catalogAsk.locale === locale) {
     if (Date.now() - catalogAsk.at >= CATALOG_FRESH_MS) refreshCatalogLater()
     return catalogAsk.p
   }
-  const mine: { at: number; p: Promise<Catalog> } = { at: Date.now(), p: Promise.resolve({ items: [] }) }
-  mine.p = fetchCatalog().then((r) => {
+  const mine: { at: number; locale: string; p: Promise<Catalog> } = { at: Date.now(), locale, p: Promise.resolve({ items: [] }) }
+  mine.p = fetchCatalog(locale).then((r) => {
     // Возраст копии с диска — её собственный, а не этого запуска.
     if (catalogAsk === mine) mine.at = r.at
     if (Date.now() - r.at >= CATALOG_FRESH_MS) refreshCatalogLater()

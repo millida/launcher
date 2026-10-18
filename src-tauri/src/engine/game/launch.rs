@@ -275,17 +275,14 @@ fn refuse_second_instance(running: &[String], profile: &str) -> Result<(), Strin
 
 /// RUNNING lives in memory, so a game started before the launcher restarted is
 /// missing from it while it still holds the jars of its build open. The system
-/// process list remembers it: the launcher starts every game inside its build
-/// folder, and the folder is also passed as --gameDir.
+/// process list remembers it by the command line the launcher gave it.
 fn build_open_elsewhere(game_dir: &Path) -> bool {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let mut sys = System::new();
     sys.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
-        ProcessRefreshKind::nothing()
-            .with_cmd(UpdateKind::Always)
-            .with_cwd(UpdateKind::Always),
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
     );
     sys.processes().values().any(|p| {
         let name = p.name().to_string_lossy().to_ascii_lowercase();
@@ -293,17 +290,26 @@ fn build_open_elsewhere(game_dir: &Path) -> bool {
             return false;
         }
         let args: Vec<String> = p.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect();
-        runs_in(game_dir, p.cwd(), &args)
+        runs_in(game_dir, &args)
     })
 }
 
-fn runs_in(game_dir: &Path, cwd: Option<&Path>, args: &[String]) -> bool {
+/// Only the command line is proof. The working folder is inherited by any java
+/// a mod spawns from the game, which can outlive the game, and matching on it
+/// refused the relaunch for seconds after the game had exited or crashed.
+fn runs_in(game_dir: &Path, args: &[String]) -> bool {
     let named = args
         .iter()
         .position(|a| a == "--gameDir")
         .and_then(|i| args.get(i + 1))
         .is_some_and(|dir| same_dir(Path::new(dir), game_dir));
-    named || cwd.is_some_and(|dir| same_dir(dir, game_dir))
+    named || args.iter().any(|a| argfile_of(game_dir, a))
+}
+
+fn argfile_of(game_dir: &Path, arg: &str) -> bool {
+    let Some(path) = arg.strip_prefix('@').map(Path::new) else { return false };
+    path.file_name().is_some_and(|n| n == ARGFILE_NAME)
+        && path.parent().is_some_and(|dir| same_dir(dir, game_dir))
 }
 
 fn same_dir(a: &Path, b: &Path) -> bool {
@@ -2575,26 +2581,35 @@ mod tests {
         }
     }
 
-    /// (game dir of the build, process cwd, process args -> same build, why pinned)
+    /// (process args -> the build's own game, why pinned)
     #[test]
     fn a_build_open_from_an_earlier_launcher_is_recognised() {
         let build = if cfg!(windows) { r"C:\Games\profiles\FO" } else { "/games/profiles/FO" };
         let other = if cfg!(windows) { r"C:\Games\profiles\FO2" } else { "/games/profiles/FO2" };
         let args = |dir: &str| vec!["-Xmx4G".to_string(), "--gameDir".to_string(), dir.to_string()];
-        let cases: [(Option<&str>, Vec<String>, bool, &str); 6] = [
-            (None, args(build), true, "--gameDir names the build: its jars are held open"),
-            (Some(build), vec![], true, "an argfile launch hides the args, the working folder still tells"),
-            (None, args(&format!("{build}/")), true, "a trailing separator is the same folder"),
-            (Some(other), args(other), false, "a build whose name only starts the same is another build"),
-            (None, vec!["--gameDir".to_string()], false, "a flag without a value names nothing"),
-            (None, vec![], false, "a java process with nothing of the build is someone else's"),
+        let argfile = |dir: &str, name: &str| vec![format!("@{}", Path::new(dir).join(name).to_string_lossy())];
+        let cases: [(Vec<String>, bool, &str); 9] = [
+            (args(build), true, "--gameDir names the build: its jars are held open"),
+            (argfile(build, ARGFILE_NAME), true, "an argfile launch hides --gameDir, the argfile beside the build still tells"),
+            (args(&format!("{build}/")), true, "a trailing separator is the same folder"),
+            (args(other), false, "a build whose name only starts the same is another build"),
+            (argfile(other, ARGFILE_NAME), false, "another build's argfile is another build"),
+            (argfile(build, "options.txt"), false, "only the launcher's own argfile proves the launcher started it"),
+            (vec!["--gameDir".to_string()], false, "a flag without a value names nothing"),
+            (
+                vec!["-jar".to_string(), "crash-helper.jar".to_string()],
+                false,
+                "a java a mod spawned from the game sits in the build folder but is not the game; \
+                 taking it for one refused the relaunch after an exit or a crash",
+            ),
+            (vec![], false, "a java process with nothing of the build is someone else's"),
         ];
-        for (cwd, list, same, why) in cases {
-            assert_eq!(runs_in(Path::new(build), cwd.map(Path::new), &list), same, "{cwd:?} {list:?}: {why}");
+        for (list, same, why) in cases {
+            assert_eq!(runs_in(Path::new(build), &list), same, "{list:?}: {why}");
         }
         if cfg!(windows) {
             assert!(
-                runs_in(Path::new(build), Some(Path::new(&build.to_uppercase())), &[]),
+                runs_in(Path::new(build), &args(&build.to_uppercase())),
                 "Windows paths ignore case: a game started with another spelling still holds the jars"
             );
         }

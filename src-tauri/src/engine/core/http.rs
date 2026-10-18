@@ -642,11 +642,66 @@ async fn fetch_cancellable(
 /// limit; the window is a minute, so the short pause meant for a dropped
 /// connection only burned the remaining attempts inside the same window.
 fn retry_pause(attempt: u32, err: &str) -> Duration {
-    if err.ends_with(&format!(" {}", reqwest::StatusCode::TOO_MANY_REQUESTS)) {
-        Duration::from_secs(5 * attempt as u64)
+    if is_throttled(err) {
+        throttle_pause(attempt, server_wait(err), jitter_unit())
     } else {
         Duration::from_millis(400 * attempt as u64)
     }
+}
+
+/// The server's own wait travels inside the failure text, so every retry loop
+/// above the transfer can honour it without a second error type.
+const RETRY_AFTER_MARK: &str = "; Retry-After: ";
+const THROTTLE_BASE: Duration = Duration::from_secs(5);
+const THROTTLE_CAP: Duration = Duration::from_secs(120);
+
+fn status_failure(url: &str, resp: &reqwest::Response) -> String {
+    let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok());
+    status_text(url, resp.status(), retry_after)
+}
+
+fn status_text(url: &str, status: reqwest::StatusCode, retry_after: Option<&str>) -> String {
+    match retry_after.and_then(parse_retry_after) {
+        Some(wait) => format!("{} → {}{}{}", url, status, RETRY_AFTER_MARK, wait.as_secs()),
+        None => format!("{} → {}", url, status),
+    }
+}
+
+/// Only the delta-seconds form: an HTTP-date would need a date parser the
+/// launcher does not carry, and the doubling backoff covers that case.
+fn parse_retry_after(raw: &str) -> Option<Duration> {
+    raw.trim().parse::<u64>().ok().map(Duration::from_secs)
+}
+
+pub(crate) fn server_wait(err: &str) -> Option<Duration> {
+    let (_, tail) = err.rsplit_once(RETRY_AFTER_MARK)?;
+    let digits: String = tail.chars().take_while(char::is_ascii_digit).collect();
+    parse_retry_after(&digits)
+}
+
+pub(crate) fn is_throttled(err: &str) -> bool {
+    err.contains(&reqwest::StatusCode::TOO_MANY_REQUESTS.to_string()) || server_wait(err).is_some()
+}
+
+/// Worth another round later: a limit that lifts by itself or a dropped line.
+/// A 404 or a wrong checksum stays the same however long one waits.
+pub(crate) fn is_transient(err: &str) -> bool {
+    is_throttled(err) || err.contains(super::mirror::NO_LINK)
+}
+
+/// Doubling from five seconds, never shorter than the server asked, capped so a
+/// hostile header cannot park the download for an hour. The jitter spreads the
+/// thousands of launchers that hit the limit in the same second after a release.
+pub(crate) fn throttle_pause(attempt: u32, server: Option<Duration>, jitter: f64) -> Duration {
+    let doubling = THROTTLE_BASE.saturating_mul(1u32 << attempt.saturating_sub(1).min(5));
+    let floor = doubling.max(server.unwrap_or_default()).min(THROTTLE_CAP);
+    floor + floor.mul_f64(jitter.clamp(0.0, 1.0) / 2.0)
+}
+
+pub(crate) fn jitter_unit() -> f64 {
+    use std::hash::BuildHasher as _;
+    let n = std::collections::hash_map::RandomState::new().hash_one(std::time::SystemTime::now());
+    (n >> 11) as f64 / (1u64 << 53) as f64
 }
 
 fn cancelled(cancel: Option<&Halt>) -> bool {
@@ -735,7 +790,7 @@ async fn fetch_once(
     }
     let resp = or_pause(req.send(), cancel).await?.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
     if !resp.status().is_success() {
-        return Err(format!("{} → {}", url, resp.status()));
+        return Err(status_failure(url, &resp));
     }
     /*
      * Сервер вправе не поддержать докачку и ответить целым файлом: тогда
@@ -1065,7 +1120,7 @@ async fn fetch_span(
             Ok(Ok(resp)) if resp.status().is_success() || resp.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE => {
                 return Err(SpanErr::Unsupported);
             }
-            Ok(Ok(resp)) => last = format!("{} → {}", url, resp.status()),
+            Ok(Ok(resp)) => last = status_failure(url, &resp),
             Ok(Err(e)) => last = format!("{}: {}", url, net_err(&e)),
         }
         if at >= end {
@@ -1187,7 +1242,7 @@ async fn resume_once(url: &str, part: &Path, have: u64, size: u64, cancel: &Halt
         if status == reqwest::StatusCode::PARTIAL_CONTENT || status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
             let _ = std::fs::remove_file(part);
         }
-        return Err(format!("{} → {}", url, status));
+        return Err(status_failure(url, &resp));
     };
     let opened = if at == 0 { std::fs::File::create(part) } else { std::fs::OpenOptions::new().append(true).open(part) };
     let mut file = opened.map_err(|e| format!("{}: {}", part.display(), e))?;
@@ -1782,6 +1837,55 @@ PK"),
         let throttled = format!("https://api.millida.net/v2/launcher/dl → {}", reqwest::StatusCode::TOO_MANY_REQUESTS);
         assert!(retry_pause(1, &throttled) >= Duration::from_secs(5), "429 должен ждать окно лимита");
         assert_eq!(retry_pause(1, "x: обрыв загрузки (нет связи (reset))"), Duration::from_millis(400), "обрыв повторяется сразу");
+    }
+
+    /// The shield answered 429 to thousands of launchers at once after the
+    /// 0.2.37 mod release, and each retried on a fixed short schedule.
+    #[test]
+    fn a_throttled_download_waits_as_asked_doubles_and_spreads() {
+        let s = Duration::from_secs;
+        let cases: [(u32, Option<Duration>, f64, Duration, &str); 7] = [
+            (1, None, 0.0, s(5), "first retry waits the base window"),
+            (2, None, 0.0, s(10), "each attempt doubles the wait"),
+            (4, None, 0.0, s(40), "doubling keeps going without a server hint"),
+            (1, Some(s(30)), 0.0, s(30), "Retry-After longer than the backoff wins"),
+            (3, Some(s(2)), 0.0, s(20), "a short Retry-After never shortens the backoff"),
+            (1, Some(s(3600)), 0.0, s(120), "a huge Retry-After is capped"),
+            (1, None, 1.0, Duration::from_millis(7500), "jitter adds up to half of the wait"),
+        ];
+        for (attempt, server, jitter, want, why) in cases {
+            assert_eq!(throttle_pause(attempt, server, jitter), want, "{}", why);
+        }
+        assert_eq!(throttle_pause(40, None, 0.0), s(120), "a large attempt number must not overflow the shift");
+        for _ in 0..64 {
+            let j = jitter_unit();
+            assert!((0.0..1.0).contains(&j), "jitter must stay in [0, 1): {}", j);
+        }
+    }
+
+    /// The failure text is the only channel from the transfer to the retry
+    /// loops, so its Retry-After marker has to survive the round trip.
+    #[test]
+    fn retry_after_rides_in_the_failure_text() {
+        let url = "https://cdn.millida.net/mod/millida-mod-fabric-1.21.1-0.2.37.jar";
+        let too_many = reqwest::StatusCode::TOO_MANY_REQUESTS;
+        type Case<'a> = (reqwest::StatusCode, Option<&'a str>, Option<u64>, bool, &'a str);
+        let cases: [Case; 6] = [
+            (too_many, Some("30"), Some(30), true, "seconds from the shield are kept"),
+            (too_many, Some(" 7 "), Some(7), true, "spaces around the number are fine"),
+            (too_many, None, None, true, "429 without a header still counts as throttled"),
+            (too_many, Some("Wed, 21 Oct 2026 07:28:00 GMT"), None, true, "an HTTP-date falls back to doubling"),
+            (reqwest::StatusCode::SERVICE_UNAVAILABLE, Some("12"), Some(12), true, "503 with a wait is a throttle too"),
+            (reqwest::StatusCode::NOT_FOUND, None, None, false, "404 is final, not a limit"),
+        ];
+        for (status, header, wait, throttled, why) in cases {
+            let text = status_text(url, status, header);
+            assert_eq!(server_wait(&text), wait.map(Duration::from_secs), "{}: {}", why, text);
+            assert_eq!(is_throttled(&text), throttled, "{}: {}", why, text);
+            assert!(text.starts_with(url), "{}: the URL stays in front for telemetry grouping", why);
+        }
+        assert!(is_transient("x: нет связи (reset)"), "a dropped line is worth another round");
+        assert!(!is_transient(&format!("x: {}", SUM_MISMATCH)), "a wrong checksum will not fix itself");
     }
 
     /// The backend tells launcher releases apart by this header in its logs; a fixed

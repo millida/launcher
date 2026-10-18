@@ -8,6 +8,16 @@ export const EMOTE_SHOW_MAX_MS = 8000
  */
 export const wornEmoteLoops = (fittingRoom: boolean) => fittingRoom
 
+/**
+ * The emote whose skin mask cuts the figure: only one that is playing right now.
+ * A worn emote that rests between shows on the home screen still carried its
+ * mask, and the legs under roller skates or cloud boots stayed cut away.
+ */
+export function skinMaskEmote<T extends { slot: string }>(outfit: readonly T[], fittingRoom: boolean, showing: T | null): T | undefined {
+  if (showing) return showing
+  return wornEmoteLoops(fittingRoom) ? outfit.find((item) => item.slot === 'EMOTE') : undefined
+}
+
 /** A short loop repeats until the show is long enough to read; a long one is cut. */
 export function emoteShowMs(introSeconds: number, loopSeconds: number): number {
   const loop = loopSeconds > 0 ? loopSeconds : 1

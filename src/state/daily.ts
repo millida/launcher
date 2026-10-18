@@ -26,6 +26,7 @@ import { showToast } from './ui'
 import { passCols, readyCells, seasonal, type ClaimTarget, type DailyView } from '../components/daily/track'
 import { demoClaim, forgetDemoChest } from '../components/daily/demoTrack'
 import { demoOpen, isTier, RARITY_ORDER } from '../components/daily/chestDrops'
+import { forgetUnseen } from '../components/daily/unseenChests'
 import type { Rarity } from '../lib/rubies'
 import { t } from '../i18n'
 
@@ -347,12 +348,14 @@ export const useDaily = create<DailyState>((set, get) => ({
       // 404: ручки нет (старая служба) или служба не знает сундук; 400 «уже открыт».
       if (/already|уже открыт/i.test(raw)) {
         drop()
+        forgetUnseen(id)
         return { error: t('Этот сундук уже открыт') }
       }
       // «Сундука нет» — служба не знает этот id (уже открыт в другом окне или
       // пропал): это не «старая служба», убираем его из списка.
       if (/сундука нет/i.test(raw)) {
         drop()
+        forgetUnseen(id)
         return { error: t('Этого сундука уже нет') }
       }
       if (/\b404\b|not found|cannot post/i.test(raw))

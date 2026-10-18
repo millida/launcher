@@ -4,6 +4,7 @@
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 // Mod version list on the Millida CDN.
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
@@ -242,12 +243,125 @@ pub async fn millida_mod_state(profile: String) -> Result<MillidaModState, Strin
 /// the new one is in place: a failed download must not leave the build without
 /// the mod it had.
 pub async fn millida_mod_install(app: AppHandle, profile: String) -> Result<MillidaModState, String> {
-    let job = Job::start(format!("millida-mod:{}", profile), "Косметика Millida")?;
-    let res = install_job(&app, &job, profile).await;
-    job.finish(&app, res)
+    run_install(&app, profile, None).await
 }
 
-async fn install_job(app: &AppHandle, job: &Job, profile: String) -> Result<MillidaModState, String> {
+/// A launch stops waiting for the jar after `LAUNCH_WAIT`: the build starts
+/// without the new version and the download keeps going for the next launch.
+async fn install_for_launch(app: &AppHandle, profile: &str) -> Result<MillidaModState, String> {
+    run_install(app, profile.to_string(), Some(LAUNCH_WAIT)).await
+}
+
+async fn run_install(app: &AppHandle, profile: String, wait: Option<Duration>) -> Result<MillidaModState, String> {
+    let job = Job::start(format!("millida-mod:{}", profile), "Косметика Millida")?;
+    let res = install_job(app, &job, profile, wait).await;
+    job.finish(app, res)
+}
+
+const LAUNCH_WAIT: Duration = Duration::from_secs(8);
+
+/// Rounds of the whole download after its own quick retries gave up, started
+/// further along the doubling so a round never comes sooner than the last retry.
+const PATIENT_ROUNDS: u32 = 6;
+const ROUND_BACKOFF_FROM: u32 = 3;
+
+const FETCH_LATER: &str = "Сервер косметики сейчас перегружен — сборка запускается без новой версии мода, она докачается в фоне и встанет при следующем запуске";
+
+#[derive(Clone)]
+struct JarSource {
+    url: String,
+    artifact: String,
+    sha256: String,
+    size: Option<u64>,
+}
+
+/// One copy per launcher, not per build: a player with five builds cost five
+/// downloads of the same jar per release.
+fn jar_cache(artifact: &str) -> Result<PathBuf, String> {
+    let dir = data_dir().join("millida-mod-cache");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Папка загрузок мода не создалась: {} — проверь место на диске и права", e))?;
+    safe_child(&dir, artifact)
+}
+
+/// Jars of older releases are never asked for again once a newer one landed.
+fn prune_jar_cache(current_version: &str) {
+    let Ok(entries) = std::fs::read_dir(data_dir().join("millida-mod-cache")) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if is_millida_mod_file(&name) && jar_version(&name) != current_version {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+async fn fetch_patiently(src: &JarSource) -> Result<PathBuf, String> {
+    let dest = jar_cache(&src.artifact)?;
+    let mut round = 1;
+    loop {
+        let err = match download_checked(&src.url, &dest, Some(Sum::Sha256(&src.sha256)), src.size).await {
+            Ok(()) => return Ok(dest),
+            Err(e) => e,
+        };
+        if round >= PATIENT_ROUNDS || !is_transient(&err) {
+            return Err(err);
+        }
+        tokio::time::sleep(throttle_pause(round + ROUND_BACKOFF_FROM - 1, server_wait(&err), jitter_unit())).await;
+        round += 1;
+    }
+}
+
+type SharedFetch = futures::future::Shared<futures::future::BoxFuture<'static, Result<PathBuf, String>>>;
+
+fn in_flight() -> &'static std::sync::Mutex<std::collections::HashMap<String, SharedFetch>> {
+    static MAP: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, SharedFetch>>> =
+        std::sync::OnceLock::new();
+    MAP.get_or_init(Default::default)
+}
+
+/// The download runs as its own task, so a launch that stops waiting does not
+/// cancel it, and several builds launched together share one request.
+fn shared_fetch(src: JarSource) -> SharedFetch {
+    use futures::FutureExt as _;
+    let mut map = in_flight().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(running) = map.get(&src.artifact) {
+        return running.clone();
+    }
+    let key = src.artifact.clone();
+    let task = tauri::async_runtime::spawn(async move {
+        let res = fetch_patiently(&src).await;
+        in_flight().lock().unwrap_or_else(|e| e.into_inner()).remove(&src.artifact);
+        res
+    });
+    let fetch = async move { task.await.map_err(|e| format!("Загрузка мода прервалась: {}", e))? }
+        .boxed()
+        .shared();
+    map.insert(key, fetch.clone());
+    fetch
+}
+
+async fn fetch_jar(src: JarSource, wait: Option<Duration>) -> Result<PathBuf, String> {
+    let fetch = shared_fetch(src);
+    match wait {
+        None => fetch.await,
+        Some(limit) => tokio::time::timeout(limit, fetch).await.unwrap_or_else(|_| Err(FETCH_LATER.into())),
+    }
+}
+
+/// Copied next to the target and renamed, so a failed copy never leaves a
+/// truncated jar that the loader would choke on.
+fn place_jar(cached: &Path, dest: &Path) -> Result<(), String> {
+    let mut part = dest.as_os_str().to_os_string();
+    part.push(".part");
+    let part = PathBuf::from(part);
+    let copied = std::fs::copy(cached, &part).and_then(|_| std::fs::rename(&part, dest));
+    if let Err(e) = copied {
+        let _ = std::fs::remove_file(&part);
+        return Err(format!("Мод не лёг в папку сборки: {} — закрой игру и антивирус и запусти ещё раз", e));
+    }
+    Ok(())
+}
+
+async fn install_job(app: &AppHandle, job: &Job, profile: String, wait: Option<Duration>) -> Result<MillidaModState, String> {
     job.emit(app, 10.0, "Подбираем версию…");
     if !millida_mod_enabled() {
         return Err("Мод выключен в настройках лаунчера".into());
@@ -279,7 +393,22 @@ async fn install_job(app: &AppHandle, job: &Job, profile: String) -> Result<Mill
     let dest = safe_child(&mods, &state.available)?;
     job.check()?;
     job.emit(app, 45.0, "Скачиваем…");
-    download_checked(&url, &dest, Some(Sum::Sha256(sha256)), variant["size"].as_u64()).await?;
+    let src = JarSource {
+        url,
+        artifact: state.available.clone(),
+        sha256: sha256.to_string(),
+        size: variant["size"].as_u64(),
+    };
+    let cached = fetch_jar(src, wait).await?;
+    job.check()?;
+    let (check_path, check_sum) = (cached.clone(), sha256.to_string());
+    let intact = tokio::task::spawn_blocking(move || file_is(&check_path, &check_sum)).await.unwrap_or(false);
+    if !intact {
+        let _ = std::fs::remove_file(&cached);
+        return Err(format!("Скачанный мод не сошёлся с каталогом ({}) — запусти сборку ещё раз", SUM_MISMATCH));
+    }
+    place_jar(&cached, &dest)?;
+    prune_jar_cache(&state.version);
 
     let stuck = keep_only(&profile, &state.available);
     if !stuck.is_empty() {
@@ -978,7 +1107,7 @@ pub async fn ensure_millida_mod(
         if stale {
             let _ = std::fs::remove_file(mods.join(&state.installed));
         }
-        if let Err(e) = millida_mod_install(app.clone(), profile.to_string()).await {
+        if let Err(e) = install_for_launch(app, profile).await {
             return keep_installed(profile, &dir, nick, licensed).map(Some).ok_or(e);
         }
     }
@@ -1036,6 +1165,52 @@ mod tests {
         let mut cosmetic = signed.clone();
         cosmetic["comment"] = json!("пробелы и новые поля подпись не ломают");
         assert_eq!(manifest_signature(&cosmetic, MOD_MANIFEST_PUBKEY), ManifestSignature::Valid);
+    }
+
+    /// The jar reaches the build only as a whole file: a copy that fails half
+    /// way must leave neither a truncated jar nor a stray part file in mods/.
+    #[test]
+    fn a_cached_jar_lands_in_the_build_whole_or_not_at_all() {
+        let root = std::env::temp_dir().join(format!("millida-place-jar-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("mods")).unwrap();
+        let cached = root.join("cache.jar");
+        std::fs::write(&cached, b"new jar").unwrap();
+        let cases: [(&str, Option<&[u8]>, bool, &str); 3] = [
+            ("mods/millida-mod-a.jar", None, true, "an empty slot gets the jar"),
+            ("mods/millida-mod-b.jar", Some(b"old"), true, "a stale file of the same name is replaced"),
+            ("missing/millida-mod-c.jar", None, false, "a folder that is not there fails cleanly"),
+        ];
+        for (rel, before, ok, why) in cases {
+            let dest = root.join(rel);
+            if let Some(bytes) = before {
+                std::fs::write(&dest, bytes).unwrap();
+            }
+            assert_eq!(place_jar(&cached, &dest).is_ok(), ok, "{}", why);
+            if ok {
+                assert_eq!(std::fs::read(&dest).unwrap(), b"new jar", "{}: the build must hold the cached bytes", why);
+            } else {
+                assert!(!dest.exists(), "{}: nothing may appear at the target", why);
+            }
+            let mut part = dest.as_os_str().to_os_string();
+            part.push(".part");
+            assert!(!PathBuf::from(part).exists(), "{}: the part file must not outlive the call", why);
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The background rounds run after the download's own quick retries gave
+    /// up, so the first round must not come back sooner than they did, and the
+    /// whole schedule has to end instead of polling the shield forever.
+    #[test]
+    fn background_rounds_back_off_and_end() {
+        let first_round = throttle_pause(ROUND_BACKOFF_FROM, None, 0.0);
+        assert!(first_round >= Duration::from_secs(20), "first round waited only {:?}", first_round);
+        let total: Duration = (1..PATIENT_ROUNDS)
+            .map(|round| throttle_pause(round + ROUND_BACKOFF_FROM - 1, None, 1.0))
+            .sum();
+        assert!(total <= Duration::from_secs(15 * 60), "the worst case schedule runs {:?}", total);
+        assert!(LAUNCH_WAIT <= Duration::from_secs(10), "a launch must not stand on the mod longer than a few seconds");
     }
 
     #[test]

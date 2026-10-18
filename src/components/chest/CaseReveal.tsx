@@ -178,7 +178,7 @@ export function CaseReveal({
   /** Запрос открытия: уходит при первом ударе (или сразу, `early`), ответ ждёт конец ударов. */
   request: (attempt: number) => Promise<RevealData>
   onFail: (e: unknown) => void
-  onDone: () => void
+  onDone: (shown: boolean) => void
   onClose: () => void
   onWear: (item: ItemRef) => void
 }) {
@@ -254,7 +254,7 @@ export function CaseReveal({
       timers.current.forEach((t) => window.clearTimeout(t))
       window.clearTimeout(deadline.current)
       // Закрыли до итога, а покупка уже прошла — список ящиков всё равно обновить.
-      if (asked.current && !finished.current) onDone()
+      if (asked.current && !finished.current) onDone(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -318,7 +318,7 @@ export function CaseReveal({
   useEffect(() => {
     if (phase === 'sum' || dealDone) {
       finished.current = true
-      onDone()
+      onDone(true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, dealDone])

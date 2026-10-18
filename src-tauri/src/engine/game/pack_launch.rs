@@ -304,7 +304,7 @@ fn collect_jars(dir: &Path, out: &mut Vec<PathBuf>) {
 /// прямыми: Windows принимает и такие. Файл лежит рядом со сборкой и
 /// перезаписывается на каждый запуск: в нём ключ подписи, и хранить его дольше
 /// одного старта незачем.
-const ARGFILE_NAME: &str = "millida-args.txt";
+pub(crate) const ARGFILE_NAME: &str = "millida-args.txt";
 const ARG_LIMIT: usize = 30_000;
 
 pub fn args_need_file(args: &[String]) -> bool {

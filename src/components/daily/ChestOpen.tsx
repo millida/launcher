@@ -8,6 +8,7 @@ import type { CaseReward, ChestDrop, ChestTier, ItemRef, PendingChest } from '..
 import { playSound } from '../../lib/sound'
 import { useDaily } from '../../state/daily'
 import { createOpenOnce } from './openOnce'
+import { chestsToReplay, forgetUnseen, markUnseen, readUnseen } from './unseenChests'
 import { showToast } from '../../state/ui'
 import { CHEST_DROPS, TIER_ORDER, viewOf } from './chestDrops'
 import { CHEST_NAME } from './rewards'
@@ -62,6 +63,22 @@ export const openChestFlow = (list: PendingChest[]) => useChestOpen.getState().s
 /** Один запрос на сундук, даже если окно смонтируется дважды. */
 const openOnce = createOpenOnce((id) => useDaily.getState().openOne(id))
 
+const offered = new Set<string>()
+
+// The open may have committed while its answer was lost or the window was closed: once the
+// server stops listing such a chest as pending, replay it so the stored rewards are shown.
+function replayUnseen(pending: PendingChest[]) {
+  if (useChestOpen.getState().queue.length) return
+  const due = chestsToReplay(readUnseen(), pending, offered)
+  if (!due.length) return
+  for (const c of due) offered.add(c.id)
+  openChestFlow(due)
+}
+
+useDaily.subscribe((s, prev) => {
+  if (s.pending !== prev.pending) replayUnseen(s.pending)
+})
+
 /** Выпадение сундука → награда общего открытия (CaseReveal). */
 export function dropReward(d: ChestDrop): CaseReward {
   if (d.kind === 'SHARDS') return { kind: 'shards', amount: d.amount }
@@ -106,14 +123,16 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
   const [bought, setBought] = useState<Set<number>>(() => new Set())
   const [buying, setBuying] = useState(-1)
   const [need, setNeed] = useState(CHEST_DROPS[tier].hits)
-  const request = (attempt: number) =>
-    openOnce(chest.id, attempt > 0).then((a) => {
+  const request = (attempt: number) => {
+    markUnseen(chest)
+    return openOnce(chest.id, attempt > 0).then((a) => {
       if (!('ok' in a)) throw new Error(a.error)
       const view = viewOf(a.ok)
       setDrops(view.drops)
       setNeed(view.hits)
       return view.drops.map(dropReward)
     })
+  }
   const wear = () => {
     onDone()
     useDaily.getState().setModal(false)
@@ -137,7 +156,7 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
         showToast(e instanceof Error ? e.message : t('Сундук не открылся, попробуй позже'), 'error')
         onDone()
       }}
-      onDone={() => undefined}
+      onDone={(shown) => shown && forgetUnseen(chest.id)}
       onClose={onDone}
       onWear={() => wear()}
       again={left > 0 ? { primary: true, onClick: onNext, node: <>{t('Следующий · ещё {n}', { n: left })}</> } : undefined}

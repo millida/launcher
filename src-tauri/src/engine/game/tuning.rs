@@ -44,6 +44,8 @@ const RESERVE_MIN_MB: u64 = 2048;
 
 /// Ниже этого свободная сейчас память кучу не урезает (см. `safe_ceiling_mb`).
 const FREE_FLOOR_MB: u64 = 4096;
+const SMALL_MACHINE_HEAP_MB: u64 = 4096;
+const LARGE_MACHINE_KEEP_MB: u64 = 10240;
 const MIN_HEAP_MB: u32 = 2048;
 const MAX_HEAP_MB: u32 = 12288;
 
@@ -100,13 +102,14 @@ fn reserved_mb(total_mb: u64) -> u64 {
     (total_mb / RESERVE_RATIO_DIVISOR).max(RESERVE_MIN_MB)
 }
 
-/// Сколько куче можно на этой машине, считая то, чего куча не видит (25.09.2026:
-/// у игрока на ноутбуке 16 ГБ с Radeon 660M сборка на 10 ГБ уронила Windows).
-/// Java сверх кучи тратит ещё ~30 % (метаспейс, нативные буферы модов),
-/// встроенная видеокарта берёт свою память из той же ОЗУ, а рядом живут
-/// Windows, лаунчер и браузер. Поэтому: не больше половины ОЗУ на машинах до
-/// 16 ГБ, не больше «всё минус 6 ГБ» на больших, и не больше того, что сейчас
-/// реально свободно (минус запас на внекучевую память).
+/// The JVM spends roughly another 30 % on top of the heap (metaspace, native
+/// buffers of mods), an integrated GPU takes its memory from the same RAM, and
+/// Windows, the launcher and a browser live next to the game. Half of a 16 GB
+/// machine as heap meant a ~10 GB java.exe and swapping, so above 8 GB the heap
+/// gets three eighths of the machine, which keeps the whole process near half
+/// of it. Modrinth App (4 GB at 16, 6 GB at 32) and Prism (4 GB) stay lower
+/// still; a pack-aware auto may go above them, not into the swap. Small machines
+/// keep half, capped at 4 GB: below that a mid-size pack does nothing but GC.
 ///
 /// Свободное «сейчас» режет кучу не ниже `FREE_FLOOR_MB`: -Xmx — только предел,
 /// G1 занимает память по мере надобности, а браузер, открытый в момент нажатия
@@ -114,7 +117,10 @@ fn reserved_mb(total_mb: u64) -> u64 {
 /// давала сборке на 200 модов 2 ГБ кучи — сборщик мусора без остановки и FPS
 /// вдвое ниже (жалоба 25.09.2026).
 fn safe_ceiling_mb(total_mb: u64, available_mb: u64) -> u64 {
-    let by_total = if total_mb <= 16 * 1024 { total_mb / 2 } else { total_mb.saturating_sub(6 * 1024) };
+    let by_total = (total_mb / 2)
+        .min(SMALL_MACHINE_HEAP_MB)
+        .max(total_mb * 3 / 8)
+        .max(total_mb.saturating_sub(LARGE_MACHINE_KEEP_MB));
     let by_free = if available_mb > 0 {
         (available_mb * 10 / 13).saturating_sub(512).max(FREE_FLOOR_MB)
     } else {
@@ -371,8 +377,8 @@ pub fn profile_content_bytes(profile: &str) -> u64 {
 mod tests {
     #[test]
     fn a_16gb_laptop_never_gives_the_heap_more_than_half() {
-        assert_eq!(super::safe_ceiling_mb(16 * 1024, 12 * 1024), 8 * 1024);
-        assert_eq!(super::safe_ceiling_mb(32 * 1024, 0), 26 * 1024);
+        assert_eq!(super::safe_ceiling_mb(16 * 1024, 12 * 1024), 6 * 1024);
+        assert_eq!(super::safe_ceiling_mb(32 * 1024, 0), 22 * 1024);
         // Свободно мало — куча под то, что есть, но не меньше пола в 4 ГБ.
         assert!(super::safe_ceiling_mb(16 * 1024, 5 * 1024) <= 5 * 1024);
         assert_eq!(super::safe_ceiling_mb(8 * 1024, 1024), 4 * 1024);
@@ -391,6 +397,33 @@ mod tests {
         }
     }
 
+    /// machine -> ceiling of the heap. The heap plus ~30 % off-heap is what
+    /// java.exe shows in Task Manager; past about half of the machine Windows
+    /// swaps and both the game and the launcher stutter.
+    #[test]
+    fn heap_ceiling_keeps_the_java_process_near_half_of_the_machine() {
+        let cases: [(u64, u64, &str); 8] = [
+            (4096, 2048, "4 GB keeps half: less and vanilla does not start"),
+            (6144, 3072, "6 GB keeps half"),
+            (8192, 4096, "8 GB keeps 4 GB: a mid-size pack in 3 GB does nothing but GC"),
+            (12288, 4608, "12 GB: three eighths, half was 6 GB of heap and ~8 GB of java.exe"),
+            (16384, 6144, "16 GB: 6 GB of heap is ~8 GB of java.exe; 8 GB of heap was the «eats 10 GB» review"),
+            (16180, 6067, "16 GB sticks as Windows reports them must not round up into the old half"),
+            (24576, 14336, "24 GB: machine minus 10 GB, more than any pack asks for"),
+            (32768, 22528, "32 GB: the heavy-pack request (up to 11 GB) still fits untouched"),
+        ];
+        for (total, want, why) in cases {
+            let got = safe_ceiling_mb(total, 0);
+            assert_eq!(got, want, "machine of {total} MB must cap the heap at {want} MB, got {got}. Why pinned: {why}");
+            if total <= 16 * 1024 {
+                assert!(
+                    got * 13 / 10 <= (total / 2).max(SMALL_MACHINE_HEAP_MB * 13 / 10),
+                    "heap {got} MB plus off-heap does not fit half of a {total} MB machine: the game swaps",
+                );
+            }
+        }
+    }
+
     use super::*;
 
     /// mods x machine -> heap. Every row is a machine we actually see in
@@ -398,7 +431,9 @@ mod tests {
     /// machine cannot back or a heap the pack cannot start in.
     #[test]
     fn heap_fits_both_the_pack_and_the_machine() {
-        let cases: [(u32, bool, u64, u32, &str); 6] = [
+        let cases: [(u32, bool, u64, u32, &str); 8] = [
+            (200, false, 16384, 6144, "большая сборка на 16 ГБ — 6 ГБ: при 8 java.exe занимал ~10 ГБ и машина уходила в своп"),
+            (300, true, 16384, 6144, "самая тяжёлая сборка с шейдерами на 16 ГБ упирается в тот же потолок"),
             (0, false, 8192, 2048, "ваниль на 8 ГБ: больше двух гигабайт игре не нужно"),
             (40, false, 16384, 4096, "средняя сборка на 16 ГБ получает свои 4 ГБ"),
             (200, false, 32768, 8192, "большая сборка на 32 ГБ — 8 ГБ"),
