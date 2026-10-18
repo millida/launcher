@@ -27,6 +27,7 @@ import { TIER_SERVER } from '../../state/tiers'
 import { setScreen, showToast } from '../../state/ui'
 import '../../styles/pixel/party-panel.css'
 import { t, useMarketOffers, useT } from '../../i18n'
+import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
 
 const CHAT_MAX = 300
 /** Быстрые фразы: договориться в один клик, без набора текста (как командный чат в Brawl Stars). */
@@ -85,7 +86,7 @@ export function useWhere(mode: LobbyMode | null, modeTitle: string): Where[] {
     list.push(w)
   }
   if (mode) add({ key: 'mine', title: modeTitle, mode, hot: true })
-  add({ key: 'pvp', title: t('PvP-дуэли'), mode: PVP_MODE })
+  if (TIERS_SECTION_PUBLIC) add({ key: 'pvp', title: t('PvP-дуэли'), mode: PVP_MODE })
   if (partners) add({ key: 'anarchy', title: t('Анархия'), mode: anarchyMode() })
   for (const s of servers.filter((x) => x.isOnline).slice(0, 2)) {
     add({

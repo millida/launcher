@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { quickJoin } from '../lib/joinServer'
 import { TIER_SERVER } from './tiers'
 import { t } from '../i18n'
+import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
 
 /**
  * Раздел PvP — отдельный режим лаунчера, как MCPVP у Dawn (владелец
@@ -57,6 +58,7 @@ export const usePvp = create<PvpState>((set) => ({
 
 /** Открыть раздел PvP (один экран: киты и «Играть», тир-лист, свои матчи). */
 export function openPvp(tab?: PvpTab) {
+  if (!TIERS_SECTION_PUBLIC) return
   usePvp.setState({ view: tab === 'tiers' ? 'tiers' : tab === 'matches' ? 'matches' : 'home' })
   setScreen('pvp')
 }

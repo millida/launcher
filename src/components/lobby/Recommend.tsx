@@ -27,6 +27,7 @@ import { loadInvites } from '../../lib/referrals'
 import { pickFriendsTab } from '../friends/friendsView'
 import { t, useMarket, useMarketOffers, useT, type Market } from '../../i18n'
 import '../../styles/pixel/playhub.css'
+import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
 
 type PackFace = PrisonFace
 
@@ -51,7 +52,7 @@ export function Recommend({ on }: { on: boolean }) {
   const swipe = useRef<{ x: number; moved: boolean } | null>(null)
   const rewards = useChatRewards(on && shown)
   const invite = useInviteOffer(on && shown)
-  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent }) : null
+  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
   const seed = promoSeed()
   const start = slides ? promoStart(slides.length, seed.day, seed.salt) : 0
   const slide = slides ? promoAt(slides, start, step) : null
