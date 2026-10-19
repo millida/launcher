@@ -141,6 +141,7 @@ export function TabWorld({
     }
   }
 
+  const toggleFeature = async (feature: 'map', on: boolean) => {
     setBusy(feature)
     try {
       if (on) {
@@ -212,9 +213,6 @@ export function TabWorld({
       {features ? (
         <div className="card set-group" style={{ padding: '10px 20px 18px', marginTop: '14px' }}>
           <Cap first>{t('Как заходят игроки')}</Cap>
-            <Toggle
-            />
-          </Row>
           <Row k={t('Онлайн-карта мира')} sub={features.map.url || undefined}>
             <Toggle
               on={features.map.enabled}

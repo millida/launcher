@@ -453,8 +453,11 @@ export function SiteFilters({
           },
         ]
       : []
+  // Быстрые ключи под списком — четыре самые наполненные версии Java. Версии другого издания нумеруются так же
   // («26.10», «26.30») — в ключах Java-раздела они путали (владелец: «26.10, 26.30 — что это»).
+  const otherEdition = (v: string) => /^2\d\.(\d+)0(\.\d+)?$/.test(v) && Number(v.split('.')[1]) >= 10
   const quick = versions
+    .filter((o) => filled.has(o.key) && !otherEdition(o.key))
     .slice()
     .sort((x, y) => (y.count ?? 0) - (x.count ?? 0))
     .slice(0, 4)

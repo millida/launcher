@@ -29,6 +29,7 @@ test('a build fits only when it shares a major with some server version', () => 
 })
 
 test('only plain numeric versions are judged', () => {
+  expect(serverVersions(['1.21', ' 1.20.1 ', '1.21', '1.16-1.21', 'Latest', ''])).toEqual(['1.21', '1.20.1'])
   expect(versionFits('26.2', serverVersions(['1.16-1.21'])), 'a range says nothing, so no nagging').toBe(true)
 })
 

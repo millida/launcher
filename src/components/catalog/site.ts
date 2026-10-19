@@ -175,6 +175,8 @@ export interface SiteCard {
   /** Source of the card when the listing carries it; absent on an older backend. */
   sourceUrl?: string | null
   curseforgeId?: number | null
+  /** Лаунчер только для Java: карточки другого издания отбрасываются (`isJavaCard`). */
+  edition?: string
   /** Сборку собрала Милли (ИИ-сборщик): метка «Милли» на карточке. */
   aiGenerated?: boolean
   /** Код сборки лаунчера — установка идёт путём «Сборки по коду». */
@@ -249,7 +251,9 @@ function qs(p: Record<string, string | number | null | undefined>): string {
 export const listingKey = (p: ListingQuery, locale: Locale = getLocale()): string =>
   'site:' + withCatalogLang('/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE }), locale)
 
+/** Лаунчер ставит только Java: карточки другого издания (и аддоны) из ответа каталога отбрасываем. */
 export const isJavaCard = (c: { edition?: string | null; section?: string | null }): boolean =>
+  (!c.edition || c.edition === 'JAVA' || c.edition === 'BOTH') && c.section !== 'addons'
 
 export function loadListing(p: ListingQuery): Promise<SiteListing> {
   const key = listingKey(p)
@@ -519,6 +523,7 @@ export function displayName(title: string): string {
   const base = title.replace(/\s*[—–-]\s*скач(?:ать|ай)(?:\s.*)?$/i, '').trim() || title
   // Хвост типа «— плагин», «- мод», «— карта» — тип и так виден по разделу.
   const noKind = base.replace(/\s*[—–-]\s*(?:плагин|мод|карта|сборка|шейдер|ресурс-?пак|дата-?пак)\s*$/i, '').trim() || base
+  const cut = noKind.replace(/\s+(?:для|под)\s+(?:minecraft|майнкрафт)(?:\s+java)?(?:\s+[0-9][0-9a-z.+-]*)?\s*$/i, '').trim()
   return cut || noKind
 }
 

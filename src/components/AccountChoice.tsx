@@ -7,6 +7,7 @@ export type GameAccountKind = Exclude<AccountAddKind, 'millida'>
 
 const BUY_URL: Record<Market, string> = {
   RU: 'https://blups.me/product/minecraft',
+  INTL: 'https://www.minecraft.net/get-minecraft',
 }
 
 export function LicenceBuyLink({ className, track }: { className: string; track: string }) {

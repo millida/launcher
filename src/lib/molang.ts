@@ -1,5 +1,6 @@
 /**
  * The slice of Molang an animation keyframe uses: numbers, arithmetic,
+ * comparisons, the ternary, `math.*` and the clip clock. Animation files write
  * a looping sway as `"(36.0+math.sin(query.anim_time*360.0*6.0)*0.3)"`; read as
  * a plain number it became zero, and "Anime love" stood the torso upright off
  * its legs while the numeric shifts of the same keyframe still applied.
