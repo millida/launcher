@@ -6,6 +6,7 @@ import { hasTauri, tauri } from '../ipc/tauri'
 import {
   appVersion,
   isFlatpak,
+  showAfterUpdate,
   updateFallbackCheck,
   updateFallbackRun,
   updateFallbackStage,
@@ -493,6 +494,7 @@ export async function applyUpdate(): Promise<void> {
   try {
     if (!downloaded) showToast(t('Качаем обновление {version}…', { version: st.version || '' }))
     const upd = await ensureDownloaded()
+    await showAfterUpdate().catch((e) => void reportError('updater-show-after-update', e))
     installing = true
     trackAppExit()
     await upd.install()

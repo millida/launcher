@@ -249,6 +249,13 @@ pub fn update_fallback_run(
     engine::fallback_run(&app, &path, restart.unwrap_or(true))
 }
 
+/// Called right before the player's own "Update": the relaunched build then
+/// opens its window even though it inherits `--autostart`.
+#[tauri::command]
+pub async fn show_after_update() -> Result<(), String> {
+    super::blocking(engine::mark_show_after_update).await?
+}
+
 /// Liveness ping from the webview; without it the self-heal path kicks in.
 #[tauri::command]
 pub fn frontend_ready() {

@@ -204,7 +204,8 @@ pub fn run() {
             allow_assets(app.handle());
             tray::init(app.handle());
             // Запущен системой при входе: сразу в трей, окно не выскакивает.
-            if commands::system::started_by_os() && tray::available() {
+            let shown_after_update = engine::take_show_after_update();
+            if commands::system::started_by_os() && !shown_after_update && tray::available() {
                 tray::hide_main(app.handle());
             }
             engine::arm_selfheal(app.handle());
@@ -457,6 +458,7 @@ pub fn run() {
             commands::system::update_notes,
             commands::system::update_fallback_stage,
             commands::system::update_fallback_run,
+            commands::system::show_after_update,
             commands::system::frontend_ready,
             commands::system::tray_available,
             commands::system::hide_to_tray,

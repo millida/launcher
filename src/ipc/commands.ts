@@ -1091,6 +1091,8 @@ export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_
 export const updateFallbackRun = (path: string, restart = true) =>
   invoke<FallbackInstall>('update_fallback_run', { path, restart })
 
+export const showAfterUpdate = () => invoke<void>('show_after_update')
+
 
 export const uiPrefs = () => invoke<Record<string, string>>('ui_prefs')
 

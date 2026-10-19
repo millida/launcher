@@ -243,6 +243,7 @@ export const EXPECTED_BY_COMMAND: Record<string, { why: string; when?: RegExp }>
   update_fallback_check: { why: 'updater.ts reports it as updater-fallback' },
   update_fallback_stage: { why: 'updater.ts reports it as updater-fallback' },
   update_fallback_run: { why: 'updater.ts reports it as updater-fallback' },
+  show_after_update: { why: 'updater.ts reports it as updater-show-after-update' },
   install_catalog_pack: { why: JOB_REPORTED },
   update_catalog_pack: { why: JOB_REPORTED },
   install_content: { why: JOB_REPORTED },

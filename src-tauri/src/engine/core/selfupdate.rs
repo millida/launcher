@@ -279,6 +279,40 @@ fn updates_dir() -> PathBuf {
     data_dir().join("updates")
 }
 
+/// The Windows updater relaunches the new build with the arguments of the old
+/// one, so a launcher started at login carries `--autostart` into the relaunch
+/// and would hide itself in the tray right after the player pressed "Update".
+/// The marker lives outside `updates_dir`, which `drop_stale` empties.
+fn show_after_update_marker() -> PathBuf {
+    data_dir().join("show-after-update")
+}
+
+const SHOW_AFTER_UPDATE_TTL: std::time::Duration = std::time::Duration::from_secs(600);
+
+fn show_after_update_fresh(age: Option<std::time::Duration>) -> bool {
+    age.is_some_and(|a| a <= SHOW_AFTER_UPDATE_TTL)
+}
+
+pub fn mark_show_after_update() -> Result<(), String> {
+    std::fs::create_dir_all(data_dir()).map_err(|e| format!("нет папки данных лаунчера: {}", e))?;
+    std::fs::write(show_after_update_marker(), b"")
+        .map_err(|e| format!("не записана отметка показа окна после обновления: {}", e))
+}
+
+/// Consumed on every start, so an install that never happened cannot surface
+/// the window at some later login.
+pub fn take_show_after_update() -> bool {
+    let marker = show_after_update_marker();
+    let age = std::fs::metadata(&marker)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok());
+    if age.is_some() {
+        let _ = std::fs::remove_file(&marker);
+    }
+    show_after_update_fresh(age)
+}
+
 fn drop_stale(keep: &Path) {
     let sig = sig_path(keep);
     if let Ok(rd) = std::fs::read_dir(updates_dir()) {
@@ -599,6 +633,25 @@ fn install_appimage(file: &Path) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// input -> verdict. Only a marker left by the install the player just
+    /// started may override the hidden start at login.
+    #[test]
+    fn only_a_fresh_marker_shows_the_relaunched_window() {
+        let cases: [(Option<u64>, bool, &str); 4] = [
+            (None, false, "no marker: a login autostart must stay in the tray"),
+            (Some(0), true, "marker from the install that just finished"),
+            (Some(600), true, "a slow installer still lands inside the window"),
+            (Some(601), false, "a marker left by an install that never ran must not pop the window at a later login"),
+        ];
+        for (age, want, why) in cases {
+            assert_eq!(
+                show_after_update_fresh(age.map(std::time::Duration::from_secs)),
+                want,
+                "age {age:?}s: {why}"
+            );
+        }
+    }
 
     /// input -> verdict. The testing channel picks a FILE next to the stable
     /// manifest, never a host: a setting that could name a URL would be an

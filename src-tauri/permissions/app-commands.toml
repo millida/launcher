@@ -213,6 +213,7 @@ permissions = [
   "allow-update-notes",
   "allow-update-fallback-stage",
   "allow-update-fallback-run",
+  "allow-show-after-update",
   "allow-frontend-ready",
   "allow-tray-available",
   "allow-hide-to-tray",
