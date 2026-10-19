@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Релиз лаунчера, например v2.0.223 (пусто — последний)"
+        description: "Launcher release, for example v2.0.223 (empty: the latest)"
         required: false
         type: string
 
@@ -43,7 +43,7 @@ jobs:
           TAG: ${{ github.event.inputs.tag }}
         run: |
           if [ ! -f scripts/attach-manifest.mjs ]; then
-            echo "::notice::scripts/attach-manifest.mjs ещё не опубликован — пропуск"
+            echo "::notice::scripts/attach-manifest.mjs is not published yet, skipping"
             exit 0
           fi
           node scripts/attach-manifest.mjs $TAG
