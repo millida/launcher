@@ -236,10 +236,24 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
     let Some(found) = best else {
         return Err(last);
     };
-    if require_newer && !is_newer(&found.version, &current) {
+    if !update_acceptable(&found.version, &current, require_newer) {
         return Ok(None);
     }
     Ok(Some(found))
+}
+
+/// Rollback protection. The manifest is signed, but a signed OLD release is
+/// still a valid signature: a hijacked or stale manifest could pin players to a
+/// build with known holes. So a version lower than the running one is never
+/// offered, on any path. `allow_same` is for recovery, which reinstalls the same
+/// artifact over a damaged install. (The beta -> stable switch just waits for
+/// the next stable that is newer than the running beta.)
+pub(crate) fn update_acceptable(remote: &str, current: &str, require_newer: bool) -> bool {
+    if require_newer {
+        is_newer(remote, current)
+    } else {
+        is_newer(remote, current) || !is_newer(current, remote)
+    }
 }
 
 fn decode_text(b64: &str) -> Result<String, String> {
@@ -681,6 +695,17 @@ mod tests {
             nsis_args(false).contains(&"/UPDATE") && nsis_args(true).contains(&"/UPDATE"),
             "без /UPDATE мастер NSIS запускает деинсталлятор с удалением данных"
         );
+    }
+
+    #[test]
+    fn an_older_manifest_is_never_offered() {
+        assert!(update_acceptable("2.0.211", "2.0.210", true));
+        assert!(!update_acceptable("2.0.210", "2.0.210", true));
+        assert!(!update_acceptable("2.0.209", "2.0.210", true));
+        // recovery: same version is fine, older is not
+        assert!(update_acceptable("2.0.210", "2.0.210", false));
+        assert!(update_acceptable("v2.0.211", "2.0.210", false));
+        assert!(!update_acceptable("2.0.209", "2.0.210", false));
     }
 
     #[test]

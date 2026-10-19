@@ -1,24 +1,18 @@
 // authlib-injector agent: a small jar attached to the game with the -javaagent flag. It points login and skins to the Millida server.
-// Downloaded from authlib-injector.yushi.moe or the project's GitHub and put into agents/ in the launcher data. It is loaded only after the sha256 check.
+// Downloaded from the project's GitHub release (pinned version and sha256) and put into agents/ in the launcher data. It is loaded only after the sha256 check.
 use crate::engine::*;
-use serde_json::Value;
 use std::path::PathBuf;
 
-pub(crate) const AUTHLIB_LATEST: &str = "https://authlib-injector.yushi.moe/artifact/latest.json";
-/// Build used when the feed is unreachable. Without the agent the launch falls
-/// back to offline: no multiplayer and, on a vanilla profile, no skin at all —
-/// a single unreachable host must not cost that. The mirror is the upstream
-/// GitHub release, and the digest is the one the feed publishes for build 56.
+/// The agent runs inside the game as -javaagent, so its build is pinned in the
+/// code: address and sha256 are ours, never taken from a third-party feed.
+/// A feed that is hacked or hijacked could otherwise hand out a jar together
+/// with its own matching hash. The pin is the upstream GitHub release v1.2.8
+/// (build 56); a new build is a code change reviewed here.
 const AUTHLIB_PINNED_URL: &str =
     "https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.8/authlib-injector-1.2.8.jar";
 const AUTHLIB_PINNED_SHA256: &str = "9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10";
-
-/// The agent runs inside the game as -javaagent, so the feed may point only at
-/// the project's own hosts: its site and its GitHub releases.
-fn authlib_host_ok(url: &str) -> bool {
-    url.starts_with("https://authlib-injector.yushi.moe/")
-        || url.starts_with("https://github.com/yushijinhun/authlib-injector/releases/download/")
-}
+/// Written next to the jar. Anything else (an older feed build number) means "fetch the pinned jar again".
+const AUTHLIB_STAMP: &str = "pinned-1.2.8";
 
 pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
     let dir = data_dir().join("agents");
@@ -32,51 +26,22 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
         let _ = std::fs::remove_file(&jar);
         let _ = std::fs::remove_file(&stamp);
     }
-
-    // With an agent on disk the feed only decides whether to update it, and a
-    // feed host that never answers must not keep the game from starting.
-    let meta: Value = if jar.exists() {
-        get_json_revalidated(AUTHLIB_LATEST, &dir.join("authlib-injector.latest.json")).await
-    } else {
-        get_json(AUTHLIB_LATEST).await
-    }
-    .unwrap_or(Value::Null);
-    let build = meta["build_number"].as_u64().map(|b| b.to_string()).unwrap_or_default();
     let have = std::fs::read_to_string(&stamp).unwrap_or_default();
-    if jar.exists() && (build.is_empty() || have == build) {
+    if jar.exists() && have == AUTHLIB_STAMP {
         return Ok(jar);
     }
-
-    // loaded into the JVM as -javaagent, so an unverified jar is never used:
-    // a feed without a usable address or digest falls back to the pinned build,
-    // never to an unchecked download.
-    // The address and the hash come from the project's answer. The address must be on one of two allowed hosts and the hash is required, otherwise we use the version built into the code.
-    let signed = meta["download_url"]
-        .as_str()
-        .filter(|u| authlib_host_ok(u))
-        .and_then(|u| {
-            let sum = meta["checksums"]["sha256"].as_str().unwrap_or("").to_lowercase();
-            let hex = sum.len() == 64 && sum.chars().all(|c| c.is_ascii_hexdigit());
-            hex.then(|| (u.to_string(), sum))
-        });
-    let (url, expected, stamped) = match signed {
-        Some((u, s)) => (u, s, build),
-        None => (AUTHLIB_PINNED_URL.to_string(), AUTHLIB_PINNED_SHA256.to_string(), String::new()),
-    };
-    // A newer build downloads next to the working agent, never over it:
-    // `download_checked` drops a file whose digest no longer matches before it
-    // fetches, so a release the player cannot reach right now used to leave the
-    // launch with no agent at all — offline mode, no multiplayer and, on a
-    // vanilla build, no skin either.
+    // The jar of an earlier launcher (feed build) is replaced by the pinned one.
+    // The new one downloads next to the working agent (.next) and replaces it
+    // only after the sha256 check, so an unreachable host never leaves the
+    // launch with no agent (offline mode, no multiplayer, no skin).
     let next = dir.join("authlib-injector.jar.next");
     let _ = std::fs::remove_file(&next);
-    // The new version is downloaded next to it (.next) and replaces the working one only after the sha256 check passes.
-    let fetched = download_checked(&url, &next, Some(Sum::Sha256(&expected)), None)
+    let fetched = download_checked(AUTHLIB_PINNED_URL, &next, Some(Sum::Sha256(AUTHLIB_PINNED_SHA256)), None)
         .await
         .and_then(|_| std::fs::rename(&next, &jar).map_err(|e| e.to_string()));
     match fetched {
         Ok(()) => {
-            let _ = std::fs::write(&stamp, &stamped);
+            let _ = std::fs::write(&stamp, AUTHLIB_STAMP);
             Ok(jar)
         }
         Err(e) => {
@@ -90,20 +55,14 @@ pub async fn ensure_authlib_injector() -> Result<PathBuf, String> {
 }
 
 #[cfg(test)]
-mod host_tests {
+mod pin_tests {
     use super::*;
 
     #[test]
-    fn the_agent_comes_only_from_the_project_hosts() {
-        let cases = [
-            ("https://authlib-injector.yushi.moe/artifact/56/authlib-injector-1.2.8.jar", true),
-            ("https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.8/authlib-injector-1.2.8.jar", true),
-            ("https://evil.example/authlib-injector.jar", false),
-            ("http://authlib-injector.yushi.moe/artifact/56/a.jar", false),
-            ("https://authlib-injector.yushi.moe.evil.example/a.jar", false),
-        ];
-        for (url, want) in cases {
-            assert_eq!(authlib_host_ok(url), want, "{}", url);
-        }
+    fn the_pin_is_a_full_sha256_on_the_project_release() {
+        assert_eq!(AUTHLIB_PINNED_SHA256.len(), 64);
+        assert!(AUTHLIB_PINNED_SHA256.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(AUTHLIB_PINNED_URL.starts_with("https://github.com/yushijinhun/authlib-injector/releases/download/"));
+        assert!(AUTHLIB_PINNED_URL.contains("1.2.8") && AUTHLIB_STAMP.contains("1.2.8"));
     }
 }

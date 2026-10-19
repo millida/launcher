@@ -360,6 +360,11 @@ pub(crate) async fn install_project_version(
     install_project_version_cancellable(profile, kind, project, version, None).await
 }
 
+/// Modrinth files are served only from https://cdn.modrinth.com.
+pub(crate) fn modrinth_file_url_ok(raw: &str) -> bool {
+    url::Url::parse(raw).is_ok_and(|u| u.scheme() == "https" && u.host_str().is_some_and(|h| h.eq_ignore_ascii_case("cdn.modrinth.com")) && u.port().is_none())
+}
+
 async fn install_project_version_cancellable(
     profile: &str, kind: &str, project: &str, version: &Value, cancel: Option<&Halt>,
 ) -> Result<String, String> {
@@ -367,6 +372,10 @@ async fn install_project_version_cancellable(
         .and_then(|fs| fs.iter().find(|f| f["primary"] == true).or_else(|| fs.first()))
         .ok_or("Файл не найден")?;
     let fname = safe_file_name(file["filename"].as_str().ok_or("нет имени файла")?)?;
+    // The link and the hash come from one answer, so the link must at least be on Modrinth's own file host.
+    if !modrinth_file_url_ok(file["url"].as_str().unwrap_or("")) {
+        return Err(format!("{}: Modrinth дал ссылку не на cdn.modrinth.com — установка остановлена", fname));
+    }
     let dest = safe_child(&profile_dir(profile).join(content_dir(kind)), &fname)?;
     // versions carry sha512/sha1, so never download without verifying
     let sha512 = file["hashes"]["sha512"].as_str().unwrap_or("");
@@ -537,6 +546,16 @@ async fn install_version_job(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn modrinth_files_come_only_from_their_cdn() {
+        assert!(modrinth_file_url_ok("https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar"));
+        assert!(!modrinth_file_url_ok("http://cdn.modrinth.com/data/x.jar"));
+        assert!(!modrinth_file_url_ok("https://cdn.modrinth.com.evil.io/x.jar"));
+        assert!(!modrinth_file_url_ok("https://evil.io/cdn.modrinth.com/x.jar"));
+        assert!(!modrinth_file_url_ok("https://cdn.modrinth.com@evil.io/x.jar"));
+        assert!(!modrinth_file_url_ok(""));
+    }
 
     fn ver(games: &[&str], loaders: &[&str]) -> Value {
         json!({ "game_versions": games, "loaders": loaders })

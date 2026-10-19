@@ -14,6 +14,7 @@ import { create } from 'zustand'
 import { markFixApplied } from './repair'
 import type { MilliMessage } from './milli'
 import { t } from '../i18n'
+import { describeSteps } from './milliStepText'
 
 // ─── Контракт (синхронно с milli-server/src/types.ts MilliAction) ───────────
 
@@ -59,6 +60,17 @@ export type MilliStep =
   | { op: 'crashfix'; kind: string; arg: string }
 
 export type MilliStepOp = MilliStep['op']
+
+/**
+ * Белый список шагов, которые принимает разбор ответа сервера. Ответ приходит
+ * от модели: неизвестный шаг отбрасывает всё действие, а не молча пропускается.
+ * `file_put` здесь нет намеренно: это внутренний шаг «Отменить», его создаёт
+ * сам лаунчер, а сервер прислать не может.
+ */
+export const SERVER_STEP_OPS: readonly MilliStepOp[] = [
+  'opt', 'cfg', 'ram', 'fpsboost', 'shader', 'add', 'snapshot', 'restore', 'world_restore', 'import',
+  'scan', 'mod_update', 'mod_off', 'mod_on', 'dep_add', 'port', 'crashfix',
+]
 export type CfgFormat = 'toml' | 'json' | 'json5' | 'properties' | 'txt-kv' | 'cfg' | 'yaml'
 export type CfgValueType = 'bool' | 'int' | 'float' | 'enum' | 'string'
 
@@ -393,6 +405,8 @@ export function parseAction(raw: unknown): MilliAction | null {
   if (typeof a.id !== 'string' || !a.id || typeof a.kind !== 'string' || typeof a.title !== 'string') return null
   if (!Array.isArray(a.steps) || !Array.isArray(a.rows)) return null
   const steps = a.steps.filter((s): s is MilliStep => !!s && typeof s === 'object' && typeof (s as { op?: unknown }).op === 'string').slice(0, 80)
+  // An unknown or internal step means the reply is not something Milli can honestly show: drop the card.
+  if (steps.some((s) => !(SERVER_STEP_OPS as readonly string[]).includes(s.op))) return null
   const rows = a.rows
     .filter((r): r is MilliActionRow => !!r && typeof r === 'object' && typeof (r as MilliActionRow).label === 'string')
     .slice(0, 40)
@@ -404,6 +418,14 @@ export function parseAction(raw: unknown): MilliAction | null {
       ...(r.to != null ? { to: String(r.to).slice(0, 40) } : {}),
       ...(Array.isArray(r.steps) ? { steps: r.steps.filter((n) => Number.isInteger(n) && n >= 0 && n < steps.length) } : {}),
     }))
+    // The card must say what will be applied: a row that owns steps is described by the steps themselves (names, ids, files),
+    // never by the server's wording, and its free-text note is dropped.
+    .map((r) => {
+      if (!r.steps?.length) return r
+      const d = describeSteps(r.steps.map((i) => steps[i]))
+      const { note: _note, from: _from, to: _to, ...rest } = r
+      return { ...rest, label: d.label, ...(d.to ? { to: d.to } : {}) }
+    })
   return {
     id: a.id,
     kind: a.kind as MilliActionKind,
