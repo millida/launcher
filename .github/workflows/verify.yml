@@ -36,7 +36,7 @@ jobs:
         run: |
           # Скрипт приезжает сюда вместе с релизом; до первого релиза с ним проверять нечем.
           if [ ! -f scripts/verify-downloads.mjs ]; then
-            echo "::notice::scripts/verify-downloads.mjs ещё не опубликован — пропуск"
+            echo "::notice::scripts/verify-downloads.mjs is not published yet, skipping"
             exit 0
           fi
           node scripts/verify-downloads.mjs
