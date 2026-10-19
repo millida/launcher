@@ -780,6 +780,8 @@
   "Синхронная запись чанков": "Synchronous chunk writes",
   "Скачать": "Download",
   "Скачать мир": "Download world",
+  "Скачиваем мир {n}%": "Downloading world {n}%",
+  "Скачиваем мир…": "Downloading world…",
   "Скачивание мира — в приложении": "Downloading the world works in the app",
   "Скачивание файлов": "Downloading files",
   "Скачивание файлов — на платном тарифе": "Downloading files — on a paid plan",
@@ -4604,5 +4606,8 @@
   "Ник аккаунта Millida: пускает на серверы с входом Millida": "Your Millida account nick: lets you join servers with Millida sign-in",
   "Игровой аккаунт": "Game account",
   "Пополни долларовый баланс на сайте и вернись за PLUS": "Top up your dollar balance on the site and come back for PLUS",
-  "Не хватает {sum} на балансе Millida — пополни и повтори": "You are {sum} short on your Millida balance. Top up and try again"
+  "Не хватает {sum} на балансе Millida — пополни и повтори": "You are {sum} short on your Millida balance. Top up and try again",
+  "Починили в версии {v} — обновись": "Fixed in version {v} — update",
+  "Знаем об этой проблеме, чиним": "We know about this problem and are fixing it",
+  "Обновиться": "Update"
 }

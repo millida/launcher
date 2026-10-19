@@ -3461,6 +3461,8 @@
   "Скачать .mrpack": ".mrpack indir",
   "Скачать звуки из игры заново": "Oyun seslerini yeniden indir",
   "Скачать мир": "Dünyayı indir",
+  "Скачиваем мир {n}%": "Dünya indiriliyor {n}%",
+  "Скачиваем мир…": "Dünya indiriliyor…",
   "Скачать не вышло": "İndirme başarısız",
   "Скачать Java": "Java indir",
   "Скачиваем обновление": "Güncelleme indiriliyor",

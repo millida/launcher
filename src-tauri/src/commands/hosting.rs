@@ -4,7 +4,9 @@
 // is consumed here and forwarded to the frontend as "host-console" events.
 // Cancellation works by generation counter: only the newest stream stays active.
 use crate::{engine, secrets};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 static CONSOLE_GEN: AtomicU64 = AtomicU64::new(0);
@@ -127,22 +129,19 @@ fn check_id(id: &str) -> Result<(), String> {
 /// The download URL is token-scoped and cannot be opened in a browser, so the
 /// file is fetched here and saved to a user-picked path.
 #[tauri::command]
-pub async fn host_download(id: String, path: Option<String>) -> Result<Option<String>, String> {
+pub async fn host_download(app: AppHandle, id: String, path: Option<String>) -> Result<Option<String>, String> {
     check_id(&id)?;
     let token = token()?;
-    let name = match &path {
-        Some(p) => p.rsplit('/').next().unwrap_or("file").to_string(),
-        None => "world.tar.gz".to_string(),
+    let Some(p) = path else {
+        return download_world(&app, &id, &token).await;
     };
-    let url = match &path {
-        Some(p) => format!(
-            "{}/hosting/servers/{}/files/download?path={}",
-            engine::MILLIDA_API,
-            id,
-            urlencoding_encode(p)
-        ),
-        None => format!("{}/hosting/servers/{}/world/download", engine::MILLIDA_API, id),
-    };
+    let name = p.rsplit('/').next().unwrap_or("file").to_string();
+    let url = format!(
+        "{}/hosting/servers/{}/files/download?path={}",
+        engine::MILLIDA_API,
+        id,
+        urlencoding_encode(&p)
+    );
     let title = name.clone();
     let dest = engine::save_file(engine::dialog().set_file_name(&title).set_title("Куда сохранить")).await;
     let Some(dest) = dest else { return Ok(None) };
@@ -164,6 +163,254 @@ pub async fn host_download(id: String, path: Option<String>) -> Result<Option<St
     }
     file.flush().map_err(|e| e.to_string())?;
     Ok(Some(dest.to_string_lossy().to_string()))
+}
+
+const WORLD_PROGRESS_EVENT: &str = "host-world-download";
+const EXPORT_POLL: Duration = Duration::from_secs(2);
+const CHUNK_START: u64 = 8 * 1024 * 1024;
+const CHUNK_MAX: u64 = 64 * 1024 * 1024;
+const CHUNK_MIN: u64 = 1024 * 1024;
+const CHUNK_FAST: Duration = Duration::from_secs(10);
+const CHUNK_SLOW: Duration = Duration::from_secs(40);
+/// The shield in front of the API cuts any request at about two minutes, so a
+/// chunk has to fit well inside that window at the measured speed.
+const CHUNK_BUDGET: Duration = Duration::from_secs(60);
+const CHUNK_ATTEMPTS: usize = 6;
+const RETRY_DELAYS: [Duration; 3] = [Duration::from_secs(1), Duration::from_secs(3), Duration::from_secs(6)];
+const WHOLE_BODY_PROGRESS_STEP: u64 = 1024 * 1024;
+
+#[derive(Clone, serde::Serialize)]
+struct WorldProgress {
+    phase: &'static str,
+    received: u64,
+    total: u64,
+}
+
+#[derive(serde::Deserialize)]
+struct WorldExportJob {
+    state: String,
+    #[serde(default)]
+    error: String,
+}
+
+fn world_progress(app: &AppHandle, phase: &'static str, received: u64, total: u64) {
+    let _ = app.emit(WORLD_PROGRESS_EVENT, WorldProgress { phase, received, total });
+}
+
+async fn refusal(res: reqwest::Response) -> String {
+    let status = res.status().as_u16();
+    let text = res.text().await.unwrap_or_default();
+    engine::api_error_message(&text).unwrap_or_else(|| format!("http {}", status))
+}
+
+/// The node builds the world archive in a background job that outlives any
+/// single request, so the download is export, poll until ready, then fetch the
+/// archive in Range chunks that each fit under the shield's request ceiling.
+async fn download_world(app: &AppHandle, id: &str, token: &str) -> Result<Option<String>, String> {
+    let dest = engine::save_file(engine::dialog().set_file_name("world.tar.gz").set_title("Куда сохранить")).await;
+    let Some(dest) = dest else { return Ok(None) };
+    let base = format!("{}/hosting/servers/{}/world", engine::MILLIDA_API, id);
+
+    world_progress(app, "archiving", 0, 0);
+    let res = engine::client()
+        // Asks Millida hosting (api.millida.net, with the token) to pack the server world into an archive on the node.
+        .post(format!("{}/export", base))
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !res.status().is_success() {
+        return Err(refusal(res).await);
+    }
+    let started: WorldExportJob = res.json().await.map_err(|e| e.to_string())?;
+    if started.state != "ready" {
+        wait_world_export(&format!("{}/export/job", base), token).await?;
+    }
+
+    world_progress(app, "downloading", 0, 0);
+    fetch_world(app, &format!("{}/download", base), token, &dest).await?;
+    Ok(Some(dest.to_string_lossy().to_string()))
+}
+
+/// "none" while waiting means the job ended without a file (the node agent was
+/// restarted mid-build), so downloading would only hit "archive not built".
+async fn wait_world_export(url: &str, token: &str) -> Result<(), String> {
+    loop {
+        tokio::time::sleep(EXPORT_POLL).await;
+        let res = engine::client()
+            // Polls Millida hosting (api.millida.net, with the token) for the world archive build state.
+            .get(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !res.status().is_success() {
+            return Err(refusal(res).await);
+        }
+        let job: WorldExportJob = res.json().await.map_err(|e| e.to_string())?;
+        match job.state.as_str() {
+            "ready" => return Ok(()),
+            "failed" if job.error.trim().is_empty() => return Err("Архив мира не собрался — повтори попытку".into()),
+            "failed" => return Err(job.error),
+            "none" => return Err("Сборка архива прервалась — повтори попытку".into()),
+            _ => {}
+        }
+    }
+}
+
+/// Removes the unfinished archive on every exit path; after the rename the
+/// file is gone and the removal is a no-op.
+struct PartFile(PathBuf);
+
+impl Drop for PartFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn part_path(dest: &Path) -> PathBuf {
+    let mut name = dest.as_os_str().to_owned();
+    name.push(".part");
+    PathBuf::from(name)
+}
+
+enum Piece {
+    Range { bytes: Vec<u8>, total: u64 },
+    Whole(reqwest::Response),
+}
+
+async fn fetch_world(app: &AppHandle, url: &str, token: &str, dest: &Path) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    let part = PartFile(part_path(dest));
+    let mut file = tokio::fs::File::create(&part.0).await.map_err(|e| e.to_string())?;
+    let mut offset = 0u64;
+    let mut size = CHUNK_START;
+    loop {
+        let started = Instant::now();
+        let (piece, used) = fetch_range(url, token, offset, size).await?;
+        size = used;
+        match piece {
+            Piece::Whole(mut res) => {
+                let total = res.content_length().unwrap_or(0);
+                let mut shown = 0u64;
+                while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+                    file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+                    offset += chunk.len() as u64;
+                    if offset - shown >= WHOLE_BODY_PROGRESS_STEP {
+                        shown = offset;
+                        world_progress(app, "downloading", offset, total);
+                    }
+                }
+                world_progress(app, "downloading", offset, offset);
+                break;
+            }
+            Piece::Range { bytes, total } => {
+                if bytes.is_empty() {
+                    return Err("Сервер перестал отдавать архив — повтори попытку".into());
+                }
+                file.write_all(&bytes).await.map_err(|e| e.to_string())?;
+                offset += bytes.len() as u64;
+                world_progress(app, "downloading", offset, total);
+                if offset >= total {
+                    break;
+                }
+                size = tune_chunk(size, bytes.len() as u64, started.elapsed());
+            }
+        }
+    }
+    file.flush().await.map_err(|e| e.to_string())?;
+    file.sync_all().await.map_err(|e| e.to_string())?;
+    drop(file);
+    tokio::fs::rename(&part.0, dest).await.map_err(|e| format!("{}: {}", dest.display(), e))
+}
+
+/// One chunk with retries. Only network faults, 429 and 5xx are retried, each
+/// time with a smaller piece: a cut caused by the request ceiling repeats at
+/// the same size forever. A refusal ("archive not built", no rights) goes up
+/// at once with the service's own words.
+async fn fetch_range(url: &str, token: &str, offset: u64, size: u64) -> Result<(Piece, u64), String> {
+    let mut piece = size;
+    let mut last = String::new();
+    for attempt in 0..CHUNK_ATTEMPTS {
+        if attempt > 0 {
+            tokio::time::sleep(RETRY_DELAYS[(attempt - 1).min(RETRY_DELAYS.len() - 1)]).await;
+            piece = (piece / 2).max(CHUNK_MIN);
+        }
+        let sent = engine::client()
+            // Downloads the packed world archive from Millida hosting (api.millida.net, with the token) one byte range at a time.
+            .get(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header(reqwest::header::RANGE, format!("bytes={}-{}", offset, offset + piece - 1))
+            .header(reqwest::header::ACCEPT_ENCODING, "identity")
+            .send()
+            .await;
+        let res = match sent {
+            Ok(res) => res,
+            Err(e) => {
+                last = e.to_string();
+                continue;
+            }
+        };
+        let status = res.status();
+        if status == reqwest::StatusCode::PARTIAL_CONTENT {
+            let total = res
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|h| content_range_total(h, offset))
+                .ok_or("Сервер отдал архив в непонятном виде — повтори попытку")?;
+            match res.bytes().await {
+                Ok(bytes) => return Ok((Piece::Range { bytes: bytes.to_vec(), total }, piece)),
+                Err(e) => {
+                    last = e.to_string();
+                    continue;
+                }
+            }
+        }
+        if status.is_success() {
+            return Ok((Piece::Whole(res), piece));
+        }
+        let code = status.as_u16();
+        let said = refusal(res).await;
+        if code < 500 && code != 429 {
+            return Err(said);
+        }
+        last = said;
+    }
+    Err(last)
+}
+
+/// Total size from "bytes <start>-<end>/<total>", accepted only when the range
+/// starts where the file so far ends: anything else would splice the archive.
+fn content_range_total(header: &str, offset: u64) -> Option<u64> {
+    let rest = header.trim().strip_prefix("bytes ")?;
+    let (span, total) = rest.split_once('/')?;
+    let (start, end) = span.split_once('-')?;
+    let start: u64 = start.trim().parse().ok()?;
+    let end: u64 = end.trim().parse().ok()?;
+    let total: u64 = total.trim().parse().ok()?;
+    if start != offset || end < start || end >= total {
+        return None;
+    }
+    Some(total)
+}
+
+/// A fast chunk doubles the next one within what the link can carry inside
+/// the budget, a slow one halves it.
+fn tune_chunk(current: u64, got: u64, took: Duration) -> u64 {
+    if got < current {
+        return current;
+    }
+    if took <= CHUNK_FAST {
+        let ms = (took.as_millis() as u64).max(1);
+        let affordable = (got.saturating_mul(CHUNK_BUDGET.as_millis() as u64) / ms).max(CHUNK_MIN);
+        return current.saturating_mul(2).min(CHUNK_MAX).min(affordable);
+    }
+    if took >= CHUNK_SLOW {
+        return (current / 2).max(CHUNK_MIN);
+    }
+    current
 }
 
 fn urlencoding_encode(s: &str) -> String {
@@ -269,6 +516,54 @@ mod console_tests {
             console_refusal(&format!(r#"{{"message":"{}"}}"#, long)).as_deref(),
             None,
             "простыню в консоль не льём: там её никто не прочитает",
+        );
+    }
+}
+
+#[cfg(test)]
+mod world_download_tests {
+    use super::{content_range_total, part_path, tune_chunk, CHUNK_MAX, CHUNK_MIN};
+    use std::time::Duration;
+
+    #[test]
+    fn content_range_is_trusted_only_where_the_file_ends() {
+        let cases: [(&str, u64, Option<u64>, &str); 7] = [
+            ("bytes 0-8388607/20000000", 0, Some(20_000_000), "first chunk of a larger archive"),
+            ("bytes 8388608-19999999/20000000", 8_388_608, Some(20_000_000), "last chunk ends exactly at total - 1"),
+            ("bytes 100-199/1000", 0, None, "a range that starts elsewhere would splice the archive"),
+            ("bytes 0-1000/1000", 0, None, "an end past the total means a broken header"),
+            ("bytes 0-99/*", 0, None, "an unknown total gives no point to stop at"),
+            ("items 0-99/100", 0, None, "only byte ranges are understood"),
+            ("", 0, None, "a missing header is not a range"),
+        ];
+        for (header, offset, want, why) in cases {
+            assert_eq!(content_range_total(header, offset), want, "{header} at {offset}: {why}");
+        }
+    }
+
+    #[test]
+    fn chunk_size_follows_the_link_and_stays_in_bounds() {
+        let mb = 1024 * 1024;
+        let cases: [(u64, u64, u64, u64, &str); 6] = [
+            (8 * mb, 8 * mb, 2_000, 16 * mb, "a fast full chunk doubles the next one"),
+            (64 * mb, 64 * mb, 1_000, CHUNK_MAX, "never above the ceiling"),
+            (8 * mb, 8 * mb, 9_000, 16 * mb, "doubling still fits the 60 s budget at this speed"),
+            (8 * mb, 8 * mb, 45_000, 4 * mb, "a slow chunk halves the next one"),
+            (CHUNK_MIN, CHUNK_MIN, 90_000, CHUNK_MIN, "never below the floor, or the download stalls"),
+            (8 * mb, 3 * mb, 1_000, 8 * mb, "the last short chunk says nothing about the link"),
+        ];
+        for (current, got, ms, want, why) in cases {
+            assert_eq!(tune_chunk(current, got, Duration::from_millis(ms)), want, "{why}");
+        }
+    }
+
+    #[test]
+    fn unfinished_archive_never_takes_the_picked_name() {
+        let part = part_path(std::path::Path::new("C:/worlds/world.tar.gz"));
+        assert_eq!(
+            part.to_string_lossy(),
+            "C:/worlds/world.tar.gz.part",
+            "a cut download must not look like a finished world archive",
         );
     }
 }

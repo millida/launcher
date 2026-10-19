@@ -3461,6 +3461,8 @@
   "Скачать .mrpack": ".mrpack herunterladen",
   "Скачать звуки из игры заново": "Spielgeräusche erneut herunterladen",
   "Скачать мир": "Welt herunterladen",
+  "Скачиваем мир {n}%": "Welt wird heruntergeladen {n}%",
+  "Скачиваем мир…": "Welt wird heruntergeladen…",
   "Скачать не вышло": "Download fehlgeschlagen",
   "Скачать Java": "Java herunterladen",
   "Скачиваем обновление": "Update wird heruntergeladen",

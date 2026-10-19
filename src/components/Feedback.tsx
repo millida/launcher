@@ -13,6 +13,8 @@ import { openUrl } from '../ipc/commands'
 import { PxIcon } from './PxIcon'
 import '../styles/pixel/feedback.css'
 import { t, useT } from '../i18n'
+import { replyText, type BugAck } from '../lib/bugReplies'
+import { checkForUpdate } from '../lib/updater'
 
 /**
  * Отзыв о лаунчере (владелец 24.09.2026, 16:41): зелёный «жучок» в верхней
@@ -134,8 +136,9 @@ function useRewardReady(): boolean {
   return ready
 }
 
-async function send(body: Record<string, unknown>) {
-  await api('/bug-reports', { method: 'POST', body: JSON.stringify({ service: 'launcher', ...body }) })
+async function send(body: Record<string, unknown>): Promise<BugAck | null> {
+  const r = await api<{ ack?: BugAck | null }>('/bug-reports', { method: 'POST', body: JSON.stringify({ service: 'launcher', ...body }) })
+  return r?.ack ?? null
 }
 
 async function sendFeedback(text: string, stars: number): Promise<FeedbackAnswer> {
@@ -179,13 +182,23 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
         })
       } else {
         const trimmed = text.trim()
-        await send({
+        const ack = await send({
           category: kind,
           severity: kind === 'crash' || kind === 'game_launch' || kind === 'auth' ? 'high' : 'medium',
           title: (BUG_KINDS.find((k) => k[0] === kind)?.[1] || 'Баг') + ': ' + (about ? about + ' — ' : '') + trimmed.slice(0, 60),
           description: about ? about + '\n\n' + trimmed : trimmed,
         })
-        showToast(t('Баг отправлен — спасибо, разберёмся'), 'ok')
+        // Known problem: answer at once instead of "we will look" — with the advice, or "update" when it is already fixed.
+        if (ack) {
+          showToast(
+            replyText(ack, t),
+            'ok',
+            undefined,
+            ack.kind === 'fixed' ? { label: t('Обновиться'), run: () => void checkForUpdate(true) } : undefined,
+          )
+        } else {
+          showToast(t('Баг отправлен — спасибо, разберёмся'), 'ok')
+        }
       }
       track('feedback_send', { ...sent, ok: true })
       onClose()
