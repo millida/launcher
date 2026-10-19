@@ -66,7 +66,9 @@ jobs:
     container: ${{ matrix.container }}
     env:
       SIGNING_POLICY: ${{ inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY }}
-      SIGN: ${{ matrix.platform == 'windows' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
+      # Not SIGN: linuxdeploy-plugin-appimage treats any SIGN value as a request
+      # to GPG-sign the AppImage and fails without a key.
+      WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
       RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
       - name: Install Linux dependencies
@@ -132,7 +134,7 @@ jobs:
         run: bash .github/scripts/set-version.sh "${VERSION_INPUT:-${GITHUB_REF_NAME#v}}"
 
       - name: Build and bundle
-        if: env.SIGN != 'true'
+        if: env.WINDOWS_SIGNING != 'true'
         shell: bash
         env:
           # linuxdeploy and appimagetool mount themselves through FUSE, which a
@@ -151,12 +153,12 @@ jobs:
       # the exe while bundling, which would break a signature made earlier, so
       # the stamp is applied here first and the bundler finds nothing to patch.
       - name: Build
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: bun run tauri build --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
 
       - name: Stage the app for signing
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
           set -eu
@@ -166,7 +168,7 @@ jobs:
           ls -l unsigned/app
 
       - name: Upload the unsigned app
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         id: unsigned-app
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -176,7 +178,7 @@ jobs:
           path: unsigned/app
 
       - name: Sign the app
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -190,7 +192,7 @@ jobs:
           output-artifact-directory: signed/app
 
       - name: Put the signed app in place
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
           set -eu
@@ -206,12 +208,12 @@ jobs:
           done
 
       - name: Bundle
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: bun run tauri bundle --bundles nsis --target ${{ matrix.target }}
 
       - name: Stage the installer for signing
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
           set -eu
@@ -220,7 +222,7 @@ jobs:
           ls -l unsigned/installer
 
       - name: Upload the unsigned installer
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         id: unsigned-installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -230,7 +232,7 @@ jobs:
           path: unsigned/installer
 
       - name: Sign the installer
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -244,7 +246,7 @@ jobs:
           output-artifact-directory: signed/installer
 
       - name: Put the signed installer in place
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
           set -eu
@@ -260,7 +262,7 @@ jobs:
           done
 
       - name: Check signatures
-        if: env.SIGN == 'true'
+        if: env.WINDOWS_SIGNING == 'true'
         shell: pwsh
         run: |
           $files = @(Get-ChildItem "$env:RELEASE_DIR/bundle/nsis/*-setup.exe") + @(Get-ChildItem unsigned/app/*.exe | ForEach-Object { Get-Item (Join-Path $env:RELEASE_DIR $_.Name) })
