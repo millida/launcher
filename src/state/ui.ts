@@ -19,7 +19,6 @@ export type ScreenId =
   | 'hosting'
   | 'playhub'
   | 'pvp'
-  | 'game'
   | 'settings'
 export type ModalId =
   | 'nbModal'

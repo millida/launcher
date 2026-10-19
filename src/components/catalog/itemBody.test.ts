@@ -48,6 +48,7 @@ describe('tag labels', () => {
     [['утилиты', 'приключения'], ['Утилиты', 'Приключения'], 'Russian tags only get a capital letter'],
     [['1.12.2', 'forge'], ['1.12.2', 'Forge'], 'versions and loader names are not English text and stay'],
     [['minecraft', 'some-unknown-slug'], [], 'an untranslated English slug is hidden rather than shown raw'],
+    [['adventure', 'приключения'], ['Приключения'], 'synonyms collapse into one chip'],
   ]
   for (const [tags, want, why] of cases) test(why, () => expect(tagLabels(tags, 8), why).toEqual(want))
 })

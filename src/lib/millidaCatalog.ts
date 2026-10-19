@@ -26,14 +26,14 @@ export const INSTALL_SECTIONS = [
   'shaders',
   'data-packs',
   'maps',
-  'addons',
   'skins',
   'capes',
 ] as const
 
 export type InstallSection = (typeof INSTALL_SECTIONS)[number]
 
-/// Раздел каталога → вид контента лаунчера (папка сборки). Скины, плащи и
+/// Раздел каталога → вид контента лаунчера (папка сборки). Скины и плащи
+/// в сборку не кладутся: они идут в гардероб.
 export const KIND_OF_SECTION: Record<string, string> = {
   mods: 'mod',
   modpacks: 'modpack',

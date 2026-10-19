@@ -17,23 +17,31 @@ const VERSION_FILES = [
   { key: 'linux-x86_64-rpm', label: 'Linux, rpm' },
 ]
 
-// Старые коммиты публичного репозитория: «Собрано из <hash>.», новые — трейлер Source-Commit.
+// Old public commits say "Собрано из <hash>." (kept for parsing only); new ones carry a Source-Commit trailer.
 export const sourceCommitOf = (message) =>
   /^Source-Commit: ([0-9a-f]{7,40})$/m.exec(message || '')?.[1] ?? /Собрано из ([0-9a-f]{7,40})\./.exec(message || '')?.[1] ?? null
 
-/** Тело коммита в публичном репозитории: что поменялось простыми строками, а не голый хеш. */
+/** Public commit body: what changed in plain lines, not a bare hash. */
 export function publicCommitBody({ changes = [], source }) {
   const shown = changes.slice(0, MAX_CHANGES).map((line) => `- ${line}`)
   if (changes.length > MAX_CHANGES) shown.push(`- and ${changes.length - MAX_CHANGES} more`)
   return [shown.length ? shown.join('\n') : 'Internal changes, nothing new for players.', `Source-Commit: ${source}`].join('\n\n')
 }
 
-export function changesFromSubjects(subjects) {
+// Everything that reaches GitHub must be English. A subject with Cyrillic is never published as is;
+// the author gives the public wording in a `Changelog: <English text>` trailer of the commit body.
+const CYRILLIC = /[\u0400-\u04FF]/
+const CHANGELOG_TRAILER = /^Changelog:\s*(.+)$/im
+
+export function changesFromCommits(commits) {
   const seen = new Set()
   const out = []
-  for (const subject of subjects) {
-    const text = CHANGE_SUBJECT.exec(subject.trim())?.[1]?.trim()
-    if (!text) continue
+  for (const commit of commits) {
+    const { subject, body = '' } = typeof commit === 'string' ? { subject: commit } : commit
+    const typed = CHANGE_SUBJECT.exec(subject.trim())
+    if (!typed) continue
+    const text = (CHANGELOG_TRAILER.exec(body)?.[1] ?? typed[1]).trim()
+    if (!text || CYRILLIC.test(text)) continue
     const line = text[0].toUpperCase() + text.slice(1)
     if (seen.has(line)) continue
     seen.add(line)
@@ -41,6 +49,8 @@ export function changesFromSubjects(subjects) {
   }
   return out
 }
+
+export const changesFromSubjects = changesFromCommits
 
 const fileName = (url) => decodeURIComponent(new URL(url).pathname.split('/').pop())
 

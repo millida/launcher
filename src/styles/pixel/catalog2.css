@@ -608,7 +608,7 @@
    та же шкала читаемости ≥4,5:1 на тёмном фоне. */
 .mr-cat, .hub-cat, .hub-cats, .fy-grid {
   --m-sec-all: #b8c2cc; --m-sec-mods: #8fce74; --m-sec-modpacks: #c99af5; --m-sec-server-packs: #86a8f0;
-  --m-sec-plugins: #6fc6de; --m-sec-data-packs: #e8c05a; --m-sec-addons: #5fd4c0;
+  --m-sec-plugins: #6fc6de; --m-sec-data-packs: #e8c05a;
   --m-sec-texture-packs: #f3a06f; --m-sec-shaders: #f5c542; --m-sec-maps: #7fb2f0; --m-sec-seeds: #9ed8a4;
   --m-sec-skins: #e3a8cf; --m-sec-capes: #b49af0; --m-sec-heads: #f09a9a;
 }

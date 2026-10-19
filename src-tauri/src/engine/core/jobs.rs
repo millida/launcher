@@ -123,8 +123,9 @@ impl Job {
         self.halt.cancelled()
     }
 
-    /// For jobs whose work runs outside our downloader (winget, local copies):
+    /// For jobs whose work runs outside our downloader (local copies):
     /// a pause there would stop nothing, so the button is not offered.
+    #[cfg(test)]
     pub(crate) fn not_pausable(&self) {
         if let Some(e) = lock().get_mut(&self.key) {
             e.pausable = false;

@@ -17,7 +17,6 @@ export type SectionSlug =
   | 'mods'
   | 'plugins'
   | 'data-packs'
-  | 'addons'
   | 'texture-packs'
   | 'shaders'
   | 'maps'
@@ -70,7 +69,7 @@ export const CATALOG_GROUPS: NavGroup[] = [
     get label() {
       return t('Моды')
     },
-    tabs: [tab('mods', () => t('Моды')), tab('plugins', () => t('Плагины')), tab('data-packs', () => t('Дата-паки')), tab('addons', () => t('Аддоны'))],
+    tabs: [tab('mods', () => t('Моды')), tab('plugins', () => t('Плагины')), tab('data-packs', () => t('Дата-паки'))],
   },
   {
     key: 'graphics',
@@ -111,7 +110,6 @@ export const SECTION_VISUAL: Record<SectionSlug, SectionVisual> = {
   mods: { px: 'blocks', tint: 'var(--m-sec-mods)' },
   plugins: { px: 'zap', tint: 'var(--m-sec-plugins)' },
   'data-packs': { px: 'book', tint: 'var(--m-sec-data-packs)' },
-  addons: { px: 'gem', tint: 'var(--m-sec-addons)' },
   'texture-packs': { px: 'brush', tint: 'var(--m-sec-texture-packs)' },
   shaders: { px: 'sun', tint: 'var(--m-sec-shaders)' },
   maps: { px: 'map', tint: 'var(--m-sec-maps)' },
@@ -142,7 +140,6 @@ export const SECTION_SOURCE: Record<SectionSlug, SectionSource> = {
   mods: 'listing',
   plugins: 'listing',
   'data-packs': 'listing',
-  addons: 'listing',
   'texture-packs': 'listing',
   shaders: 'listing',
   maps: 'listing',
@@ -172,7 +169,6 @@ export interface ListingFilters {
   sort?: CatalogSortId
   page?: number
   perPage?: number
-  edition?: EditionFilter | null
   use?: string | null
   price?: PriceFilter | null
   side?: SideFilter | null
@@ -193,7 +189,6 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   if (f.category) sp.set('category', f.category)
   if (f.q && f.q.trim().length >= 2) sp.set('q', f.q.trim())
   if (f.price) sp.set('price', f.price)
-  if (f.edition) sp.set('edition', f.edition)
   if (f.use) sp.set('use', f.use)
   if (f.side) sp.set('side', f.side)
   // Как на сайте: «Рекомендуемые» — без параметра, «Популярные» и «Новые» — параметром.
@@ -208,9 +203,11 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
 
 /**
  * Хвост из Modrinth и CurseForge дописывается только к «чистой» выдаче: у чужих
+ * источников нет ни платного, ни задач «Для чего» — с такими
  * фильтрами хвост показывал бы не то, что выбрано.
  */
-export const foreignTailAllowed = (f: Pick<ListingFilters, 'edition' | 'use' | 'price' | 'side'>): boolean =>
+export const foreignTailAllowed = (f: Pick<ListingFilters, 'use' | 'price' | 'side'>): boolean =>
+  !f.use && f.price !== 'paid' && !f.side
 
 /** Сиды, головы, плащи — лаунчер ведёт на сайт или в гардероб, ленты у них нет. */
 export const hasFeed = (slug: SectionSlug): boolean => SECTION_SOURCE[slug] !== 'site'

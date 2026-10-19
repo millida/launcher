@@ -1,103 +1,106 @@
-# Откуда берётся лаунчер и как это проверить
+# Where the launcher comes from and how to verify it
 
-## Коротко
+Russian version: [SAFETY.ru.md](SAFETY.ru.md)
+
+## In short
 
 ```
-код в этом репозитории ──► GitHub Actions ──► Releases ──► установщик и автообновление
+code in this repository ──► GitHub Actions ──► Releases ──► installer and auto-update
 ```
 
-1. Код, который ты видишь здесь, — весь код самого лаунчера. Мод Millida для игры (скины и косметика) собирается
-   отдельно и сюда не входит — как лаунчер его проверяет, см. таблицу ниже.
-2. Собирает его не человек, а робот GitHub ([release.yml](.github/workflows/release.yml)) на компьютерах GitHub.
-3. Готовые файлы лежат в [Releases](https://github.com/millida/launcher/releases). У каждого есть
-   [свидетельство GitHub](https://github.com/millida/launcher/attestations) — из какого коммита и каким workflow он собран.
-   Подмену видно: у подменённого файла свидетельства не будет.
-4. Какая версия последняя, лаунчер узнаёт у нашего сервера (`launcher-storage.millida.net`), а сам файл качает из
-   Releases на GitHub; если GitHub не открывается — ту же копию с нашего сервера. Перед установкой файл проверяется
-   подписью Millida (открытая часть ключа — в [tauri.conf.json](src-tauri/tauri.conf.json)): без закрытой части чужой
-   файл не поставится, откуда бы он ни пришёл. Сама подпись — отдельный файл, байты программы она не меняет.
+1. The code you see here is all of the launcher's code. The Millida in-game mod (skins and cosmetics) is built
+   separately and is not part of this repository. How the launcher verifies it is in the table below.
+2. It is built not by a person but by a GitHub robot ([release.yml](.github/workflows/release.yml)) on GitHub's machines.
+3. The finished files are in [Releases](https://github.com/millida/launcher/releases). Each one has a
+   [GitHub attestation](https://github.com/millida/launcher/attestations) showing which commit and which workflow produced it.
+   Tampering is visible: a swapped file will have no attestation.
+4. The launcher learns the latest version from our server (`launcher-storage.millida.net`) and downloads the file itself from
+   GitHub Releases; if GitHub is unreachable, it takes the same copy from our server. Before installing, the file is checked
+   against the Millida signature (the public half of the key is in [tauri.conf.json](src-tauri/tauri.conf.json)): without the
+   private half, a foreign file will not install, wherever it came from. The signature is a separate file and does not change
+   the program's bytes.
 
-## Проверить самому за минуту
+## Verify it yourself in a minute
 
-**Главная проверка — свидетельство GitHub** (нужен [GitHub CLI](https://cli.github.com)): доказывает, что файл собрал
-GitHub из этого репозитория.
+**The main check is the GitHub attestation** (needs the [GitHub CLI](https://cli.github.com)): it proves that GitHub built
+the file from this repository.
 
 ```bash
 gh attestation verify Millida-Launcher_X.Y.Z_x64-setup.exe -R millida/launcher
 ```
 
-**Без программ** — сравнить, что файл с сайта тот же, что на GitHub. Посчитай отпечаток:
+**Without any tools:** compare the file from the website with the one on GitHub. Compute the fingerprint:
 
-| Система | Команда |
+| System | Command |
 | --- | --- |
 | Windows (PowerShell) | `Get-FileHash .\Millida-Launcher_X.Y.Z_x64-setup.exe` |
 | macOS | `shasum -a 256 Millida-Launcher_X.Y.Z_aarch64.dmg` |
 | Linux | `sha256sum Millida-Launcher_X.Y.Z_amd64.AppImage` |
 
-Отпечаток должен совпасть со строкой в файле `SHA256SUMS` того же релиза. Тот же отпечаток можно вбить в поиск на
-[virustotal.com](https://www.virustotal.com) и посмотреть проверку десятками антивирусов.
+The fingerprint must match the line in the `SHA256SUMS` file of the same release. You can also paste the same fingerprint into the search on
+[virustotal.com](https://www.virustotal.com) to see the scan by dozens of antivirus engines.
 
-**Собрать самому** — три команды в [BUILDING.md](BUILDING.md).
+**Build it yourself:** three commands in [BUILDING.md](BUILDING.md).
 
-## Что лаунчер качает и откуда
+## What the launcher downloads and from where
 
-Всё видно в коде — перехвати трафик и сверь с этой таблицей.
+Everything is visible in the code. Intercept the traffic and compare it with this table.
 
-| Что | Откуда | Как проверяется |
+| What | From where | How it is checked |
 | --- | --- | --- |
-| Сам лаунчер и его обновления | [Releases](https://github.com/millida/launcher/releases) этого репозитория; наш `launcher-storage.millida.net` — запасная копия тех же байтов | подпись обновления ([selfupdate.rs](src-tauri/src/engine/core/selfupdate.rs)) |
-| Minecraft, Java, Fabric/Forge/NeoForge/Quilt | официальные сайты Mojang, Adoptium/Azul, загрузчиков | хеши из их же списков |
-| Моды и сборки | Modrinth, CurseForge, каталог Millida | хеш каждого файла |
-| Мод Millida (скины и косметика в игре) | `cdn.millida.net/mod` | sha256 каждого jar из списка версий; если список подписан — ещё и подпись ([millida_mod.rs](src-tauri/src/engine/content/millida_mod.rs)) |
-| Агент скинов authlib-injector | сайт проекта и его GitHub | sha256 |
+| The launcher itself and its updates | [Releases](https://github.com/millida/launcher/releases) of this repository; our `launcher-storage.millida.net` is a backup copy of the same bytes | update signature ([selfupdate.rs](src-tauri/src/engine/core/selfupdate.rs)) |
+| Minecraft, Java, Fabric/Forge/NeoForge/Quilt | the official sites of Mojang, Adoptium/Azul and the loaders | hashes from their own lists |
+| Mods and modpacks | Modrinth, CurseForge, the Millida catalog | hash of every file |
+| The Millida mod (skins and cosmetics in game) | `cdn.millida.net/mod` | sha256 of every jar from the version list; if the list is signed, the signature as well ([millida_mod.rs](src-tauri/src/engine/content/millida_mod.rs)) |
+| The authlib-injector skin agent | the project's site and its GitHub | sha256 |
 
-Modrinth, CurseForge и часть сайтов Mojang в России открываются не у всех. Тогда тот же файл идёт через
-наш сервер-посредник — список адресов в [mirror.rs](src-tauri/src/engine/core/mirror.rs); там, где сайт
-открывается, лаунчер ходит напрямую.
+Modrinth, CurseForge and some Mojang sites do not open for everyone in Russia. In that case the same file goes through
+our proxy server (the list of addresses is in [mirror.rs](src-tauri/src/engine/core/mirror.rs)); where a site
+is reachable, the launcher connects directly.
 
-## Аккаунт украсть нельзя — вот почему
+## Your account cannot be stolen, and here is why
 
-| Чего боятся | Как на самом деле | Где проверить |
+| The fear | How it really works | Where to check |
 | --- | --- | --- |
-| Лаунчер увидит пароль | Пароль вводится на сайте Microsoft по коду, лаунчер его не получает | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs) — `devicecode` |
-| Токен уйдёт в Millida | Токен Microsoft ходит только на сервера Microsoft и Mojang и передаётся самой игре при запуске, как в любом лаунчере. На сервера Millida — никогда. | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs), [accounts.rs](src-tauri/src/commands/accounts.rs) |
-| Токен утащит сайт внутри лаунчера | Интерфейс токена не видит: ядро вырезает его из ответа | [session.rs](src-tauri/src/engine/accounts/session.rs) — `keep_tokens` |
-| Лаунчер полезет в файлы или запустит что угодно | У интерфейса нет доступа к диску и командной строке, только к командам ядра | [capabilities/default.json](src-tauri/capabilities/default.json) |
-| Подсунут обновление | Обновление без нашей подписи не установится | [selfupdate.rs](src-tauri/src/engine/core/selfupdate.rs), ключ в [tauri.conf.json](src-tauri/tauri.conf.json) |
+| The launcher will see your password | You enter the password on the Microsoft site using a code; the launcher never receives it | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs), `devicecode` |
+| The token will go to Millida | The Microsoft token goes only to Microsoft and Mojang servers and is handed to the game itself at launch, as in any launcher. Never to Millida servers. | [microsoft.rs](src-tauri/src/engine/accounts/microsoft.rs), [accounts.rs](src-tauri/src/commands/accounts.rs) |
+| A site inside the launcher will grab the token | The interface never sees the token: the core strips it from the response | [session.rs](src-tauri/src/engine/accounts/session.rs), `keep_tokens` |
+| The launcher will rummage through files or run anything | The interface has no access to the disk or the command line, only to the core's commands | [capabilities/default.json](src-tauri/capabilities/default.json) |
+| A fake update is slipped in | An update without our signature will not install | [selfupdate.rs](src-tauri/src/engine/core/selfupdate.rs), the key is in [tauri.conf.json](src-tauri/tauri.conf.json) |
 
-Токены лежат только на твоём компьютере в зашифрованном файле ([secrets.rs](src-tauri/src/secrets.rs)).
-Шифрование не даёт унести файл на другой ПК. От вируса, который уже сидит на твоём компьютере, не спасает ни один лаунчер.
+Tokens are stored only on your computer, in an encrypted file ([secrets.rs](src-tauri/src/secrets.rs)).
+The encryption prevents carrying the file to another PC. No launcher can protect you from a virus that already sits on your computer.
 
-Статистика (версия, железо, вылеты, клики; у вошедшего в аккаунт привязана к нему) — что уходит и зачем: [TELEMETRY.md](TELEMETRY.md); выключается в «Настройки → Аккаунт → Статистика использования».
+Statistics (version, hardware, crashes, clicks; tied to your account if you are signed in): what is sent and why is in [TELEMETRY.md](TELEMETRY.md). It can be turned off in "Settings → Account → Usage statistics".
 
-## Честно о том, что не здесь
+## Honestly, about what is not here
 
-- **Разработка** идёт во внутреннем репозитории: там задачи, черновики и ключи публикации. Каждый релиз целиком
-  приходит сюда, и собирается он здесь — не там. Коммит `Release X.Y.Z` содержит весь код этой версии и список изменений.
-- **Подпись обновлений** ставится нашим ключом после сборки. Подпись не меняет файл: байты те же, что собрал GitHub,
-  отпечаток совпадает с `SHA256SUMS`.
-- **Кнопка «Скачать» на сайте** отдаёт не сборку из Releases, а установщик. Что это за файлы, сказано ниже, а
-  их суммы — в [installer/site-files.json](installer/site-files.json).
+- **Development** happens in an internal repository: it holds tasks, drafts and publishing keys. Every release
+  arrives here in full, and it is built here, not there. The `Release X.Y.Z` commit contains all the code of that version and a changelog.
+- **Update signing** is done with our key after the build. The signature does not change the file: the bytes are the ones GitHub built,
+  and the fingerprint matches `SHA256SUMS`.
+- **The "Download" button on the website** serves not a build from Releases but an installer. What those files are is described below, and
+  their checksums are in [installer/site-files.json](installer/site-files.json).
 
-  | Система | Файл с кнопки | Где собран | Кто подписал |
+  | System | File behind the button | Where it was built | Who signed it |
   | --- | --- | --- | --- |
-  | Windows | `MillidaLauncherSetup.exe`, 1,9 МБ, лежит в релизе [setup-signed-1](https://github.com/millida/launcher/releases/tag/setup-signed-1). Лаунчера внутри нет: он скачивает установщик текущей версии — те же байты, что в релизе здесь | вне GitHub, 03.09.2026 | EV-сертификат GlobalSign, ИП Веселов Никита Николаевич |
-  | macOS | `Millida-Launcher-aarch64.dmg`, `Millida-Launcher-x64.dmg`. Дальше лаунчер обновляется сборками из Releases | вне GitHub, 10.09.2026 | Developer ID: Mark Sheremeta (G6P84BXZCC), нотаризован Apple |
-  | Linux | `.deb`, `.rpm`, AppImage | здесь, это файлы релиза | не подписаны; сверяются по `SHA256SUMS` и аттестации |
+  | Windows | `MillidaLauncherSetup.exe`, 1.9 MB, in the [setup-signed-1](https://github.com/millida/launcher/releases/tag/setup-signed-1) release. It does not contain the launcher: it downloads the installer of the current version, the same bytes as in the release here | outside GitHub, 2026-09-03 | GlobalSign EV certificate, sole proprietor Veselov Nikita Nikolaevich |
+  | macOS | `Millida-Launcher-aarch64.dmg`, `Millida-Launcher-x64.dmg`. After that the launcher updates from builds in Releases | outside GitHub, 2026-09-10 | Developer ID: Mark Sheremeta (G6P84BXZCC), notarized by Apple |
+  | Linux | `.deb`, `.rpm`, AppImage | here; these are the release files | not signed; checked against `SHA256SUMS` and the attestation |
 
-  Почему установщик Windows и образ macOS собраны не здесь: сборки GitHub для них не подписаны (подпись Windows
-  лежит на аппаратном ключе, подпись Apple в сборку ещё не заведена), а неподписанный файл Windows и macOS запускать
-  отговаривают, и часть антивирусов срабатывает на него без причины. Что с этим делаем: установщик Windows уже
-  собирается здесь — релизы `setup-v*` с аттестацией; кнопка сайта перейдёт на него, когда эта сборка получит
-  подпись. Он берёт с GitHub всё: список версий (`latest.json`, приложен к каждому релизу лаунчера прогоном
-  [Manifest](https://github.com/millida/launcher/actions/workflows/manifest.yml) после сверки с `SHA256SUMS`), сам
-  установщик лаунчера и его сумму; хранилище Millida — запасное зеркало с теми же байтами. Подписи Windows на нём пока
-  нет, поэтому при первом запуске Windows показывает окно «Неизвестный издатель»: как это устроено и что мы делаем —
-  в [CODE_SIGNING.md](CODE_SIGNING.md).
-- **Проверка без нас.** [Verify downloads](https://github.com/millida/launcher/actions/workflows/verify.yml) четыре раза
-  в сутки скачивает всё, что раздаётся (файлы обновлений и установщики с кнопки), и сверяет: первые — с `SHA256SUMS`
-  релиза, вторые — со списком выше. Расхождение делает прогон красным. То же самое можно запустить у себя:
+  Why the Windows installer and the macOS image were not built here: GitHub builds for them are not signed (the Windows signature
+  lives on a hardware key, and the Apple signature is not yet set up in the build), and Windows and macOS discourage running
+  an unsigned file, and some antivirus engines flag it for no reason. What we are doing about it: the Windows installer is already
+  built here, as `setup-v*` releases with an attestation; the website button will switch to it once that build gets
+  a signature. It takes everything from GitHub: the version list (`latest.json`, attached to every launcher release by a run of
+  [Manifest](https://github.com/millida/launcher/actions/workflows/manifest.yml) after checking against `SHA256SUMS`), the
+  launcher installer itself and its checksum; Millida storage is a backup mirror with the same bytes. It has no Windows signature yet,
+  so on first launch Windows shows an "Unknown publisher" window. How this works and what we are doing about it is in
+  [CODE_SIGNING.md](CODE_SIGNING.md).
+- **Verification without us.** [Verify downloads](https://github.com/millida/launcher/actions/workflows/verify.yml) runs four times
+  a day, downloads everything that is served (the update files and the installers behind the button) and compares: the former with the `SHA256SUMS`
+  of the release, the latter with the list above. A mismatch turns the run red. You can run the same thing yourself:
   `node scripts/verify-downloads.mjs`.
-- **Мобильный лаунчер** — отдельный открытый репозиторий [millida/launcher-mobile](https://github.com/millida/launcher-mobile): каждая версия приходит туда коммитом с номером версии.
+- **The mobile launcher** is a separate open repository, [millida/launcher-mobile](https://github.com/millida/launcher-mobile): every version arrives there as a commit with the version number.
 
-Нашёл дыру в безопасности — [SECURITY.md](SECURITY.md).
+Found a security hole? See [SECURITY.md](SECURITY.md).

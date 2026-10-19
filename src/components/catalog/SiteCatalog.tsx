@@ -694,7 +694,6 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       category={s.category}
       access={sec.slug === 'modpacks' && store === useSite ? s.access : undefined}
       ruCount={sec.slug === 'modpacks' && store === useSite ? s.ruTotal : 0}
-      edition={s.edition}
       use={s.use}
       price={s.price}
       side={s.side}
@@ -815,7 +814,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         <CatalogNotice note={{ icon: 'i-alert', title: t('Каталог не ответил'), action: { label: t('Повторить'), primary: true, icon: 'i-restart', onClick: () => void s.load() } }} />
       ) : loading ? (
         <div className={feedClass}>
-          <RowSkeleton gallery={gallery} actions={sec.kind !== 'plugin' && sec.kind !== 'serverpack' && sec.kind !== 'addon'} />
+          <RowSkeleton gallery={gallery} actions={sec.kind !== 'plugin' && sec.kind !== 'serverpack'} />
         </div>
       ) : !s.items.length && !tail.length && !cfRows.length ? (
         <CatalogNotice
@@ -1233,7 +1232,7 @@ export function SiteCatalog({
           version: m.fVer !== ANY_VERSION && m.fVer ? m.fVer : null,
           loader: sec.loaderAxis && sec.kind !== 'shader' && m.fLoader !== ANY_LOADER && m.fLoader ? m.fLoader : null,
         }
-    const clean = !st.category && !st.q && !st.use && !st.edition && !st.price && st.access === 'all' && st.sort === 'recommended'
+    const clean = !st.category && !st.q && !st.use && !st.price && st.access === 'all' && st.sort === 'recommended'
     if (st.section !== sec.slug || !st.page || !clean || (sec.kind === 'modpack' && (st.version || st.loader))) {
       st.setSection(sec.slug)
       if (scope.version || scope.loader) useSite.getState().patch(scope)

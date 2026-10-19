@@ -8,18 +8,18 @@ import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 export function peDigest(buf) {
-  if (buf.length < 0x40 || buf.readUInt16LE(0) !== 0x5a4d) throw new Error('не PE: нет MZ')
+  if (buf.length < 0x40 || buf.readUInt16LE(0) !== 0x5a4d) throw new Error('not a PE file: no MZ')
   const pe = buf.readUInt32LE(0x3c)
-  if (buf.readUInt32LE(pe) !== 0x4550) throw new Error('не PE: нет подписи PE')
+  if (buf.readUInt32LE(pe) !== 0x4550) throw new Error('not a PE file: no PE signature')
   const opt = pe + 24
   const magic = buf.readUInt16LE(opt)
-  if (magic !== 0x10b && magic !== 0x20b) throw new Error('неизвестный опциональный заголовок')
+  if (magic !== 0x10b && magic !== 0x20b) throw new Error('unknown optional header')
   const checksum = opt + 64
   const secDir = opt + (magic === 0x20b ? 112 : 96) + 4 * 8
   const certOff = buf.readUInt32LE(secDir)
   const certLen = buf.readUInt32LE(secDir + 4)
   const end = certLen ? certOff : buf.length
-  if (certLen && certOff + certLen > buf.length) throw new Error('таблица подписей за концом файла')
+  if (certLen && certOff + certLen > buf.length) throw new Error('the certificate table is past the end of the file')
   const h = createHash('sha256')
   h.update(buf.subarray(0, checksum))
   h.update(buf.subarray(checksum + 4, secDir))
@@ -31,6 +31,6 @@ export function peDigest(buf) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   for (const file of process.argv.slice(2)) {
     const { digest, signed } = peDigest(readFileSync(file))
-    console.log(`${digest}  ${file}${signed ? '  (подписан)' : ''}`)
+    console.log(`${digest}  ${file}${signed ? '  (signed)' : ''}`)
   }
 }

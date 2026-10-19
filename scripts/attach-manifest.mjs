@@ -37,21 +37,21 @@ export function parseSums(text) {
 /** Что в списке не сходится с релизом; пустой массив — список можно прикладывать. */
 export function manifestProblems(manifest, version, sums, repo = REPO) {
   const problems = []
-  if (manifest?.version !== version) problems.push(`версия списка ${manifest?.version}, релиз ${version}`)
+  if (manifest?.version !== version) problems.push(`list version ${manifest?.version}, release ${version}`)
   const platforms = Object.entries(manifest?.platforms || {})
-  if (!platforms.length) problems.push('в списке нет ни одной платформы')
+  if (!platforms.length) problems.push('the list has no platforms')
   const base = `https://github.com/${repo}/releases/download/v${version}/`
   for (const [key, entry] of platforms) {
     const url = String(entry?.url || '')
     if (!url.startsWith(base)) {
-      problems.push(`${key}: адрес не из релиза v${version} — ${url}`)
+      problems.push(`${key}: the address is not from release v${version} — ${url}`)
       continue
     }
     const asset = decodeURIComponent(url.slice(base.length))
     const want = sums.get(asset)
-    if (!want) problems.push(`${key}: файла ${asset} нет в SHA256SUMS`)
-    else if (entry.sha256 !== want) problems.push(`${key}: сумма ${entry.sha256} не равна SHA256SUMS ${want}`)
-    if (typeof entry.signature !== 'string' || entry.signature.length < 40) problems.push(`${key}: нет подписи обновления`)
+    if (!want) problems.push(`${key}: file ${asset} is not in SHA256SUMS`)
+    else if (entry.sha256 !== want) problems.push(`${key}: checksum ${entry.sha256} differs from SHA256SUMS ${want}`)
+    if (typeof entry.signature !== 'string' || entry.signature.length < 40) problems.push(`${key}: no update signature`)
   }
   return problems
 }
@@ -59,14 +59,14 @@ export function manifestProblems(manifest, version, sums, repo = REPO) {
 async function main() {
   const tag = process.argv[2] || gh('release', 'view', '--repo', REPO, '--json', 'tagName', '--jq', '.tagName')
   const version = tag.replace(/^v/, '')
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`«${tag}» — не релиз лаунчера`)
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`'${tag}' is not a launcher release`)
   const sumsRes = await fetch(`https://github.com/${REPO}/releases/download/v${version}/SHA256SUMS`, { headers: UA })
-  if (!sumsRes.ok) throw new Error(`SHA256SUMS релиза v${version}: HTTP ${sumsRes.status}`)
+  if (!sumsRes.ok) throw new Error(`SHA256SUMS of release v${version}: HTTP ${sumsRes.status}`)
   const sums = parseSums(await sumsRes.text())
 
   const until = Date.now() + WAIT_MS
   let text = ''
-  let problems = ['список ещё не запрошен']
+  let problems = ['the list has not been requested yet']
   for (;;) {
     const res = await fetch(`${SOURCE}?t=${Date.now()}`, { headers: UA }).catch(() => null)
     if (res?.ok) {
@@ -74,18 +74,18 @@ async function main() {
       try {
         problems = manifestProblems(JSON.parse(text), version, sums)
       } catch (e) {
-        problems = [`список не разобран: ${e.message}`]
+        problems = [`the list could not be parsed: ${e.message}`]
       }
       if (!problems.length) break
-    } else problems = [`список не отдан: HTTP ${res?.status ?? 'нет связи'}`]
+    } else problems = [`the list was not served: HTTP ${res?.status ?? 'no connection'}`]
     // Файлы ещё подписываются и заливаются: версия в списке сменится через несколько минут.
-    if (Date.now() > until) throw new Error(`список не сошёлся с релизом v${version}: ${problems.join('; ')}`)
-    console.log(`ждём список v${version}: ${problems[0]}`)
+    if (Date.now() > until) throw new Error(`the list does not match release v${version}: ${problems.join('; ')}`)
+    console.log(`waiting for the list of v${version}: ${problems[0]}`)
     await sleep(STEP_MS)
   }
   writeFileSync('latest.json', text)
   gh('release', 'upload', `v${version}`, 'latest.json', '--repo', REPO, '--clobber')
-  console.log(`latest.json приложен к релизу v${version}: ${Object.keys(JSON.parse(text).platforms).join(', ')}`)
+  console.log(`latest.json attached to release v${version}: ${Object.keys(JSON.parse(text).platforms).join(', ')}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

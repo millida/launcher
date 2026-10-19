@@ -132,7 +132,7 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
           <b>{sv.name}</b>
           {on ? <span className="dot"></span> : null}
           <span className="pill">{sv.cat}</span>
-          {sv.lic === 'CRACKED' ? <span className="pill lic-cracked">{t('Вход по нику')}</span> : null}
+          {sv.lic === 'CRACKED' ? <span className="pill lic-nick">{t('Вход по нику')}</span> : null}
         </span>
         <span className="srv-meta cat-srv-meta">
           {range ? (

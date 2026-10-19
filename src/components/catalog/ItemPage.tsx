@@ -565,7 +565,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
   const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
   const updated = relativeTime((data && data.updated) || realUpdated(card))
   // Файл по выбору ставится только своим путём каталога и только в сборку.
-  const canPick = !!data && data.pickable && target.kind === 'build' && sec.source === 'listing' && sec.kind !== 'plugin' && sec.kind !== 'serverpack' && sec.kind !== 'addon'
+  const canPick = !!data && data.pickable && target.kind === 'build' && sec.source === 'listing' && sec.kind !== 'plugin' && sec.kind !== 'serverpack'
   const installFile = canPick ? (f: VerFile) => void installFromCatalog(sec.slug, card.slug, { fileId: f.id }) : undefined
   const loaderAxis = sec.loaderAxis && sec.kind !== 'shader'
   const vis = SECTION_VISUAL[sec.slug as SectionSlug] || SECTION_VISUAL.mods

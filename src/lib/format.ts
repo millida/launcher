@@ -122,7 +122,6 @@ const ruMap = (): Record<string, string> => ({
   'map-information': t('Карта и подсказки'),
   informational: t('Подсказки'),
   'world-mobs': t('Мобы'),
-  'mc-addons': t('Аддоны'),
   'mc-food': t('Еда'),
   'library-api': t('Библиотека'),
   'small-light': t('Лёгкий'),

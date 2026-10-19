@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thank you for the report. The more exact the steps, the faster we find the cause.
-        You can write in English or in Russian (можно писать по-русски).
+        Please write in English.
 
         Found a vulnerability? Do not create an issue. The procedure is in
         [SECURITY.md](https://github.com/millida/launcher/blob/main/SECURITY.md).

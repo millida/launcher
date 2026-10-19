@@ -280,7 +280,7 @@ function ActBar({
 }
 
 const CONTENT = new Set(['mod', 'resourcepack', 'shader', 'datapack'])
-const SITE_ONLY_KINDS = new Set(['plugin', 'serverpack', 'addon'])
+const SITE_ONLY_KINDS = new Set(['plugin', 'serverpack'])
 
 function Bound({ h, kind, want, onFired, extra }: { h: ModHit; kind: string; want: Want | null; onFired: () => void; extra?: ReactNode }) {
   const t = useT()
@@ -479,6 +479,7 @@ export function RowActions(props: { card: SiteCard; sec: SiteSection; hit: ModHi
   const compact = useContext(CompactCtx)
   const server = useServerButton(props.card, props.sec)
   if (target.kind === 'server') return <div className="mr-actions">{server}</div>
+  // В сборку не ставятся: плагины и серверные сборки — на сервер.
   // Вместо «Установить», за которым отказ, — «На сервер» и страница на сайте.
   if (SITE_ONLY_KINDS.has(props.sec.kind))
     return (

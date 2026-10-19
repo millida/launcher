@@ -5,7 +5,7 @@ import { MrIcon, TagGlyph } from './SiteRow'
 import { capFirst, categoryIconSrc, categoryLabel, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
 import type { SiteFacets, SiteSection } from './site'
 import type { SiteAccess, SiteSort } from './siteStore'
-import type { EditionFilter, PriceFilter, SideFilter } from './sections'
+import type { PriceFilter, SideFilter } from './sections'
 import { t, useT } from '../../i18n'
 import { sellsPaidPacks } from '../../lib/paidPacks'
 
@@ -307,10 +307,6 @@ function KeySection({
   )
 }
 
-const EDITIONS: [EditionFilter, string][] = [
-  ['JAVA', 'Java'],
-]
-
 const prices = (): [PriceFilter, string][] => [
   ['free', t('Бесплатно')],
   ['paid', t('Платно')],
@@ -329,7 +325,6 @@ export function SiteFilters({
   category,
   access,
   ruCount = 0,
-  edition = null,
   use = null,
   price = null,
   side = null,
@@ -349,8 +344,7 @@ export function SiteFilters({
   access?: SiteAccess
   /** Переводов Millida на русский: есть — в колонке группа «Язык». */
   ruCount?: number
-  /** Издание, «Для чего», цена — колонки фильтров сайта (30.09.2026). */
-  edition?: EditionFilter | null
+  /** «Для чего», цена — колонки фильтров сайта (30.09.2026). */
   use?: string | null
   price?: PriceFilter | null
   /** Only mods the server does not need. */
@@ -367,8 +361,7 @@ export function SiteFilters({
     loader?: string | null
     category?: string | null
     access?: SiteAccess
-    edition?: EditionFilter | null
-    use?: string | null
+      use?: string | null
     price?: PriceFilter | null
     side?: SideFilter | null
   }) => void
@@ -436,17 +429,6 @@ export function SiteFilters({
         onPick: () => onPatch({ access: access === id ? 'all' : id }),
       }))
     : []
-  // Издание — как на сайте: группа есть, когда в разделе встречаются оба (или
-  const edCount = (v: string) => (facets.editions || []).find((e) => e.value.toLowerCase() === v)?.count ?? 0
-  const editions: FilterOpt[] =
-      ? EDITIONS.map(([id, label]) => ({
-          key: id,
-          label,
-          count: edCount(id.toLowerCase()),
-          active: edition === id,
-          onPick: () => onPatch({ edition: edition === id ? null : id }),
-        }))
-      : []
   const uses: FilterOpt[] = (facets.uses || []).map((u) => ({
     key: u.value,
     label: t(u.label),
@@ -476,7 +458,7 @@ export function SiteFilters({
     .slice()
     .sort((x, y) => (y.count ?? 0) - (x.count ?? 0))
     .slice(0, 4)
-  const anyActive = !!(version || loader || category || edition || use || price || side || (access && access !== 'all'))
+  const anyActive = !!(version || loader || category || use || price || side || (access && access !== 'all'))
   const tight = uses.length > 0
   return (
     <div className="card mr-filters mr-fbox">
@@ -495,7 +477,6 @@ export function SiteFilters({
       ) : null}
       {/* «Доступ» — только когда выбран: платных единицы (владелец 30.09.2026, 20:39). */}
       {(access === 'premium' || access === 'free') && accessOpts.length ? <KeySection title={t('Доступ')} name="access" opts={accessOpts} plain /> : null}
-      <KeySection title={t('Издание')} name="edition" opts={editions} plain />
       <KeySection title={t('Загрузчик')} name="loader" opts={loaders} split={LOADERS_VISIBLE} />
       <KeySection title={t('Сторона')} name="side" opts={sides} plain />
       <KeySection title={t('Для чего')} name="use" opts={uses} split={USES_VISIBLE} plain />

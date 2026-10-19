@@ -81,7 +81,7 @@ fn with_levels(text: &str) -> Vec<(&str, bool)> {
         .collect()
 }
 
-/// Шум нелицензионного входа: игра пишет это под ERROR при каждом запуске без лицензии
+/// Шум офлайн-входа: игра пишет это под ERROR при каждом офлайн-запуске
 /// и спокойно играет дальше. Причиной вылета такие строки не бывают — а разбор брал
 /// именно их, потому что они первые под ERROR (около 30 установок за полтора часа
 /// 12.10.2026 ушли в телеметрию с «Realms authentication error» вместо настоящей причины).
@@ -1244,7 +1244,7 @@ mod tests {
                  [12:00:09] [Render thread/ERROR]: Unreported exception thrown!
                  java.lang.NullPointerException: boom in mod\n\tat net.foo.Bar.baz(Bar.java:1)",
                 "java.lang.NullPointerException: boom in mod",
-                "шум нелицензионного входа под ERROR — не причина, причина дальше",
+                "шум офлайн-входа под ERROR — не причина, причина дальше",
             ),
             (
                 "#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n\

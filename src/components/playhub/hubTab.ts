@@ -15,7 +15,7 @@ import { openPvp } from '../../state/pvp'
  */
 export type HubTab = 'catalog' | 'builds'
 /** Раздел, к которому прокрутить при входе снаружи («add» — полный каталог с модами). */
-export type HubSection = 'server' | 'try' | 'builds' | 'foryou' | 'packs' | 'modes' | 'servers' | 'games' | 'add' | 'categories' | 'together'
+export type HubSection = 'server' | 'try' | 'builds' | 'foryou' | 'packs' | 'modes' | 'servers' | 'add' | 'categories' | 'together'
 
 interface HubTabState {
   tab: HubTab
