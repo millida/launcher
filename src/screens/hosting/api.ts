@@ -282,11 +282,13 @@ export const host = {
 
   features: (id: string) => api<HostingFeatures>(P(id) + '/features'),
 
+  enableFeature: (id: string, feature: 'map') =>
     api<{ enabled: boolean; address: string; port: number | null; note: string }>(P(id) + '/features/' + feature, {
       method: 'POST',
       body: JSON.stringify({}),
     }),
 
+  disableFeature: (id: string, feature: 'map') =>
     api(P(id) + '/features/' + feature, { method: 'DELETE' }),
 
   files: (id: string, path: string) => api<HostingFileEntry[]>(P(id) + '/files?path=' + encodeURIComponent(path)),

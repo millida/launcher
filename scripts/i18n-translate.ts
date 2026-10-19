@@ -74,6 +74,7 @@ const SYSTEM = [
   'Rules, in order of importance:',
   '1. Return ONLY a JSON array. Each element: {"i": <number>, "t": "<translation>"}. Same length and same "i" values as the input. No prose, no markdown fence.',
   '2. Preserve every placeholder EXACTLY as written: {n}, {nick}, {name} and similar. Never translate, reorder inside braces or drop them.',
+  '3. Do NOT translate product and brand names: Millida, Minecraft, Microsoft, Java, Modrinth, CurseForge, Forge, Fabric, NeoForge, Quilt, OptiFine, Discord, Telegram, PLUS, Diamond. Server mode names (SkyBlock, BedWars, OneBlock, Anarchy, Lifesteal, SMP, PvP, Duels) stay in English.',
   '4. These are interface strings. Keep them SHORT: a translated button must not be much longer than the source. A button is an imperative or infinitive, a heading is a short phrase.',
   '5. Keep the meaning exact for anything about money, prices, limits, accounts or errors. Do not soften, embellish or add words.',
   '6. A bare technical token (an ALL_CAPS code, a file name, a URL, a version number) is returned unchanged.',

@@ -181,6 +181,7 @@ async fn install_content_job(app: &AppHandle, job: &Job, req: &CatalogInstallReq
     let r = resolve(req).await?;
     let fname = safe_file_name(&r.name)?;
     let lower = fname.to_ascii_lowercase();
+    // Аддон не для Java или установщик чита — не мод: игра Java-издания его не
     // прочитает, а в папке модов он только сломает запуск.
     if req.kind == "mod" && (!lower.ends_with(".jar") || lower.starts_with("installer")) {
         return Err("Этот файл не ставится в сборку как мод — скачай его со страницы на сайте".into());

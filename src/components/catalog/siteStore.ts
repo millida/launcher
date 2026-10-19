@@ -430,6 +430,7 @@ export function byRelevance(cards: SiteCard[], q: string): SiteCard[] {
 /** Подходит ли платная сборка под выбранные версию, загрузчик и поиск: категорий у неё нет. */
 function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string): boolean {
   const needle = q.length >= 2 ? q.toLowerCase() : ''
+  // Платная сборка Java без задач «Для чего»: под «Бесплатно» и задачу не подходит.
   if (st.price === 'free' || st.use) return false
   return (
     !st.category &&

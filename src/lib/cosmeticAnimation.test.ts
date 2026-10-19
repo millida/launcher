@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { poseOf, readAnimations } from './cosmeticAnimation'
 
 /**
+ * A switching keyframe -> the value on each side of it. The animation format writes an
  * instant change as {"pre": old, "post": new}; the cat of "Cat cuddle" blinks
  * that way. The same case as the mod's AnimationTest: read as one value, the
  * open-eyed head shrank for two seconds and slid off its ears.
