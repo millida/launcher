@@ -96,6 +96,11 @@ pub fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+#[tauri::command]
+pub fn remember_install_id(id: String) -> Result<(), String> {
+    engine::remember_install_id(&id)
+}
+
 /// Флаг, с которым система запускает лаунчер при входе пользователя.
 pub const AUTOSTART_ARG: &str = "--autostart";
 

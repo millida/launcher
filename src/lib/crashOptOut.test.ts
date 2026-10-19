@@ -22,6 +22,7 @@ mock.module('../ipc/commands', () => ({
   onCoreFailure: () => {},
   defaultJava: async () => null,
   deviceSpecs: async () => null,
+  rememberInstallId: async () => {},
   listJavaRuntimes: async () => [],
   loadProfileSettings: async () => null,
   testJava: async () => '',

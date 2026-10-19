@@ -6,6 +6,7 @@ description = "Все команды ядра — только для главн
 permissions = [
   "allow-core-version",
   "allow-app-version",
+  "allow-remember-install-id",
   "allow-autostart-state",
   "allow-autostart-set",
   "allow-set-app-icon",
