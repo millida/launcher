@@ -3,14 +3,21 @@
 # repository once by an account that can.
 #
 # Every official installer is built here, on GitHub-hosted runners, from the
-# tagged commit. No secrets are involved: updater signatures are added after
-# the fact by the publisher, who first checks these files against their
-# build provenance.
+# tagged commit. Updater signatures are added after the fact by the publisher,
+# who first checks these files against their build provenance. The only secret
+# is the SignPath token: Windows files are Authenticode-signed by SignPath
+# Foundation from artifacts this workflow uploads.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version stamped into a trial build, nothing is published
+        required: true
+        default: "0.0.1"
 
 permissions:
   contents: read
@@ -53,6 +60,9 @@ jobs:
             updater_pattern: "*.AppImage"
             updater_extra: "deb:*.deb:linux-x86_64-deb rpm:*.rpm:linux-x86_64-rpm"
     container: ${{ matrix.container }}
+    env:
+      SIGN: ${{ matrix.platform == 'windows' && vars.SIGNPATH_SIGNING_POLICY != '' }}
+      RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
@@ -112,9 +122,12 @@ jobs:
 
       - name: Set version from the tag
         shell: bash
-        run: bash .github/scripts/set-version.sh "${GITHUB_REF_NAME#v}"
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: bash .github/scripts/set-version.sh "${VERSION_INPUT:-${GITHUB_REF_NAME#v}}"
 
       - name: Build and bundle
+        if: env.SIGN != 'true'
         shell: bash
         env:
           # linuxdeploy and appimagetool mount themselves through FUSE, which a
@@ -127,6 +140,133 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -C target-cpu=x86-64
         # Types are checked by CI on the commit this tag is cut from.
         run: bun run tauri build --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+
+      # Signed Windows build: the app exe is signed before it goes into the
+      # installer, then the installer itself. Tauri stamps the bundle type into
+      # the exe while bundling, which would break a signature made earlier, so
+      # the stamp is applied here first and the bundler finds nothing to patch.
+      - name: Build
+        if: env.SIGN == 'true'
+        shell: bash
+        run: bun run tauri build --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+
+      - name: Stage the app for signing
+        if: env.SIGN == 'true'
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p unsigned/app
+          node .github/scripts/mark-bundle-type.mjs "$RELEASE_DIR" nsis > marked.txt
+          while read -r name; do cp "$RELEASE_DIR/$name" unsigned/app/; done < marked.txt
+          ls -l unsigned/app
+
+      - name: Upload the unsigned app
+        if: env.SIGN == 'true'
+        id: unsigned-app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unsigned-app
+          retention-days: 1
+          if-no-files-found: error
+          path: unsigned/app
+
+      - name: Sign the app
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: signed/app
+
+      - name: Put the signed app in place
+        if: env.SIGN == 'true'
+        shell: bash
+        run: |
+          set -eu
+          for f in unsigned/app/*.exe; do
+            name=$(basename "$f")
+            built=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
+            signed=$(node .github/scripts/pe-digest.mjs "signed/app/$name" | cut -d' ' -f1)
+            if [ -z "$built" ] || [ "$built" != "$signed" ]; then
+              echo "::error::signed $name is not the file that was built"
+              exit 1
+            fi
+            cp "signed/app/$name" "$RELEASE_DIR/$name"
+          done
+
+      - name: Bundle
+        if: env.SIGN == 'true'
+        shell: bash
+        run: bun run tauri bundle --bundles nsis --target ${{ matrix.target }}
+
+      - name: Stage the installer for signing
+        if: env.SIGN == 'true'
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p unsigned/installer
+          cp "$RELEASE_DIR"/bundle/nsis/*-setup.exe unsigned/installer/
+          ls -l unsigned/installer
+
+      - name: Upload the unsigned installer
+        if: env.SIGN == 'true'
+        id: unsigned-installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unsigned-installer
+          retention-days: 1
+          if-no-files-found: error
+          path: unsigned/installer
+
+      - name: Sign the installer
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: signed/installer
+
+      - name: Put the signed installer in place
+        if: env.SIGN == 'true'
+        shell: bash
+        run: |
+          set -eu
+          for f in unsigned/installer/*.exe; do
+            name=$(basename "$f")
+            built=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
+            signed=$(node .github/scripts/pe-digest.mjs "signed/installer/$name" | cut -d' ' -f1)
+            if [ -z "$built" ] || [ "$built" != "$signed" ]; then
+              echo "::error::signed $name is not the file that was built"
+              exit 1
+            fi
+            cp "signed/installer/$name" "$RELEASE_DIR/bundle/nsis/$name"
+          done
+
+      - name: Check signatures
+        if: env.SIGN == 'true'
+        shell: pwsh
+        env:
+          POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+        run: |
+          $files = @(Get-ChildItem "$env:RELEASE_DIR/bundle/nsis/*-setup.exe") + @(Get-ChildItem unsigned/app/*.exe | ForEach-Object { Get-Item (Join-Path $env:RELEASE_DIR $_.Name) })
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            "{0}: {1} {2}" -f $f.Name, $sig.Status, $sig.SignerCertificate.Subject
+            if (-not $sig.SignerCertificate) { throw "$($f.Name) carries no signature" }
+            if ($env:POLICY -eq 'release-signing' -and $sig.Status -ne 'Valid') { throw "$($f.Name): signature status $($sig.Status)" }
+          }
 
       # curve25519.c has no runtime dispatch, so BMI2 or AVX2 in its object file
       # means the build drifted past baseline x86-64.
@@ -164,7 +304,7 @@ jobs:
 
   macos:
     name: ${{ matrix.label }}
-    if: github.repository == 'millida/launcher'
+    if: github.repository == 'millida/launcher' && github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -253,6 +393,7 @@ jobs:
   release:
     name: GitHub release
     needs: [build, macos]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
