@@ -251,7 +251,8 @@ let gameStartedAt = 0
 /** Когда запускали в последний раз. Не обнуляется выходом: событие выхода приходит и раньше события вылета. */
 let lastGameStartAt = 0
 import { flushNativeCrashes, installErrorHandlers, reportGameCrash } from './lib/crash'
-import { autoUpdate, bootUpdate, installUpdateOnExit, updateReady } from './lib/updater'
+import { autoUpdate, bootUpdate, checkForUpdate, installUpdateOnExit, updateReady } from './lib/updater'
+import { pickReplies, replyText } from './lib/bugReplies'
 import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
 import { useSlidingSegs } from './lib/slidingSegs'
@@ -844,6 +845,35 @@ export function App() {
 
   useEffect(() => {
     if (logged) startMusicAfterLogin()
+  }, [logged])
+
+  // "Fixed in version X" for the player's own bug reports: asked once per start, a while after login so it does not compete with the boot.
+  useEffect(() => {
+    if (!logged) return
+    let off = false
+    const timer = setTimeout(() => {
+      if (!hasMillidaAccount()) return
+      void api('/bug-reports/me/replies')
+        .then((r) => {
+          const items = off ? [] : pickReplies(r?.items)
+          items.forEach((it, i) =>
+            setTimeout(() => {
+              showToast(replyText({ kind: 'fixed', workaround: null, version: it.version }, t), 'ok', undefined, {
+                label: t('Обновиться'),
+                run: () => void checkForUpdate(true),
+              })
+            }, i * 8000),
+          )
+          if (items.length) {
+            void api('/bug-reports/me/replies/seen', { method: 'POST', body: JSON.stringify({ ids: items.map((x) => x.id) }) }).catch(() => {})
+          }
+        })
+        .catch(() => {})
+    }, 20_000)
+    return () => {
+      off = true
+      clearTimeout(timer)
+    }
   }, [logged])
 
   useEffect(() => {

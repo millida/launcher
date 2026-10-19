@@ -102,6 +102,18 @@ export function listenHostConsole(handler: (line: string) => void): Promise<Unli
   return T.event.listen<string>('host-console', (e) => handler(e.payload)).catch(() => null)
 }
 
+export interface WorldDownloadProgress {
+  phase: 'archiving' | 'downloading'
+  received: number
+  total: number
+}
+
+export function listenHostWorldDownload(handler: (p: WorldDownloadProgress) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<WorldDownloadProgress>('host-world-download', (e) => handler(e.payload)).catch(() => null)
+}
+
 /// End of the log the node replays on connect. What came before it is history
 /// the server had already written, what comes after is live.
 export function listenHostConsoleReplayEnd(handler: () => void): Promise<UnlistenFn | null> {

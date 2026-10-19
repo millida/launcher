@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Millida Launcher",
-  "version": "2.0.250",
+  "version": "2.0.251",
   "identifier": "net.millida.launcher",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -182,7 +182,7 @@
     ],
     "publisher": "Millida",
     "homepage": "https://millida.net/launcher",
-    "copyright": "© 2026 Millida (MARKET LINK LLC)",
+    "copyright": "© 2026 Millida (ИП Веселов Никита Николаевич)",
     "category": "Game",
     "shortDescription": "Лаунчер Minecraft",
     "longDescription": "Лаунчер Minecraft от Millida: версии от Mojang, загрузчики Fabric, Quilt, Forge и NeoForge, моды и модпаки с Modrinth и CurseForge.",

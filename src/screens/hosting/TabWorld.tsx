@@ -5,6 +5,8 @@ import { showToast } from '../../state/ui'
 import { uiConfirm } from '../../state/confirm'
 import { hasTauri } from '../../ipc/tauri'
 import { hostDownload, hostUpload } from '../../ipc/commands'
+import { listenHostWorldDownload } from '../../ipc/events'
+import type { WorldDownloadProgress } from '../../ipc/events'
 import { Cap, Empty, Loading, LockBtn, Row, Toggle, gbLabel } from './kit'
 import { host, errText } from './api'
 import type { HostingFeatures, HostingWorld } from './api'
@@ -26,6 +28,7 @@ export function TabWorld({
   const [worlds, setWorlds] = useState<HostingWorld[] | null>(null)
   const [features, setFeatures] = useState<HostingFeatures | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [worldProgress, setWorldProgress] = useState<WorldDownloadProgress | null>(null)
 
   const load = () => {
     void host
@@ -62,14 +65,25 @@ export function TabWorld({
     }
     setBusy('download')
     showToast(t('Собираем архив мира…'))
+    const unlisten = await listenHostWorldDownload(setWorldProgress)
     try {
       const path = await hostDownload(serverId)
       showToast(path ? t('Мир сохранён: {path}', { path }) : t('Отменено'))
     } catch (e) {
       showToast(t('Не удалось скачать: {error}', { error: errText(e) }), 'error')
     } finally {
+      if (unlisten) unlisten()
+      setWorldProgress(null)
       setBusy(null)
     }
+  }
+
+  const downloadLabel = (): string => {
+    if (!worldProgress) return t('Скачать мир')
+    if (worldProgress.phase === 'archiving') return t('Собираем архив мира…')
+    if (worldProgress.total > 0)
+      return t('Скачиваем мир {n}%', { n: Math.floor((worldProgress.received / worldProgress.total) * 100) })
+    return t('Скачиваем мир…')
   }
 
   // Server accepts only latin letters, digits, dot, dash and underscore in world names.
@@ -174,7 +188,7 @@ export function TabWorld({
             <LockBtn label={t('Загрузить свой')} feature={t('Загрузка своего мира')} onTariff={onTariff} />
           )}
           <button className="btn sm secondary" style={{ marginLeft: '8px' }} disabled={busy === 'download'} onClick={() => void download()}>
-            <Icon id="i-download" /> {t('Скачать мир')}
+            <Icon id="i-download" /> {downloadLabel()}
           </button>
         </div>
         {worlds === null ? (

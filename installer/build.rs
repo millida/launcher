@@ -8,8 +8,8 @@ fn main() {
         res.set_manifest_file("setup.manifest");
         res.set("ProductName", "Millida Launcher");
         res.set("FileDescription", "Установщик Millida Launcher");
-        res.set("CompanyName", "MARKET LINK LLC");
-        res.set("LegalCopyright", "© 2026 Millida (MARKET LINK LLC)");
+        res.set("CompanyName", "ИП Веселов Никита Николаевич");
+        res.set("LegalCopyright", "© 2026 Millida (ИП Веселов Никита Николаевич)");
         res.set("OriginalFilename", "MillidaLauncherSetup.exe");
         res.set_version_info(winresource::VersionInfo::FILEVERSION, 1 << 48);
         res.set_version_info(winresource::VersionInfo::PRODUCTVERSION, 1 << 48);
