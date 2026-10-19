@@ -18,6 +18,10 @@ on:
         description: Version stamped into a trial build, nothing is published
         required: true
         default: "0.0.1"
+      signing_policy:
+        description: SignPath signing policy for the trial build, empty to skip signing
+        required: false
+        default: test-signing
 
 permissions:
   contents: read
@@ -61,7 +65,8 @@ jobs:
             updater_extra: "deb:*.deb:linux-x86_64-deb rpm:*.rpm:linux-x86_64-rpm"
     container: ${{ matrix.container }}
     env:
-      SIGN: ${{ matrix.platform == 'windows' && vars.SIGNPATH_SIGNING_POLICY != '' }}
+      SIGNING_POLICY: ${{ inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY }}
+      SIGN: ${{ matrix.platform == 'windows' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
       RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
       - name: Install Linux dependencies
@@ -177,7 +182,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          signing-policy-slug: ${{ env.SIGNING_POLICY }}
           artifact-configuration-slug: app
           github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
           wait-for-completion: true
@@ -231,7 +236,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          signing-policy-slug: ${{ env.SIGNING_POLICY }}
           artifact-configuration-slug: installer
           github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
           wait-for-completion: true
@@ -257,15 +262,13 @@ jobs:
       - name: Check signatures
         if: env.SIGN == 'true'
         shell: pwsh
-        env:
-          POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY }}
         run: |
           $files = @(Get-ChildItem "$env:RELEASE_DIR/bundle/nsis/*-setup.exe") + @(Get-ChildItem unsigned/app/*.exe | ForEach-Object { Get-Item (Join-Path $env:RELEASE_DIR $_.Name) })
           foreach ($f in $files) {
             $sig = Get-AuthenticodeSignature $f.FullName
             "{0}: {1} {2}" -f $f.Name, $sig.Status, $sig.SignerCertificate.Subject
             if (-not $sig.SignerCertificate) { throw "$($f.Name) carries no signature" }
-            if ($env:POLICY -eq 'release-signing' -and $sig.Status -ne 'Valid') { throw "$($f.Name): signature status $($sig.Status)" }
+            if ($env:SIGNING_POLICY -eq 'release-signing' -and $sig.Status -ne 'Valid') { throw "$($f.Name): signature status $($sig.Status)" }
           }
 
       # curve25519.c has no runtime dispatch, so BMI2 or AVX2 in its object file
