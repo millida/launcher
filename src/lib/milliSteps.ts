@@ -9,6 +9,7 @@ import { registerStep, setActionHooks, setDefaultProfileGetter, pushMilliAction 
 import type { DiaryChange, MilliStep, StepResult } from './milliActions'
 import { cfgSet, type CfgSpec } from './milliCfg'
 import { canLocal, diaryAdd, diaryMarkUndone, dropFactsCache, filesRead, filesWrite, sizeText, snapshot, snapshotRestore } from './milliLocal'
+import { milliPathOk } from './milliPaths'
 import { milliEmote } from '../components/milli/milliEmotions'
 import { t } from '../i18n'
 
@@ -115,6 +116,7 @@ registerStep('opt', {
 registerStep('cfg', {
   run: async (s, { profile }) => {
     const st = s as Step<'cfg'>
+    if (!milliPathOk(st.file)) return { ok: false, detail: t('эту настройку Милли не трогает') }
     const spec: CfgSpec = { ...(st.type ? { type: st.type } : {}), ...(st.min != null ? { min: st.min } : {}), ...(st.max != null ? { max: st.max } : {}), ...(st.values ? { values: st.values } : {}) }
     const label = st.path.split('.').pop() || st.path
     return editFile(profile, st.file, (text, exists) => (exists ? cfgSet(text, st.format, st.path, st.to, spec, false) : { ok: false, error: t('нет файла — запусти игру разок') }), label)
@@ -124,6 +126,8 @@ registerStep('cfg', {
 registerStep('file_put', {
   run: async (s, { profile }) => {
     const { path, text, expect } = s as Step<'file_put'>
+    // Only options.txt and text configs under config/: no absolute paths, no "..", no jars or scripts (the core checks again).
+    if (!milliPathOk(path)) return { ok: false, detail: t('эту настройку Милли не трогает') }
     if (!(await canLocal())) return LOCAL_NEEDED
     await filesWrite(profile, [{ path, text, ...(expect ? { expect } : {}) }])
     dropFactsCache()

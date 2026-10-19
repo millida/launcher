@@ -1,5 +1,5 @@
 // Installs one file from the Millida catalog (mod, resource pack, shader, world) into a modpack.
-// Paid file: api.millida.net gives the link after it checks the purchase (Millida token). Downloads only from https addresses of Millida, Modrinth and CurseForge. The file is checked by hash.
+// Paid file: api.millida.net gives the link after it checks the purchase (Millida token). Downloads only from a short list of exact https hosts. The file is checked by hash.
 use crate::engine::*;
 use serde_json::Value;
 use tauri::AppHandle;
@@ -17,7 +17,16 @@ const KINDS: [&str; 5] = ["mod", "resourcepack", "shader", "datapack", "world"];
 /// Hosts a signed or mirrored catalogue file may be served from. The answer is
 /// ours, but it is still an address the core writes into a game folder from.
 // The only hosts we accept a catalog file from. A link to any other address is rejected.
-const FILE_HOSTS: [&str; 5] = ["millida.net", "millida.trade", "cdn.modrinth.com", "edge.forgecdn.net", "mediafilez.forgecdn.net"];
+// Exact hosts only, no suffix match: millida.net is multi-tenant (users upload files there), so a wildcard would trust any subdomain.
+const FILE_HOSTS: [&str; 7] = [
+    "garage.millida.net",
+    "cdn.millida.net",
+    "cdn.millida.trade",
+    "cdn.modrinth.com",
+    "edge.forgecdn.net",
+    "mediafilez.forgecdn.net",
+    "api.millida.net",
+];
 
 pub(crate) fn catalog_file_url_allowed(raw: &str) -> bool {
     let Ok(url) = url::Url::parse(raw) else { return false };
@@ -25,12 +34,22 @@ pub(crate) fn catalog_file_url_allowed(raw: &str) -> bool {
         return false;
     }
     let host = url.host_str().unwrap_or("").to_ascii_lowercase();
-    FILE_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{}", h)))
+    FILE_HOSTS.contains(&host.as_str())
 }
 
 /// Same shape as the server's check (`FILE_ID` in catalog-purchase.controller).
 pub(crate) fn catalog_file_id_ok(id: &str) -> bool {
     (10..=40).contains(&id.len()) && id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+}
+
+/// The expected digest of a catalog file: sha512 from the server, else the sha1 of the catalog entry.
+// ~3% of catalogue rows (CurseForge imports) still have no hash, so a missing one is allowed until the server backfills them.
+fn pick_sum<'a>(sha512: Option<&'a str>, sha1: Option<&'a str>) -> Option<Sum<'a>> {
+    match (sha512, sha1) {
+        (Some(s), _) => Some(Sum::Sha512(s)),
+        (None, Some(s)) => Some(Sum::Sha1(s)),
+        _ => None,
+    }
 }
 
 fn hex_ok(v: &str, len: usize) -> bool {
@@ -100,11 +119,7 @@ async fn install_catalog_file_job(
         return Err("Файл такого типа в сборку не добавить".into());
     }
     let sha1 = sha1.filter(|s| hex_ok(s, 40)).map(|s| s.to_ascii_lowercase());
-    let sum = match (&sha512, &sha1) {
-        (Some(s), _) => Some(Sum::Sha512(s.as_str())),
-        (None, Some(s)) => Some(Sum::Sha1(s.as_str())),
-        _ => None,
-    };
+    let sum = pick_sum(sha512.as_deref(), sha1.as_deref());
     job.rename(title);
     job.emit(app, 20.0, &format!("Скачиваем {}…", fname));
     job.check()?;
@@ -158,10 +173,19 @@ mod tests {
         assert!(catalog_file_url_allowed("https://garage.millida.net/a.jar?X-Amz=1"));
         assert!(catalog_file_url_allowed("https://cdn.millida.trade/catalog/x.zip"));
         assert!(catalog_file_url_allowed("https://cdn.modrinth.com/data/x.jar"));
+        assert!(!catalog_file_url_allowed("https://evil-user.millida.net/a.jar"));
+        assert!(!catalog_file_url_allowed("https://millida.net/a.jar"));
         assert!(!catalog_file_url_allowed("http://garage.millida.net/a.jar"));
         assert!(!catalog_file_url_allowed("https://millida.net.evil.io/a.jar"));
         assert!(!catalog_file_url_allowed("https://evilmillida.net/a.jar"));
         assert!(!catalog_file_url_allowed("file:///etc/passwd"));
+    }
+
+    #[test]
+    fn a_file_without_a_hash_is_refused() {
+        assert!(pick_sum(None, None).is_none());
+        assert!(matches!(pick_sum(None, Some("a")), Some(Sum::Sha1(_))));
+        assert!(matches!(pick_sum(Some("b"), Some("a")), Some(Sum::Sha512(_))));
     }
 
     #[test]
