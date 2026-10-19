@@ -37,8 +37,9 @@ export function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBa
   const ms = useMsLogin()
   const profileNick = useGameNick((s) => s.name)
   const pinned = pinnedOfflineNick(hasMillidaAccount(), profileNick)
-  const [typed, setTyped] = useState('')
-  const nick = pinned || typed
+  const [typed, setTyped] = useState<string | null>(null)
+  const nick = typed ?? pinned
+  const carriesMillida = !!pinned && nick.trim() === pinned
   const count = useAccounts((s) => s.list.length)
   const startCount = useRef(count)
   const doneRef = useRef(false)
@@ -98,7 +99,6 @@ export function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBa
               placeholder={t('Ник в игре (латиница, 3–16)')}
               maxLength={16}
               autoFocus
-              readOnly={!!pinned}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -109,7 +109,7 @@ export function KindPanel({ kind, onBack, onDone, onSafety }: { kind: Kind; onBa
               }}
             />
           </div>
-          {pinned ? <p className="faint-note">{t('Ник аккаунта Millida: пускает на серверы с входом Millida')}</p> : null}
+          {carriesMillida ? <p className="faint-note">{t('Ник аккаунта Millida: пускает на серверы с входом Millida')}</p> : null}
           <button className="btn md primary" style={{ width: '100%', marginTop: '12px' }} onClick={createOffline}>
             {t('Создать')}
           </button>
