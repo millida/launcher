@@ -2,7 +2,7 @@
 // to api.millida.net/v2/launcher/telemetry. Also a "in lobby / in game" pulse to /launcher/heartbeat. What exactly is sent and how to turn it off:
 // TELEMETRY.md in the root. The switch is m-telemetry-off in localStorage. The install id (a random UUID) is stored here too.
 import { hasTauri } from '../ipc/tauri'
-import { appVersion, deviceSpecs, millidaApi, setGameTelemetry } from '../ipc/commands'
+import { appVersion, deviceSpecs, millidaApi, rememberInstallId, setGameTelemetry } from '../ipc/commands'
 import { LAUNCHER_API, apiHeaders } from './api'
 import { detectGpu } from './gpu'
 import { errorCode, scrubText } from './telemetryPrivacy'
@@ -197,6 +197,7 @@ async function initDevice(): Promise<Device> {
     gpu: detectGpu(),
   }
   if (hasTauri()) {
+    if (telemetryEnabled()) void Promise.resolve(rememberInstallId(base.installId)).catch(() => {})
     try {
       base.appVersion = await appVersion()
     } catch {}

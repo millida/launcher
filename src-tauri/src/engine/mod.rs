@@ -52,6 +52,7 @@ pub mod media;
 pub mod cloud;
 pub mod party_voice;
 pub mod rewind;
+pub mod uninstall_report;
 
 pub use core::*;
 pub use game::*;
@@ -61,3 +62,4 @@ pub use accounts::*;
 pub use skins::*;
 pub use media::*;
 pub use cloud::*;
+pub use uninstall_report::*;

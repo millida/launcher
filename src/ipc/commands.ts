@@ -1025,6 +1025,7 @@ export interface CrashEntry {
 }
 
 export const appVersion = () => invoke<string>('app_version')
+export const rememberInstallId = (id: string) => invoke<void>('remember_install_id', { id })
 /** Запуск вместе с системой: включён ли и включить/выключить (ответ — итог). */
 export const autostartState = () => invoke<boolean>('autostart_state')
 /** Иконка окна/панели задач/Dock: default | spark | gold | diamond. */

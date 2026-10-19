@@ -161,6 +161,10 @@ fn avoid_webkit_compositing_on_appimage_wayland() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if engine::uninstall_report_requested() {
+        engine::report_uninstall();
+        return;
+    }
     #[cfg(target_os = "linux")]
     {
         avoid_nvidia_explicit_sync();
@@ -246,6 +250,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::content::core_version,
             commands::system::app_version,
+            commands::system::remember_install_id,
             commands::system::autostart_state,
             commands::system::autostart_set,
             app_icon::set_app_icon,

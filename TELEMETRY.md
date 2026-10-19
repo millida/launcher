@@ -36,7 +36,8 @@ The label in `ui_click` comes from `data-track`, `aria-label`, `title` or the bu
 
 ## What is tied to a person
 
-- **Install id.** A random UUID created on first launch and stored in `localStorage` under the key `m-install-id`. It does not change until you clear the app data. The server uses it to join all events from one install.
+- **Install id.** A random UUID created on first launch and stored in `localStorage` under the key `m-install-id`. It does not change until you clear the app data. The server uses it to join all events from one install. While statistics are on, a copy is kept in the `install-id` file in the launcher data folder.
+- **Uninstall.** On Windows the uninstaller runs the launcher with `--report-uninstall`, and it sends only that install id to `/launcher/uninstall`, so the server can count how many installs were removed ([src-tauri/src/engine/uninstall_report.rs](src-tauri/src/engine/uninstall_report.rs)). With statistics off nothing is sent.
 - **Session id.** A new UUID on every launch.
 - **Account.** The request goes through the launcher core, which adds the token. If you are signed in, the server takes the account id from the token and writes it into every event and into the install row (`userId` in `launcher_telemetry_events` and `launcher_installs`, server code that is not part of this repository). A guest goes without a link. An id that was linked once is not erased by later batches without a token.
 - **IP and country.** The batch intake code does not record the IP. The country is taken from a proxy header, and if there is none, it is guessed from the time zone and the system language (`geo-fallback.ts`).
