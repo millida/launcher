@@ -15,18 +15,18 @@ case "$os" in
 Linux)
 	case "$arch" in
 	x86_64 | amd64) name="millida-launcher-setup-linux-x86_64" ;;
-	*) fail "Millida Launcher собирается только под x86_64, а здесь $arch. Напишите нам: millida.net/support" ;;
+	*) fail "Millida Launcher is built only for x86_64, but this machine is $arch. Contact us: millida.net/support" ;;
 	esac
 	;;
 Darwin)
 	case "$arch" in
 	arm64 | aarch64) name="millida-launcher-setup-darwin-aarch64" ;;
 	x86_64) name="millida-launcher-setup-darwin-x86_64" ;;
-	*) fail "Неизвестный процессор Mac: $arch. Напишите нам: millida.net/support" ;;
+	*) fail "Unknown Mac processor: $arch. Contact us: millida.net/support" ;;
 	esac
 	;;
 *)
-	fail "Эта система не поддерживается: $os. Установщик для Windows — на millida.net/launcher"
+	fail "This system is not supported: $os. The Windows installer is at millida.net/launcher"
 	;;
 esac
 
@@ -35,7 +35,7 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v wget >/dev/null 2>&1; then
 	fetch() { wget -q --https-only -O "$2" "$1"; }
 else
-	fail "Нужен curl или wget, но их нет в системе"
+	fail "curl or wget is required, but neither is installed"
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
@@ -43,20 +43,20 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
 	digest() { shasum -a 256 "$1" | cut -d' ' -f1; }
 else
-	fail "Нужен sha256sum или shasum, но их нет в системе"
+	fail "sha256sum or shasum is required, but neither is installed"
 fi
 
 work=$(mktemp -d 2>/dev/null || mktemp -d -t millida-setup)
 trap 'rm -rf "$work"' EXIT INT TERM HUP
 
-echo "Скачиваем установщик Millida Launcher…"
-fetch "$base/$name" "$work/setup" || fail "Не скачался установщик. Проверьте подключение к интернету."
-fetch "$base/$name.sha256" "$work/setup.sha256" || fail "Не скачалась контрольная сумма установщика."
+echo "Downloading the Millida Launcher installer..."
+fetch "$base/$name" "$work/setup" || fail "The installer failed to download. Check your internet connection."
+fetch "$base/$name.sha256" "$work/setup.sha256" || fail "The installer checksum failed to download."
 
 expected=$(cut -d' ' -f1 <"$work/setup.sha256")
 actual=$(digest "$work/setup")
-[ -n "$expected" ] || fail "Пустая контрольная сумма установщика."
-[ "$expected" = "$actual" ] || fail "Установщик скачался повреждённым, запустите установку ещё раз."
+[ -n "$expected" ] || fail "The installer checksum is empty."
+[ "$expected" = "$actual" ] || fail "The installer downloaded corrupted. Run the installation again."
 
 chmod +x "$work/setup"
 "$work/setup"

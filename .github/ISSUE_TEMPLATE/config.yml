@@ -3,3 +3,6 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/millida/launcher/blob/main/SECURITY.md
     about: Do not create a public issue. The reporting procedure is in SECURITY.md. Write to security@millida.net.
+  - name: Copyright / DMCA notice
+    url: mailto:dmca@millida.net
+    about: Copyright and DMCA takedown notices go to dmca@millida.net. See DMCA.md for what a notice must contain.

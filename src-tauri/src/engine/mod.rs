@@ -50,7 +50,6 @@ pub mod accounts;
 pub mod skins;
 pub mod media;
 pub mod cloud;
-pub mod games;
 pub mod party_voice;
 pub mod rewind;
 
@@ -62,4 +61,3 @@ pub use accounts::*;
 pub use skins::*;
 pub use media::*;
 pub use cloud::*;
-pub use games::*;

@@ -7,7 +7,7 @@ body:
       value: |
         Describe the task, not a ready solution. When we understand what exactly is hard,
         we often find a solution that is simpler and better than the first one.
-        You can write in English or in Russian (можно писать по-русски).
+        Please write in English.
 
   - type: textarea
     id: problem

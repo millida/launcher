@@ -21,7 +21,7 @@ describe('isMilliScreen', () => {
     expect(isMilliScreen('playhub', false)).toBe(false)
   })
 
-  const support: ScreenId[] = ['play', 'premium', 'plus', 'builds', 'servers', 'skins', 'rubies', 'friends', 'chat', 'hosting', 'game', 'settings']
+  const support: ScreenId[] = ['play', 'premium', 'plus', 'builds', 'servers', 'skins', 'rubies', 'friends', 'chat', 'hosting', 'settings']
   for (const s of support) {
     it(`${s} — поддержка, даже если каталог хаба остался открытым`, () => {
       expect(isMilliScreen(s, true)).toBe(false)

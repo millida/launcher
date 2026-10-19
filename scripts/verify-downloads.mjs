@@ -72,22 +72,22 @@ const fail = (what) => {
 async function verifyRelease() {
   const manifest = await (await get(`${CDN}/v2/latest.json?t=${Date.now()}`)).json()
   const version = String(manifest.version || '')
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`в манифесте нет версии: ${version}`)
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`the manifest has no version: ${version}`)
   const sums = parseSums(await (await get(`https://github.com/${REPO}/releases/download/v${version}/SHA256SUMS`)).text())
-  if (!sums.size) throw new Error(`SHA256SUMS релиза v${version} пуст`)
-  console.log(`Манифест: ${version}, в SHA256SUMS релиза ${sums.size} файлов`)
+  if (!sums.size) throw new Error(`SHA256SUMS of release v${version} is empty`)
+  console.log(`Manifest: ${version}, release SHA256SUMS lists ${sums.size} files`)
   for (const [key, entry] of Object.entries(manifest.platforms || {})) {
     const asset = decodeURIComponent(new URL(entry.github).pathname.split('/').pop())
     const want = sums.get(asset)
     if (!want) {
-      fail(`${key}: файла ${asset} нет в SHA256SUMS релиза v${version}`)
+      fail(`${key}: file ${asset} is not in SHA256SUMS of release v${version}`)
       continue
     }
-    if (!SHA.test(entry.sha256 || '') || entry.sha256 !== want) fail(`${key}: сумма в манифесте не совпадает с SHA256SUMS (${asset})`)
+    if (!SHA.test(entry.sha256 || '') || entry.sha256 !== want) fail(`${key}: the checksum in the manifest does not match SHA256SUMS (${asset})`)
     const got = await digest(entry.url)
     const ok = got.sha256 === want
-    if (!ok) fail(`${key}: с хранилища пришёл другой файл — ${got.sha256}, в релизе ${want} (${entry.url})`)
-    rows.push([key, asset, (got.size / 1048576).toFixed(1) + ' МБ', ok ? 'совпадает с релизом v' + version : 'НЕ СОВПАДАЕТ'])
+    if (!ok) fail(`${key}: the storage served a different file: ${got.sha256}, the release has ${want} (${entry.url})`)
+    rows.push([key, asset, (got.size / 1048576).toFixed(1) + ' MB', ok ? 'matches release v' + version : 'MISMATCH'])
     console.log(`${ok ? '✓' : '✗'} ${key}: ${asset}`)
   }
   return version
@@ -98,12 +98,12 @@ async function verifySite() {
   for (const file of list.files) {
     const got = await digest(list.base + file.name)
     let ok = got.sha256 === file.sha256
-    if (!ok) fail(`setup/${file.name}: в хранилище ${got.sha256}, в списке ${file.sha256}`)
+    if (!ok) fail(`setup/${file.name}: storage has ${got.sha256}, the list has ${file.sha256}`)
     if (file.signed === 'authenticode' && !hasAuthenticode(got.head)) {
       ok = false
-      fail(`setup/${file.name}: подписи Authenticode нет`)
+      fail(`setup/${file.name}: no Authenticode signature`)
     }
-    rows.push(['setup/', file.name, (got.size / 1048576).toFixed(1) + ' МБ', ok ? 'совпадает со списком · ' + file.signer : 'НЕ СОВПАДАЕТ'])
+    rows.push(['setup/', file.name, (got.size / 1048576).toFixed(1) + ' MB', ok ? 'matches the list · ' + file.signer : 'MISMATCH'])
     console.log(`${ok ? '✓' : '✗'} setup/${file.name}`)
   }
 }
@@ -117,10 +117,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     fail(String(e?.message || e))
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
-    const table = ['| Откуда | Файл | Размер | Итог |', '| --- | --- | --- | --- |', ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n')
-    const head = problems.length ? `## Расхождения: ${problems.length}\n\n${problems.map((p) => '- ' + p).join('\n')}\n\n` : `## Всё, что раздаётся, совпадает с релизом ${version}\n\n`
+    const table = ['| Source | File | Size | Result |', '| --- | --- | --- | --- |', ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n')
+    const head = problems.length ? `## Mismatches: ${problems.length}\n\n${problems.map((p) => '- ' + p).join('\n')}\n\n` : `## Everything that is served matches release ${version}\n\n`
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, head + table + '\n')
   }
   if (problems.length) process.exit(1)
-  console.log(`Готово: ${rows.length} файлов, расхождений нет`)
+  console.log(`Done: ${rows.length} files, no mismatches`)
 }

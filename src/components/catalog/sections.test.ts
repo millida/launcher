@@ -23,7 +23,7 @@ import { hasPx } from '../pxArt'
 const SITE_GROUPS: [string, string, [string, string][]][] = [
   ['all', 'Все', [['all', 'Все']]],
   ['packs', 'Сборки', [['modpacks', 'Сборки модов']]],
-  ['mods', 'Моды', [['mods', 'Моды'], ['plugins', 'Плагины'], ['data-packs', 'Дата-паки'], ['addons', 'Аддоны']]],
+  ['mods', 'Моды', [['mods', 'Моды'], ['plugins', 'Плагины'], ['data-packs', 'Дата-паки']]],
   ['graphics', 'Графика', [['texture-packs', 'Ресурс-паки'], ['shaders', 'Шейдеры']]],
   ['worlds', 'Карты', [['maps', 'Карты'], ['seeds', 'Сиды']]],
   ['looks', 'Скины', [['skins', 'Скины'], ['capes', 'Плащи']]],
@@ -88,17 +88,20 @@ describe('«Скачать в лаунчере» с сайта ставится 
 })
 
 describe('запрос листинга — те же параметры, что у сайта', () => {
-  it('издание, «Для чего», цена, сортировка, страница', () => {
+  it('«Для чего», цена, сортировка, страница', () => {
     const q = new URLSearchParams(
+      listingQuery('maps', { use: 'friends', price: 'free', sort: 'new', page: 2, perPage: 20, q: ' замок ' }),
     )
+    expect(Object.fromEntries(q)).toEqual({ section: 'maps', q: 'замок', price: 'free', use: 'friends', sort: 'new', page: '2', perPage: '20' })
   })
 
   it('пустые фильтры не попадают в адрес, одна буква поиска — тоже', () => {
     expect(listingQuery('all', { sort: 'recommended', page: 1, q: 'a', version: null })).toBe('section=all')
   })
 
+  it('хвост Modrinth/CurseForge — только без платного и задач', () => {
     expect(foreignTailAllowed({})).toBe(true)
-    expect(foreignTailAllowed({ edition: 'JAVA', price: 'free' })).toBe(true)
+    expect(foreignTailAllowed({ price: 'free' })).toBe(true)
     expect(foreignTailAllowed({ price: 'paid' })).toBe(false)
     expect(foreignTailAllowed({ use: 'lowpc' })).toBe(false)
     expect(foreignTailAllowed({ side: 'client' }), 'у чужих источников нет нашей пометки стороны — хвост показал бы и серверные моды').toBe(false)

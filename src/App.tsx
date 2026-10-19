@@ -24,7 +24,6 @@ import {
   Mods,
   PlayHub,
   Pvp,
-  Game,
   Play,
   Premium,
   Plus,
@@ -962,11 +961,6 @@ export function App() {
               {screen === 'pvp' && (
                 <Guard what="PvP">
                   <Pvp on />
-                </Guard>
-              )}
-              {screen === 'game' && (
-                <Guard what="Игра">
-                  <Game on />
                 </Guard>
               )}
               {screen === 'settings' && (

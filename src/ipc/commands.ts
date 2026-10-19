@@ -221,19 +221,6 @@ export const cancelInstall = (key: string) => invoke<boolean>('cancel_install', 
 
 export const pauseInstall = (key: string, paused: boolean) => invoke<boolean>('pause_install', { key, paused })
 
-export interface StoreGameState {
-  slug: string
-  steam: boolean
-  steamClient: boolean
-  store: boolean
-  windows: boolean
-}
-
-export const storeGamesState = () => invoke<StoreGameState[]>('store_games_state', {})
-export const storeGameOpen = (slug: string, via: 'steam' | 'steam-install' | 'store-page' | 'store') =>
-  invoke<void>('store_game_open', { slug, via })
-export const storeGameInstall = (slug: string) => invoke<void>('store_game_install', { slug })
-
 export const addLocalFile = (profile: string, kind: string, path: string) =>
   invoke<string>('add_local_file', { profile, kind, path })
 

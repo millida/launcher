@@ -35,7 +35,6 @@ const TONE: Record<ScreenId, [string, string]> = {
   pvp: ['#7a1f12', '#ff6b3d'],
   chat: ['#2d2f6b', '#7b82ff'],
   hosting: ['#0f5a3a', '#35d49a'],
-  game: ['#3b2a5c', '#9b6bff'],
   settings: ['#23272b', '#5d6670'],
 }
 

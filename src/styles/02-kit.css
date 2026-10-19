@@ -903,7 +903,7 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 /* Канон 7.9 / MkServerRow: топ-3 — та же пилюля accent-soft, без медальных
    135°-градиентов (запрет 5.2). Отличие — только цвет текста/акцент. */
 .srv-rank.medal{background:var(--m-accent-soft);color:var(--m-accent)}
-.pill.lic-cracked{background:var(--m-warning-soft,rgba(245,146,59,.14));color:var(--m-warning,#F5923B)}
+.pill.lic-nick{background:var(--m-warning-soft,rgba(245,146,59,.14));color:var(--m-warning,#F5923B)}
 /* Server sort panel */
 .srv-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 /* Featured server card */

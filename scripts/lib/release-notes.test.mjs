@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { changesFromSubjects, publicCommitBody, releaseNotes, sourceCommitOf } from './release-notes.mjs'
+import { changesFromCommits, changesFromSubjects, publicCommitBody, releaseNotes, sourceCommitOf } from './release-notes.mjs'
 
 describe('changesFromSubjects', () => {
   const cases = [
-    ['feat(hub): закреплены наши серверы', ['Закреплены наши серверы'], 'scope prefix is stripped, first letter capitalised'],
-    ['fix: вход не терял сессию', ['Вход не терял сессию'], 'plain fix is a user-visible change'],
-    ['perf(lobby)!: быстрее лобби', ['Быстрее лобби'], 'breaking marker does not hide the change'],
-    ['chore(ci): кэш раннера', [], 'internal chores never reach players'],
+    ['feat(hub): pin our servers', ['Pin our servers'], 'scope prefix is stripped, first letter capitalised'],
+    ['fix: sign-in no longer loses the session', ['Sign-in no longer loses the session'], 'plain fix is a user-visible change'],
+    ['perf(lobby)!: faster lobby', ['Faster lobby'], 'breaking marker does not hide the change'],
+    ['chore(ci): runner cache', [], 'internal chores never reach players'],
     ['Merge pull request #160 from millida/main', [], 'merge commits are noise'],
-    ['открытый код: синхронизация', [], 'subjects without a conventional type are skipped'],
+    ['open source: sync', [], 'subjects without a conventional type are skipped'],
   ]
   for (const [subject, expected, why] of cases) {
     test(`${subject} -> ${expected.length} (${why})`, () => {
@@ -17,14 +17,33 @@ describe('changesFromSubjects', () => {
   }
 
   test('duplicates collapse into one line', () => {
-    expect(changesFromSubjects(['fix: одно и то же', 'fix(ui): одно и то же'])).toEqual(['Одно и то же'])
+    expect(changesFromSubjects(['fix: same thing', 'fix(ui): same thing'])).toEqual(['Same thing'])
+  })
+})
+
+describe('changesFromCommits', () => {
+  test('a Russian subject is never published', () => {
+    expect(changesFromCommits(['fix: вход не терял сессию', 'feat: faster lobby'])).toEqual(['Faster lobby'])
+  })
+
+  test('the Changelog trailer gives the English wording of a Russian subject', () => {
+    const commits = [{ subject: 'feat(hub): закреплены наши серверы', body: 'Подробности.\n\nChangelog: pin our servers\n' }]
+    expect(changesFromCommits(commits)).toEqual(['Pin our servers'])
+  })
+
+  test('a Russian Changelog trailer is dropped too', () => {
+    expect(changesFromCommits([{ subject: 'fix: sign-in', body: 'Changelog: вход' }])).toEqual([])
+  })
+
+  test('internal commits stay out even with a trailer', () => {
+    expect(changesFromCommits([{ subject: 'chore: cache', body: 'Changelog: faster builds' }])).toEqual([])
   })
 })
 
 describe('sourceCommitOf', () => {
   const cases = [
     ['Release 2.0.176\n\nСобрано из 95e8ce0.', '95e8ce0', 'sync commit body names its source'],
-    ['Release 2.0.203\n\n- Починка сборок\n\nSource-Commit: 1a2b3c4', '1a2b3c4', 'new body keeps the source as a trailer'],
+    ['Release 2.0.203\n\n- Build fixes\n\nSource-Commit: 1a2b3c4', '1a2b3c4', 'new body keeps the source as a trailer'],
     [publicCommitBody({ changes: [], source: 'abcdef1' }), 'abcdef1', 'body without changes still round-trips'],
     ['Initial commit', null, 'foreign commits have no source'],
     [undefined, null, 'missing message is tolerated'],
@@ -53,13 +72,13 @@ describe('releaseNotes', () => {
 
   test('changes section appears only when there are changes', () => {
     expect(releaseNotes({ version: '2.0.1' })).not.toContain("What's new")
-    expect(releaseNotes({ version: '2.0.1', changes: ['Быстрее лобби'] })).toContain('- Быстрее лобби')
+    expect(releaseNotes({ version: '2.0.1', changes: ['Faster lobby'] })).toContain('- Faster lobby')
   })
 
   test('long change lists are capped', () => {
-    const changes = Array.from({ length: 25 }, (_, i) => `Правка ${i}`)
+    const changes = Array.from({ length: 25 }, (_, i) => `Change ${i}`)
     const body = releaseNotes({ version: '2.0.1', changes })
-    expect(body, 'the 21st change must be folded into the counter').not.toContain('Правка 20')
+    expect(body, 'the 21st change must be folded into the counter').not.toContain('Change 20')
     expect(body).toContain('- and 5 more')
   })
 

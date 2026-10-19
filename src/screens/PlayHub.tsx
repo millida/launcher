@@ -41,8 +41,6 @@ import { MyBuildCard, useMyBuilds } from '../components/playhub/MyBuilds'
 import { ServerFeed } from '../components/playhub/ServerFeed'
 import { ModeTile } from '../components/playhub/ModeTile'
 import { useHubTab } from '../components/playhub/hubTab'
-import { GAMES, gameHero, useGame } from '../lib/games'
-import '../styles/pixel/game.css'
 import type { HubSection } from '../components/playhub/hubTab'
 import { ALL_CATEGORIES, ANY_LOADER, ANY_VERSION, useMods } from '../state/mods'
 import { ForYou } from '../components/playhub/ForYou'
@@ -72,7 +70,7 @@ import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
  * карточками с обложкой (нет сборок — полка версий Minecraft) → «Категории»
  * маленькими кнопками → «Рекомендуем» в четыре ряда (хостинг, эксклюзивы,
  * OneBlock, лента) → «Режимы» (пиксельные значки, баннер OneBlock) →
- * «Играть вдвоём» → «Другие игры» → «Серверы».
+ * «Играть вдвоём» → «Серверы».
  * «Новая сборка» и «Импорт» — в верхней полосе хаба (PlayhubBar).
  * «Продолжить» здесь нет: продолжение — кнопка «Играть» в лобби.
  */
@@ -1026,36 +1024,6 @@ export function PlayHub({ on }: { on?: boolean }) {
             {t('Все серверы')} <Icon id="i-chev-r" />
           </button>
         </>,
-      )}
-      {/* Игры Minecraft — такими же карточками, как сборки; клик открывает экран игры (владелец 29.09.2026). */}
-      {head(
-        'games',
-        t('Другие игры'),
-        <div className="hub-grid" data-section="games" data-src="hub_card">
-          {GAMES.map((g, i) => (
-            <button
-              key={g.slug}
-              className="ph-card"
-              data-sound="open"
-              data-track="open_game"
-              data-id={g.slug}
-              data-pos={i}
-              onClick={() => {
-                useGame.getState().open(g.slug)
-                setScreen('game')
-              }}
-            >
-              <span className="ph-card-art">
-                {img(gameHero(g.slug))}
-                {g.isNew ? <span className="gm-new gm-new-card">{t('Новинка')}</span> : null}
-              </span>
-              <span className="ph-card-body">
-                <b>{g.name}</b>
-                <span className="ph-card-meta">{g.meta}</span>
-              </span>
-            </button>
-          ))}
-        </div>,
       )}
       {/* «Зайти на сервер» и «Недавние» убраны из библиотеки (17:50). */}
     </div>,

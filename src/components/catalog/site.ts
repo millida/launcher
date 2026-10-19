@@ -7,7 +7,7 @@ import type { MillidaPack } from '../../ipc/commands'
 import type { ModHit } from '../../state/mods'
 import { cfProjectOf } from '../../lib/millidaCatalog'
 import { SECTION_SOURCE, listingQuery } from './sections'
-import type { CatalogSortId, EditionFilter, PriceFilter, SectionSlug, SectionSource, SideFilter } from './sections'
+import type { CatalogSortId, PriceFilter, SectionSlug, SectionSource, SideFilter } from './sections'
 import type { CatalogFile, Pricing } from './paid'
 import { getLocale, intlTag, t, type Locale } from '../../i18n'
 import { withCatalogLang } from './catalogLang'
@@ -38,6 +38,7 @@ export interface SiteSection {
   /**
    * Вид материала для установки лаунчером — как `useMods.modTab`. У разделов,
    * которые в сборку не ставятся, свой вид: плагины и серверные сборки — на
+   * сервер, скины и плащи — в гардероб.
    */
   kind:
     | 'all'
@@ -49,7 +50,6 @@ export interface SiteSection {
     | 'world'
     | 'plugin'
     | 'serverpack'
-    | 'addon'
     | 'seed'
     | 'skin'
     | 'cape'
@@ -175,7 +175,6 @@ export interface SiteCard {
   /** Source of the card when the listing carries it; absent on an older backend. */
   sourceUrl?: string | null
   curseforgeId?: number | null
-  /** Издание игры; нет поля — Java. */
   /** Сборку собрала Милли (ИИ-сборщик): метка «Милли» на карточке. */
   aiGenerated?: boolean
   /** Код сборки лаунчера — установка идёт путём «Сборки по коду». */
@@ -214,7 +213,6 @@ export interface SiteFacets {
   versions: Facet[]
   loaders: Facet[]
   categories: Facet[]
-  editions?: Facet[]
   /** «Для чего» (`?use=`) — задачи раздела; у сайта это карты и сборки. */
   uses?: { value: string; label: string; count: number }[]
 }
@@ -234,7 +232,6 @@ export interface ListingQuery {
   sort?: CatalogSortId
   page?: number
   perPage?: number
-  edition?: EditionFilter | null
   use?: string | null
   price?: PriceFilter | null
   side?: SideFilter | null
@@ -252,17 +249,19 @@ function qs(p: Record<string, string | number | null | undefined>): string {
 export const listingKey = (p: ListingQuery, locale: Locale = getLocale()): string =>
   'site:' + withCatalogLang('/catalog/listing?' + listingQuery(p.section, { ...p, perPage: p.perPage || PER_PAGE }), locale)
 
+export const isJavaCard = (c: { edition?: string | null; section?: string | null }): boolean =>
+
 export function loadListing(p: ListingQuery): Promise<SiteListing> {
   const key = listingKey(p)
   // На диск — только первые страницы: их показываем сразу при входе, остальное догружается.
   return cachedCatalog(key, () => api<SiteListing>(key.slice(5)), { persist: !p.page || p.page <= 1 })
 }
 
-export const facetsKey = (section: SiteSlug, version?: string | null, loader?: string | null, edition?: EditionFilter | null): string =>
-  'site:/catalog/facets?' + qs({ section, edition, version, loader })
+export const facetsKey = (section: SiteSlug, version?: string | null, loader?: string | null): string =>
+  'site:/catalog/facets?' + qs({ section, version, loader })
 
-export function loadFacets(section: SiteSlug, version?: string | null, loader?: string | null, edition?: EditionFilter | null): Promise<SiteFacets> {
-  const key = facetsKey(section, version, loader, edition)
+export function loadFacets(section: SiteSlug, version?: string | null, loader?: string | null): Promise<SiteFacets> {
+  const key = facetsKey(section, version, loader)
   return cachedCatalog(key, () => api<SiteFacets>(key.slice(5)), { persist: true })
 }
 

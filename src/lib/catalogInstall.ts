@@ -523,9 +523,6 @@ export async function installFromCatalog(section: string, slug: string, opts: Ca
   }
   if (section === 'skins') return applySkin(slug, opts)
   if (section === 'capes') return applyCape(slug)
-  if (section === 'addons') {
-    return false
-  }
   if (section === 'modpacks') return installModpackItem(slug, opts)
   const kind = KIND_OF_SECTION[section]
   if (!kind) {
