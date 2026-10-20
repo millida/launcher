@@ -381,8 +381,10 @@ export function makeChunkLoader(b: RemoteUiBundle, base = REMOTE_UI_BASE) {
     if (!p) {
       p = (async () => {
         await extCss()
+        // The URL is awaited outside import(): Vite wraps import() in a plain arrow for preloading, where await is a parse error.
+        const url = await urlOf(name)
         // Runs website code inside the launcher window. Only verified text gets here.
-        return import(/* @vite-ignore */ await urlOf(name))
+        return import(/* @vite-ignore */ url)
       })()
       mods.set(name, p)
       p.catch(() => mods.delete(name))

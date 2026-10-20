@@ -28,6 +28,7 @@ export function makeRemoteBridge(host: {
     api: async <T,>(path: string, init?: { method?: string; body?: unknown }): Promise<T> => {
       const method = (init?.method || 'GET').toUpperCase()
       if (!remoteApiAllowed(path, method)) throw new RemoteApiError(403, null, 'not allowed for website screens')
+      const t0 = performance.now()
       try {
         return await api<T>(path, {
           method,
@@ -35,6 +36,10 @@ export function makeRemoteBridge(host: {
         })
       } catch (e) {
         throw remoteApiError(e)
+      } finally {
+        // Журнал для замеров (window.__mluApi): когда ушёл запрос экрана и сколько ждали ответ.
+        const log = ((window as unknown as { __mluApi?: unknown[] }).__mluApi ??= [])
+        if (log.length < 300) log.push({ path, method, at: Math.round(t0), ms: Math.round(performance.now() - t0) })
       }
     },
     upload: async (path, file, opts) => {
