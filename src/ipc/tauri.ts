@@ -12,7 +12,7 @@ export interface CloseRequestedEvent {
 
 export interface TauriGlobal {
   core: {
-    invoke<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T>
+    invoke<T = unknown>(cmd: string, args?: Record<string, unknown> | Uint8Array, options?: { headers?: Record<string, string> }): Promise<T>
     convertFileSrc?: (path: string) => string
   }
   event: {

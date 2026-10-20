@@ -55,7 +55,7 @@ import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
 import { type MarketFeature, marketOffers, t, useMarket, useT } from '../i18n'
 import { LangPicker } from '../components/LangPicker'
-import { writePref } from '../lib/prefs'
+import { readPref, writePref } from '../lib/prefs'
 import { setMusicAutostart } from '../state/music'
 import { setTelemetryEnabled, telemetryEnabled, track, trackFailure } from '../lib/telemetry'
 import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
@@ -266,6 +266,7 @@ export function Settings({ on }: { on: boolean }) {
   const [upd, setUpd] = useState(pendingUpdate)
   const [updBusy, setUpdBusy] = useState(false)
   const [beta, setBeta] = useState(betaChannel)
+  const [remoteUi, setRemoteUi] = useState(() => readPref('m-remote-ui', '0') === '1')
   const updStaged = useUpdate((s) => s.staged)
   const [skins, setSkins] = useState<SkinSource>(skinSource)
   const charAnim = useViewPrefs((s) => s.charAnim)
@@ -1162,6 +1163,17 @@ export function Settings({ on }: { on: boolean }) {
               const next = !beta
               setBeta(next)
               writePref('m-beta', next ? '1' : '0')
+            }}
+          />
+        </Row>
+        <Row title={t('Экспериментальные экраны')} hint={remoteUi ? t('Хостинг — новый вид с сайта') : undefined} keys="эксперимент новые экраны сайт хостинг">
+          <Toggle
+            label={t('Экспериментальные экраны')}
+            on={remoteUi}
+            onChange={() => {
+              const next = !remoteUi
+              setRemoteUi(next)
+              writePref('m-remote-ui', next ? '1' : '0')
             }}
           />
         </Row>

@@ -42,6 +42,12 @@ export default defineConfig(({ mode }) => {
             },
           }
         : {}),
+      // Website screens (src/lib/remoteUi.ts) from a local millida-web dev server; set m-ui-base to change.
+      '/mlu-site': {
+        target: process.env.MLU_SITE || 'http://127.0.0.1:3037',
+        changeOrigin: true,
+        rewrite: (p: string) => p.replace(/^\/mlu-site/, ''),
+      },
       '/papi': {
         target: 'https://api.millida.net',
         changeOrigin: true,

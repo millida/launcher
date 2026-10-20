@@ -33,6 +33,9 @@ import '../styles/pixel/hosting2.css'
 import '../styles/pixel/hosting-scene.css'
 import '../styles/pixel/hosting-panel.css'
 import { hostingPlanPrice, useMoney } from '../lib/useMoney'
+import { RemoteScreen } from '../components/RemoteScreen'
+import { remoteUiEnabled } from '../lib/remoteUi'
+import { makeRemoteBridge } from '../lib/remoteUiBridge'
 
 export interface HostServer {
   id: string
@@ -103,6 +106,7 @@ export function Hosting({ on }: { on: boolean }) {
   const [err, setErr] = useState('')
   const [list, setList] = useState<HostServer[]>([])
   const [manageId, setManageId] = useState<string | null>(null)
+  const [remoteFailed, setRemoteFailed] = useState(false)
   const [inviteFor, setInviteFor] = useState<string | null>(null)
   const [picker, setPicker] = useState<{
     mode: 'create' | 'upgrade'
@@ -399,6 +403,41 @@ export function Hosting({ on }: { on: boolean }) {
             onDone={() => setTimeout(() => void load(true), 1500)}
           />
         ) : null}
+      </section>
+    )
+  }
+
+  if (millida && remoteUiEnabled() && !remoteFailed) {
+    return (
+      <section className={'screen' + (on ? ' on' : '')} id="s-hosting">
+        <TopbarPortal>
+          <div className="tb-actions">
+            <InviteChip />
+            <BalancePill />
+            <button className="btn sm ghost" id="hostPanel" onClick={() => openExt('https://millida.net/hosting')}>
+              {t('Веб-панель')}
+              <Icon id="i-ext" />
+            </button>
+          </div>
+        </TopbarPortal>
+        <RemoteScreen
+          screen="hosting-servers"
+          onFail={() => setRemoteFailed(true)}
+          bridge={() =>
+            makeRemoteBridge({
+              navigate: (path) => {
+                const id = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/hosting\/s\/([\w-]+)$/i.exec(path)?.[1]
+                if (!id) return false
+                setManageId(id)
+                return true
+              },
+              join: (srv) => {
+                const known = list.find((x) => x.address === srv.address)
+                return joinServer(known ?? { id: srv.address, name: srv.name, address: srv.address, version: srv.version })
+              },
+            })
+          }
+        />
       </section>
     )
   }

@@ -536,6 +536,99 @@ pub async fn millida_api_auth_in(
     }
 }
 
+/// Uploads the website hosting screens may make: the file-manager chunk (POST, raw bytes, `offset` in the
+/// query) and the resource pack (PUT, raw bytes). Nothing else gets a raw body through the core.
+pub fn upload_route_allowed(path: &str, method: &str) -> bool {
+    let route = path.split(['?', '#']).next().unwrap_or_default();
+    let parts: Vec<&str> = route.split('/').collect();
+    // "", "hosting", "servers", <id>, <tail...>
+    if parts.len() < 5 || !parts[0].is_empty() || parts[1] != "hosting" || parts[2] != "servers" {
+        return false;
+    }
+    let id_ok = !parts[3].is_empty() && parts[3].chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !id_ok || !webview_path_allowed(path) {
+        return false;
+    }
+    matches!(
+        (method, &parts[4..]),
+        ("POST", ["files", "upload"]) | ("PUT", ["resource-pack"])
+    )
+}
+
+/// One raw-body request to the API: the body is cut into 64 KB pieces as it goes out (no second full copy
+/// in the HTTP layer) and `progress` hears how many bytes have left.
+pub async fn millida_upload_raw_in(
+    path: &str,
+    method: &str,
+    body: std::sync::Arc<Vec<u8>>,
+    token: Option<String>,
+    progress: std::sync::Arc<dyn Fn(u64) + Send + Sync>,
+) -> Result<Value, String> {
+    let resolved = api_url(path)?;
+    let total = body.len();
+    let stream = futures::stream::unfold((body, 0usize), move |(data, pos)| {
+        let progress = progress.clone();
+        async move {
+            if pos >= data.len() {
+                return None;
+            }
+            let end = (pos + 64 * 1024).min(data.len());
+            let piece = data[pos..end].to_vec();
+            progress(end as u64);
+            Some((Ok::<Vec<u8>, std::io::Error>(piece), (data, end)))
+        }
+    });
+    let mut req = match method {
+        "PUT" => client().put(resolved.as_str()),
+        _ => client().post(resolved.as_str()),
+    };
+    req = req
+        .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+        .header(reqwest::header::CONTENT_LENGTH, total.to_string())
+        .body(reqwest::Body::wrap_stream(stream));
+    if let Some(t) = token.as_ref().filter(|t| !t.is_empty()) {
+        req = req.header("Authorization", format!("Bearer {}", t));
+    }
+    let res = req.send().await.map_err(|e| net_err(&e))?;
+    let status = res.status();
+    let text = match read_capped(res, JSON_MAX_BYTES).await {
+        Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+        Err(e) if status.is_success() => return Err(e),
+        Err(_) => String::new(),
+    };
+    if !status.is_success() {
+        if status.as_u16() == 401 {
+            return Err("http 401".into());
+        }
+        let msg = api_error_message(&text).unwrap_or_default();
+        return Err(format!("http {}{}{}", status.as_u16(), if msg.is_empty() { "" } else { ": " }, msg));
+    }
+    parse_api_body(&text)
+}
+
+/// Same session handling as `millida_api_auth_in`: a 401 refreshes the token once and sends the body again.
+pub async fn millida_upload_raw_auth(
+    path: String,
+    method: String,
+    body: std::sync::Arc<Vec<u8>>,
+    progress: std::sync::Arc<dyn Fn(u64) + Send + Sync>,
+) -> Result<Value, String> {
+    if !upload_route_allowed(&path, &method) {
+        return Err("bad path".into());
+    }
+    let token = millida_token();
+    let first = millida_upload_raw_in(&path, &method, body.clone(), token.clone(), progress.clone()).await;
+    let Err(e) = first else { return first };
+    if e != "http 401" {
+        return Err(e);
+    }
+    match refresh_session(token).await {
+        Refreshed::Token(fresh) => millida_upload_raw_in(&path, &method, body, Some(fresh), progress).await,
+        Refreshed::Dead => Err(UNAUTHORIZED.into()),
+        Refreshed::Unavailable => Err(e),
+    }
+}
+
 /// Multipart upload to the same API, with the same path validation: the payload
 /// is built in the core and the webview never names a URL or a file on disk.
 pub async fn millida_upload(
@@ -739,9 +832,22 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn raw_upload_only_reaches_the_hosting_upload_routes() {
+        assert!(upload_route_allowed("/hosting/servers/abc-1/files/upload?path=%2Fworld.zip&offset=0", "POST"));
+        assert!(upload_route_allowed("/hosting/servers/abc-1/resource-pack?name=a.zip", "PUT"));
+        assert!(!upload_route_allowed("/hosting/servers/abc-1/files/upload", "PUT"));
+        assert!(!upload_route_allowed("/hosting/servers/abc-1/resource-pack", "POST"));
+        assert!(!upload_route_allowed("/hosting/servers/abc-1/files/delete", "POST"));
+        assert!(!upload_route_allowed("/hosting/servers/../files/upload", "POST"));
+        assert!(!upload_route_allowed("/hosting/servers/a%2Fb/files/upload", "POST"));
+        assert!(!upload_route_allowed("/me/avatar", "POST"));
+        assert!(!upload_route_allowed("/hosting/servers//files/upload", "POST"));
+    }
+
     use super::{
         api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
-        verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
+        upload_route_allowed, verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
 

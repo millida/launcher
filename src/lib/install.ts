@@ -141,13 +141,14 @@ export async function askPlanForVersion(
   return decision.go ? decision.extras : null
 }
 
-export async function installContentFlow(src: Source, kind: string, title?: string): Promise<boolean> {
+export async function installContentFlow(src: Source, kind: string, title?: string, profile?: string): Promise<boolean> {
   const done = catalogInstallTracker(kind, src.source === 'curseforge' ? src.cfid : src.slug)
   if (!hasTauri()) {
     showToast(t('Установка доступна в приложении'))
     return false
   }
-  const prof = await resolveTargetBuild(kind)
+  // A website screen names the build in its own picker; it is used only while that build still exists.
+  const prof = profile && buildOf(profile) ? profile : await resolveTargetBuild(kind)
   if (!prof) return false
   // A build that only needs the mod itself must stay one click, so the window
   // opens only when the plan actually has something to decide or to warn about.

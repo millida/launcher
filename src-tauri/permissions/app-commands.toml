@@ -187,6 +187,7 @@ permissions = [
   "allow-modpack-info",
   "allow-list-screenshots",
   "allow-millida-api",
+  "allow-millida-upload-raw",
   "allow-millida-login-poll",
   "allow-millida-logout",
   "allow-session-status",

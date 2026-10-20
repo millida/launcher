@@ -773,6 +773,16 @@ export type ApiMarket = 'RU' | 'EN'
 export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown, market?: ApiMarket, lang?: string) =>
   invoke<T>('millida_api', { path, method, body: body === undefined ? null : body, market: market ?? null, lang: lang ?? null })
 
+/// Raw bytes to a hosting upload route; the token is added by the core. `id` ties the progress events
+/// (`remote-upload-progress`) to this call.
+export const millidaUploadRaw = (path: string, method: string, id: string, bytes: Uint8Array) => {
+  const T = tauri()
+  if (!T) return Promise.reject(new Error('no tauri'))
+  return T.core.invoke<unknown>('millida_upload_raw', bytes, {
+    headers: { 'x-path': path, 'x-method': method, 'x-upload-id': id },
+  })
+}
+
 export interface MillidaLoginPoll {
   status: 'pending' | 'ok' | 'denied' | 'expired'
   user?: { id: string; email: string; nickname: string | null } | null
