@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Millida Launcher",
-  "version": "2.0.252",
+  "version": "2.0.253",
   "identifier": "net.millida.launcher",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -31,7 +31,8 @@
           "'self'"
         ],
         "script-src": [
-          "'self'"
+          "'self'",
+          "blob:"
         ],
         "style-src": [
           "'self'",
@@ -68,7 +69,8 @@
           "https://api.millida.net",
           "wss://api.millida.net",
           "https://api.modrinth.com",
-          "https://cdn.modrinth.com"
+          "https://cdn.modrinth.com",
+          "https://millida.net"
         ],
         "worker-src": [
           "'self'",
@@ -100,7 +102,8 @@
           "'unsafe-inline'",
           "'unsafe-eval'",
           "http://localhost:5173",
-          "http://127.0.0.1:5173"
+          "http://127.0.0.1:5173",
+          "blob:"
         ],
         "style-src": [
           "'self'",
@@ -147,7 +150,8 @@
           "https://api.millida.net",
           "wss://api.millida.net",
           "https://api.modrinth.com",
-          "https://cdn.modrinth.com"
+          "https://cdn.modrinth.com",
+          "https://millida.net"
         ],
         "worker-src": [
           "'self'",

@@ -136,6 +136,40 @@ pub async fn millida_api(
     engine::millida_api_auth_in(path, method, body, market, lang).await
 }
 
+/// Raw-body upload for the website hosting screens (files, resource pack). The webview sends the bytes as
+/// the invoke body and names the target in headers (`x-path`, `x-method`, `x-upload-id`); the token is
+/// added here, and only the hosting upload routes pass `upload_route_allowed`. Progress goes out as the
+/// `remote-upload-progress` event `{ id, sent, total }`.
+#[tauri::command]
+pub async fn millida_upload_raw(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<serde_json::Value, String> {
+    use tauri::Emitter;
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+    let path = header("x-path");
+    let method = header("x-method").to_uppercase();
+    let id = header("x-upload-id");
+    if id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("bad path".into());
+    }
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("bad body".into());
+    };
+    if !engine::upload_route_allowed(&path, &method) {
+        return Err("bad path".into());
+    }
+    let total = bytes.len() as u64;
+    let data = std::sync::Arc::new(bytes.to_vec());
+    let last = std::sync::atomic::AtomicU64::new(0);
+    let progress: std::sync::Arc<dyn Fn(u64) + Send + Sync> = std::sync::Arc::new(move |sent| {
+        use std::sync::atomic::Ordering;
+        let before = last.load(Ordering::Relaxed);
+        if sent == total || sent >= before + 256 * 1024 {
+            last.store(sent, Ordering::Relaxed);
+            let _ = app.emit("remote-upload-progress", serde_json::json!({ "id": id, "sent": sent, "total": total }));
+        }
+    });
+    engine::millida_upload_raw_auth(path, method, data, progress).await
+}
+
 #[tauri::command(async)]
 pub fn set_local_skin(skin: Option<String>, cape: Option<String>, slim: bool) -> Result<(), String> {
     engine::set_local_skin(skin, cape, slim)

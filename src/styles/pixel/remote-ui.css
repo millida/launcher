@@ -1,0 +1,34 @@
+/* Website screens (src/components/RemoteScreen.tsx): the bundle reads --host-m-* first, so it wears the launcher palette and accent. */
+.remote-ui {
+  --host-m-accent: var(--m-accent);
+  --host-m-accent-hover: var(--m-accent-hover);
+  --host-m-accent-rgb: var(--m-accent-rgb);
+  --host-m-accent-soft: var(--m-accent-soft);
+  --host-m-bg: var(--m-bg);
+  --host-m-border: var(--m-border);
+  --host-m-border-strong: var(--m-border-strong);
+  --host-m-danger: var(--m-danger);
+  --host-m-danger-soft: var(--m-danger-soft);
+  --host-m-fg: var(--m-fg);
+  --host-m-fg-faint: var(--m-fg-faint);
+  --host-m-fg-muted: var(--m-fg-muted);
+  --host-m-fg-subtle: var(--m-fg-subtle);
+  --host-m-font: var(--m-font);
+  --host-m-info: var(--m-info);
+  --host-m-info-soft: var(--m-info-soft);
+  --host-m-inset: var(--m-inset);
+  --host-m-mono: var(--m-mono);
+  --host-m-raised: var(--m-raised);
+  --host-m-success: var(--m-success);
+  --host-m-success-soft: var(--m-success-soft);
+  --host-m-surface: var(--m-surface);
+  --host-m-surface-2: var(--m-surface-2);
+  --host-m-warning: var(--m-warning);
+  --host-m-warning-soft: var(--m-warning-soft);
+  --host-m-ease-out: var(--m-ease-out);
+  --host-m-ease-smooth: var(--m-ease-smooth);
+  --host-m-t-base: var(--m-t-base);
+  --host-m-t-fast: var(--m-t-fast);
+  --host-m-t-slow: var(--m-t-slow);
+  min-height: 100%;
+}

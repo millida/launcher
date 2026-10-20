@@ -270,12 +270,30 @@ const SERVER = {
   pendingRestart: [] as string[],
 }
 
+// m-demo-paid=1 — сервер на платном тарифе: открываются файлы, база, защита и прочие разделы «Ещё».
+const DEMO_PAID = typeof localStorage !== 'undefined' && localStorage.getItem('m-demo-paid') === '1'
+if (DEMO_PAID) {
+  Object.assign(SERVER, {
+    planName: '8 ГБ', planCode: 'mc-8', planRamMb: 8192, planMaxPlayers: 40, planFullAccess: true, ramMb: 8192, maxPlayers: 40,
+    planPriceKopecks: 67_900, expiresAt: new Date(Date.now() + 21 * 86_400_000).toISOString(),
+  })
+}
+
+const VDS_ID = 'demo-vds'
+const VDS_MACHINE = {
+  id: VDS_ID, hostname: 'bot-hub', os: 'ubuntu-24', state: 'running', ipv4: '203.0.113.7', network: 'public',
+  paidUntil: new Date(Date.now() + 12 * 86_400_000).toISOString(), suspendedAt: null as string | null, deletedAt: null as string | null, purgeAfter: null as string | null,
+  plan: { name: '4 ГБ', cores: 2, memoryMb: 4096, diskGb: 50, priceKopecks: 39_000 },
+}
+
 const SERVER_DETAIL = {
   ...SERVER,
   canDelete: true,
   customDomain: null,
   iconLocked: false,
-  subscription: null,
+  subscription: DEMO_PAID
+    ? { status: 'active', autoRenew: true, paidUntil: new Date(Date.now() + 21 * 86_400_000).toISOString(), periodDays: 30, periodMonths: 1, renewMonths: 1, priceKopecks: 67_900, cashbackKopecks: 3_395, renewChargeKopecks: 67_900, renewCurrency: 'RUB' }
+    : null,
   crashReason: null,
   players: [
     { id: 'p-1', nickname: DEMO_NICK, role: 'owner', banned: false, lastJoinAt: iso(ago(30 * 60_000)) },
@@ -1333,8 +1351,38 @@ const ROUTES: [RegExp, Handler][] = [
       }],
     }
   }],
+  [/^\/hosting\/networks\/me$/, () => []],
   [/^\/hosting\/servers\/me$/, () => (localStorage.getItem('m-demo-noserver') === '1' ? [] : [SERVER])],
+  // Смена тарифа: цены сроков берутся из живых гостевых котировок прода, зачёт остатка в демо нулевой.
+  [/^\/hosting\/servers\/[^/]+\/plan\/quotes$/, async () => {
+    const list = await live<any[]>('/hosting/plans/quotes?brand=millida&lang=ru')
+    return {
+      currency: 'RUB',
+      creditKopecks: 0,
+      currentPlanCode: SERVER.planCode,
+      plans: (Array.isArray(list) ? list : []).map((q) => ({
+        code: q.code,
+        terms: (q.terms || []).map((t: any) => ({
+          months: t.months, days: t.days, displayCurrency: 'RUB', priceMinor: t.listKopecks, discountMinor: t.discountKopecks,
+          perMonthMinor: t.perMonthKopecks, creditMinor: 0, payMinor: t.payKopecks, chargeKopecks: t.payKopecks,
+        })),
+      })),
+    }
+  }],
   [/^\/hosting\/servers\/[^/]+$/, () => SERVER_DETAIL],
+  [/^\/hosting\/servers\/[^/]+\/live(\?.*)?$/, () => ({
+    server: SERVER_DETAIL,
+    stats: serverStats(),
+    players: { online: 3, source: 'plugin', players: [
+      { name: DEMO_NICK, uuid: DEMO_UUID_DASHED },
+      { name: 'Kirpich', uuid: '1a2b3c4d5e6f4a5b8c9d0e1f2a3b4c5d' },
+      { name: 'Grom228', uuid: '2b3c4d5e6f7a4b5c8d9e0f1a2b3c4d5e' },
+    ] },
+  })],
+  [/^\/hosting\/servers\/[^/]+\/addons$/, () => ({ kind: 'plugins', pack: null, items: [
+    { dir: 'plugins', file: 'EssentialsX.jar', name: 'EssentialsX', version: '2.21.0', source: 'catalog', installId: 'demo-i1' },
+    { dir: 'plugins', file: 'WorldEdit.jar', name: 'WorldEdit', version: '7.3.8', source: 'catalog', installId: 'demo-i2' },
+  ] })],
   [/^\/hosting\/servers\/[^/]+\/stats$/, serverStats],
   [/^\/hosting\/servers\/[^/]+\/online$/, () => ({
     players: [
@@ -1387,8 +1435,42 @@ const ROUTES: [RegExp, Handler][] = [
     points: Array.from({ length: 7 }, (_, i) => ({ date: iso(ago((6 - i) * DAY)).slice(0, 10), runningMinutes: 1_380 - i * 20, peakPlayers: 3 + (i % 3), crashes: 0 })),
     summary: { runningHours: 160, ramGbHours: 320, peakPlayers: 5, crashes: 0, uptimePercent: 99.1 },
   })],
-  [/^\/hosting\/servers\/[^/]+\/crash$/, () => ({ reason: null, hint: null, lines: [] })],
+  [/^\/hosting\/servers\/[^/]+\/crash$/, () => ({ reason: null, hint: null, lines: [
+    '[14:02:11] [Server thread/INFO]: Done (6.412s)! For help, type "help"',
+    '[14:03:40] [Server thread/INFO]: Kirpich joined the game',
+    '[14:03:52] [Server thread/INFO]: <Kirpich> дай алмазов',
+    '[14:04:10] [Server thread/INFO]: Grom228 joined the game',
+  ] })],
   [/^\/hosting\/servers\//, ok],
+
+  // VDS владельца: одна машина (m-demo-novds=1 — без машин), каталог берётся живым у прода.
+  [/^\/vds\/me\/machines$/, (_p, method) => {
+    if (method !== 'GET') return { machine: { id: VDS_ID, ipv4: '203.0.113.7' }, password: 'demo-password' }
+    return localStorage.getItem('m-demo-novds') === '1' ? [] : [VDS_MACHINE]
+  }],
+  [/^\/vds\/me\/catalog$/, async () => {
+    const plans = await live<any>('/vds/plans')
+    return { ...plans, images: [
+      { code: 'ubuntu-24', label: 'Ubuntu 24.04', family: 'ubuntu' },
+      { code: 'debian-12', label: 'Debian 12', family: 'debian' },
+      { code: 'win-2022', label: 'Windows Server 2022', family: 'windows' },
+    ] }
+  }],
+  [/^\/vds\/me\/machines\/[^/]+$/, () => ({
+    machine: { ...VDS_MACHINE, ipv6: null, autoRenew: true, periodMonths: 1, nodeId: 'n1', ipv4Kopecks: 19_900, plan: { ...VDS_MACHINE.plan, code: 'vds-2', rateMbps: 500, monthlyKopecks: 59_900 } },
+    live: { status: 'running', cpu: 0.07, mem: 1_100_000_000, maxmem: 4_294_967_296, uptime: 86_400 * 3, diskUsed: 9_000_000_000, diskTotal: 53_687_091_200, memUsed: 1_100_000_000, memTotal: 4_294_967_296 },
+    bootMode: 'disk', sshKeys: '', tasks: [],
+  })],
+  [/^\/vds\/me\/machines\/[^/]+\/metrics/, () => ({ memoryReported: true, points: Array.from({ length: 24 }, (_, i) => ({ time: Math.round(Date.now() / 1000) - (23 - i) * 150, cpu: 0.05 + (i % 5) * 0.02, mem: 1_000_000_000 + i * 8_000_000, maxmem: 4_294_967_296, disk: 9_000_000_000, maxdisk: 53_687_091_200, netin: 2_000 * i, netout: 1_000 * i })) })],
+  [/^\/vds\/me\/machines\/[^/]+\/events/, () => [
+    { id: 'v-e1', kind: 'start', message: 'Машина запущена', createdAt: iso(ago(3 * 3_600_000)) },
+    { id: 'v-e2', kind: 'created', message: 'Машина выдана', createdAt: iso(ago(3 * DAY)) },
+  ]],
+  [/^\/vds\/me\/machines\/[^/]+\/forwards/, () => ({ forwards: [], egressIp: '203.0.113.9' })],
+  [/^\/vds\/me\/machines\/[^/]+\/recipes/, () => ({ runs: [] })],
+  [/^\/vds\/me\/recipes$/, () => ({ recipes: [] })],
+  [/^\/vds\/me\/machines\/[^/]+\/ptr/, () => ({ supported: false })],
+  [/^\/vds\/me\//, ok],
 
   // Телеметрия ошибок в демо никуда не уходит
   [/^\/errors$/, ok],

@@ -432,6 +432,7 @@ pub fn run() {
             commands::profiles::modpack_info,
             commands::profiles::list_screenshots,
             commands::accounts::millida_api,
+            commands::accounts::millida_upload_raw,
             commands::accounts::millida_login_poll,
             commands::accounts::millida_logout,
             commands::accounts::session_status,
@@ -759,9 +760,11 @@ mod tests {
         let scripts = list("script-src");
         assert_eq!(
             scripts,
-            vec!["'self'".to_string()],
-            "script-src must stay exactly 'self': 'unsafe-inline' or 'unsafe-eval' would let \
-             injected markup run, and a remote origin would let it be loaded from the network.",
+            vec!["'self'".to_string(), "blob:".to_string()],
+            "script-src must stay exactly 'self' and blob:. blob: carries the website screens, which \
+             remoteUi.ts imports only after their Ed25519 signature and sha256 check out; \
+             'unsafe-inline' or 'unsafe-eval' would let injected markup run, and a remote origin \
+             would let unchecked code be loaded from the network.",
         );
         assert_eq!(
             list("frame-src"),

@@ -1,6 +1,9 @@
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { openHubBuild } from '../components/playhub/hubTab'
 import { SiteCatalog } from '../components/catalog/SiteCatalog'
+import { RemoteScreen } from '../components/RemoteScreen'
+import { remoteUiEnabled } from '../lib/remoteUi'
+import { makeRemoteBridge } from '../lib/remoteUiBridge'
 
 /*
  * Millida Каталог в лаунчере — каталог millida.net один в один (владелец
@@ -36,6 +39,14 @@ export function CatalogPane({
   onOpenPack?: (slug: string) => boolean | void
   servers?: import('react').ReactNode
 }) {
+  const [remoteFailed, setRemoteFailed] = useState(false)
+  // The full catalog comes from the website bundle when website screens are on; «Мои сборки» keeps its own pane.
+  if (!content && remoteUiEnabled() && !remoteFailed)
+    return (
+      <div className="hub-cat">
+        <RemoteScreen screen="catalog" onFail={() => setRemoteFailed(true)} bridge={() => makeRemoteBridge({ join: () => undefined })} />
+      </div>
+    )
   return (
     <div className="hub-cat">
       <SiteCatalog content={content} onOpenPack={onOpenPack} servers={servers} />
