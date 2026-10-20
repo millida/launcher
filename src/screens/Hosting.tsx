@@ -117,11 +117,13 @@ export function Hosting({ on }: { on: boolean }) {
   const [plans, setPlans] = useState<HostPlanLite[]>([])
   const friends = useFriends((s) => s.friends)
   const millida = useHasMillida()
+  // Экран с сайта сам ходит за списком; родной список в это время не опрашивает и тарифы не тянет.
+  const remoteActive = millida && remoteUiEnabled() && !remoteFailed
   const loadedRef = useRef(false)
 
   // Числа платных тарифов нужны и полосе продажи под карточкой сервера.
   useEffect(() => {
-    if (!on) return
+    if (!on || remoteActive) return
     let alive = true
     api('/hosting/plans?brand=millida')
       .then((r) => alive && setPlans(Array.isArray(r) ? r : []))
@@ -129,7 +131,7 @@ export function Hosting({ on }: { on: boolean }) {
     return () => {
       alive = false
     }
-  }, [on])
+  }, [on, remoteActive])
 
   useEffect(() => {
     if (!inviteFor) return
@@ -194,7 +196,7 @@ export function Hosting({ on }: { on: boolean }) {
     if (hasMillidaAccount()) void loadMillidaProfile()
   }, [on])
 
-  usePolling(() => void load(true), 20000, { enabled: on, hiddenMs: 0, immediate: false, realtime: 'hosting' })
+  usePolling(() => void load(true), 20000, { enabled: on && !remoteActive, hiddenMs: 0, immediate: false, realtime: 'hosting' })
 
   const act = async (sid: string, path: string, label: string, ok: string) => {
     showToast(label)

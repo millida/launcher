@@ -91,7 +91,7 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
       const market = marketFor(pathname)
       const lang = moneyLangFor(pathname)
       const run = () => millidaApi<T>(pathname, method, body, market, lang)
-      return await (method === 'GET' ? hedged(run) : run())
+      return await (method === 'GET' ? sharedGet(pathname, (market ?? '') + '|' + (lang ?? ''), run) : run())
     } catch (e) {
       if (String(e).includes('unauthorized')) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
       throw e
@@ -122,7 +122,28 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     }
     return r.json()
   }
-  return !opts || !opts.method || opts.method.toUpperCase() === 'GET' ? hedged(run) : run()
+  return !opts || !opts.method || opts.method.toUpperCase() === 'GET'
+    ? opts && opts.headers
+      ? hedged(run)
+      : sharedGet(pathname, (market ?? '') + '|' + (lang ?? ''), run)
+    : run()
+}
+
+const SHARED_GET = /^\/(?:hosting|vds)\//
+const inflightGets = new Map<string, Promise<unknown>>()
+
+/**
+ * Хостинг: список и карточка сервера просят одни и те же адреса из нескольких мест сразу (родной экран,
+ * экран с сайта, прогрев при наведении). Пока первый запрос в пути, остальные ждут его ответ, а не шлют свой.
+ */
+export function sharedGet<T>(pathname: string, variant: string, run: () => Promise<T>): Promise<T> {
+  if (!SHARED_GET.test(pathname)) return hedged(run)
+  const key = variant + '|' + pathname
+  const live = inflightGets.get(key)
+  if (live) return live as Promise<T>
+  const p = hedged(run).finally(() => inflightGets.delete(key))
+  inflightGets.set(key, p)
+  return p
 }
 
 /** Через сколько без ответа уходит второй такой же запрос. */

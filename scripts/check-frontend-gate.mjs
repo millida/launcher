@@ -39,6 +39,24 @@ if (broken.length > 0) {
   )
 }
 
+// The bundler can emit a chunk that does not parse (an await it moved into a plain arrow): every
+// screen importing it shows "Unexpected reserved word" instead of opening.
+const transpiler = new Bun.Transpiler({ loader: 'js' })
+const unparsable = sources.filter((c) => {
+  try {
+    transpiler.transformSync(c.text)
+    return false
+  } catch {
+    return true
+  }
+})
+if (unparsable.length > 0) {
+  throw new Error(
+    `чанки ${unparsable.map((c) => c.name).join(', ')} не разбираются как JavaScript — экраны, которые их ` +
+      'грузят, падают с «Unexpected reserved word». Чаще всего это await внутри import(): вынеси адрес в переменную',
+  )
+}
+
 const html = readFileSync(join(root, 'index.html'), 'utf8')
 const htmlBroken = OLD_WEBKIT_HTML_BREAKERS.filter((p) => html.includes(p))
 if (htmlBroken.length > 0) {
