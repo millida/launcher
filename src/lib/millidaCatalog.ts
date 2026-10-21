@@ -6,6 +6,7 @@ import { loaderId } from './format'
 import { cachedCatalog } from './catalogCache'
 import { cfProxyBackoff, proxyVerdict } from './proxyBackoff'
 import { t } from '../i18n'
+import { withCatalogLang } from '../components/catalog/catalogLang'
 
 /// Каталог Millida — библиотека лаунчера (приказ владельца 21.09.2026): то же,
 /// что на millida.net/mods, /texture-packs, /modpacks, с тем же поиском и теми же
@@ -539,7 +540,7 @@ export const catalog = {
   }) =>
     getJson<CatalogListing>(
       CATALOG_API +
-        '/listing?' +
+        withCatalogLang('/listing?' +
         qs({
           section: p.section,
           version: p.version,
@@ -549,13 +550,13 @@ export const catalog = {
           sort: p.sort,
           page: p.page && p.page > 1 ? p.page : null,
           perPage: CATALOG_PAGE,
-        }),
+        })),
     ),
   facets: (section: string) => getJson<CatalogFacets>(CATALOG_API + '/facets?' + qs({ section })),
-  item: (slug: string) => getJson<CatalogItem>(CATALOG_API + '/items/' + encodeURIComponent(slug)),
+  item: (slug: string) => getJson<CatalogItem>(CATALOG_API + withCatalogLang('/items/' + encodeURIComponent(slug))),
   resolve: (slug: string, gameVersion: string, loader: string) =>
     getJson<ResolvePlan>(
-      CATALOG_API + '/items/' + encodeURIComponent(slug) + '/resolve?' + qs({ gameVersion, loader }),
+      CATALOG_API + withCatalogLang('/items/' + encodeURIComponent(slug) + '/resolve?' + qs({ gameVersion, loader })),
     ),
   pack: (slug: string) => getJson<PackView>(CATALOG_API + '/packs/' + encodeURIComponent(slug)),
 }

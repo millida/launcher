@@ -81,6 +81,8 @@ interface CallState {
   level: number
   speaking: boolean
   parts: CallParticipant[]
+  /** The party talks through the core relay: there is no peer connection to measure the link on. */
+  relayed: boolean
   screenFull: boolean
   /** Чей экран развёрнут: в группе показывать могут несколько человек сразу. */
   screenOf: string
@@ -110,6 +112,7 @@ const IDLE = {
   level: 0,
   speaking: false,
   parts: [] as CallParticipant[],
+  relayed: false,
   screenFull: false,
   screenOf: '',
 }
@@ -744,7 +747,7 @@ async function joinRelayVoice(partyId: string, startMuted = false): Promise<stri
   }
   if (st().roomId !== partyId) return null
   myId = reply.me || myId
-  st().set({ status: 'active', answeredAt: Date.now() })
+  st().set({ status: 'active', answeredAt: Date.now(), relayed: true })
   relayFlags({ muted: st().muted, deafened: st().deafened })
   beatTimer = setInterval(() => void beatVoice(), VOICE_BEAT_MS)
   await applyRoster(partyId, reply.members || [])
