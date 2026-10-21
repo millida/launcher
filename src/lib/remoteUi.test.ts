@@ -89,3 +89,16 @@ describe('remote ui chunks', () => {
     expect(out).toBe('import { a } from "./evil.js";')
   })
 })
+
+describe('site off-switch', () => {
+  it('an "off" manifest sends launchers back to the built-in screens', async () => {
+    const { downloadBundle } = await import('./remoteUi')
+    const real = globalThis.fetch
+    globalThis.fetch = (async () => new Response(JSON.stringify({ off: true }), { status: 200 })) as unknown as typeof fetch
+    try {
+      expect(await downloadBundle('https://example.invalid/launcher-ui')).toBe('off')
+    } finally {
+      globalThis.fetch = real
+    }
+  })
+})

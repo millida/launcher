@@ -21,8 +21,8 @@ export interface RemoteUiBridge {
   upload?(path: string, file: Blob, opts?: { method?: 'POST' | 'PUT'; onProgress?: (sent: number) => void }): Promise<unknown>
   openExternal(url: string): void
   toast(message: string, kind?: 'info' | 'success' | 'error'): void
-  /** The player's builds for the catalog's «For: build» picker: names, versions and loaders only. */
-  profiles?(): Promise<{ list: { name: string; version: string; loader: string | null }[]; selected: string | null }>
+  /** The player's builds for the catalog's «For: build» picker: names, versions, loaders and the catalog slug of a build installed from it. */
+  profiles?(): Promise<{ list: { name: string; version: string; loader: string | null; slug?: string | null }[]; selected: string | null }>
 }
 
 // Website screens may only reach these API sections; everything else (wallet, account, chats) stays closed.

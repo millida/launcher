@@ -8,18 +8,19 @@ import * as React from 'react'
 import * as ReactJsx from 'react/jsx-runtime'
 import * as ReactDOM from 'react-dom'
 import * as ReactDOMClient from 'react-dom/client'
+import { REMOTE_UI_BASE, sha256Hex, verifySigned } from './remoteOrigin'
 import type { RemoteUiBridge } from './remoteUiRules'
 
-export const REMOTE_UI_API = 1
-// Public half of the signing key (raw Ed25519, base64). The private key never leaves the site's CI.
-export const REMOTE_UI_PUBLIC_KEY = 'TgYsbCG1NTtZWwyTeaj2dozeEUWkBxqgNmbhrr9frjE='
-const MANIFEST_TAG = 'millida-launcher-ui/1'
-const FLAG_KEY = 'm-remote-ui'
-const BAD_KEY = 'm-remote-ui-bad'
+export { REMOTE_UI_BASE, REMOTE_UI_PUBLIC_KEY, sha256Hex } from './remoteOrigin'
 
-export const REMOTE_UI_BASE: string =
-  (import.meta.env.DEV && typeof localStorage !== 'undefined' && localStorage.getItem('m-ui-base')) ||
-  (import.meta.env.DEV ? '/mlu-site/launcher-ui' : 'https://millida.net/launcher-ui')
+export const REMOTE_UI_API = 1
+const MANIFEST_TAG = 'millida-launcher-ui/1'
+// Website screens are on for everyone. 'm-remote-ui-off' = '1' is a local escape hatch; the site turns them off
+// for all launchers with "off": true in the manifest (see downloadBundle), retried after OFF_RETRY_MS.
+const OFF_KEY = 'm-remote-ui-off'
+const SITE_OFF_KEY = 'm-remote-ui-site-off'
+const OFF_RETRY_MS = 30 * 60 * 1000
+const BAD_KEY = 'm-remote-ui-bad'
 
 export interface RemoteUiChunk {
   file: string
@@ -52,11 +53,13 @@ export interface RemoteUiModule {
   mount: (el: HTMLElement, bridge: RemoteUiBridge, opts: { screen: string; onReady?: () => void }) => { unmount: () => void }
 }
 
-export function remoteUiEnabled(): boolean {
+export function remoteUiEnabled(now = Date.now()): boolean {
   try {
-    return localStorage.getItem(FLAG_KEY) === '1'
+    if (localStorage.getItem(OFF_KEY) === '1') return false
+    const off = Number(localStorage.getItem(SITE_OFF_KEY) || 0)
+    return !(off && now - off < OFF_RETRY_MS)
   } catch {
-    return false
+    return true
   }
 }
 
@@ -77,22 +80,6 @@ export function chunkName(m: RemoteUiManifest, c: RemoteUiChunk): string {
   return c.file.slice(m.version.length + 1)
 }
 
-const b64 = (s: string): Uint8Array<ArrayBuffer> => {
-  const bin = atob(s)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
-}
-
-let verifyKey: Promise<CryptoKey | null> | null = null
-
-function publicKey(): Promise<CryptoKey | null> {
-  verifyKey ??= crypto.subtle
-    .importKey('raw', b64(REMOTE_UI_PUBLIC_KEY), { name: 'Ed25519' }, false, ['verify'])
-    .catch(() => null)
-  return verifyKey
-}
-
 export async function verifyManifest(m: RemoteUiManifest, key?: CryptoKey | null): Promise<boolean> {
   if (!m || m.api !== REMOTE_UI_API || typeof m.sig !== 'string' || !/^[0-9a-f]{16}$/.test(m.version)) return false
   if (!m.file.startsWith(m.version + '/') || !m.css.startsWith(m.version + '/')) return false
@@ -102,18 +89,7 @@ export async function verifyManifest(m: RemoteUiManifest, key?: CryptoKey | null
       if (!c || typeof c.file !== 'string' || !/^[0-9a-f]{64}$/.test(c.sha256) || !c.file.startsWith(m.version + '/') || !CHUNK_NAME.test(chunkName(m, c))) return false
     }
   }
-  const k = key === undefined ? await publicKey() : key
-  if (!k) return false
-  try {
-    return await crypto.subtle.verify({ name: 'Ed25519' }, k, b64(m.sig), new TextEncoder().encode(signedText(m)))
-  } catch {
-    return false
-  }
-}
-
-export async function sha256Hex(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
-  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('')
+  return verifySigned(signedText(m), m.sig, key)
 }
 
 function badVersions(): string[] {
@@ -238,9 +214,11 @@ async function fetchText(url: string, init?: RequestInit): Promise<string> {
   return r.text()
 }
 
-export async function downloadBundle(base = REMOTE_UI_BASE, known?: string): Promise<RemoteUiBundle | 'same' | null> {
+export async function downloadBundle(base = REMOTE_UI_BASE, known?: string): Promise<RemoteUiBundle | 'same' | 'off' | null> {
   try {
-    const manifest = JSON.parse(await fetchText(base + '/manifest.json', { cache: 'no-cache' })) as RemoteUiManifest
+    const manifest = JSON.parse(await fetchText(base + '/manifest.json', { cache: 'no-cache' })) as RemoteUiManifest & { off?: unknown }
+    // Unsigned on purpose: whoever could forge it can only send players back to the built-in screens.
+    if (manifest.off === true) return 'off'
     if (known && manifest.version === known) return 'same'
     if (!(await verifyManifest(manifest))) return null
     if (badVersions().includes(manifest.version)) return null
@@ -262,6 +240,15 @@ let refreshing: Promise<RemoteUiBundle | null> | null = null
 export function refreshRemoteUi(current?: RemoteUiBundle | null): Promise<RemoteUiBundle | null> {
   refreshing ??= downloadBundle(REMOTE_UI_BASE, current?.manifest.version)
     .then(async (b) => {
+      if (b === 'off') {
+        try {
+          localStorage.setItem(SITE_OFF_KEY, String(Date.now()))
+        } catch {
+          // no localStorage: the cached bundle is dropped all the same
+        }
+        await idbSet({ current: undefined, prev: undefined })
+        return null
+      }
       if (!b || b === 'same') return null
       await idbSet({ current: b, prev: current ?? undefined })
       void collectChunks([b.manifest, current?.manifest])
@@ -292,16 +279,37 @@ function shareReact() {
   })
 }
 
-function applyCss(version: string, css: string) {
-  let el = document.getElementById('mlu-css') as HTMLStyleElement | null
-  if (el && el.dataset.version === version) return
+const adoptedSheets = new Map<string, CSSStyleSheet>()
+
+// The built app's CSP has Tauri's hashes in style-src, so 'unsafe-inline' is void and a <style> made at runtime gets
+// no sheet. The verified text then goes in through adoptedStyleSheets, which CSP does not govern; the tag is emptied
+// so the site module (which does the same for older launchers) does not add it twice.
+export function setStyle(id: string, css: string, version?: string): void {
+  let el = document.getElementById(id) as HTMLStyleElement | null
   if (!el) {
     el = document.createElement('style')
-    el.id = 'mlu-css'
+    el.id = id
     document.head.appendChild(el)
   }
-  el.dataset.version = version
+  if (version !== undefined) el.dataset.version = version
   el.textContent = css
+  const old = adoptedSheets.get(id)
+  if (old) {
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== old)
+    adoptedSheets.delete(id)
+  }
+  if (el.sheet || !css || typeof CSSStyleSheet === 'undefined' || !('adoptedStyleSheets' in document)) return
+  const sheet = new CSSStyleSheet()
+  sheet.replaceSync(css)
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+  adoptedSheets.set(id, sheet)
+  el.textContent = ''
+}
+
+function applyCss(version: string, css: string) {
+  const el = document.getElementById('mlu-css') as HTMLStyleElement | null
+  if (el && el.dataset.version === version) return
+  setStyle('mlu-css', css, version)
 }
 
 export const STATIC_IMPORT = /\b(from|import)\s*(["'])\.\/([\w.-]+\.js)\2/g
@@ -363,14 +371,7 @@ export function makeChunkLoader(b: RemoteUiBundle, base = REMOTE_UI_BASE) {
     ext ??= (async () => {
       const c = known.get('ui-ext.css')
       if (!c) return
-      const css = await chunkText(c, base)
-      let el = document.getElementById('mlu-css-ext') as HTMLStyleElement | null
-      if (!el) {
-        el = document.createElement('style')
-        el.id = 'mlu-css-ext'
-        document.head.appendChild(el)
-      }
-      el.textContent = css
+      setStyle('mlu-css-ext', await chunkText(c, base))
     })()
     ext.catch(() => (ext = null))
     return ext

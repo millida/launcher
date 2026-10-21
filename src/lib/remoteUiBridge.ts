@@ -7,7 +7,7 @@ import { showToast } from '../state/ui'
 import { installFromCatalog } from './catalogInstall'
 import { installContentFlow } from './install'
 import { keyCfModpack, keyMrModpack } from './installKeys'
-import { cfInstallModpack, installModpack, millidaUploadRaw } from '../ipc/commands'
+import { cfInstallModpack, installModpack, loadProfileSettings, millidaUploadRaw } from '../ipc/commands'
 import { hasTauri, tauri } from '../ipc/tauri'
 import { runInstall } from '../state/installs'
 import { useProfiles } from '../state/profiles'
@@ -88,8 +88,12 @@ export function makeRemoteBridge(host: {
     },
     profiles: async () => {
       const { profiles, selected } = useProfiles.getState()
+      // The catalog slug of a build installed from the catalog lets a site screen offer «a server with this build».
+      const slugs = hasTauri()
+        ? await Promise.all(profiles.map((p) => loadProfileSettings(p.name).then((st) => st?.catalogPackSlug || null, () => null)))
+        : profiles.map(() => null)
       return {
-        list: profiles.map((p) => ({ name: p.name, version: p.version, loader: p.loader || (p.fabric ? 'fabric' : null) })),
+        list: profiles.map((p, i) => ({ name: p.name, version: p.version, loader: p.loader || (p.fabric ? 'fabric' : null), slug: slugs[i] ?? null })),
         selected: selected || null,
       }
     },
