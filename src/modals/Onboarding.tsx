@@ -316,7 +316,7 @@ function LookStep() {
 
 function ReadyStep() {
   const t = useT()
-  const [autostart, setAuto] = useState(true)
+  const [autostart, setAuto] = useState(false)
   useEffect(() => {
     if (hasTauri()) void autostartOn().then(setAuto)
   }, [])

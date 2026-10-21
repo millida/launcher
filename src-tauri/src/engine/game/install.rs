@@ -10,7 +10,10 @@ use std::process::Command;
 use std::time::Duration;
 use tauri::AppHandle;
 
-pub(crate) const MANIFEST_TTL: Duration = Duration::from_secs(6 * 3600);
+/// Mojang publishes snapshots without notice and players look for them within
+/// minutes. Past this age the copy is revalidated by ETag, which costs a 304
+/// while nothing changed.
+pub(crate) const MANIFEST_TTL: Duration = Duration::from_secs(5 * 60);
 const LOADER_TTL: Duration = Duration::from_secs(24 * 3600);
 /// Assets are thousands of tiny files where request concurrency, not bandwidth,
 /// is the limit; libraries are few and large.
@@ -1364,12 +1367,19 @@ pub(crate) async fn vanilla_meta(app: &AppHandle, root: &Path, version_id: &str)
         Some(v) => (version_id.to_string(), v),
         None => {
             emit(app, "files", 5.0, "Читаем манифест версий…");
-            let manifest = get_json_fresh(MANIFEST, &root.join("version_manifest_v2.json"), MANIFEST_TTL).await?;
+            let cache = root.join("version_manifest_v2.json");
+            let mut manifest = get_json_conditional(MANIFEST, &cache, MANIFEST_TTL).await?;
             let vid = if version_id == "latest" {
                 manifest["latest"]["release"].as_str().unwrap_or("1.21.4").to_string()
             } else {
                 version_id.to_string()
             };
+            let listed = |m: &Value| m["versions"].as_array().is_some_and(|a| a.iter().any(|v| v["id"] == vid.as_str()));
+            // A version picked from a newer list (a server, a shared build) than
+            // the copy still inside its TTL: ask the source before giving up.
+            if !listed(&manifest) {
+                manifest = get_json_conditional(MANIFEST, &cache, Duration::ZERO).await?;
+            }
             let ventry = manifest["versions"]
                 .as_array()
                 .and_then(|a| a.iter().find(|v| v["id"] == vid.as_str()))

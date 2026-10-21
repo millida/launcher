@@ -854,16 +854,45 @@ fn download_pct(got: u64, total: Option<u64>) -> Option<u32> {
     Some((got.min(total) * 100 / total) as u32)
 }
 
-pub(crate) fn branded_alias(java: &Path) -> Option<PathBuf> {
-    let name = if cfg!(target_os = "windows") { "MillidaLauncher.exe" } else { "MillidaLauncher" };
-    java.parent().map(|d| d.join(name))
+/// ASCII without spaces: the name goes through the ANSI path rewrite, command
+/// lines and the GPU preference registry key unchanged on every system.
+const GAME_EXE_STEM: &str = "MillidaMinecraft";
+
+/// Named after the launcher the game was mistaken for it: Task Manager showed
+/// "MillidaLauncher.exe" eating the CPU and memory of Minecraft.
+const LEGACY_GAME_EXE_STEM: &str = "MillidaLauncher";
+
+/// Linux reports a process name cut to 15 bytes (TASK_COMM_LEN).
+const COMM_LEN: usize = 15;
+
+fn exe_name(stem: &str) -> String {
+    if cfg!(target_os = "windows") { format!("{}.exe", stem) } else { stem.to_string() }
 }
 
-/// Discord detects games by process name and labels any java.exe as Minecraft,
-/// overriding our Rich Presence. Launching a renamed copy avoids that; the copy
-/// must sit in the same bin/ because the JVM locates its home relative to the
-/// executable. Falls back to the original when copying is not permitted.
-// For Discord: copies java.exe next to it as MillidaLauncher.exe (same content, nothing changed) so Discord does not show "Minecraft". If that fails, we start the normal java.
+pub(crate) fn branded_alias(java: &Path) -> Option<PathBuf> {
+    java.parent().map(|d| d.join(exe_name(GAME_EXE_STEM)))
+}
+
+fn legacy_alias(java: &Path) -> Option<PathBuf> {
+    java.parent().map(|d| d.join(exe_name(LEGACY_GAME_EXE_STEM)))
+}
+
+/// Whether a process name from the system list can be a game this launcher
+/// started: plain java, the current copy, or the copy a previous version made.
+pub(crate) fn is_game_process_name(name: &str) -> bool {
+    let low = name.to_ascii_lowercase();
+    let stem = low.strip_suffix(".exe").unwrap_or(&low);
+    stem.starts_with("java")
+        || [GAME_EXE_STEM, LEGACY_GAME_EXE_STEM].iter().any(|known| {
+            let known = known.to_ascii_lowercase();
+            stem == known || (stem.len() == COMM_LEN && known.starts_with(stem))
+        })
+}
+
+/// The game runs as a renamed copy of java so that Task Manager and Discord
+/// show a Minecraft process instead of java.exe. The copy must sit in the same
+/// bin/ because the JVM locates its home relative to the executable. Falls
+/// back to the original when copying is not permitted.
 pub(crate) fn branded_java(java: &Path) -> PathBuf {
     let Some(alias) = branded_alias(java) else { return java.to_path_buf() };
     let src_len = std::fs::metadata(java).map(|m| m.len()).unwrap_or(0);
@@ -880,7 +909,23 @@ pub(crate) fn branded_java(java: &Path) -> PathBuf {
             let _ = std::fs::set_permissions(&alias, std::fs::Permissions::from_mode(0o755));
         }
     }
-    if alias.exists() { alias } else { java.to_path_buf() }
+    if !alias.exists() {
+        return java.to_path_buf();
+    }
+    drop_legacy_alias(java);
+    alias
+}
+
+/// Runs only once the new copy exists, and only on a file of java's size: the
+/// player may point the launcher at a Java folder of their own. A game started
+/// by the previous version may still hold the old file, and Windows then
+/// refuses the delete: the file stays until a later launch, which costs nothing.
+fn drop_legacy_alias(java: &Path) {
+    let size = |p: &Path| std::fs::metadata(p).ok().filter(|m| m.is_file()).map(|m| m.len());
+    let Some(old) = legacy_alias(java) else { return };
+    if size(&old).is_some() && size(&old) == size(java) {
+        let _ = std::fs::remove_file(old);
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -1361,6 +1406,79 @@ mod tests {
         );
         assert!(exe.exists(), "the copy the game is started from must exist");
         std::fs::remove_file(&java).ok();
+    }
+
+    /// Antivirus reports and players saw "MillidaLauncher.exe" using 100% CPU
+    /// and 4 GB: the game copy has to read as Minecraft, never as the launcher.
+    #[test]
+    fn game_process_reads_as_minecraft_not_as_the_launcher() {
+        let exe = branded_alias(Path::new("/jre/bin/java")).unwrap();
+        let name = exe.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+        assert!(name.contains("minecraft"), "the game process {name:?} does not say it is Minecraft");
+        assert!(!name.contains("launcher"), "the game process {name:?} is named like the launcher again");
+        assert!(
+            name.is_ascii() && !name.contains(' ') && !name.contains('(') && !name.contains(')'),
+            "{name:?} must stay plain ASCII: it goes through the ANSI path rewrite and command lines",
+        );
+    }
+
+    #[test]
+    fn running_games_are_recognised_by_every_name_they_had() {
+        let cases: [(&str, bool, &str); 9] = [
+            ("java.exe", true, "a launch that fell back to the original java"),
+            ("javaw.exe", true, "a game started by an older launcher through javaw"),
+            ("java", true, "the Unix launcher"),
+            ("MillidaMinecraft.exe", true, "the current copy on Windows"),
+            ("MillidaMinecraft", true, "the current copy on macOS"),
+            ("MillidaMinecraf", true, "Linux cuts process names to 15 bytes"),
+            ("MillidaLauncher.exe", true, "a game started by the previous version is still running after the update"),
+            ("Millida Launcher.exe", false, "the launcher itself is not a game"),
+            ("chrome.exe", false, "unrelated processes"),
+        ];
+        for (name, want, why) in cases {
+            assert_eq!(is_game_process_name(name), want, "{name}: {why}");
+        }
+    }
+
+    fn brand_dir(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join("millida-java-rename").join(name).join("bin");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let java = dir.join(exe_name("java"));
+        std::fs::write(&java, b"jre-bytes").unwrap();
+        let legacy = legacy_alias(&java).unwrap();
+        (dir, java, legacy)
+    }
+
+    #[test]
+    fn the_old_copy_goes_only_after_the_new_one_exists() {
+        let (dir, java, legacy) = brand_dir("ok");
+        std::fs::write(&legacy, b"jre-bytes").unwrap();
+        let exe = branded_java(&java);
+        assert_eq!(Some(exe.clone()), branded_alias(&java), "the game must start from the new copy");
+        assert!(exe.is_file(), "the new copy must exist before anything is removed");
+        assert!(!legacy.exists(), "the old MillidaLauncher copy stays and keeps confusing antivirus software");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_old_copy_stays_when_the_new_one_cannot_be_made() {
+        let (dir, java, legacy) = brand_dir("blocked");
+        std::fs::write(&legacy, b"jre-bytes").unwrap();
+        std::fs::create_dir_all(branded_alias(&java).unwrap()).unwrap();
+        let exe = branded_java(&java);
+        assert_eq!(exe, java, "a failed copy must fall back to the original java");
+        assert!(legacy.is_file(), "the old copy was removed although no new one replaced it");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_foreign_file_with_the_old_name_is_left_alone() {
+        let (dir, java, legacy) = brand_dir("foreign");
+        std::fs::write(&legacy, b"something else entirely").unwrap();
+        branded_java(&java);
+        assert!(legacy.is_file(), "only a copy of java may be deleted, never a file the player put there");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// The webview can pass any string to `test_java`; only binaries the core

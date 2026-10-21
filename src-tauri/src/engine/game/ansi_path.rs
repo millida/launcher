@@ -47,8 +47,8 @@ fn safe_path_in(p: &Path, codepage: Option<u32>) -> PathBuf {
     if fits_code_page(&p.to_string_lossy(), codepage) {
         return p.to_path_buf();
     }
-    // Readable tail names stay long: Discord tells the game by the name
-    // MillidaLauncher.exe, and MILLID~1.EXE would lose the label.
+    // Readable tail names stay long: Task Manager and Discord show the game as
+    // MillidaMinecraft.exe, and MILLID~1.EXE would lose the label.
     if let (Some(parent), Some(name)) = (p.parent(), p.file_name()) {
         if fits_code_page(&name.to_string_lossy(), codepage) {
             let safe_parent = safe_path_in(parent, codepage);
@@ -66,6 +66,13 @@ fn safe_path_in(p: &Path, codepage: Option<u32>) -> PathBuf {
 /// already fits the code page or the volume keeps no short names.
 pub(crate) fn ansi_safe_path(p: &Path) -> PathBuf {
     safe_path_in(p, ansi_codepage())
+}
+
+/// Whether the long form of the path survives the ANSI round trip. The JVM
+/// canonicalizes some paths, which expands an 8.3 name back to the long one,
+/// so for those a short name is no way out.
+pub(crate) fn ansi_readable_as_is(p: &Path) -> bool {
+    fits_code_page(&p.to_string_lossy(), ansi_codepage())
 }
 
 fn substitutions(roots: &[PathBuf], codepage: Option<u32>) -> Vec<(String, String)> {
@@ -149,7 +156,7 @@ mod tests {
     fn real_folder_outside_the_code_page_gets_an_ascii_name() {
         let dir = std::env::temp_dir().join("millida-ansi-test").join("Ωmega").join("bin");
         std::fs::create_dir_all(&dir).unwrap();
-        let exe = dir.join("MillidaLauncher.exe");
+        let exe = dir.join("MillidaMinecraft.exe");
         std::fs::write(&exe, b"x").unwrap();
         let safe = safe_path_in(&exe, Some(1251));
         if safe == exe {
@@ -158,7 +165,7 @@ mod tests {
         }
         assert!(fits_code_page(&safe.to_string_lossy(), Some(1251)), "java.exe would still see `?`: {}", safe.display());
         assert!(safe.is_file(), "the short name must lead to the same file");
-        assert!(safe.ends_with("bin/MillidaLauncher.exe"), "readable tail names stay long for Discord: {}", safe.display());
+        assert!(safe.ends_with("bin/MillidaMinecraft.exe"), "readable tail names stay long for Discord: {}", safe.display());
         let _ = std::fs::remove_dir_all(std::env::temp_dir().join("millida-ansi-test"));
     }
 }

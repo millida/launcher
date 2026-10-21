@@ -46,7 +46,7 @@ import type { ItemView, SiteCard, SiteSection, SiteSlug } from './site'
 import { defaultPick, filesFor, loaderOptions, sizeLabel, spanOf, versionOptions } from './itemView'
 import type { VerFile } from './itemView'
 import { weaveMarkdown } from './weave'
-import { planMedia, readsRussian, russianText, tagLabels } from './itemBody'
+import { foreignBody, planMedia, readsRussian, russianText, tagLabels } from './itemBody'
 import '../../styles/pixel/catalog-item.css'
 import { useMarketOffers, useT } from '../../i18n'
 
@@ -340,11 +340,11 @@ export function Gallery({ urls }: { urls: string[] }) {
  * Описание без перевода Modrinth: русский текст каталога с кадрами по тексту, текст автора —
  * кнопкой. Русского нет — текст автора под своей пометкой.
  */
-function DescBody({ body, ru, shots }: { body: string; ru: string; shots: string[] }) {
+function DescBody({ body, ru, shots, author }: { body: string; ru: string; shots: string[]; author?: boolean }) {
   const t = useT()
   const [en, setEn] = useState(false)
   if (!ru && !body) return <p className="faint-note">{t('Без описания')}</p>
-  const foreign = !!body && body !== ru && !readsRussian(body)
+  const foreign = author ?? (!!body && body !== ru && !readsRussian(body))
   if (!ru || en)
     return (
       <>
@@ -624,17 +624,17 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           {tab === 'desc' ? (
             <article className="card ci-box ci-desc pj-body">
               {/* Перевод не ждёт карточку сайта: как только известен проект Modrinth — сразу он. */}
-              {data && data.ruArticle ? (
+              {data && data.ruArticle && ruContent ? (
                 renderMarkdown(media.body)
               ) : mrId && ruContent ? (
                 <RuDesc projectId={mrId} englishBody={fullBody || (data ? data.body : '')} lead={card.summary} shots={shots} />
               ) : data === null ? (
                 <>
-                  {card.summary && readsRussian(card.summary) ? <p className="ci-ru-lead">{card.summary}</p> : null}
+                  {ruContent && card.summary && readsRussian(card.summary) ? <p className="ci-ru-lead">{card.summary}</p> : null}
                   {DescSkel()}
                 </>
               ) : (
-                <DescBody body={stripAds(fullBody || data.body)} ru={ruContent ? media.body : ''} shots={shots} />
+                <DescBody body={stripAds(ruContent ? fullBody || data.body : foreignBody(fullBody, data.body, card.summary))} ru={ruContent ? media.body : ''} shots={shots} author={ruContent ? undefined : !!fullBody} />
               )}
               {failed ? (
                 <button className="btn sm secondary ci-retry" onClick={retry}>

@@ -1006,6 +1006,58 @@ pub(crate) fn reports_crash(text: &str) -> bool {
     })
 }
 
+/// Forge and NeoForge print the exception that kills the game through the
+/// STDERR logger at INFO, so the level alone would call the real failure benign.
+fn routed_from_stderr(line: &str) -> bool {
+    let t = line.trim_start();
+    t.starts_with('[') && t.split("]: ").next().unwrap_or(t).to_lowercase().contains("[stderr")
+}
+
+fn loud_lines(text: &str) -> impl Iterator<Item = String> + '_ {
+    with_levels(text)
+        .into_iter()
+        .filter(|(line, benign)| !benign || routed_from_stderr(line))
+        .map(|(line, _)| line.to_lowercase())
+}
+
+/// A mixin failure the game did not survive. Fabric logs a mixin that is not
+/// marked required at WARN and keeps starting: such a line sits in front of
+/// every later, unrelated crash of the same build.
+pub(crate) fn mixin_failed_fatally(text: &str, markers: &[&str]) -> bool {
+    loud_lines(text).any(|l| markers.iter().any(|m| l.contains(m)))
+}
+
+const CRASH_REPORT_END: [&str; 2] = ["a detailed walkthrough of the error", "-- head --"];
+
+/// The exception chain of the newest crash report: from its «Description:» to
+/// the walkthrough that lists threads and mods.
+fn crash_report_chain(text: &str) -> Option<String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let d = lines.iter().rposition(|l| l.trim_start().starts_with("Description:"))?;
+    let chain: Vec<String> = lines[d..]
+        .iter()
+        .map(|l| l.to_lowercase())
+        .take_while(|l| !CRASH_REPORT_END.iter().any(|m| l.trim_start().starts_with(m)))
+        .collect();
+    Some(chain.join("\n"))
+}
+
+/// The line of the fatal failure that carries one of `markers`, lowercased. A
+/// crash report decides by its own chain; without one, only an exception that
+/// escaped a thread killed the game. A mod that caught a missing class and
+/// logged it (AllTheLeaks probing optional integrations) did not.
+pub(crate) fn fatal_line_with(text: &str, markers: &[&str]) -> Option<String> {
+    let has = |l: &str| markers.iter().any(|m| l.contains(m));
+    if let Some(chain) = crash_report_chain(text) {
+        return chain.lines().find(|l| has(l)).map(String::from);
+    }
+    let low = text.to_lowercase();
+    if !low.contains("exception in thread") && !low.contains("uncaughtexception") {
+        return None;
+    }
+    loud_lines(text).find(|l| has(l))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

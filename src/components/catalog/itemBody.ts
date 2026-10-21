@@ -1,3 +1,4 @@
+import { t as translate } from '../../i18n'
 import { ruLabel } from '../../lib/format'
 import { weaveMarkdown } from './weave'
 
@@ -17,6 +18,13 @@ export function readsRussian(text: string | null | undefined): boolean {
 export function russianText(desc: string, seoText: string | null | undefined, summary: string | null | undefined): string {
   for (const t of [desc, seoText, summary]) if (readsRussian(t)) return t!.trim()
   return ''
+}
+
+/// Outside Russia the page must not fall back to the Russian article: the author's text, then a translated summary, else nothing.
+export function foreignBody(full: string, body: string, summary: string | null | undefined): string {
+  if (full) return full
+  if (body && !readsRussian(body)) return body
+  return summary && !readsRussian(summary) ? summary : ''
 }
 
 export const MAX_INLINE_SHOTS = 5
@@ -44,7 +52,7 @@ export function tagLabels(tags: string[], limit: number): string[] {
   for (const raw of tags) {
     const t = raw.trim()
     const known = ruLabel(t.toLowerCase())
-    const label = known || (VERSION.test(t) || readsRussian(t) ? t : null)
+    const label = known || (VERSION.test(t) ? t : readsRussian(t) ? translate(t.charAt(0).toUpperCase() + t.slice(1)) : null)
     if (!label) continue
     const shown = label.charAt(0).toUpperCase() + label.slice(1)
     const key = shown.toLowerCase()

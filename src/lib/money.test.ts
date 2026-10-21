@@ -6,6 +6,7 @@ import {
   goodsQuote,
   moneyLangFor,
   moneyShortfall,
+  plusCheckout,
   quoteText,
   shortfallOf,
   topupUrl,
@@ -16,14 +17,11 @@ import {
 
 const RATE = 90
 
-const account = (currency: MoneyCurrency, kopecks: number, proven = true): MoneyView => ({
+const account = (currency: MoneyCurrency, kopecks: number): MoneyView => ({
   region: currency === 'RUB' ? 'RU' : 'INTL',
-  proven,
-  country: proven ? (currency === 'RUB' ? 'RU' : 'US') : null,
   displayCurrency: currency,
   balance: { kopecks, displayMinor: currency === 'RUB' ? kopecks : Math.floor(kopecks / RATE), displayCurrency: currency, rate: currency === 'RUB' ? 1 : RATE },
   rubPerUsd: RATE,
-  canProveRuVia: currency === 'RUB' ? [] : ['sbp'],
   topup: { RUB: { minMinor: 10000, maxMinor: 10000000, methods: [], methodMinMinor: {} }, USD: { minMinor: 100, maxMinor: 100000, methods: [], methodMinMinor: {} } },
 })
 
@@ -47,7 +45,7 @@ type BuyerCase = {
 
 const BUYERS: BuyerCase[] = [
   {
-    why: 'a proven Russian account pays the ruble list and can afford it from 500 RUB',
+    why: 'the Russian interface is quoted the ruble list and affords it from 500 RUB',
     locale: 'ru',
     view: account('RUB', 50000),
     quote: PLUS_RUB,
@@ -56,7 +54,7 @@ const BUYERS: BuyerCase[] = [
     topup: null,
   },
   {
-    why: 'a proven foreign account sees dollars; 300 RUB of balance is less than $5.00 at 90 RUB, so it tops up the missing $1.67',
+    why: 'any other interface is quoted dollars; 300 RUB of balance is less than $5.00 at 90 RUB, so it tops up the missing $1.67',
     locale: 'en',
     view: account('USD', 30000),
     quote: PLUS_USD,
@@ -65,16 +63,16 @@ const BUYERS: BuyerCase[] = [
     topup: { currency: 'USD', amountMinor: 167 },
   },
   {
-    why: 'the Russian interface does not turn a dollar account into rubles: the currency is the account, the language only formats',
+    why: 'a dollar quote still on screen right after a switch to Russian keeps its own currency until the list reloads; the language only formats',
     locale: 'ru',
-    view: account('USD', 30000, false),
+    view: account('USD', 30000),
     quote: PLUS_USD,
     shown: '5 $',
     affords: false,
     topup: { currency: 'USD', amountMinor: 167 },
   },
   {
-    why: 'the English interface does not turn a ruble account into dollars',
+    why: 'a ruble quote still on screen right after a switch to English is not converted on the client',
     locale: 'en',
     view: account('RUB', 27000),
     quote: PLUS_RUB,
@@ -164,6 +162,13 @@ const LANG_PATHS: Array<[why: string, path: string, sent: boolean]> = [
   ['creating a paid server charges the balance', '/hosting/servers', true],
   ['changing a plan charges the balance', '/hosting/servers/abc/plan', true],
   ['the catalog access answer carries the price', '/catalog/items/bsl/access', true],
+  ['a catalog buy is charged at the quote of the interface language', '/catalog/items/bsl/buy', true],
+  ['a catalog subscription is priced by the interface language', '/catalog/items/bsl/subscribe', true],
+  ['the PLUS gateway subscription is priced by the interface language', '/launcher/plus/subscribe', true],
+  ['binding PLUS to the balance can answer with a shortfall', '/launcher/plus/wallet/bind', true],
+  ['rubies bought from the balance are charged at the language quote', '/rubies/topup', true],
+  ['VDS plans are quoted for the viewer', '/vds/plans', true],
+  ['the catalog card list asks quotes in one call', '/catalog/purchases/quotes?prices=100', true],
   ['a server console has nothing to price', '/hosting/servers/abc/console', false],
   ['the friends list has nothing to price', '/friends', false],
 ]
@@ -179,3 +184,29 @@ test('a fractional sum keeps its cents and a whole one drops them', () => {
   expect(spaced(formatMoney(129050, 'RUB'))).toBe('RUB 1,290.50')
   expect(spaced(formatMoney(500, 'USD'))).toBe('$5')
 })
+
+const CHECKOUTS: Array<[why: string, current: Quote | null, statusQuote: Quote | undefined, want: 'gateway' | 'balance']> = [
+  ['a ruble quote goes through the ruble gateway', PLUS_RUB, undefined, 'gateway'],
+  ['a dollar quote is paid from the balance: the gateway bills rubles only', PLUS_USD, undefined, 'balance'],
+  ['the price list follows the interface language, so it outranks an older PLUS status', PLUS_USD, PLUS_RUB, 'balance'],
+  ['without a price list the status quote decides', null, PLUS_USD, 'balance'],
+  ['nothing known yet falls back to the gateway', null, undefined, 'gateway'],
+]
+
+for (const [why, current, statusQuote, want] of CHECKOUTS) {
+  test('PLUS checkout: ' + why, () => {
+    expect(plusCheckout(current, statusQuote), 'the checkout must match the currency of the price on screen').toBe(want)
+  })
+}
+
+const LOCALES: Array<[why: string, locale: Locale]> = [
+  ['Russian asks for the ruble list', 'ru'],
+  ['English asks for the dollar list', 'en'],
+  ['Brazilian Portuguese is sent as the launcher spells it', 'pt-BR'],
+]
+
+for (const [why, locale] of LOCALES) {
+  test('interface language on money requests: ' + why, () => {
+    expect(moneyLangFor('/pricing', locale), 'the server prices by exactly this language').toBe(locale)
+  })
+}

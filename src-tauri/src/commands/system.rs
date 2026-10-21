@@ -23,6 +23,7 @@ pub async fn pick_game_dir() -> Result<Option<String>, String> {
     let picked =
         engine::pick_folder(engine::dialog().set_directory(&start).set_title("Папка игры Millida")).await;
     let Some(d) = picked else { return Ok(None) };
+    let d = engine::game_root_from_pick(d);
     // refused at pick time, so the player sees why right away
     engine::game_root_candidate_ok(&d)?;
     engine::vouch_game_root(&d);

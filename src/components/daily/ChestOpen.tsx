@@ -86,7 +86,9 @@ export function dropReward(d: ChestDrop): CaseReward {
   const v = d.variant
   const item: ItemRef | undefined = d.item
     ? {
-        code: d.item.code + (v?.name ? '~' + v.name : ''),
+        // Служба уже отдаёт код вещи-расцветки («CAPE~red»): второй суффикс давал
+        // «CAPE~red~red», и «Докупить» отвечало «Такой вещи нет» (разбор 20.10.2026).
+        code: d.item.code.includes('~') || !v?.name ? d.item.code : d.item.code + '~' + v.name,
         name: d.item.name,
         slot: d.item.slot,
         rarity: d.rarity,

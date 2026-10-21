@@ -7,9 +7,9 @@ import { Burst, Confetti, Rays } from '../reward/RewardReveal'
 import type { CaseOpenView, CaseReward, ChestTier, ItemRef, Rarity } from '../../lib/rubies'
 import { playCase } from './caseSound'
 import { Shard } from '../shop/parts'
-import { FragBar, RarityChip } from '../shop/rarityUi'
+import { FragBar, FragmentIcon, RarityChip } from '../shop/rarityUi'
 import { PxThumb } from '../shop/Sets'
-import { RARITY_NAME_SHORT, RARITY_TONE, rarityRank, shardWord, word } from '../shop/rarity'
+import { RARITY_NAME_SHORT, RARITY_TONE, fragmentWord, rarityRank, shardWord, word } from '../shop/rarity'
 import { dealOrder, finalRarity, ladderAt, openOfRewards, revealLadder } from './revealLadder'
 import { ANSWER_TIMEOUT_MS, hitView, skipAction } from './answerDeadline'
 import { showToast } from '../../state/ui'
@@ -88,6 +88,28 @@ function Cracks({ hits, need, more }: { hits: number; need: number; more?: boole
 
 /** Награда на сцене: вещь — карточка и слово редкости, валюта — большая сумма. */
 function BigReward({ r }: { r: CaseReward }) {
+  if (r.item && r.kind === 'fragments') {
+    const n = r.amount ?? 0
+    return (
+      <div className="rv2-cash rv2-fragwin" style={{ ['--sh-tone' as string]: rewardTone(r) } as CSSProperties} data-rar={r.item.rarity}>
+        <span className="rv2-fragwin-head">
+          <FragmentIcon rarity={r.item.rarity} size={88} />
+          <b className="rv2-cash-n">+{n.toLocaleString(intlTag())}</b>
+        </span>
+        <span className="rv2-cash-w">{fragmentWord(n)}</span>
+        <span className="rv2-fragwin-item">
+          <span className="rv2-fragwin-pic">
+            <PxThumb item={r.item} />
+          </span>
+          <span className="rv2-fragwin-meta">
+            <b className="rv2-fragwin-name">{r.item.name}</b>
+            <RarityChip rarity={r.item.rarity} />
+            {r.frag ? <FragBar have={r.frag.have} need={r.frag.need} rarity={r.item.rarity} gain={n} /> : null}
+          </span>
+        </span>
+      </div>
+    )
+  }
   if (r.item) {
     return (
       <>
@@ -131,6 +153,11 @@ export function RewardCard({ r, big }: { r: CaseReward; big?: boolean }) {
           : '+' + (r.amount ?? 0).toLocaleString(intlTag()) + ' ' + (r.kind === 'rubies' ? word(r.amount ?? 0) : shardWord(r.amount ?? 0))}
       </b>
       {r.item && r.kind === 'cheap' && r.amount ? <span className="rv2-plus">+{r.amount.toLocaleString(intlTag())}</span> : null}
+      {r.item && r.kind === 'fragments' && r.amount ? (
+        <span className="rv2-plus rv2-plus-frag">
+          <FragmentIcon rarity={r.item.rarity} size={14} />+{r.amount.toLocaleString(intlTag())} {fragmentWord(r.amount)}
+        </span>
+      ) : null}
       {r.kind === 'fragments' && r.frag ? (
         <span className="rv2-frag">
           <FragBar have={r.frag.have} need={r.frag.need} rarity={r.item?.rarity} gain={r.amount} />

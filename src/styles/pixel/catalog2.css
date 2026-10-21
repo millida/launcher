@@ -1061,3 +1061,11 @@
 }
 @media (hover: none) { .mr-star { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .mr-star.on svg, .mr-star-wide.on svg { animation: none; } }
+
+/* Publishing is an action, not a section: the button sits outside the tab capsule, which stays centred. */
+.mr-groups-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; margin-bottom: 8px; }
+.mr-groups-row > .segs.mr-types.mr-groups { grid-column: 2; margin: 0; }
+.mr-groups-row > .mr-publish { grid-column: 3; justify-self: end; }
+@media (max-width: 1100px) {
+  .mr-groups-row { display: flex; flex-wrap: wrap; justify-content: center; }
+}

@@ -1,7 +1,12 @@
 import { autostartSet, autostartState } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
+import { hydratePrefs } from './prefs'
+import { onboardingDone, useOnboarding } from '../state/onboarding'
+import { useTour } from '../state/tour'
+import { uiChoice } from '../state/confirm'
+import { showToast } from '../state/ui'
+import { t } from '../i18n'
 
-/** Спрашивали ли уже: включаем по умолчанию один раз, дальше решает человек. */
 const ASKED_KEY = 'm-autostart'
 
 const asked = (): boolean => {
@@ -16,23 +21,61 @@ const remember = (on: boolean) => {
   try {
     localStorage.setItem(ASKED_KEY, on ? '1' : '0')
   } catch {
-    /* без хранилища включим ещё раз — вреда нет */
+    /* without storage the question comes back next launch, which is harmless */
   }
 }
 
-/**
- * Запуск вместе с системой включён по умолчанию (владелец 06.10.2026): лаунчер
- * в трее показывает таймер сундука и напоминание о серии. Один раз при первом
- * запуске; выключенное человеком больше не включаем.
- */
+const firstRunSettled = (): boolean => onboardingDone() && !useOnboarding.getState().open && !useTour.getState().active
+
+function nextChange(): Promise<void> {
+  return new Promise((resolve) => {
+    if (firstRunSettled()) return resolve()
+    const check = () => {
+      if (!firstRunSettled()) return
+      unsubOnboarding()
+      unsubTour()
+      resolve()
+    }
+    const unsubOnboarding = useOnboarding.subscribe(check)
+    const unsubTour = useTour.subscribe(check)
+  })
+}
+
+/// finishOnboarding closes the wizard and only then starts the tour, so the
+/// moment the wizard closes is not yet the end of the first run.
+async function waitFirstRun(): Promise<void> {
+  for (;;) {
+    await nextChange()
+    await new Promise((r) => setTimeout(r, 0))
+    if (firstRunSettled()) return
+  }
+}
+
+/// A launcher that registers itself at login without asking and then sits in
+/// the background reads as malware, so it is enabled only on an explicit yes.
 export async function initAutostart(): Promise<void> {
   if (!hasTauri() || asked()) return
+  await hydratePrefs()
+  await waitFirstRun()
+  if (asked()) return
+  const answer = await uiChoice(t('Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.'), {
+    title: t('Запускать вместе с системой?'),
+    confirmLabel: t('Включить'),
+    cancelLabel: t('Не нужно'),
+    danger: false,
+  })
+  if (answer === 'dismiss') return
+  if (answer === 'no') {
+    remember(false)
+    return
+  }
   try {
     remember(await autostartSet(true))
-  } catch {
-    // Система не дала (Windows: «Отказано в доступе») — запоминаем и больше не пробуем
-    // на каждом запуске (09.10.2026: ~1 100 одинаковых ошибок в сутки). Тумблер в «Настройках» остаётся.
+  } catch (e) {
+    // Windows keeps answering Access denied, so asking again on every start would only nag.
     remember(false)
+    console.error('[autostart]', e)
+    showToast(t('Система не дала включить запуск вместе с системой. Попробуй ещё раз в Настройках.'), 'error')
   }
 }
 

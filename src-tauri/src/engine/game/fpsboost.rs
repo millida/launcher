@@ -12,9 +12,11 @@ pub fn boost_flags() -> Vec<&'static str> {
     GC_FLAGS.iter().copied().chain(std::iter::once(PRETOUCH_FLAG)).collect()
 }
 
-/// Bumped whenever `boost_mods` changes: builds that enabled the mode under an
-/// older set get the new mods on their next launch instead of never.
-pub const BOOST_SET_REV: u64 = 3;
+/// Bumped whenever `boost_mods` or the way its files are checked changes: builds
+/// that enabled the mode under an older revision are brought up to date on their
+/// next launch instead of never. Revision 4 re-checks files already installed
+/// against their own jars.
+pub const BOOST_SET_REV: u64 = 4;
 
 /// Mods a version had no stable file for are asked about again after this long:
 /// performance mods reach a fresh game version weeks after it ships.
@@ -425,6 +427,13 @@ fn slot_filled(slot: &Slot, known: &[String], canon: &std::collections::HashMap<
     })
 }
 
+/// The set is ordered by weight, the renderer first. When two of the mode's own
+/// files clash, the later one goes, so it is checked first: Sodium stays and the
+/// culling add-on that breaks it is removed, not the other way round.
+fn settle_order(installed: &[String]) -> Vec<String> {
+    installed.iter().rev().cloned().collect()
+}
+
 /// `keep_options`: an automatic caller (version builds, presets) only fills in
 /// an options.txt the game has not written yet; the player's own is theirs.
 async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: Vec<(String, String)>) -> Result<FpsBoostState, String> {
@@ -444,6 +453,7 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
 
     let mut installed = str_list(&before["fpsBoostMods"]);
     let mut skipped: Vec<String> = vec![];
+    let mut slug_of: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let total = wanted.len().max(1);
     for (i, slot) in wanted.iter().enumerate() {
         let name = slot.install.first().copied().unwrap_or_default();
@@ -482,6 +492,7 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
                 for miss in resolve_deps(profile, &version, &loaders, &bridge, &ver["dependencies"]).await {
                     warn(app, &format!("{}: нет зависимости {} под {}", slug, miss, version));
                 }
+                slug_of.insert(file.clone(), slug.to_string());
                 if !installed.contains(&file) {
                     installed.push(file);
                 }
@@ -490,6 +501,29 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
                 warn(app, &format!("Мод {} не поставился: {}", slug, e));
                 skipped.push(slug.to_string());
             }
+        }
+    }
+
+    emit(app, "fpsboost", 85.0, "Проверяем совместимость…");
+    let present = enabled_jars(profile);
+    for file in settle_order(&installed) {
+        if !present.contains(&file) {
+            continue;
+        }
+        let blockers = settle_installed_jar(profile, &file).await;
+        if blockers.is_clear() {
+            continue;
+        }
+        let name = slug_of.get(&file).cloned().unwrap_or_else(|| file.clone());
+        match delete_content(profile, "mod", &file) {
+            Ok(()) => {
+                warn(app, &format!("{}: не ставим — {}", name, blockers.describe().join("; ")));
+                installed.retain(|f| f != &file);
+                if !skipped.contains(&name) {
+                    skipped.push(name);
+                }
+            }
+            Err(e) => warn(app, &format!("{}: мешает запуску ({}), но убрать файл не вышло: {}", name, blockers.describe().join("; "), e)),
         }
     }
 
@@ -696,7 +730,7 @@ mod tests {
         for (loader, want, why) in cases {
             assert_eq!(installs(loader), want, "boost set for {loader} changed without a pin update: {why}");
         }
-        assert_eq!(BOOST_SET_REV, 3, "the set above is revision 3; a new set needs a new revision");
+        assert_eq!(BOOST_SET_REV, 4, "the set above is revision 4 (rev 4 re-checks installed files by their jars); a new set needs a new revision");
     }
 
     #[test]

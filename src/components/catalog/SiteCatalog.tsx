@@ -10,7 +10,7 @@ import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow
 import { CapesPane } from './CapesPane'
 import type { MapHit } from './SiteRow'
 import { SERVER_SECTIONS, SITE_SECTIONS, fmtNum, loadSkinTags, loadSkins, materials, peekHit, sectionBySlug, sectionByKind } from './site'
-import { useSkinTag } from './skinTag'
+import { skinTagLabel, useSkinTag } from './skinTag'
 import { skinName } from './SkinPage'
 import type { SiteCard, SkinTile } from './site'
 import { CATALOG_GROUPS, SECTION_VISUAL, groupOf, groupVisual, siteSectionPath } from './sections'
@@ -951,7 +951,7 @@ function SkinsPane() {
               data-id={t.slug}
               onClick={() => useSkinTag.getState().set(tag && tag.slug === t.slug ? null : t)}
             >
-              {capFirst(t.label)}
+              {capFirst(skinTagLabel(t.label))}
             </button>
           ))}
         </nav>
@@ -1055,44 +1055,52 @@ function GroupNav({
   own,
   onPick,
   extras,
+  onPublish,
 }: {
   section: string
   own: boolean
   onPick: (slug: string) => void
   extras: ReactNode
+  onPublish: () => void
 }) {
   const t = useT()
   const current = groupOf(section)
   return (
     <>
-      <nav className="segs mr-types mr-groups" aria-label={t('Разделы каталога')}>
-        {CATALOG_GROUPS.map((g: NavGroup) => {
-          const on = !own && g.key === current.key
-          const vis = groupVisual(g)
-          return (
-            <button
-              key={g.key}
-              className={'seg' + (on ? ' on' : '')}
-              aria-current={on ? 'page' : undefined}
-              data-track={'cat_group_' + g.key}
-              onClick={() => onPick(on ? section : g.tabs[0]!.slug)}
-            >
-              <span className="mr-tab-art" aria-hidden="true">
-                {g.key === 'packs' ? (
-                  // Сборки — книжная полка Millida вместо сундука (владелец 10.10.2026).
-                  <img className="mr-tab-block" src="/block-icons/Block52Millida.png" alt="" draggable={false} />
-                ) : GROUP_ART[g.key] ? (
-                  <PxArt name={GROUP_ART[g.key]!} size={32} glint={false} />
-                ) : (
-                  <PxIcon name={vis.px} size={20} />
-                )}
-              </span>
-              <span className="mr-tab-label">{g.label}</span>
-            </button>
-          )
-        })}
-        {extras}
-      </nav>
+      <div className="mr-groups-row">
+        <nav className="segs mr-types mr-groups" aria-label={t('Разделы каталога')}>
+          {CATALOG_GROUPS.map((g: NavGroup) => {
+            const on = !own && g.key === current.key
+            const vis = groupVisual(g)
+            return (
+              <button
+                key={g.key}
+                className={'seg' + (on ? ' on' : '')}
+                aria-current={on ? 'page' : undefined}
+                data-track={'cat_group_' + g.key}
+                onClick={() => onPick(on ? section : g.tabs[0]!.slug)}
+              >
+                <span className="mr-tab-art" aria-hidden="true">
+                  {g.key === 'packs' ? (
+                    // Сборки — книжная полка Millida вместо сундука (владелец 10.10.2026).
+                    <img className="mr-tab-block" src="/block-icons/Block52Millida.png" alt="" draggable={false} />
+                  ) : GROUP_ART[g.key] ? (
+                    <PxArt name={GROUP_ART[g.key]!} size={32} glint={false} />
+                  ) : (
+                    <PxIcon name={vis.px} size={20} />
+                  )}
+                </span>
+                <span className="mr-tab-label">{g.label}</span>
+              </button>
+            )
+          })}
+          {extras}
+        </nav>
+        <button type="button" className="btn sm secondary mr-publish" data-track="cat_publish" onClick={onPublish}>
+          <Icon id="i-upload" />
+          {t('Выложить своё')}
+        </button>
+      </div>
       {!own && current.tabs.length > 1 ? (
         <nav className="segs mr-subtypes" aria-label={t('Разделы группы «{name}»', { name: current.label })}>
           {current.tabs.map((tab) => {
@@ -1316,6 +1324,7 @@ export function SiteCatalog({
             section={section}
             own={!!own}
             onPick={pick}
+            onPublish={() => openExt(PUBLISH_URL + '?type=' + encodeURIComponent(section))}
             extras={
               <>
                 {extras.filter((x) => x.first).map(extraBtn)}
@@ -1350,6 +1359,9 @@ export function SiteCatalog({
 }
 
 const BUILD: CatalogTarget = { kind: 'build' }
+
+/** Where an author publishes on the site; `type` opens the form for the section the player is in. */
+const PUBLISH_URL = 'https://millida.net/zagruzit'
 
 /** Какой вход в каталог уже применён (useHubTab.seq); -1 — каталог ещё не открывали. */
 let appliedSeq = -1
