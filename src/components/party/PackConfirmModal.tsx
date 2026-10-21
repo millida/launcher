@@ -3,7 +3,8 @@ import { Icon } from '../Icon'
 import { fmtSize } from '../../lib/format'
 import { apiErrorText } from '../../lib/apiError'
 import { packPreview, type PackPreview } from '../../ipc/commands'
-import type { PackConfirmAsk } from '../../state/party'
+import type { PackConfirmAnswer, PackConfirmAsk } from '../../state/party'
+import { OwnJarsConsent, approvedOwnJars, needsOwnJarsConsent } from '../OwnJarsConsent'
 import { t, useT } from '../../i18n'
 
 const SOURCE: Record<string, string> = {
@@ -19,10 +20,12 @@ const SOURCE: Record<string, string> = {
  * Nothing from the leader's custom build is downloaded before the player has seen every
  * file it brings. Unknown files are listed too: the core refuses them at install.
  */
-export function PackConfirmModal({ ask, close }: { ask: PackConfirmAsk; close: (ok: boolean) => void }) {
+export function PackConfirmModal({ ask, close: answer }: { ask: PackConfirmAsk; close: (answer: PackConfirmAnswer) => void }) {
   const t = useT()
   const [preview, setPreview] = useState<PackPreview | null>(null)
   const [error, setError] = useState('')
+  const [trusted, setTrusted] = useState(false)
+  const close = (ok: boolean) => answer({ ok, jars: ok ? approvedOwnJars(preview, trusted) : [] })
 
   useEffect(() => {
     let alive = true
@@ -35,10 +38,10 @@ export function PackConfirmModal({ ask, close }: { ask: PackConfirmAsk; close: (
   }, [ask.code])
 
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && close(false)
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && answer({ ok: false, jars: [] })
     document.addEventListener('keydown', esc)
     return () => document.removeEventListener('keydown', esc)
-  }, [close])
+  }, [answer])
 
   const mods = preview?.mods || []
   const unknown = mods.filter((m) => m.source === 'unknown').length
@@ -83,13 +86,14 @@ export function PackConfirmModal({ ask, close }: { ask: PackConfirmAsk; close: (
             {unknown || (preview.dropped || []).length ? (
               <p className="faint-note">{t('Не поставим: {n} файл(ов) без проверки по каталогу', { n: unknown + (preview.dropped || []).length })}</p>
             ) : null}
+            <OwnJarsConsent preview={preview} trusted={trusted} onTrusted={setTrusted} />
           </>
         ) : null}
         <div className="room-modal-acts">
           <button className="btn sm ghost" onClick={() => close(false)}>
             {t('Отмена')}
           </button>
-          <button className="btn sm primary" disabled={!preview} onClick={() => close(true)}>
+          <button className="btn sm primary" disabled={!preview || (needsOwnJarsConsent(preview) && !trusted)} onClick={() => close(true)}>
             <Icon id="i-download" />
             {t('Поставить')}
           </button>

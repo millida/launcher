@@ -18,7 +18,7 @@ mod navguard;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows, nothing else. The token
-/// vault (`secrets.bin`, `vault.key`) sits directly under `data_dir()` and
+/// vault (`secrets.bin`, `device.key`) sits directly under `data_dir()` and
 /// imported files land in `game_root()/profiles/...`, so neither root may ever
 /// be granted — an XSS would read the vault and any copied file straight out of
 /// the scope. Skins, capes and head avatars need no grant at all: they reach
@@ -69,7 +69,7 @@ fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
 pub fn allow_assets(app: &tauri::AppHandle) {
     let scope = app.asset_protocol_scope();
     for dir in asset_dirs() {
-        // The window may read only the wallpaper, music and sound folders. The token store (secrets.bin, vault.key) is not in the list.
+        // The window may read only the wallpaper, music and sound folders. The token store (secrets.bin, device.key) is not in the list.
         std::fs::create_dir_all(&dir).ok();
         let _ = scope.allow_directory(&dir, true);
     }
@@ -863,7 +863,7 @@ mod tests {
             for bad in &forbidden {
                 assert_ne!(
                     &dir, bad,
-                    "{} is served over asset://; secrets.bin, vault.key and imported files sit \
+                    "{} is served over asset://; secrets.bin, device.key and imported files sit \
                      under it and would become readable from the webview.",
                     dir.display(),
                 );

@@ -88,7 +88,7 @@ body:
         Before you send it, read through the text: logs and screenshots can contain
         session tokens, links with access keys and email addresses. Replace them
         with `***`. Do not post the whole launcher data folder: it holds
-        `secrets.bin` and `vault.key`, and saved sessions.
+        `secrets.bin` and `device.key`, and saved sessions.
       render: text
     validations:
       required: false

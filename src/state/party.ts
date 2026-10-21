@@ -32,10 +32,16 @@ interface PartyLoad extends PartyReply {
   safety: PartySafety
 }
 
+/** Yes or no, and the sha512 of every own jar of the author the player approved. */
+export interface PackConfirmAnswer {
+  ok: boolean
+  jars: string[]
+}
+
 export interface PackConfirmAsk {
   code: string
   title: string
-  resolve: (ok: boolean) => void
+  resolve: (answer: PackConfirmAnswer) => void
 }
 
 export interface ReportAsk {

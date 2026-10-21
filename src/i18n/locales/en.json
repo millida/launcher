@@ -4720,5 +4720,9 @@
   "вампиры": "vampires",
   "ведьмы": "witches",
   "летние": "summer",
-  "зимние": "winter"
+  "зимние": "winter",
+  "Свои моды автора не проверены Modrinth и CurseForge. Ставь, только если доверяешь {author}: такой мод может украсть аккаунт.": "The author's own mods were not checked by Modrinth or CurseForge. Install them only if you trust {author}: such a mod can steal your account.",
+  "автору": "the author",
+  "Свой мод автора": "Author's own mod",
+  "Доверяю автору, поставить его моды": "I trust the author, install their mods"
 }

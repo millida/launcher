@@ -1,5 +1,5 @@
 // Login token storage on disk: the file secrets.bin in the launcher data folder, encrypted with AES-256-GCM.
-// The key lies next to it in vault.key (on Windows it is also protected by DPAPI). Tokens are not given out and not given to the UI. This file does not go to the network.
+// The key lies next to it in device.key (on Windows it is also protected by DPAPI). Tokens are not given out and not given to the UI. This file does not go to the network.
 // The machine id is read only to tie the encryption to this computer.
 use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::aead::{Aead, KeyInit, OsRng, Payload};
@@ -15,11 +15,15 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 // auto-update, which makes the macOS Keychain re-prompt for a password forever.
 //
 //   secrets.bin - AES-256-GCM, fresh nonce per record, key name used as AAD
-//   vault.key   - 32 random bytes, DPAPI-wrapped on Windows, mode 0600 elsewhere
-//   cipher key  - HKDF-SHA256(vault.key + machine identifier)
+//   device.key  - 32 random bytes, DPAPI-wrapped on Windows, mode 0600 elsewhere
+//   cipher key  - HKDF-SHA256(device.key + machine identifier)
 //
-// Binding to the machine identifier makes secrets.bin + vault.key useless when
+// Binding to the machine identifier makes secrets.bin + device.key useless when
 // copied to another machine or another user account, without any prompts.
+//
+// The key used to be called vault.key. Sandbox scanners match that name against
+// the CrypVault ransomware, which drops a key file with the same name, so it is
+// renamed on first start.
 
 // This is a salt for key derivation, not a secret: anyone can read it, the key strength does not depend on it.
 const VAULT_SALT: &[u8] = b"millida-launcher-vault-v2";
@@ -31,6 +35,10 @@ fn vault_path() -> PathBuf {
 }
 
 fn device_key_path() -> PathBuf {
+    crate::engine::data_dir().join("device.key")
+}
+
+fn legacy_device_key_path() -> PathBuf {
     crate::engine::data_dir().join("vault.key")
 }
 
@@ -164,7 +172,7 @@ fn random_bytes(n: usize) -> Vec<u8> {
     b
 }
 
-/// 32 bytes from vault.key, DPAPI-protected on Windows. A missing or corrupt
+/// 32 bytes from device.key, DPAPI-protected on Windows. A missing or corrupt
 /// file yields a fresh key: existing records become unreadable and the user
 /// signs in again. Resolved once per process so concurrent callers on a clean
 /// install cannot each generate a different key.
@@ -225,7 +233,7 @@ fn read_key_file(path: &Path) -> KeyFile {
     }
 }
 
-// Antivirus and indexers hold vault.key open for a moment after a write.
+// Antivirus and indexers hold device.key open for a moment after a write.
 const KEY_READ_RETRY_MS: [u64; 5] = [25, 50, 100, 200, 400];
 
 fn read_key_file_patiently(path: &Path) -> KeyFile {
@@ -240,12 +248,28 @@ fn read_key_file_patiently(path: &Path) -> KeyFile {
     got
 }
 
-/// True while vault.key exists but could not be read: the key in use is a
+/// True while device.key exists but could not be read: the key in use is a
 /// stand-in, and the vault must be neither rewritten nor moved aside with it.
 static KEY_UNREADABLE: AtomicBool = AtomicBool::new(false);
 
 const KEY_BUSY: &str =
-    "ключ хранилища входа сейчас недоступен (файл vault.key держит другая программа) — закрой лаунчер, подожди немного и открой снова";
+    "ключ хранилища входа сейчас недоступен (файл device.key держит другая программа) — закрой лаунчер, подожди немного и открой снова";
+
+/// The key file to read: the renamed one, or the old vault.key while it cannot
+/// be moved yet. Losing the old key would sign the user out, so a failed rename
+/// keeps reading it under the old name and retries on the next start.
+fn adopt_legacy_key(current: &Path, legacy: &Path) -> PathBuf {
+    if current.exists() || !legacy.exists() {
+        return current.to_path_buf();
+    }
+    match rename_with_retry(legacy, current) {
+        Ok(()) => current.to_path_buf(),
+        Err(e) => {
+            eprintln!("[secrets] vault.key не переименован в device.key ({e}) — читаем старое имя");
+            legacy.to_path_buf()
+        }
+    }
+}
 
 fn key_usable() -> Result<(), String> {
     device_key();
@@ -253,7 +277,7 @@ fn key_usable() -> Result<(), String> {
 }
 
 fn load_device_key() -> Vec<u8> {
-    let path = device_key_path();
+    let path = adopt_legacy_key(&device_key_path(), &legacy_device_key_path());
     match read_key_file_patiently(&path) {
         KeyFile::Ready(k) => {
             restrict_path(&path);
@@ -261,7 +285,7 @@ fn load_device_key() -> Vec<u8> {
             return k;
         }
         KeyFile::Unreadable => {
-            eprintln!("[secrets] vault.key есть, но не читается — сохранённые входы не трогаем до перезапуска");
+            eprintln!("[secrets] device.key есть, но не читается — сохранённые входы не трогаем до перезапуска");
             KEY_UNREADABLE.store(true, Ordering::SeqCst);
             return random_bytes(32);
         }
@@ -285,7 +309,7 @@ fn load_device_key() -> Vec<u8> {
     }
 }
 
-/// On an explicit sign-in an unreadable vault.key is moved aside and the key
+/// On an explicit sign-in an unreadable device.key is moved aside and the key
 /// already in use is saved in its place, so the new tokens survive a restart.
 fn persist_device_key_for_login(stamp: u64) -> Result<(), String> {
     let key = device_key();
@@ -300,7 +324,7 @@ fn persist_device_key_for_login(stamp: u64) -> Result<(), String> {
     if path.exists() {
         quarantine(&path, stamp)?;
     }
-    create_new_private(&path, &sealed).map_err(|e| format!("не удалось записать vault.key ({e})"))?;
+    create_new_private(&path, &sealed).map_err(|e| format!("не удалось записать device.key ({e})"))?;
     KEY_PERSISTED.store(true, Ordering::SeqCst);
     Ok(())
 }
@@ -656,7 +680,59 @@ pub fn present(keys: &[String]) -> HashMap<String, bool> {
 mod tests {
     use super::*;
 
-    /// state of vault.key -> verdict. Anything but «missing» or «corrupt» must
+    /// (key files on disk before start, file the key is read from, files left after, why this case is pinned)
+    #[test]
+    fn legacy_key_adoption_verdicts() {
+        type Case = (&'static [&'static str], &'static str, &'static [&'static str], &'static str);
+        let cases: &[Case] = &[
+            (&[], "device.key", &[], "a clean install creates the key under the new name"),
+            (
+                &["vault.key"],
+                "device.key",
+                &["device.key"],
+                "an update moves the old key, otherwise sandboxes keep reporting CrypVault and nothing changes",
+            ),
+            (
+                &["device.key"],
+                "device.key",
+                &["device.key"],
+                "an already renamed key is used as is",
+            ),
+            (
+                &["device.key", "vault.key"],
+                "device.key",
+                &["device.key", "vault.key"],
+                "a downgrade-and-back leaves both: the new key wins and the old one is not overwritten",
+            ),
+        ];
+        for (before, expected, after, why) in cases {
+            let scratch = Scratch::new("adopt");
+            for name in before.iter() {
+                std::fs::write(scratch.0.join(name), name.as_bytes()).expect("seed key");
+            }
+            let current = scratch.0.join("device.key");
+            let legacy = scratch.0.join("vault.key");
+            let original = std::fs::read(&legacy).ok();
+            let used = adopt_legacy_key(&current, &legacy);
+            assert_eq!(used, scratch.0.join(expected), "start with {before:?} read the key from {used:?}. Reason: {why}");
+            let mut left: Vec<String> = std::fs::read_dir(&scratch.0)
+                .expect("listing")
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect();
+            left.sort();
+            assert_eq!(left, after.to_vec(), "start with {before:?} left {left:?} on disk. Reason: {why}");
+            if *before == ["vault.key"].as_slice() {
+                assert_eq!(
+                    std::fs::read(&current).ok(),
+                    original,
+                    "the moved key must keep its bytes, or every stored sign-in becomes unreadable",
+                );
+            }
+        }
+    }
+
+    /// state of device.key -> verdict. Anything but «missing» or «corrupt» must
     /// not be answered with a fresh key: a fresh key makes every stored session
     /// unreadable, and the sign-in that follows moves the real key aside.
     #[test]

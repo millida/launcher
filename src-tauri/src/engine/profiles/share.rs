@@ -86,6 +86,48 @@ pub struct PackManifest {
     pub servers: Vec<ServerEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub overrides: Vec<PackOverride>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub jars: Vec<PackJar>,
+}
+
+/// A hand-added mod no catalogue serves. It travels through Millida storage to
+/// the author's friends only, and is installed only when the receiving player
+/// approved exactly this file by its sha512.
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PackJar {
+    pub path: String,
+    pub sha1: String,
+    pub sha512: String,
+    pub size: u64,
+}
+
+const MAX_JARS: usize = 20;
+const MAX_JAR_BYTES: u64 = 50 * 1024 * 1024;
+const JAR_HOST: &str = "garage.millida.net";
+const JAR_PUT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(110);
+
+fn jar_url_allowed(raw: &str) -> bool {
+    let Ok(url) = url::Url::parse(raw) else { return false };
+    url.scheme() == "https" && url.host_str() == Some(JAR_HOST)
+}
+
+fn sha512_ok(v: &str) -> bool {
+    v.len() == 128 && v.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn jar_ok(j: &PackJar) -> Result<String, &'static str> {
+    let path = shared_entry_path("mod", &j.path)?;
+    if !path.to_ascii_lowercase().ends_with(".jar") {
+        return Err("не jar");
+    }
+    if !sha1_ok(&j.sha1) || !sha512_ok(&j.sha512) {
+        return Err("нет контрольной суммы");
+    }
+    if j.size == 0 || j.size > MAX_JAR_BYTES {
+        return Err("размер вне пределов");
+    }
+    Ok(path)
 }
 
 #[derive(Serialize, Clone)]
@@ -198,6 +240,7 @@ pub fn build_manifest(profile: &str, with_overrides: bool) -> Result<(PackManife
             settings: settings_of(profile),
             servers: list_servers(profile),
             overrides,
+            jars: vec![],
         },
         skipped,
     ))
@@ -225,7 +268,9 @@ pub fn pack_link(code: &str) -> String {
 pub async fn share_profile(profile: String, summary: Option<String>) -> Result<SharedPack, String> {
     refuse_protected(&profile)?;
     let (mut manifest, skipped) = build_manifest(&profile, true)?;
-    if manifest.files.is_empty() {
+    let (jars, skipped) = upload_own_jars(&profile_dir(&profile), skipped).await;
+    manifest.jars = jars;
+    if manifest.files.is_empty() && manifest.jars.is_empty() {
         return Err("В сборке нет файлов из Modrinth или CurseForge — передавать нечего".into());
     }
     manifest.summary = summary
@@ -244,12 +289,99 @@ pub async fn share_profile(profile: String, summary: Option<String>) -> Result<S
     Ok(SharedPack {
         url: pack_link(&code),
         code,
-        files: manifest.files.len() as u32,
+        files: (manifest.files.len() + manifest.jars.len()) as u32,
         skipped,
         size_bytes,
     })
 }
 
+/// Digests of a jar read whole: it is uploaded from the same bytes, so what the
+/// server checks is exactly what was hashed.
+struct OwnJar {
+    rel: String,
+    name: String,
+    bytes: Vec<u8>,
+    sha1: String,
+    sha256: String,
+    sha512: String,
+}
+
+fn read_own_jar(pdir: &Path, rel: &str) -> Result<OwnJar, String> {
+    use sha2::Digest as _;
+    let norm = shared_entry_path("mod", rel).map_err(|why| why.to_string())?;
+    let path = safe_join(pdir, &norm).map_err(|e| e.to_string())?;
+    let len = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    if len == 0 || len > MAX_JAR_BYTES {
+        return Err("больше 50 МБ".into());
+    }
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let hex = |d: &[u8]| d.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+    Ok(OwnJar {
+        name: file_name_of(&norm),
+        rel: norm,
+        sha1: super::milli_local::sha1_hex(&bytes),
+        sha256: hex(sha2::Sha256::digest(&bytes).as_slice()),
+        sha512: hex(sha2::Sha512::digest(&bytes).as_slice()),
+        bytes,
+    })
+}
+
+async fn upload_own_jar(jar: OwnJar) -> Result<PackJar, String> {
+    let decl = serde_json::json!({
+        "fileName": jar.name,
+        "size": jar.bytes.len(),
+        "sha1": jar.sha1,
+        "sha256": jar.sha256,
+        "sha512": jar.sha512,
+    });
+    // The author's own jar goes to Millida storage: only the author's friends can fetch it back.
+    let res = millida_api_auth(format!("{}/jars", PACKS_PATH), "POST".into(), Some(decl.clone())).await?;
+    if res["status"].as_str() == Some("upload") {
+        let url = res["url"].as_str().filter(|u| jar_url_allowed(u)).ok_or("Сервер выдал чужой адрес для загрузки")?;
+        let size = jar.bytes.len() as u64;
+        let put = client()
+            .put(url)
+            .timeout(JAR_PUT_TIMEOUT)
+            .body(jar.bytes)
+            .send()
+            .await
+            .map_err(|e| net_err(&e))?;
+        if !put.status().is_success() {
+            return Err(format!("хранилище ответило {}", put.status().as_u16()));
+        }
+        millida_api_auth(format!("{}/jars/confirm", PACKS_PATH), "POST".into(), Some(decl)).await?;
+        return Ok(PackJar { path: jar.rel, sha1: jar.sha1, sha512: jar.sha512, size });
+    }
+    let size = jar.bytes.len() as u64;
+    Ok(PackJar { path: jar.rel, sha1: jar.sha1, sha512: jar.sha512, size })
+}
+
+/// Hand-added jars from `skipped` travel as the author's own files; one that
+/// cannot is named in what stays behind, with the reason.
+async fn upload_own_jars(pdir: &Path, skipped: Vec<String>) -> (Vec<PackJar>, Vec<String>) {
+    let mut jars = vec![];
+    let mut left = vec![];
+    for rel in skipped {
+        let own = rel.starts_with("mods/") && rel.to_ascii_lowercase().ends_with(".jar");
+        if !own || jars.len() >= MAX_JARS {
+            left.push(rel);
+            continue;
+        }
+        let (dir, r) = (pdir.to_path_buf(), rel.clone());
+        let read = match tokio::task::spawn_blocking(move || read_own_jar(&dir, &r)).await {
+            Ok(x) => x,
+            Err(e) => Err(e.to_string()),
+        };
+        match read {
+            Ok(jar) => match upload_own_jar(jar).await {
+                Ok(j) => jars.push(j),
+                Err(e) => left.push(format!("{} ({})", rel, e)),
+            },
+            Err(e) => left.push(format!("{} ({})", rel, e)),
+        }
+    }
+    (jars, left)
+}
 
 pub async fn unshare_profile(code: String) -> Result<(), String> {
     let code = normalize_code(&code);
@@ -283,18 +415,30 @@ pub async fn pack_preview(code: String) -> Result<Value, String> {
         })
         .collect();
     let overrides: Vec<&str> = manifest.overrides.iter().map(|o| o.path.as_str()).collect();
+    let custom: Vec<Value> = manifest
+        .jars
+        .iter()
+        .map(|j| {
+            serde_json::json!({
+                "name": file_name_of(&j.path),
+                "size": j.size,
+                "sha512": j.sha512,
+            })
+        })
+        .collect();
     Ok(serde_json::json!({
         "code": code,
         "name": manifest.name,
         "summary": manifest.summary,
         "game": manifest.game,
         "loader": manifest.loader,
-        "files": manifest.files.len(),
+        "files": manifest.files.len() + manifest.jars.len(),
         "author": res["author"].as_str().unwrap_or(""),
         "installs": res["installs"].as_u64().unwrap_or(0),
         "updatedAt": res["updatedAt"].as_str().unwrap_or(""),
-        "sizeBytes": manifest.files.iter().map(|f| f.size).sum::<u64>(),
+        "sizeBytes": manifest.files.iter().map(|f| f.size).sum::<u64>() + manifest.jars.iter().map(|j| j.size).sum::<u64>(),
         "mods": mods,
+        "customMods": custom,
         "overrides": overrides,
         "dropped": dropped,
     }))
@@ -359,6 +503,18 @@ pub(crate) fn parse_manifest_report(raw: &Value) -> Result<(PackManifest, Vec<St
     let (overrides, refused) = accept_overrides(std::mem::take(&mut manifest.overrides));
     manifest.overrides = overrides;
     dropped.extend(refused);
+    let mut seen_jars: HashSet<String> = HashSet::new();
+    for mut j in std::mem::take(&mut manifest.jars) {
+        match jar_ok(&j) {
+            Ok(path) if manifest.jars.len() < MAX_JARS && seen_jars.insert(path.to_lowercase()) => {
+                j.path = path;
+                j.sha1 = j.sha1.to_ascii_lowercase();
+                j.sha512 = j.sha512.to_ascii_lowercase();
+                manifest.jars.push(j);
+            }
+            _ => dropped.push(shown_path(&j.path)),
+        }
+    }
     dropped.truncate(MAX_DROPPED_SHOWN);
     manifest.name = manifest.name.chars().filter(|c| !c.is_control()).take(64).collect();
     manifest.summary = manifest.summary.chars().filter(|c| !c.is_control() || *c == '\n').take(MAX_SUMMARY).collect();
@@ -790,6 +946,7 @@ pub(crate) async fn install_manifest(
     app: &AppHandle,
     manifest: &PackManifest,
     target: Option<String>,
+    jars_from: Option<JarSource<'_>>,
 ) -> Result<Profile, String> {
     let name = match target {
         Some(n) => n,
@@ -813,6 +970,10 @@ pub(crate) async fn install_manifest(
             decode_override(o).map_err(|why| format!("Настройка {} не принята: {}", shown_path(&o.path), why))?;
         overrides.push((rel, bytes));
     }
+    let jars = match &jars_from {
+        Some(src) => approved_jars(manifest, src.approved)?,
+        None => vec![],
+    };
     emit_share_progress(app, 8.0, "Сверяем файлы с Modrinth и CurseForge…");
     let vouched = vouch_files(&files).await?;
 
@@ -839,6 +1000,13 @@ pub(crate) async fn install_manifest(
         emit_share_progress(app, 10.0 + 80.0 * (i as f32 / total as f32), &format!("Файлы сборки {}/{}", i + 1, total));
     }
     save_content_manifest(&name, &entries);
+    if let Some(src) = &jars_from {
+        for (i, (rel, jar)) in jars.iter().enumerate() {
+            fetch_own_jar(&pdir, src.code, rel, jar).await?;
+            let msg = format!("Свои моды автора {}/{}", i + 1, jars.len());
+            emit_share_progress(app, 90.0 + 5.0 * (i as f32 / jars.len().max(1) as f32), &msg);
+        }
+    }
     for (rel, bytes) in &overrides {
         let dest = safe_join(&pdir, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
         write_bytes_atomic(&dest, bytes).map_err(|e| format!("Не записалась настройка {}: {}", rel, e))?;
@@ -887,6 +1055,65 @@ pub(crate) async fn install_manifest(
     Ok(profile)
 }
 
+/// Where the author's own jars of a shared pack come from, and which of them the
+/// player approved after seeing them listed.
+pub(crate) struct JarSource<'a> {
+    pub code: &'a str,
+    pub approved: &'a [String],
+}
+
+/// Every jar of the manifest must be among the approved ones: a pack the author
+/// changed after the player looked is refused, never installed half-seen.
+fn approved_jars(manifest: &PackManifest, approved: &[String]) -> Result<Vec<(String, PackJar)>, String> {
+    let ok: HashSet<String> = approved.iter().map(|h| h.to_ascii_lowercase()).collect();
+    let mut out = vec![];
+    let mut unseen = vec![];
+    for j in &manifest.jars {
+        let rel = jar_ok(j).map_err(|why| format!("Свой мод {} не принят: {}", shown_path(&j.path), why))?;
+        if ok.contains(&j.sha512.to_ascii_lowercase()) {
+            out.push((rel, j.clone()));
+        } else {
+            unseen.push(file_name_of(&j.path));
+        }
+    }
+    if !unseen.is_empty() {
+        return Err(format!(
+            "В сборке есть свои моды автора, которые ты не подтвердил: {}. Открой установку по коду ещё раз и посмотри список",
+            unseen.join(", ")
+        ));
+    }
+    Ok(out)
+}
+
+/// The author's jar, fetched by a link only the author's friends receive, and
+/// kept only when its sha512 is the one the player approved.
+async fn fetch_own_jar(pdir: &Path, code: &str, rel: &str, jar: &PackJar) -> Result<(), String> {
+    let name = file_name_of(rel);
+    // The link is signed for this player only after the server checked they are the author's friend.
+    let res = millida_api_auth(format!("{}/{}/jars/{}", PACKS_PATH, code, jar.sha512), "GET".into(), None)
+        .await
+        .map_err(|e| format!("Свой мод {} не скачался: {}", name, e))?;
+    let url = res["url"]
+        .as_str()
+        .filter(|u| jar_url_allowed(u))
+        .ok_or_else(|| format!("Сервер выдал чужой адрес для мода {}", name))?;
+    let dest = safe_join(pdir, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+    download_verify(url, &dest, Some(&jar.sha1), Some(jar.size))
+        .await
+        .map_err(|e| format!("Свой мод {} не скачался: {}", name, e))?;
+    let (path, want) = (dest.clone(), jar.sha512.clone());
+    let holds = tokio::task::spawn_blocking(move || file_sha512(&path).is_some_and(|h| h.eq_ignore_ascii_case(&want)))
+        .await
+        .map_err(|e| format!("Не удалось проверить мод {}: {}", name, e))?;
+    if !holds {
+        return Err(match std::fs::remove_file(&dest) {
+            Ok(()) => format!("Мод {} не совпал с тем, что ты подтвердил — установка остановлена", name),
+            Err(e) => format!("Мод {} не совпал с тем, что ты подтвердил, и не удалился ({}) — удали его из сборки вручную", name, e),
+        });
+    }
+    Ok(())
+}
+
 fn emit_share_progress(app: &AppHandle, pct: f32, msg: &str) {
     use tauri::Emitter;
     let _ = app.emit(
@@ -896,18 +1123,19 @@ fn emit_share_progress(app: &AppHandle, pct: f32, msg: &str) {
 }
 
 /// Installs a shared build by its code.
-pub async fn install_shared_pack(app: AppHandle, code: String) -> Result<Profile, String> {
+pub async fn install_shared_pack(app: AppHandle, code: String, approved_jars: Vec<String>) -> Result<Profile, String> {
     let code = normalize_code(&code);
     if !code_ok(&code) {
         return Err("Такого кода не бывает — проверь, что ввёл".into());
     }
     let res = millida_api(format!("{}/{}", PACKS_PATH, code), "GET".into(), None, None).await?;
     let manifest = parse_manifest(&res["manifest"])?;
-    if manifest.files.is_empty() {
+    if manifest.files.is_empty() && manifest.jars.is_empty() {
         return Err("В этой сборке не осталось файлов, которые можно скачать".into());
     }
     emit_share_progress(&app, 5.0, "Читаем сборку…");
-    let profile = install_manifest(&app, &manifest, None).await?;
+    let source = JarSource { code: &code, approved: &approved_jars };
+    let profile = install_manifest(&app, &manifest, None, Some(source)).await?;
     // Reported after the files land, so a cancelled install does not inflate
     // anyone's counter.
     let _ = millida_api(format!("{}/{}/installed", PACKS_PATH, code), "POST".into(), None, None).await;
@@ -1243,5 +1471,69 @@ mod tests {
         ] {
             assert_eq!(file_source(url), want, "{url}");
         }
+    }
+
+    fn own_jar(path: &str, sha512: &str) -> PackJar {
+        PackJar { path: path.into(), sha1: "a".repeat(40), sha512: sha512.into(), size: 1024 }
+    }
+
+    /// jar line -> kept. These lines come from another player and name files the
+    /// launcher would run, so every field is checked before anything is fetched.
+    #[test]
+    fn own_jar_lines_are_checked_like_catalogue_files() {
+        let good = "b".repeat(128);
+        let cases = [
+            (own_jar("mods/strata.jar", &good), true, "a plain jar in mods/ with both digests"),
+            (own_jar("mods/../evil.jar", &good), false, "a path escaping the build folder"),
+            (own_jar("config/strata.jar", &good), false, "a jar outside mods/ is loaded from where nobody looks"),
+            (own_jar("mods/run.exe", &good), false, "only jars are mods"),
+            (own_jar("mods/strata.jar", "b"), false, "without sha512 the bytes cannot be proven"),
+            (PackJar { size: 0, ..own_jar("mods/strata.jar", &good) }, false, "an empty file"),
+            (PackJar { size: MAX_JAR_BYTES + 1, ..own_jar("mods/strata.jar", &good) }, false, "over the 50 MB cap"),
+        ];
+        for (jar, kept, why) in cases {
+            assert_eq!(jar_ok(&jar).is_ok(), kept, "{why}");
+        }
+    }
+
+    #[test]
+    fn own_jars_install_only_when_each_one_was_approved() {
+        let (a, b) = ("a".repeat(128), "c".repeat(128));
+        let manifest = PackManifest { jars: vec![own_jar("mods/a.jar", &a), own_jar("mods/b.jar", &b)], ..Default::default() };
+        assert!(approved_jars(&manifest, &[a.clone(), b.to_uppercase()]).is_ok(), "approval by sha512 ignores letter case");
+        let err = approved_jars(&manifest, std::slice::from_ref(&a)).err().unwrap_or_default();
+        assert!(err.contains("b.jar"), "a jar added after the player looked must stop the install and be named");
+        assert!(approved_jars(&manifest, &[]).is_err(), "no approval means no foreign code");
+    }
+
+    #[test]
+    fn own_jars_come_only_from_millida_storage() {
+        for (url, ok) in [
+            ("https://garage.millida.net/millida-packs/launcher-jars/u/x.jar?X-Amz-Signature=s", true),
+            ("http://garage.millida.net/x.jar", false),
+            ("https://garage.millida.net.evil.example/x.jar", false),
+            ("https://cdn.modrinth.com/x.jar", false),
+        ] {
+            assert_eq!(jar_url_allowed(url), ok, "{url}");
+        }
+    }
+
+    #[test]
+    fn manifest_parsing_keeps_only_sound_own_jars() {
+        let raw = serde_json::json!({
+            "formatVersion": 1,
+            "name": "аддон маркет",
+            "game": "26.3",
+            "loader": "fabric",
+            "files": [],
+            "jars": [
+                {"path": "mods/strata.jar", "sha1": "a".repeat(40), "sha512": "b".repeat(128), "size": 10},
+                {"path": "mods/strata.jar", "sha1": "a".repeat(40), "sha512": "b".repeat(128), "size": 10},
+                {"path": "../evil.jar", "sha1": "a".repeat(40), "sha512": "b".repeat(128), "size": 10}
+            ]
+        });
+        let (m, dropped) = parse_manifest_report(&raw).expect("манифест должен разобраться");
+        assert_eq!(m.jars.iter().map(|j| j.path.as_str()).collect::<Vec<_>>(), vec!["mods/strata.jar"], "a duplicate path and an escaping path must not survive");
+        assert_eq!(dropped.len(), 2, "the player must see what the pack arrives without");
     }
 }

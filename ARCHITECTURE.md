@@ -233,9 +233,9 @@ five people, and it is fully off when the connection goes through the relay.
 
 1. **Secrets only in Rust.** [secrets.rs](src-tauri/src/secrets.rs) is our own
    vault: `secrets.bin` is encrypted with AES-256-GCM (a fresh nonce per write, the key name
-   as AAD). The key `vault.key` is 32 random bytes, wrapped with DPAPI on Windows
+   as AAD). The key `device.key` is 32 random bytes, wrapped with DPAPI on Windows
    and with 0600 permissions on Unix. The final cipher key is derived with HKDF-SHA256 from
-   `vault.key` and the machine ID. Files copied to another machine
+   `device.key` and the machine ID. Files copied to another machine
    are useless. The system keychain is deliberately not used: the hash of the binary
    changes with every auto-update, and the macOS Keychain starts asking
    for the password forever.
@@ -379,7 +379,7 @@ And never return the value of a token to the frontend: return a flag.
 ## Data on disk
 
 - Launcher data is in `data_dir()/net.millida.launcher`: `profiles.json`,
-  `secrets.bin`, `vault.key`, `game-root.txt`, downloaded JREs in `java/`.
+  `secrets.bin`, `device.key`, `game-root.txt`, downloaded JREs in `java/`.
   On Windows this is `%APPDATA%`, on macOS `~/Library/Application Support`,
   on Linux `~/.local/share`.
 - Game files are in `game_root()`, by default `<data>/minecraft`: `versions`,
