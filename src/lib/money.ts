@@ -7,8 +7,6 @@ export interface Quote {
   displayCurrency: MoneyCurrency
   priceMinor: number
   chargeKopecks: number
-  estimate?: boolean
-  rublePriceMinor?: number | null
 }
 
 export interface TopupOffer {
@@ -20,18 +18,14 @@ export interface TopupOffer {
 
 export interface MoneyView {
   region: 'RU' | 'INTL'
-  proven: boolean
-  country: string | null
   displayCurrency: MoneyCurrency
   balance: { kopecks: number; displayMinor: number; displayCurrency: MoneyCurrency; rate: number }
   rubPerUsd: number
-  canProveRuVia: string[]
   topup: Record<MoneyCurrency, TopupOffer>
 }
 
 export interface PriceList {
   displayCurrency: MoneyCurrency
-  estimate?: boolean
   rubPerUsd: number
   plus: { tier: 'PLUS' | 'DIAMOND'; quote: Quote }[]
   hosting: { code: string; ramMb: number; quote: Quote }[]
@@ -85,7 +79,7 @@ export function isPriceList(v: unknown): v is PriceList {
   return !!p && isCurrency(p.displayCurrency) && isAmount(p.rubPerUsd) && Array.isArray(p.plus) && Array.isArray(p.hosting) && Array.isArray(p.rubies)
 }
 
-/// The language only formats; the currency is the account's.
+/// The language only formats; the currency is the one the server quoted.
 export function formatMoney(minor: number, currency: MoneyCurrency, locale: Locale = getLocale()): string {
   const amount = Math.round(minor) / 100
   const whole = Number.isInteger(amount)
@@ -130,6 +124,13 @@ export function goodsQuote(rubKopecks: number, currency: MoneyCurrency | null, r
   return { displayCurrency: 'USD', priceMinor: cents, chargeKopecks: kopecksForUsdCents(cents, rubPerUsd) }
 }
 
+/// The ruble gateway charges rubles, so a buyer shown a dollar price pays from the balance at that price.
+/// The price list follows the interface language and is reloaded when it changes; a PLUS status may be older.
+export function plusCheckout(current: Quote | null | undefined, statusQuote: Quote | null | undefined): 'gateway' | 'balance' {
+  const currency = current?.displayCurrency ?? statusQuote?.displayCurrency
+  return currency === 'USD' ? 'balance' : 'gateway'
+}
+
 export function scaleQuote(q: Quote | null | undefined, fromKopecks: number, toKopecks: number): Quote | null {
   if (!q || !isQuote(q) || fromKopecks <= 0) return null
   const k = toKopecks / fromKopecks
@@ -156,8 +157,8 @@ export function shortfallOf(q: Quote | null | undefined, view: MoneyView | null)
 const MONEY_PATHS =
   /^\/(me\/money|pricing|launcher\/plus(\/.*)?|rubies\/(rules|packs(\/.*)?|shop\/packs(\/.*)?|topup)|hosting\/plans(\/.*)?|hosting\/servers(\/[^/?]+\/plan(\/.*)?)?|vds\/plans|catalog\/(purchases\/quotes|items\/[^/?]+\/(access|buy|subscribe)))(\?.*)?$/
 
-/// The server shows an unproven buyer rubles only when the request states a ruble-zone language,
-/// so money requests name the interface language; other requests stay as they were.
+/// The server prices by the interface language (Russian in rubles, any other in dollars),
+/// so every request that shows or charges a price names it; other requests stay as they were.
 export const moneyLangFor = (pathname: string, locale: Locale = getLocale()): Locale | undefined =>
   MONEY_PATHS.test(pathname) ? locale : undefined
 

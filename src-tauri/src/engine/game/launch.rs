@@ -285,8 +285,7 @@ fn build_open_elsewhere(game_dir: &Path) -> bool {
         ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
     );
     sys.processes().values().any(|p| {
-        let name = p.name().to_string_lossy().to_ascii_lowercase();
-        if !name.starts_with("java") {
+        if !is_game_process_name(&p.name().to_string_lossy()) {
             return false;
         }
         let args: Vec<String> = p.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect();
@@ -492,6 +491,34 @@ fn mod_fault_reason(faults: &[ModFault]) -> String {
     }
 }
 
+/// The requiring mod named alone reads as the missing one, and a dependency that
+/// is installed in the wrong version reads as absent. Each requirement is named
+/// as requiring mod → what it needs, with the version that is in the way.
+fn missing_deps_reason(text: &str) -> Option<String> {
+    let mut items: Vec<String> = vec![];
+    for finding in super::crashcause::loader_findings(text) {
+        let super::crashcause::LoaderFinding::Requires { by, dep, present, .. } = finding else { continue };
+        if super::crashcause::is_platform_id(&dep.id) {
+            continue;
+        }
+        let item = match present {
+            Some(v) => format!("{} → {} (стоит {}, нужна другая версия)", by.name, dep.name, v),
+            None => format!("{} → {}", by.name, dep.name),
+        };
+        if !items.contains(&item) {
+            items.push(item);
+        }
+    }
+    if items.is_empty() {
+        return None;
+    }
+    let mut list = items.iter().take(FAULT_NAMES_SHOWN).cloned().collect::<Vec<_>>().join(", ");
+    if items.len() > FAULT_NAMES_SHOWN {
+        list.push_str(&format!(" и ещё {}", items.len() - FAULT_NAMES_SHOWN));
+    }
+    Some(format!("Модам не хватает зависимостей: {}. Установи то, что они требуют, или убери их.", list))
+}
+
 const CERTIFICATE_REJECTION_MARKERS: [&str; 4] =
     ["pkix path", "certification path", "certificate_unknown", "sslhandshakeexception"];
 
@@ -587,6 +614,25 @@ fn died_bringing_up_graphics(kind: &str, cause: &str, text: &str) -> bool {
     }
 }
 
+const MIXIN_VERDICT_MARKERS: [&str; 4] = ["mixin apply failed", "mixin apply for mod ", "mixinapplyerror", "mixintransformererror"];
+
+const LINKAGE_MARKERS: [&str; 4] = ["nosuchmethoderror", "noclassdeffounderror", "nosuchfielderror", "incompatibleclasschangeerror"];
+
+/// Code of the game, its loader or its API: a mod that cannot link against it was
+/// built for another game version. Anything else is another mod or a library,
+/// and updating mods "to the build's version" does not help there.
+const GAME_PACKAGES: [&str; 8] =
+    ["net.minecraft", "net/minecraft", "com.mojang", "com/mojang", "net.fabricmc", "net/fabricmc", "net.neoforged", "net/neoforged"];
+
+fn links_into_game(line: &str) -> bool {
+    GAME_PACKAGES.iter().any(|p| line.contains(p))
+}
+
+const API_MISMATCH_GAME_REASON: &str =
+    "Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию.";
+
+const API_MISMATCH_LIBRARY_REASON: &str = "Один из модов зовёт код другого мода или библиотеки, которого нет в установленной версии: версии модов не сходятся между собой. Обнови мод из конца лога вместе с модами, от которых он зависит, или убери его.";
+
 #[cfg(test)]
 pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
     let v = crash_verdict(&crash_text(game_dir, since));
@@ -635,7 +681,8 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         } else {
             "missing_deps"
         };
-        return verdict(mod_fault_reason(&faults), kind);
+        let reason = if kind == "missing_deps" { missing_deps_reason(text).unwrap_or_else(|| mod_fault_reason(&faults)) } else { mod_fault_reason(&faults) };
+        return verdict(reason, kind);
     } else if loader_reported_missing_dependency(&low) {
         ("Не хватает зависимости одного из модов.", "missing_deps")
     } else if let Some(file) = wrong_game.first() {
@@ -653,21 +700,14 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         || low.contains("present in multiple files")
     {
         ("Конфликт модов — есть дубли или несовместимые моды.", "conflict")
-    } else if low.contains("mixin apply failed")
-        || low.contains("mixin apply for mod ")
-        || low.contains("mixinapplyerror")
-        || low.contains("mixintransformererror")
-    {
+    } else if super::crashcause::mixin_failed_fatally(text, &MIXIN_VERDICT_MARKERS) {
         ("Один из модов не подошёл к этой версии игры (ошибка миксина).", "mixin")
-    } else if low.contains("nosuchmethoderror")
-        || low.contains("noclassdeffounderror")
-        || low.contains("nosuchfielderror")
-        || low.contains("incompatibleclasschangeerror")
-    {
+    } else if let Some(line) = super::crashcause::fatal_line_with(text, &LINKAGE_MARKERS) {
         // Загрузчик пропустил мод, а код внутри него зовёт то, чего в этой версии
         // игры уже нет. Так падает сборка, перенесённая на другую версию, — часто
         // не на запуске, а при входе на сервер, когда мод впервые доходит до дела.
-        ("Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию.", "api_mismatch")
+        let reason = if links_into_game(&line) { API_MISMATCH_GAME_REASON } else { API_MISMATCH_LIBRARY_REASON };
+        (reason, "api_mismatch")
     } else if window_failed(&low) {
         ("Игра не смогла открыть окно — дело в видеокарте или её драйвере. Обнови драйвер видеокарты.", "gpu")
     } else if text.trim().is_empty() {
@@ -1501,8 +1541,9 @@ pub(crate) async fn install_and_launch_into(
     // или 502 на выкатке роняет игру до окна (2.0.122, 25.09.2026: 13 игроков
     // за 6 часов). Сети нет даже у лаунчера — игра идёт офлайн, а не падает.
     let mut prefetched: Option<String> = None;
+    let mut agent_held: Option<GameAgent> = None;
     if !auth.yggdrasil.is_empty() {
-        match ensure_authlib_injector().await {
+        match ensure_authlib_injector().await.and_then(|jar| agent_for_game(&jar)) {
             // One GET to the Millida skin server for its description. The password and the Microsoft token are not sent there.
             Ok(jar) => match get_json(&auth.yggdrasil).await {
                 Ok(meta) => {
@@ -1511,7 +1552,8 @@ pub(crate) async fn install_and_launch_into(
                         "-Dauthlibinjector.yggdrasil.prefetched={}",
                         base64::engine::general_purpose::STANDARD.encode(meta.to_string())
                     ));
-                    agent = Some(format!("-javaagent:{}={}", jar.to_string_lossy(), auth.yggdrasil));
+                    agent = Some(format!("-javaagent:{}={}", jar.path.to_string_lossy(), auth.yggdrasil));
+                    agent_held = Some(jar);
                 }
                 Err(e) => {
                     warn(&app, &format!("Сервер скинов Millida не ответил ({}) — запускаем в офлайн-режиме", e));
@@ -1857,6 +1899,7 @@ pub(crate) async fn install_and_launch_into(
     std::thread::spawn(move || {
         let _media = media;
         let _rewind = rewind;
+        let _agent = agent_held;
         let (status, evidence, elapsed) = watch_session(&mut child, start, pid, &pname, &server_now, &app2, |status| {
             if status.is_ok() {
                 wait_log_readers(&readers, LOG_DRAIN_WAIT);
@@ -2385,6 +2428,87 @@ mod tests {
         assert!(v.cause.contains("NullPointerException"), "в причину попадает настоящее исключение: {}", v.cause);
         let required = " - Mod 'Archers' (archers) 1.0.6 requires version 0.12.3 or later of spell_engine, which is missing!";
         assert_eq!(crash_verdict(required).kind, "missing_deps", "обязательная зависимость по-прежнему распознаётся");
+    }
+
+    /// Loader refusal -> what the verdict names. The requiring mod alone sent the
+    /// player looking for a mod that was installed all along.
+    #[test]
+    fn a_missing_dependency_verdict_names_what_is_needed() {
+        let cases: [(&str, &[&str], &str); 3] = [
+            (
+                "\tMod ID: 'flywheel', Requested by: 'create', Expected range: '[0.6.11,0.6.12)', Actual version: '1.0.5'",
+                &["create → flywheel", "стоит 1.0.5"],
+                "The Last of Us 0.7.6, 20.10: Create is there, its Flywheel is the wrong one",
+            ),
+            (
+                " - Mod 'More Culling' (moreculling) 1.20.1-0.24.6 requires version 11.0.99 or later of cloth-config, which is missing!",
+                &["More Culling → cloth-config"],
+                "the library itself is absent: no version note",
+            ),
+            (
+                "\tMod ID: 'curios', Requested by: 'artifacts', Expected range: '[5.0,)', Actual version: '[MISSING]'",
+                &["artifacts → curios"],
+                "NeoForge format of an absent dependency",
+            ),
+        ];
+        for (log, parts, why) in cases {
+            let v = crash_verdict(log);
+            assert_eq!(v.kind, "missing_deps", "{why}");
+            for part in parts {
+                assert!(v.reason.contains(part), "{why}: {:?} must contain {part:?}", v.reason);
+            }
+        }
+    }
+
+    /// Log excerpt -> (kind, does the reason blame the game version). Each case is
+    /// a real report: the verdict named a cause the log did not show, and the
+    /// player went updating mods that were fine.
+    #[test]
+    fn mod_code_verdicts_follow_the_failure_that_ended_the_game() {
+        let skipped_mixin = "[Render thread/WARN]: Mixin apply for mod millida failed millida.mixins.json:HudWetWorldMixin from mod millida -> net.minecraft.client.renderer.LevelRenderer: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException non-static callback method\n\
+             org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: non-static callback method targets a static method which is not supported\n";
+        let report = |chain: &str| {
+            format!(
+                "---- Minecraft Crash Report ----\nDescription: Initializing game\n\n{chain}\n\nA detailed walkthrough of the error, its code path and all known details is as follows:\n---------------------------------------------------------------------------------------\n"
+            )
+        };
+        let block_models = format!(
+            "{skipped_mixin}{}",
+            report("java.lang.NullPointerException: Block models not yet initialized\n\tat knot//net.minecraft.client.resources.model.ModelManager.getBlockStateModelSet(ModelManager.java:88)")
+        );
+        let caught_probe = "[Render thread/ERROR] [AllTheLeaks/]: Failed to instantiate constructor.\n\
+             java.lang.NoClassDefFoundError: io/redspace/ironsspellbooks/entity/mobs/dead_king_boss/DeadKingMusicManager\n\
+             \tat dev.uncandango.alltheleaks.leaks.client.mods.irons_spellbooks.UntrackedIssue002.<clinit>(UntrackedIssue002.java:20)\n\
+             [12:22:05] [Forge Version Check/INFO] [ne.mi.fm.VersionChecker/]: [iceberg] Starting version check";
+        let old_keybinding = report(
+            "java.lang.RuntimeException: Could not execute entrypoint stage 'main' due to errors, provided by 'wi_zoom' at 'net.wimods.zoom.WiZoomInitializer'!\n\
+             Caused by: java.lang.NoSuchMethodError: 'void net.minecraft.class_304.<init>(java.lang.String, net.minecraft.class_3675$class_307, int, java.lang.String)'",
+        );
+        let javafx = report(
+            "java.lang.RuntimeException: Could not execute entrypoint stage 'client' due to errors, provided by 'mc-armor-hud' at 'com.armor.hud.mc.McarmorhudClient'!\n\
+             Caused by: java.lang.NoClassDefFoundError: javafx/application/Application",
+        );
+        let library_on_forge = "[main/INFO] [STDERR/]: [java.lang.ThreadGroup:uncaughtException:1077]: java.lang.RuntimeException: java.lang.reflect.InvocationTargetException\n\
+             [main/INFO] [STDERR/]: [java.lang.Throwable:printStackTrace:659]: Caused by: java.lang.NoSuchMethodError: 'com.mr_toad.lib.api.config.entry.ConfigEntry com.mr_toad.lib.api.config.entry.BoolEntry.withWarning(com.mr_toad.lib.api.config.util.HighlightWarning)'\n\
+             Exception in thread \"main\" ";
+        let fatal_mixin_on_forge = "[main/INFO] [STDERR/]: [java.lang.ThreadGroup:uncaughtException:-1]: java.lang.RuntimeException: org.spongepowered.asm.mixin.throwables.MixinApplyError: Mixin [pixelmonspeedup.mixins.json:BattleControllerMixin from mod pixelmonspeedup] FAILED during PREPARE\n\
+             Exception in thread \"main\" ";
+        let cases: [(&str, &str, Option<bool>, &str); 7] = [
+            (&block_models, "unknown", None, "26.3, 19.10: a skipped WARN mixin of an optional feature read as «ошибка миксина», the crash was an NPE in model loading"),
+            (skipped_mixin, "unknown", None, "the skipped mixin alone is not a crash"),
+            (caught_probe, "unknown", None, "DotG 1.2.9, 20.10: AllTheLeaks caught a missing optional class and the game kept loading"),
+            (&old_keybinding, "api_mismatch", Some(true), "PvP build, 1.21.11: a 1.21.4 jar calls the old KeyBinding constructor — another game version"),
+            (&javafx, "api_mismatch", Some(false), "1.21.11, 20.10: the mod needs JavaFX, no game version has it"),
+            (library_on_forge, "api_mismatch", Some(false), "DotG 1.2.9, 20.10: Palladium against an older ToadLib — a library mismatch on Forge's STDERR path"),
+            (fatal_mixin_on_forge, "mixin", None, "pixelmon, 20.10: Forge prints the fatal mixin through STDERR at INFO and it still decides"),
+        ];
+        for (log, kind, game, why) in cases {
+            let v = crash_verdict(log);
+            assert_eq!(v.kind, kind, "{why}: got {:?}", v.reason);
+            if let Some(game) = game {
+                assert_eq!(v.reason == API_MISMATCH_GAME_REASON, game, "{why}: reason {:?}", v.reason);
+            }
+        }
     }
 
     /// Окно — только до меню. «GLFW»/«OpenGL» в отчёте о вылете посреди игры

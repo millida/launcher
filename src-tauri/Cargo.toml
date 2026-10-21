@@ -1,6 +1,6 @@
 [package]
 name = "millida-launcher"
-version = "2.0.255"
+version = "2.0.256"
 description = "Millida Launcher — безопасный лаунчер Minecraft"
 authors = ["Millida"]
 edition = "2021"
@@ -83,7 +83,7 @@ webview2-com = "0.38"
 # Rewind (src/engine/rewind/win): Windows Graphics Capture of the game window,
 # GPU scaling to NV12, the hardware H.264 encoder and AAC through Media
 # Foundation, WASAPI process loopback. All in-box, so nothing extra ships.
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Foundation", "Media_Control", "Storage_Streams", "Graphics", "Graphics_Capture", "Graphics_DirectX", "Graphics_DirectX_Direct3D11", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Media_MediaFoundation", "Win32_Media_Audio", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Ole", "Win32_System_WinRT", "Win32_System_WinRT_Direct3D11", "Win32_System_WinRT_Graphics", "Win32_System_WinRT_Graphics_Capture", "Win32_Security", "Win32_System_Threading", "Win32_System_Performance", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Foundation", "Media_Control", "Storage_Streams", "Graphics", "Graphics_Capture", "Graphics_DirectX", "Graphics_DirectX_Direct3D11", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Media_MediaFoundation", "Win32_Media_Audio", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Ole", "Win32_System_WinRT", "Win32_System_WinRT_Direct3D11", "Win32_System_WinRT_Graphics", "Win32_System_WinRT_Graphics_Capture", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Performance", "Win32_UI_WindowsAndMessaging"] }
 # VPN clients in "system proxy" mode (v2rayN, Hiddify, Clash) only set the
 # WinINet proxy. Without this feature the core went straight past it into the
 # resets the player turned the VPN on to avoid, while the browser worked.

@@ -148,6 +148,22 @@
 .rv2-cash-n { font-size: 96px; font-weight: 900; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 6px 0 #000, 0 0 30px var(--sh-tone); }
 .rv2-cash-w { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sh-tone); text-shadow: 0 2px 0 #000; }
 
+/* ---------- Фрагменты вещи: сумма крупно, вещь — целью сбора ---------- */
+.rv2-fragwin { gap: 6px; }
+.rv2-fragwin-head { display: flex; align-items: center; gap: 14px; }
+.rv2-fragwin-head .rar-frag { image-rendering: pixelated; filter: drop-shadow(0 0 24px var(--sh-tone)); }
+.rv2-fragwin-item {
+  display: flex; align-items: center; gap: 14px; width: min(360px, 84vw); margin-top: 14px; padding: 10px 14px 10px 10px;
+  background: color-mix(in srgb, var(--sh-tone) 26%, #15181a); --px-n: 10px; clip-path: var(--px-10);
+}
+.rv2-fragwin-pic { display: grid; place-items: center; flex: none; width: 84px; height: 84px; background: rgba(0, 0, 0, 0.28); --px-n: 5px; clip-path: var(--px-5); }
+.rv2-fragwin-pic img { width: 86%; height: 86%; object-fit: contain; image-rendering: pixelated; }
+.rv2-fragwin-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; flex: 1; }
+.rv2-fragwin-meta .rar-chip { position: static; }
+.rv2-fragwin-meta .rar-fbar { width: 100%; }
+.rv2-fragwin-name { font-size: 17px; font-weight: 900; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.rv2-plus-frag { display: inline-flex; align-items: center; gap: 4px; color: var(--sh-tone); }
+
 /* Итог: карточки ряда одной высоты — полоса редкости внизу на одной линии, даже если имя вещи в две строки (QA 06.10.2026). */
 .rv2-grid { align-items: stretch; }
 .rv2-sum-cell > .rv2-card { flex: 1; }

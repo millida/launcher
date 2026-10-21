@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { planMedia, readsRussian, russianText, tagLabels } from './itemBody'
+import { foreignBody, planMedia, readsRussian, russianText, tagLabels } from './itemBody'
 
 const EN = 'A modpack specially designed to bring an incredibly hardcore and semi-realism challenge.'
 const RU = 'Сборка для хардкорного выживания с элементами RPG.'
@@ -51,4 +51,15 @@ describe('tag labels', () => {
     [['adventure', 'приключения'], ['Приключения'], 'synonyms collapse into one chip'],
   ]
   for (const [tags, want, why] of cases) test(why, () => expect(tagLabels(tags, 8), why).toEqual(want))
+})
+
+describe('description outside the Russian interface', () => {
+  const cases: Array<[string, string, string | null, string, string]> = [
+    ['Full author text', RU, EN, 'Full author text', 'the author text from Modrinth is the fullest non-Russian description and wins'],
+    ['', EN, RU, EN, 'a catalogue article in the asked language is shown as is'],
+    ['', RU, EN, EN, 'a catalogue article left in Russian gives way to the translated summary'],
+    ['', RU, RU, '', 'with Russian everywhere the page says there is no description instead of showing Russian'],
+    ['', '', null, '', 'nothing at all stays empty'],
+  ]
+  for (const [full, body, summary, want, why] of cases) test(why, () => expect(foreignBody(full, body, summary), why).toBe(want))
 })

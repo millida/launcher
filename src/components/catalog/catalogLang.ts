@@ -1,9 +1,13 @@
 import { getLocale, type Locale } from '../../i18n'
 
-export type CatalogLang = 'en'
+const TRANSLATED = ['en', 'de', 'pl', 'tr', 'pt-BR', 'es'] as const satisfies readonly Locale[]
 
-/// The catalogue is written in Russian and translated only into English; every other interface reads English too.
-export const catalogLang = (locale: Locale = getLocale()): CatalogLang | null => (locale === 'ru' ? null : 'en')
+export type CatalogLang = (typeof TRANSLATED)[number]
+
+const isTranslated = (locale: Locale): locale is CatalogLang => (TRANSLATED as readonly Locale[]).includes(locale)
+
+/// The catalogue is written in Russian and translated into the public interface languages; any other interface reads English.
+export const catalogLang = (locale: Locale = getLocale()): CatalogLang | null => (locale === 'ru' ? null : isTranslated(locale) ? locale : 'en')
 
 /// Russian addresses stay byte-for-byte as before, so their server and disk caches keep working.
 export function withCatalogLang(path: string, locale: Locale = getLocale()): string {

@@ -18,12 +18,9 @@ import type { CatalogFile } from './paid'
 
 const account = (currency: MoneyCurrency): MoneyView => ({
   region: currency === 'RUB' ? 'RU' : 'INTL',
-  proven: true,
-  country: currency === 'RUB' ? 'RU' : 'US',
   displayCurrency: currency,
   balance: { kopecks: 50000, displayMinor: currency === 'RUB' ? 50000 : 555, displayCurrency: currency, rate: currency === 'RUB' ? 1 : 90 },
   rubPerUsd: 90,
-  canProveRuVia: [],
   topup: { RUB: { minMinor: 10000, maxMinor: 10000000, methods: [], methodMinMinor: {} }, USD: { minMinor: 100, maxMinor: 100000, methods: [], methodMinMinor: {} } },
 })
 

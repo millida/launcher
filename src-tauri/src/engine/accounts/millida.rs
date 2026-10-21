@@ -120,8 +120,8 @@ pub fn market_header(raw: Option<&str>) -> Result<Option<&'static str>, String> 
     }
 }
 
-/// An unproven buyer is shown rubles only when the request states a ruble-zone language,
-/// so money requests carry the interface language. Only the launcher's own codes pass.
+/// The server prices by the interface language (Russian in rubles, any other in dollars),
+/// so money requests carry it. Only the launcher's own codes pass.
 const LANGS: [&str; 18] = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt-BR", "id", "ur", "ru", "de", "ja", "vi", "te", "tr", "ko", "pl"];
 
 pub fn lang_header(raw: Option<&str>) -> Result<Option<&'static str>, String> {
@@ -768,14 +768,55 @@ fn cookie_value(header: &str, name: &str) -> Option<String> {
 /// invalidates the whole token family.
 // Session refresh: the refresh token goes to api.millida.net, the new one comes back in the rt2 cookie.
 pub async fn millida_refresh(refresh_token: &str) -> Result<(String, String), String> {
-    let res = client()
-        .post(format!("{}/auth/refresh", MILLIDA_API))
+    refresh_at(MILLIDA_API, refresh_token, [client(), spare_client()], REFRESH_ATTEMPT).await
+}
+
+/// The server answers a spent refresh token with a fresh pair only for 60 s
+/// after it rotated it (REFRESH_ROTATION_GRACE_MS in trade-api); later it is
+/// treated as stolen and the session is revoked. When the rotated pair is lost
+/// on the way back, the client's 60 s read timeout plus the 30 s cooldown put
+/// the resend at about 90 s, past that window. Two attempts of this length fit
+/// inside it.
+const REFRESH_ATTEMPT: std::time::Duration = std::time::Duration::from_secs(20);
+
+enum RefreshFailure {
+    /// The server gave its verdict: sending the same token again changes nothing.
+    Answered(String),
+    /// No verdict reached us, yet the server may already have rotated the pair.
+    Unanswered(String),
+}
+
+async fn refresh_at(
+    base: &str,
+    refresh_token: &str,
+    [first, spare]: [reqwest::Client; 2],
+    attempt: std::time::Duration,
+) -> Result<(String, String), String> {
+    match refresh_once(&first, base, refresh_token, attempt).await {
+        Ok(pair) => Ok(pair),
+        Err(RefreshFailure::Answered(e)) => Err(e),
+        Err(RefreshFailure::Unanswered(_)) => match refresh_once(&spare, base, refresh_token, attempt).await {
+            Ok(pair) => Ok(pair),
+            Err(RefreshFailure::Answered(e) | RefreshFailure::Unanswered(e)) => Err(e),
+        },
+    }
+}
+
+async fn refresh_once(
+    c: &reqwest::Client,
+    base: &str,
+    refresh_token: &str,
+    attempt: std::time::Duration,
+) -> Result<(String, String), RefreshFailure> {
+    let res = c
+        .post(format!("{}/auth/refresh", base))
+        .timeout(attempt)
         .json(&serde_json::json!({ "refreshToken": refresh_token }))
         .send()
         .await
-        .map_err(|e| net_err(&e))?;
+        .map_err(|e| RefreshFailure::Unanswered(net_err(&e)))?;
     if !res.status().is_success() {
-        return Err(format!("http {}", res.status().as_u16()));
+        return Err(RefreshFailure::Answered(format!("http {}", res.status().as_u16())));
     }
     let next = res
         .headers()
@@ -784,10 +825,10 @@ pub async fn millida_refresh(refresh_token: &str) -> Result<(String, String), St
         .filter_map(|v| v.to_str().ok())
         .find_map(|c| cookie_value(c, REFRESH_COOKIE))
         .unwrap_or_else(|| refresh_token.to_string());
-    let body: Value = res.json().await.map_err(|e| e.to_string())?;
+    let body: Value = res.json().await.map_err(|e| RefreshFailure::Unanswered(e.to_string()))?;
     let access = body["accessToken"].as_str().unwrap_or_default().to_string();
     if access.is_empty() {
-        return Err("в ответе нет accessToken".into());
+        return Err(RefreshFailure::Answered("в ответе нет accessToken".into()));
     }
     Ok((access, next))
 }
@@ -929,7 +970,7 @@ mod tests {
         type Case<'a> = (Option<&'a str>, Result<Option<&'a str>, ()>, &'a str);
         let cases: [Case; 5] = [
             (None, Ok(None), "a request without a language stays exactly as before"),
-            (Some("ru"), Ok(Some("ru")), "a ruble-zone language lets an unproven buyer see rubles"),
+            (Some("ru"), Ok(Some("ru")), "Russian is priced in rubles"),
             (Some("pt-BR"), Ok(Some("pt-BR")), "a regional code passes as the launcher spells it"),
             (Some("ru\r\nX-Evil: 1"), Err(()), "a webview value must never become a header of its own"),
             (Some("xx"), Err(()), "a language the launcher does not have is refused"),
@@ -1110,6 +1151,111 @@ mod tests {
             format!("{}/core/list?page=1&limit=20", MILLIDA_API),
             "the resolved URL must match what plain concatenation produced before, \
              otherwise existing callers would start hitting different endpoints",
+        );
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Reply {
+        Lost,
+        Status(u16),
+        Rotated,
+    }
+
+    async fn refresh_server(script: Vec<Reply>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let base = format!("http://{}", listener.local_addr().expect("addr"));
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = seen.clone();
+        tokio::spawn(async move {
+            for reply in script {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 4096];
+                while !String::from_utf8_lossy(&buf).contains("spent-token") {
+                    match sock.read(&mut chunk).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    }
+                }
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let answer = match reply {
+                    Reply::Lost => {
+                        tokio::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                            drop(sock);
+                        });
+                        continue;
+                    }
+                    Reply::Status(code) => {
+                        format!("HTTP/1.1 {code} Nope\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}")
+                    }
+                    Reply::Rotated => {
+                        let body = r#"{"accessToken":"fresh-access"}"#;
+                        format!(
+                            "HTTP/1.1 200 OK\r\nSet-Cookie: rt2=fresh-refresh; Path=/\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        )
+                    }
+                };
+                let _ = sock.write_all(answer.as_bytes()).await;
+            }
+        });
+        (base, seen)
+    }
+
+    fn direct_client() -> reqwest::Client {
+        reqwest::Client::builder().no_proxy().build().expect("client")
+    }
+
+    #[tokio::test]
+    async fn a_lost_rotation_is_asked_again_inside_the_server_grace() {
+        let attempt = std::time::Duration::from_millis(400);
+        let ok = Ok(("fresh-access".to_string(), "fresh-refresh".to_string()));
+        // (server replies per connection, expected result, requests sent, why this case is pinned)
+        type Case<'a> = (Vec<Reply>, Result<(String, String), String>, usize, &'a str);
+        let cases: Vec<Case> = vec![
+            (
+                vec![Reply::Lost, Reply::Rotated],
+                ok.clone(),
+                2,
+                "the server rotated the pair but the reply never came back: only a resend inside the \
+                 60 s grace gets the new pair, a later one is judged reuse and signs the player out \
+                 (prod 20.10.2026: 519 of 1503 desktop revocations in three days landed at 90-100 s)",
+            ),
+            (vec![Reply::Rotated], ok.clone(), 1, "an answered refresh is sent exactly once"),
+            (
+                vec![Reply::Status(401), Reply::Rotated],
+                Err("http 401".to_string()),
+                1,
+                "the server's own verdict on the token is final: sending it again is a reuse",
+            ),
+            (
+                vec![Reply::Status(503), Reply::Rotated],
+                Err("http 503".to_string()),
+                1,
+                "an answered failure did not rotate anything, the cooldown handles the retry",
+            ),
+        ];
+        for (script, expected, requests, why) in cases {
+            let (base, seen) = refresh_server(script.clone()).await;
+            let started = std::time::Instant::now();
+            let got = super::refresh_at(&base, "spent-token", [direct_client(), direct_client()], attempt).await;
+            assert_eq!(got, expected, "server script {script:?}. Reason this case is pinned: {why}");
+            assert_eq!(
+                seen.load(std::sync::atomic::Ordering::SeqCst),
+                requests,
+                "server script {script:?}: wrong number of refresh requests. Reason this case is pinned: {why}",
+            );
+            assert!(
+                started.elapsed() < attempt * 3,
+                "server script {script:?}: the refresh took {:?}, a resend this late falls outside the grace window",
+                started.elapsed(),
+            );
+        }
+        assert!(
+            super::REFRESH_ATTEMPT * 2 < std::time::Duration::from_secs(60),
+            "two refresh attempts must fit inside the server's 60 s rotation grace, otherwise the resend revokes the session",
         );
     }
 

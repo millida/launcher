@@ -87,7 +87,7 @@ pub fn apply_gpu_pref(cmd: &mut Command, java: &Path, pref: GpuPref) {
 }
 
 /// На Windows «Авто» — это «производительная видеокарта». Игра идёт как
-/// копия MillidaLauncher.exe, а не javaw.exe: профили драйвера NVIDIA/AMD
+/// копия MillidaMinecraft.exe, а не javaw.exe: профили драйвера NVIDIA/AMD
 /// под Java её не узнают, и «Пусть Windows решает» на ноутбуке с двумя
 /// видеокартами отдаёт OpenGL встроенной — FPS вдвое ниже (25.09.2026).
 /// На машине с одной видеокартой запись ничего не меняет.

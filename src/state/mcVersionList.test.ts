@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test'
-import { versionOptions } from './mcVersionList'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { ensureMcVersionList, useMcVersionList, versionOptions } from './mcVersionList'
 import type { McVersion } from '../ipc/commands'
 
 const LIST: McVersion[] = [
@@ -24,5 +24,39 @@ describe('versionOptions', () => {
   test('non-release versions are labelled so the choice is deliberate', () => {
     const labels = versionOptions(LIST, true).map((o) => o.label)
     expect(labels).toEqual(['26.2', '26w05a · снапшот', 'b1.7.3 · бета'])
+  })
+})
+
+describe('ensureMcVersionList', () => {
+  const realFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  // A snapshot released while the launcher stayed open used to stay invisible
+  // until restart: the first answer was kept for the whole session.
+  test('a later picker open asks again, back-to-back opens share one answer', async () => {
+    let served = ['26.2']
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls++
+      return new Response(JSON.stringify({ versions: served.map((id) => ({ id, type: 'release' })) }))
+    }) as unknown as typeof fetch
+    const clock = spyOn(Date, 'now').mockReturnValue(1_000_000)
+    try {
+      await ensureMcVersionList()
+      expect(useMcVersionList.getState().list.map((v) => v.id)).toEqual(['26.2'])
+
+      served = ['26w43a', '26.2']
+      await ensureMcVersionList()
+      expect(calls).toBe(1)
+
+      clock.mockReturnValue(1_000_000 + 61_000)
+      await ensureMcVersionList()
+      expect(calls).toBe(2)
+      expect(useMcVersionList.getState().list.map((v) => v.id)).toEqual(['26w43a', '26.2'])
+    } finally {
+      clock.mockRestore()
+    }
   })
 })

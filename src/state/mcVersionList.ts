@@ -61,20 +61,33 @@ function browserManifest(): Promise<McVersion[]> {
 }
 
 let pending: Promise<void> | null = null
+let loadedAt = 0
 
-// One fetch feeds every picker: the manifest is the same for all of them, and a
-// second request only bought a second way to show a different list.
+// Pickers opened back to back share one answer instead of asking the core each.
+const REUSE_MS = 60_000
+
+// One store feeds every picker: the manifest is the same for all of them, and a
+// second copy only bought a second way to show a different list. The list is
+// asked again on a later open: a session-long copy hid a snapshot released
+// while the launcher sat in the tray. The core keeps its own short TTL and
+// answers from disk when offline.
 export function ensureMcVersionList(): Promise<void> {
   if (pending) return pending
+  const held = useMcVersionList.getState().list.length > 0
+  if (held && Date.now() - loadedAt < REUSE_MS) return Promise.resolve()
   pending = (hasTauri() ? listVersionsTyped() : browserManifest())
     .then((list) => {
       if (!Array.isArray(list) || !list.length) throw new Error(t('Mojang вернул пустой список версий'))
+      loadedAt = Date.now()
       useMcVersionList.setState({ list, error: '' })
     })
     .catch((e) => {
-      pending = null
+      if (held) return
       useMcVersionList.setState({ error: '' + e })
       throw e
+    })
+    .finally(() => {
+      pending = null
     })
   return pending
 }

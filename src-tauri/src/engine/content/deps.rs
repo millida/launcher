@@ -632,6 +632,108 @@ fn local_conflicts(profile: &str, incoming: &DepNode) -> Vec<DepConflict> {
         .collect()
 }
 
+/// What in the jars themselves would stop the loader before the window opens:
+/// `missing` — mod ids the incoming jar requires and no file of the build answers
+/// for, `clashes` — `breaks` rules either side declares against the other.
+#[derive(Default, Debug, PartialEq)]
+pub(crate) struct JarBlockers {
+    pub missing: Vec<String>,
+    pub clashes: Vec<String>,
+}
+
+impl JarBlockers {
+    pub(crate) fn is_clear(&self) -> bool {
+        self.missing.is_empty() && self.clashes.is_empty()
+    }
+
+    pub(crate) fn describe(&self) -> Vec<String> {
+        self.missing
+            .iter()
+            .map(|id| format!("нужен мод «{}», его нет", id))
+            .chain(self.clashes.iter().cloned())
+            .collect()
+    }
+}
+
+fn answers_for(m: &LocalMeta, id: &str) -> bool {
+    m.mod_id == id || m.provides.iter().any(|p| p == id)
+}
+
+pub(crate) fn jar_blockers(
+    incoming: &LocalMeta,
+    others: &[LocalMeta],
+    runs: &[String],
+    loader_id: &str,
+    loader_version: Option<&str>,
+) -> JarBlockers {
+    let mut out = JarBlockers::default();
+    let Some((requires, breaks)) = relations_on(incoming, runs) else {
+        let declared: &[String] = if incoming.loaders.is_empty() { std::slice::from_ref(&incoming.loader) } else { &incoming.loaders };
+        out.clashes.push(wrong_loader_text(declared, loader_id));
+        return out;
+    };
+    for id in requires {
+        if !others.iter().any(|o| answers_for(o, id)) && !loader_provides(loader_id, loader_version, id) && !out.missing.contains(id) {
+            out.missing.push(id.clone());
+        }
+    }
+    for b in breaks {
+        if let Some(o) = others.iter().find(|o| answers_for(o, &b.id) && version_satisfies(&o.version, &b.range)) {
+            out.clashes.push(format!("несовместим с «{}» {}", o.title, o.version));
+        }
+    }
+    let ours = |id: &str| answers_for(incoming, id);
+    for o in others {
+        let Some((_, their_breaks)) = relations_on(o, runs) else { continue };
+        if their_breaks.iter().any(|b| ours(&b.id) && version_satisfies(&incoming.version, &b.range)) {
+            out.clashes.push(format!("«{}» объявляет несовместимость с ним", o.title));
+        }
+    }
+    out
+}
+
+async fn scan_mods(profile: &str) -> Vec<LocalMeta> {
+    let prof = profile.to_string();
+    tauri::async_runtime::spawn_blocking(move || scan_local_meta(&prof, "mod", false))
+        .await
+        .unwrap_or_default()
+}
+
+fn split_incoming(all: Vec<LocalMeta>, file_name: &str) -> Option<(LocalMeta, Vec<LocalMeta>)> {
+    let (mine, others): (Vec<LocalMeta>, Vec<LocalMeta>) = all.into_iter().partition(|m| m.file_name == file_name);
+    mine.into_iter().next().map(|m| (m, others))
+}
+
+/// Brings a jar the launcher has just put into a build to a state it starts in,
+/// judged by the jar and not by the catalogue page: a catalogue page may list no
+/// dependency while fabric.mod.json demands one, or the newest file may declare
+/// `breaks` against the only renderer published for that game version. Missing
+/// requirements are installed; whatever still blocks the start comes back, and
+/// the caller decides.
+pub(crate) async fn settle_installed_jar(profile: &str, file_name: &str) -> JarBlockers {
+    let ctx = ctx_of(profile, "mod");
+    let loader_version = load_profiles().into_iter().find(|p| p.name == profile).and_then(|p| p.loader_version);
+    let runs: Vec<String> = std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect();
+    let Some((incoming, others)) = split_incoming(scan_mods(profile).await, file_name) else {
+        return JarBlockers::default();
+    };
+    let first = jar_blockers(&incoming, &others, &runs, &ctx.loader_id, loader_version.as_deref());
+    if first.missing.is_empty() {
+        return first;
+    }
+    for id in &first.missing {
+        if let Ok(p) = pick_modrinth(&ctx, catalog_slug(id), "").await {
+            if install_pick(&ctx, &p).await.is_ok() {
+                install_required(&ctx, p.deps).await;
+            }
+        }
+    }
+    match split_incoming(scan_mods(profile).await, file_name) {
+        Some((incoming, others)) => jar_blockers(&incoming, &others, &runs, &ctx.loader_id, loader_version.as_deref()),
+        None => first,
+    }
+}
+
 /// Installs every hard dependency the given relations pull in, transitively.
 /// Returns the ones nothing could be found for, so the caller can say so instead
 /// of leaving a build that will not start.
@@ -1050,6 +1152,63 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
+    use super::{jar_blockers, BreakRule, LocalMeta};
+
+    fn declared_jar(file: &str, id: &str, version: &str, requires: &[&str], breaks: &[(&str, &str)]) -> LocalMeta {
+        LocalMeta {
+            kind: "mod".into(),
+            file_name: file.into(),
+            title: id.into(),
+            version: version.into(),
+            loader: "fabric".into(),
+            mod_id: id.into(),
+            requires: requires.iter().map(|s| s.to_string()).collect(),
+            breaks: breaks.iter().map(|(id, range)| BreakRule { id: id.to_string(), range: range.to_string() }).collect(),
+            ..Default::default()
+        }
+    }
+
+    /// (incoming jar, the rest of the build) -> (missing ids, clash count). The
+    /// FPS mode puts a jar into a build by itself; a blocker it misses is a build
+    /// Fabric refuses on the very first start.
+    #[test]
+    fn a_jar_is_judged_by_what_it_declares() {
+        let culling_1201 = declared_jar("moreculling-1.20.1-0.24.6.jar", "moreculling", "1.20.1-0.24.6", &["cloth-config"], &[]);
+        let culling_1211 = declared_jar("moreculling-fabric-1.21.1-1.0.10.jar", "moreculling", "1.0.10", &["cloth-config"], &[("sodium", "<=0.6.13")]);
+        let sodium_06 = declared_jar("sodium-fabric-0.6.13+mc1.21.1.jar", "sodium", "0.6.13+mc1.21.1", &[], &[]);
+        let sodium_07 = declared_jar("sodium-fabric-0.7.0+mc1.21.1.jar", "sodium", "0.7.0+mc1.21.1", &[], &[]);
+        let cloth = declared_jar("cloth-config-15.0.140-fabric.jar", "cloth-config", "15.0.140", &[], &[]);
+        let mut cloth_by_provides = declared_jar("cloth-config2.jar", "cloth-config2", "11.1.136", &[], &[]);
+        cloth_by_provides.provides = vec!["cloth-config".into()];
+        let old_guard = declared_jar("oldmod.jar", "oldmod", "1.0", &[], &[("moreculling", "<1.0.0")]);
+        let hostile = declared_jar("hostile.jar", "hostile", "1.0", &[], &[("moreculling", "*")]);
+        let runs = vec!["fabric".to_string()];
+        type Case<'a> = (&'a LocalMeta, Vec<LocalMeta>, Vec<&'a str>, usize, &'a str);
+        let cases: Vec<Case> = vec![
+            (&culling_1201, vec![], vec!["cloth-config"], 0, "Modrinth lists no dependency for 0.24.6, the jar still needs Cloth Config"),
+            (&culling_1201, vec![cloth.clone()], vec![], 0, "the library is in the build: nothing blocks"),
+            (&culling_1201, vec![cloth_by_provides], vec![], 0, "a jar that provides the id answers for it"),
+            (&culling_1211, vec![cloth.clone(), sodium_06], vec![], 1, "1.0.10 breaks Sodium 0.6.13, the newest Sodium for 1.21.1"),
+            (&culling_1211, vec![cloth.clone(), sodium_07], vec![], 0, "a Sodium past the guard is fine: breaks is a version range, not a ban"),
+            (&culling_1201, vec![cloth.clone(), old_guard], vec![], 0, "a rule against older versions of the incoming jar does not apply"),
+            (&culling_1201, vec![cloth, hostile], vec![], 1, "a mod already in the build that breaks the incoming one blocks it too"),
+        ];
+        for (incoming, others, missing, clashes, why) in cases {
+            let got = jar_blockers(incoming, &others, &runs, "fabric", Some("0.16.10"));
+            assert_eq!(got.missing, missing, "{}: missing requirements. Why pinned: {why}", incoming.file_name);
+            assert_eq!(got.clashes.len(), clashes, "{}: clashes {:?}. Why pinned: {why}", incoming.file_name, got.clashes);
+        }
+    }
+
+    #[test]
+    fn a_jar_for_another_loader_is_a_blocker_by_itself() {
+        let mut forge_only = declared_jar("create-1.20.1-6.0.jar", "create", "6.0", &["flywheel"], &[]);
+        forge_only.loader = "forge".into();
+        let got = jar_blockers(&forge_only, &[], &["fabric".to_string()], "fabric", None);
+        assert!(got.missing.is_empty(), "the requirements of a foreign jar describe another game and must not be installed");
+        assert_eq!(got.clashes.len(), 1, "a Forge jar on Fabric never loads, the mode must not keep it");
+    }
+
     /// (loader, loader version, mod id) -> satisfied by the loader itself.
     #[test]
     fn a_catalogue_pack_is_audited_as_shipped() {

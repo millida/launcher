@@ -34,7 +34,7 @@ import { Icon } from '../components/Icon'
 import { Block, Group, Query, Row, Segs, Toggle } from '../components/SetKit'
 import { CloudSync } from '../components/CloudSync'
 import { SharedStore } from '../components/SharedStore'
-import { uiConfirm } from '../state/confirm'
+import { uiChoice, uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
 import { AudioSettings } from '../components/AudioSettings'
@@ -240,7 +240,7 @@ export function Settings({ on }: { on: boolean }) {
   const [telemetryOn, setTelemetryOn] = useState(telemetryEnabled)
   const [backAfterGame, setBackAfterGame] = useState(restoreOnGameExit)
   const [tray, setTray] = useState(hasTray)
-  const [autostart, setAutostartOn] = useState(true)
+  const [autostart, setAutostartOn] = useState(false)
   const [streakRemind, setStreakRemindOn] = useState(streakRemindOn)
   const [discord, setDiscord] = useState(() => localStorage.getItem('m-discord') !== '0')
   const [musicAuto, setMusicAuto] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
@@ -356,11 +356,15 @@ export function Settings({ on }: { on: boolean }) {
     try {
       const p = await pickGameDir()
       if (!p) return
-      const move = await uiConfirm(t('Перенести в новую папку уже скачанные сборки, версии, миры и ассеты?'), {
+      // «Оставить на месте» is an action of its own: closing the question must
+      // not switch the folder without the builds.
+      const answer = await uiChoice(t('Перенести в новую папку уже скачанные сборки, версии, миры и ассеты?'), {
         confirmLabel: t('Перенести'),
         cancelLabel: t('Оставить на месте'),
         danger: false,
       })
+      if (answer === 'dismiss') return
+      const move = answer === 'yes'
       setMoving(true)
       showToast(move ? t('Переносим файлы игры…') : t('Меняем папку…'))
       await setGameDir(p, move)
@@ -368,7 +372,8 @@ export function Settings({ on }: { on: boolean }) {
       showToast(move ? t('Папка игры сменилась, файлы перенесены') : t('Папка игры сменилась'))
     } catch (e) {
       console.error('[settings] game dir', e)
-      showToast(t('Папка не сменилась'), 'error')
+      const why = String((e as { message?: string } | null)?.message ?? e ?? '').trim()
+      showToast(why ? t('Папка не сменилась') + ': ' + why : t('Папка не сменилась'), 'error')
     } finally {
       setMoving(false)
     }

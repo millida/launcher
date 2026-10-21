@@ -12,11 +12,12 @@ import {
 } from '../lib/rubies'
 import { api, hasMillidaAccount } from '../lib/api'
 import { affords, plusQuote, refreshMoney, shortfallFor, showMoneyError, showShortfall } from '../lib/useMoney'
+import { plusCheckout } from '../lib/money'
 import { isPaymentUrl } from '../lib/payHosts'
 import { openPaymentUrl } from '../lib/openPayment'
 import { MILLIDA_USER_KEY } from './accounts'
 import { apiErrorText } from '../lib/apiError'
-import { buyPlusMonth, loadPlus, plusCheckout, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
+import { buyPlusMonth, loadPlus, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
 import { logoutToLogin } from '../lib/session'
 import { watchPlusPurchase } from './plusWatch'
 import { purchaseFlow } from '../lib/purchaseTrack'
@@ -259,7 +260,7 @@ export const useDaily = create<DailyState>((set, get) => ({
       openPaymentUrl(fresh.url)
       return
     }
-    if (plusCheckout(get().plus) === 'balance') {
+    if (plusCheckout(plusQuote(tier), get().plus?.quote) === 'balance') {
       set({ busy: 'plus' })
       const paid = purchaseFlow('plus', 'plus')
       if (affords(plusQuote(tier)) === false) {

@@ -40,7 +40,7 @@ pub(crate) use loader_sums::*;
 pub use launch::*;
 pub use launch_guard::*;
 pub(crate) use earlyexit::*;
-pub(crate) use ansi_path::{ansi_safe_args, ansi_safe_path};
+pub(crate) use ansi_path::{ansi_readable_as_is, ansi_safe_args, ansi_safe_path};
 pub use pack_keep::*;
 pub use pack_launch::*;
 pub(crate) use native_launch::*;

@@ -12,7 +12,7 @@ import { capFirst, fmtNum, plural } from './site'
 import type { SkinTile } from './site'
 import { Back } from './ItemPage'
 import { dropItem, openItem } from './itemStore'
-import { useSkinTag } from './skinTag'
+import { skinTagLabel, useSkinTag } from './skinTag'
 import { useT } from '../../i18n'
 
 /*
@@ -153,7 +153,7 @@ export function SkinPage({ k }: { k: SkinTile }) {
                     requestAnimationFrame(() => document.querySelector('.content')?.scrollTo({ top: 0 }))
                   }}
                 >
-                  #{t.label}
+                  #{skinTagLabel(t.label)}
                 </button>
               ))}
             </div>

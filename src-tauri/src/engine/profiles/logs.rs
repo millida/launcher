@@ -51,7 +51,7 @@ pub struct McVersion {
 /// request left the version picker holding a single option — the build's current
 /// version — and changing the version looked impossible with nothing said.
 pub async fn list_versions_typed() -> Result<Vec<McVersion>, String> {
-    let m = get_json_fresh(MANIFEST, &game_root().join("version_manifest_v2.json"), MANIFEST_TTL).await?;
+    let m = get_json_conditional(MANIFEST, &game_root().join("version_manifest_v2.json"), MANIFEST_TTL).await?;
     Ok(m["versions"]
         .as_array()
         .map(|a| {

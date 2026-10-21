@@ -1,5 +1,5 @@
 // Where the launcher data lives: net.millida.launcher in the user data folder, the game root (inside it by default), moving the root, clearing the cache.
-// Only the cache (tmp and natives) and the old folder after a move are deleted.
+// Only the cache (tmp and natives) and, once the new root is in use, the originals copied there are deleted.
 use std::path::PathBuf;
 
 /// Inside Flatpak /app is read-only: self-update is handled by `flatpak update`
@@ -40,13 +40,65 @@ pub fn game_root_ready() -> Result<PathBuf, String> {
 /// Everything else under the game root is regenerated on demand.
 const ROOT_CONTENT: [&str; 6] = ["profiles", "versions", "libraries", "assets", "runtime", "natives"];
 
-/// Rename first (instant within one volume), copy-then-delete across volumes.
-/// Entries already present in the destination are left untouched.
-pub fn move_game_data(from: &std::path::Path, to: &std::path::Path) -> Result<usize, String> {
-    if from == to || !from.exists() {
-        return Ok(0);
+/// The first half of a move. Renamed entries already live only in the new
+/// root; copied ones are still whole in the old root too. Nothing is deleted
+/// until the new root is the one the launcher reads (`commit`), and a failure
+/// before that puts everything back (`undo`): a move that stopped halfway used
+/// to leave the old root without the folders already carried over, while the
+/// launcher still pointed at it.
+#[derive(Default)]
+pub struct MovedData {
+    renamed: Vec<(PathBuf, PathBuf)>,
+    copied: Vec<(PathBuf, PathBuf)>,
+}
+
+impl MovedData {
+    pub fn count(&self) -> usize {
+        self.renamed.len() + self.copied.len()
     }
-    let mut moved = 0;
+
+    /// The originals of what was copied. Runs only after the new root is in
+    /// use; a leftover the system would not let go of costs disk space, not data.
+    pub fn commit(self) {
+        for (src, _) in self.copied {
+            let _ = std::fs::remove_dir_all(&src);
+        }
+    }
+
+    pub fn undo(self) {
+        for (src, dst) in self.renamed.into_iter().rev() {
+            let _ = std::fs::rename(&dst, &src);
+        }
+        for (_, dst) in self.copied {
+            let _ = std::fs::remove_dir_all(&dst);
+        }
+    }
+}
+
+/// Copies under a temporary name and takes the real one only when complete:
+/// a copy cut short by a full disk or a locked file used to stay under the
+/// real name, and the next attempt skipped it as "already there".
+fn copy_entry(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    let mut name = dst.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".millida-moving");
+    let part = dst.with_file_name(name);
+    let _ = std::fs::remove_dir_all(&part);
+    let done = std::fs::create_dir_all(&part)
+        .and_then(|_| crate::engine::copy_dir_all(src, &part))
+        .and_then(|_| std::fs::rename(&part, dst));
+    if done.is_err() {
+        let _ = std::fs::remove_dir_all(&part);
+    }
+    done
+}
+
+/// Rename first (instant within one volume), copy across volumes.
+/// Entries already present in the destination are left untouched.
+pub fn move_game_data(from: &std::path::Path, to: &std::path::Path) -> Result<MovedData, String> {
+    let mut moved = MovedData::default();
+    if from == to || !from.exists() {
+        return Ok(moved);
+    }
     for name in ROOT_CONTENT {
         let src = from.join(name);
         if !src.exists() {
@@ -57,16 +109,29 @@ pub fn move_game_data(from: &std::path::Path, to: &std::path::Path) -> Result<us
             continue;
         }
         if std::fs::rename(&src, &dst).is_ok() {
-            moved += 1;
+            moved.renamed.push((src, dst));
             continue;
         }
-        std::fs::create_dir_all(&dst).map_err(|e| format!("{}: {}", name, e))?;
-        crate::engine::copy_dir_all(&src, &dst).map_err(|e| format!("{}: {}", name, e))?;
-        // Deletes the old copy after it was copied to the new folder the user picked.
-        let _ = std::fs::remove_dir_all(&src);
-        moved += 1;
+        if let Err(e) = copy_entry(&src, &dst) {
+            moved.undo();
+            return Err(format!(
+                "Не удалось перенести «{}»: {}. Старая папка не тронута — закрой игру и проверь место на диске",
+                name, e
+            ));
+        }
+        moved.copied.push((src, dst));
     }
     Ok(moved)
+}
+
+/// A whole drive is what players pick when they want the game "on drive D";
+/// the launcher then makes its own folder there instead of refusing.
+pub fn game_root_from_pick(picked: PathBuf) -> PathBuf {
+    if picked.parent().is_none() && picked.has_root() {
+        picked.join("Millida")
+    } else {
+        picked
+    }
 }
 
 /// The folder the native dialog returned last. `set_game_root` accepts only
@@ -153,11 +218,19 @@ pub fn set_game_root(path: String, move_data: bool) -> Result<String, String> {
     }
     if path.trim().is_empty() {
         let default = data_dir().join("minecraft");
-        if move_data {
+        let moved = if move_data {
             std::fs::create_dir_all(&default).map_err(|e| e.to_string())?;
-            move_game_data(&old, &default)?;
+            move_game_data(&old, &default)?
+        } else {
+            MovedData::default()
+        };
+        if let Err(e) = std::fs::remove_file(&marker) {
+            if marker.exists() {
+                moved.undo();
+                return Err(format!("Не удалось вернуть папку по умолчанию: {}", e));
+            }
         }
-        let _ = std::fs::remove_file(&marker);
+        moved.commit();
         return Ok(game_root().to_string_lossy().to_string());
     }
     let p = PathBuf::from(path.trim());
@@ -165,10 +238,12 @@ pub fn set_game_root(path: String, move_data: bool) -> Result<String, String> {
     let probe = p.join(".millida-write-test");
     std::fs::write(&probe, b"ok").map_err(|e| format!("Нет прав на запись: {}", e))?;
     let _ = std::fs::remove_file(&probe);
-    if move_data {
-        move_game_data(&old, &p)?;
+    let moved = if move_data { move_game_data(&old, &p)? } else { MovedData::default() };
+    if let Err(e) = write_bytes_atomic(&marker, p.to_string_lossy().as_bytes()) {
+        moved.undo();
+        return Err(format!("Не удалось запомнить новую папку: {}", e));
     }
-    std::fs::write(&marker, p.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+    moved.commit();
     Ok(p.to_string_lossy().to_string())
 }
 
@@ -292,11 +367,68 @@ mod tests {
         std::fs::create_dir_all(to.join("versions")).unwrap();
         std::fs::write(to.join("versions/keep.txt"), b"mine").unwrap();
 
-        assert_eq!(move_game_data(&from, &to).unwrap(), 1);
+        move_game_data(&from, &to).unwrap().commit();
         assert!(to.join("profiles/Moya/options.txt").exists());
         assert!(!from.join("profiles").exists());
         assert!(to.join("versions/keep.txt").exists());
         assert!(from.join("versions").exists());
+    }
+
+    /// A copy that fails halfway must leave the old root whole and nothing
+    /// under the real name in the new one: the launcher keeps reading the old
+    /// root, and a retry must not skip a half-copied folder as "already there".
+    #[test]
+    fn a_failed_move_puts_everything_back() {
+        let from = tmp("undo-from");
+        let to = tmp("undo-to");
+        std::fs::create_dir_all(from.join("profiles/Moya")).unwrap();
+        std::fs::write(from.join("profiles/Moya/options.txt"), b"lang:ru").unwrap();
+        let moved = move_game_data(&from, &to).unwrap();
+        assert!(to.join("profiles/Moya/options.txt").exists(), "перенос кладёт сборки в новую папку");
+        moved.undo();
+        assert!(
+            from.join("profiles/Moya/options.txt").exists(),
+            "откат обязан вернуть сборки в старую папку, на которую лаунчер всё ещё смотрит"
+        );
+        assert!(!to.join("profiles").exists(), "после отката в новой папке не должно остаться половины");
+    }
+
+    /// Copied originals stay in the old root until the new one is committed.
+    #[test]
+    fn copied_originals_go_only_on_commit() {
+        let from = tmp("commit-from");
+        let to = tmp("commit-to");
+        std::fs::create_dir_all(from.join("versions/26.2")).unwrap();
+        std::fs::write(from.join("versions/26.2/26.2.json"), b"{}").unwrap();
+        copy_entry(&from.join("versions"), &to.join("versions")).unwrap();
+        let moved = MovedData { renamed: vec![], copied: vec![(from.join("versions"), to.join("versions"))] };
+        assert!(from.join("versions/26.2/26.2.json").exists(), "до переключения папки оригинал на месте");
+        assert!(!to.join("versions.millida-moving").exists(), "временное имя копии не остаётся");
+        moved.commit();
+        assert!(!from.join("versions").exists(), "после переключения оригинал убирается");
+        assert!(to.join("versions/26.2/26.2.json").exists());
+    }
+
+    /// pick -> root the launcher uses. Players pick "drive D" itself, which
+    /// was refused with a reason they never saw.
+    #[test]
+    fn a_whole_drive_becomes_a_folder_on_it() {
+        let cases: Vec<(PathBuf, PathBuf, &str)> = if cfg!(windows) {
+            vec![
+                (PathBuf::from(r"D:\"), PathBuf::from(r"D:\Millida"), "корень диска"),
+                (PathBuf::from(r"D:\Games"), PathBuf::from(r"D:\Games"), "своя папка не меняется"),
+            ]
+        } else {
+            vec![
+                (PathBuf::from("/"), PathBuf::from("/Millida"), "корень файловой системы"),
+                (PathBuf::from("/home/me/Games"), PathBuf::from("/home/me/Games"), "своя папка не меняется"),
+            ]
+        };
+        for (picked, want, why) in cases {
+            let got = game_root_from_pick(picked);
+            assert_eq!(got, want, "{}", why);
+            assert!(game_root_candidate_ok(&got).is_ok(), "{}: итоговая папка должна проходить проверку", why);
+        }
     }
 
     /// The Skins screen refreshes the wardrobe twice on open, and both calls

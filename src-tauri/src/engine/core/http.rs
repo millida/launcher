@@ -303,10 +303,10 @@ enum Attempt {
     Fatal(String),
 }
 
-async fn retrying<F, Fut>(mut once: F) -> Result<Value, String>
+async fn retrying<T, F, Fut>(mut once: F) -> Result<T, String>
 where
     F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<Value, Attempt>>,
+    Fut: std::future::Future<Output = Result<T, Attempt>>,
 {
     let mut last = String::new();
     for attempt in 1..=TRIES {
@@ -334,8 +334,7 @@ where
 async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt> {
     let status = resp.status();
     if !status.is_success() {
-        let msg = format!("{} от {}", status, url);
-        return Err(if retryable(status) { Attempt::Retry(msg) } else { Attempt::Fatal(msg) });
+        return Err(status_attempt(url, status));
     }
     if resp.content_length().is_some_and(|n| n > JSON_MAX_BYTES as u64) {
         return Err(Attempt::Fatal(format!("ответ больше 16 МБ — {}", url)));
@@ -345,6 +344,15 @@ async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt>
         .map_err(|e| Attempt::Retry(format!("ответ оборвался: {} — {}", e, url)))?;
     serde_json::from_slice(&body)
         .map_err(|e| Attempt::Retry(format!("неожиданный ответ: {} — {}", e, url)))
+}
+
+fn status_attempt(url: &str, status: reqwest::StatusCode) -> Attempt {
+    let msg = format!("{} от {}", status, url);
+    if retryable(status) {
+        Attempt::Retry(msg)
+    } else {
+        Attempt::Fatal(msg)
+    }
 }
 
 /// Marker of a download whose bytes arrived whole but hash to something else.
@@ -414,17 +422,161 @@ pub(crate) async fn get_json_immutable(url: &str, cache: &Path) -> Result<Value,
     get_json_cached(url, cache).await
 }
 
-pub(crate) async fn get_json_fresh(url: &str, cache: &Path, ttl: Duration) -> Result<Value, String> {
-    let fresh = std::fs::metadata(cache)
+fn copy_is_fresh(cache: &Path, ttl: Duration) -> bool {
+    std::fs::metadata(cache)
         .and_then(|m| m.modified())
         .map(|t| t.elapsed().map(|age| age < ttl).unwrap_or(false))
-        .unwrap_or(false);
-    if fresh {
+        .unwrap_or(false)
+}
+
+pub(crate) async fn get_json_fresh(url: &str, cache: &Path, ttl: Duration) -> Result<Value, String> {
+    if copy_is_fresh(cache, ttl) {
         if let Ok(v) = read_json_file(cache) {
             return Ok(v);
         }
     }
     get_json_revalidated(url, cache).await
+}
+
+/// What the source said about the copy on disk. `sum` ties them to the exact
+/// bytes: other readers of the same URL rewrite the copy without validators,
+/// and validators of a newer body sent for an older copy would earn a 304 that
+/// pins the old copy until the source changes again.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Validators {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    etag: Option<String>,
+    #[serde(default, rename = "lastModified", skip_serializing_if = "Option::is_none")]
+    last_modified: Option<String>,
+    sum: String,
+}
+
+fn validators_path(cache: &Path) -> PathBuf {
+    let mut name = cache.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".validators");
+    cache.with_file_name(name)
+}
+
+fn sha1_hex(bytes: &[u8]) -> String {
+    let mut h = Hasher::for_sum(&Sum::Sha1(""));
+    h.update(bytes);
+    h.hex()
+}
+
+fn stored_validators(cache: &Path, copy: &[u8]) -> Option<Validators> {
+    let v: Validators = serde_json::from_slice(&std::fs::read(validators_path(cache)).ok()?).ok()?;
+    (v.sum == sha1_hex(copy) && (v.etag.is_some() || v.last_modified.is_some())).then_some(v)
+}
+
+enum Revalidated {
+    Unchanged,
+    Changed { body: Vec<u8>, value: Value, etag: Option<String>, last_modified: Option<String> },
+}
+
+async fn read_if_changed(url: &str, resp: reqwest::Response) -> Result<Revalidated, Attempt> {
+    let status = resp.status();
+    if status == reqwest::StatusCode::NOT_MODIFIED {
+        return Ok(Revalidated::Unchanged);
+    }
+    if !status.is_success() {
+        return Err(status_attempt(url, status));
+    }
+    let header = |name: reqwest::header::HeaderName| {
+        resp.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned)
+    };
+    let etag = header(reqwest::header::ETAG);
+    let last_modified = header(reqwest::header::LAST_MODIFIED);
+    let body = read_capped(resp, JSON_MAX_BYTES)
+        .await
+        .map_err(|e| Attempt::Retry(format!("ответ оборвался: {} — {}", e, url)))?;
+    let value = serde_json::from_slice(&body)
+        .map_err(|e| Attempt::Retry(format!("неожиданный ответ: {} — {}", e, url)))?;
+    Ok(Revalidated::Changed { body, value, etag, last_modified })
+}
+
+async fn fetch_if_changed(url: &str, sent: Option<&Validators>) -> Result<Revalidated, String> {
+    let mut last = String::new();
+    for target in super::mirror::routes(url).await {
+        let attempt = retrying(|| {
+            let target = target.clone();
+            async move {
+                let mut req = client().get(&target).timeout(JSON_TIMEOUT);
+                if let Some(etag) = sent.and_then(|v| v.etag.as_deref()) {
+                    req = req.header(reqwest::header::IF_NONE_MATCH, etag);
+                }
+                if let Some(since) = sent.and_then(|v| v.last_modified.as_deref()) {
+                    req = req.header(reqwest::header::IF_MODIFIED_SINCE, since);
+                }
+                match req.send().await {
+                    Ok(r) => read_if_changed(&target, r).await,
+                    Err(e) => Err(Attempt::Retry(format!("{} — {}", net_err(&e), target))),
+                }
+            }
+        })
+        .await;
+        match attempt {
+            Ok(v) => return Ok(v),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+/// A 304 only restarts the copy's age; a new body replaces the copy together
+/// with its validators.
+async fn refresh_if_changed(url: &str, cache: &Path) -> Result<Value, String> {
+    let copy = std::fs::read(cache).ok();
+    let sent = copy.as_deref().and_then(|b| stored_validators(cache, b));
+    match fetch_if_changed(url, sent.as_ref()).await? {
+        Revalidated::Unchanged => {
+            match copy.as_deref().map(serde_json::from_slice::<Value>) {
+                Some(Ok(v)) => {
+                    // A failed touch only means the next call asks again.
+                    if let Ok(f) = std::fs::File::options().write(true).open(cache) {
+                        let _ = f.set_modified(std::time::SystemTime::now());
+                    }
+                    Ok(v)
+                }
+                _ => get_json_cached(url, cache).await,
+            }
+        }
+        Revalidated::Changed { body, value, etag, last_modified } => {
+            let marks = validators_path(cache);
+            if super::paths::write_bytes_atomic(cache, &body).is_ok() {
+                if etag.is_some() || last_modified.is_some() {
+                    super::paths::write_json_quiet(&marks, &Validators { etag, last_modified, sum: sha1_hex(&body) });
+                } else {
+                    let _ = std::fs::remove_file(&marks);
+                }
+            }
+            Ok(value)
+        }
+    }
+}
+
+/// For a large list that changes rarely but whose changes players wait for
+/// (Mojang's version manifest): past `ttl` the source is asked with the copy's
+/// ETag/Last-Modified, so an unchanged list costs a 304 instead of the whole
+/// body. Same budget and offline fallback as `get_json_revalidated`.
+pub(crate) async fn get_json_conditional(url: &str, cache: &Path, ttl: Duration) -> Result<Value, String> {
+    conditional_within(url, cache, ttl, REFRESH_BUDGET).await
+}
+
+async fn conditional_within(url: &str, cache: &Path, ttl: Duration, budget: Duration) -> Result<Value, String> {
+    if copy_is_fresh(cache, ttl) {
+        if let Ok(v) = read_json_file(cache) {
+            return Ok(v);
+        }
+    }
+    let Ok(copy) = read_json_file(cache) else {
+        return refresh_if_changed(url, cache).await.map_err(|e| format!("{} (и нет офлайн-кэша)", e));
+    };
+    let (url, cache) = (url.to_string(), cache.to_path_buf());
+    let refresh = tauri::async_runtime::spawn(async move { refresh_if_changed(&url, &cache).await.ok() });
+    match tokio::time::timeout(budget, refresh).await {
+        Ok(Ok(Some(v))) => Ok(v),
+        _ => Ok(copy),
+    }
 }
 
 /// The network answer when it comes within `REFRESH_BUDGET`, the copy from an
@@ -1494,6 +1646,111 @@ PK"),
         assert_eq!(v["latest"]["release"], "26.2");
         let v2 = get_json_fresh(DEAD, &cache, Duration::from_millis(0)).await.unwrap();
         assert_eq!(v2["latest"]["release"], "26.2");
+    }
+
+    /// Answers each connection with the next canned response and hands back the
+    /// request heads it saw, so a test can check what the launcher asked.
+    async fn serve_sequence(replies: Vec<String>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/version_manifest_v2.json", listener.local_addr().unwrap());
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = seen.clone();
+        tokio::spawn(async move {
+            for reply in replies {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut buf = [0u8; 4096];
+                let n = sock.read(&mut buf).await.unwrap_or(0);
+                log.lock().unwrap().push(String::from_utf8_lossy(&buf[..n]).to_lowercase());
+                let _ = sock.write_all(reply.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        (url, seen)
+    }
+
+    fn ok_with_etag(body: &str, etag: &str) -> String {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            etag,
+            body.len(),
+            body
+        )
+    }
+
+    const NOT_MODIFIED: &str = "HTTP/1.1 304 Not Modified\r\nConnection: close\r\n\r\n";
+
+    fn age(cache: &Path, by: Duration) {
+        let f = std::fs::File::options().write(true).open(cache).unwrap();
+        f.set_modified(std::time::SystemTime::now() - by).unwrap();
+    }
+
+    /// The version list past its TTL: an unchanged source answers 304 and the
+    /// copy is served and counted fresh again, a changed source replaces it.
+    /// Without the validators every check re-downloaded the whole 270 KB list,
+    /// which is why the TTL had been stretched to six hours and a snapshot
+    /// stayed invisible for the afternoon of its release (20.10.2026).
+    #[tokio::test]
+    async fn a_stale_version_list_is_revalidated_with_its_etag() {
+        let budget = Duration::from_secs(10);
+        let ttl = Duration::from_secs(300);
+        let cache = tmp("conditional").join("version_manifest_v2.json");
+        let (url, seen) = serve_sequence(vec![
+            ok_with_etag(r#"{"v":"1"}"#, "\"a\""),
+            NOT_MODIFIED.to_string(),
+            ok_with_etag(r#"{"v":"2"}"#, "\"b\""),
+        ])
+        .await;
+
+        let v = conditional_within(&url, &cache, ttl, budget).await.unwrap();
+        assert_eq!(v["v"], "1", "без копии список берётся из сети");
+        assert!(!seen.lock().unwrap()[0].contains("if-none-match"), "без копии спрашивать «изменилось ли» нечего");
+
+        let v = conditional_within(&url, &cache, ttl, budget).await.unwrap();
+        assert_eq!(v["v"], "1", "свежая копия отдаётся без сети");
+        assert_eq!(seen.lock().unwrap().len(), 1, "в пределах TTL сеть не трогается");
+
+        age(&cache, ttl * 2);
+        let v = conditional_within(&url, &cache, ttl, budget).await.unwrap();
+        assert_eq!(v["v"], "1", "304 — значит копия верна");
+        assert!(seen.lock().unwrap()[1].contains("if-none-match: \"a\""), "устаревшая копия переспрашивается по своему ETag");
+        assert!(copy_is_fresh(&cache, ttl), "после 304 копия снова считается свежей, иначе спрашивали бы на каждом открытии");
+
+        age(&cache, ttl * 2);
+        let v = conditional_within(&url, &cache, ttl, budget).await.unwrap();
+        assert_eq!(v["v"], "2", "новый ответ источника заменяет копию — так появляется новый снапшот");
+        assert_eq!(read_json_file(&cache).unwrap()["v"], "2", "новая версия списка ложится на диск для офлайна");
+    }
+
+    /// Another reader rewrote the copy without validators: sending the old
+    /// ETag could earn a 304 for a body we no longer hold.
+    #[tokio::test]
+    async fn validators_of_another_body_are_not_sent() {
+        let cache = tmp("conditional-foreign").join("version_manifest_v2.json");
+        let (url, seen) = serve_sequence(vec![
+            ok_with_etag(r#"{"v":"1"}"#, "\"a\""),
+            ok_with_etag(r#"{"v":"3"}"#, "\"c\""),
+        ])
+        .await;
+        conditional_within(&url, &cache, Duration::ZERO, Duration::from_secs(10)).await.unwrap();
+        std::fs::write(&cache, br#"{"v":"old"}"#).unwrap();
+        let v = conditional_within(&url, &cache, Duration::ZERO, Duration::from_secs(10)).await.unwrap();
+        assert_eq!(v["v"], "3");
+        assert!(
+            !seen.lock().unwrap()[1].contains("if-none-match"),
+            "ETag чужого тела отправлять нельзя: 304 закрепил бы старую копию"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_version_list_survives_offline() {
+        let cache = tmp("conditional-offline").join("version_manifest_v2.json");
+        std::fs::write(&cache, br#"{"v":"cached"}"#).unwrap();
+        let v = conditional_within(DEAD, &cache, Duration::ZERO, Duration::from_secs(10)).await.unwrap();
+        assert_eq!(v["v"], "cached", "без сети список версий берётся с диска");
+        let missing = tmp("conditional-none").join("version_manifest_v2.json");
+        let err = conditional_within(DEAD, &missing, Duration::ZERO, Duration::from_secs(10)).await.unwrap_err();
+        assert!(err.contains("нет офлайн-кэша"), "без копии и сети ошибка говорит, чего не хватает: {}", err);
     }
 
     #[tokio::test]

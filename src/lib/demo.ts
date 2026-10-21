@@ -84,8 +84,6 @@ function demoMoney(): MoneyView {
   const usd = demoForeign()
   return {
     region: usd ? 'INTL' : 'RU',
-    proven: true,
-    country: usd ? 'US' : 'RU',
     displayCurrency: usd ? 'USD' : 'RUB',
     balance: {
       kopecks: DEMO_BALANCE_KOPECKS,
@@ -94,7 +92,6 @@ function demoMoney(): MoneyView {
       rate: usd ? DEMO_RUB_PER_USD : 1,
     },
     rubPerUsd: DEMO_RUB_PER_USD,
-    canProveRuVia: usd ? ['sbp', 'card_ru'] : [],
     topup: {
       RUB: { minMinor: 10000, maxMinor: 10000000, methods: ['sbp'], methodMinMinor: {} },
       USD: { minMinor: 100, maxMinor: 100000, methods: ['card_global', 'paypal'], methodMinMinor: { card_global: 500, paypal: 500 } },

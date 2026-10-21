@@ -457,14 +457,6 @@ export function loadPlus(): Promise<PlusStatus> {
   return api<PlusStatus>('/launcher/plus')
 }
 
-/// The ruble gateway charges rubles, so a buyer shown a dollar price pays from the balance at that price.
-export function plusCheckout(status: PlusStatus | null | undefined): 'gateway' | 'balance' {
-  if (!status) return 'gateway'
-  const options = status.checkoutOptions ?? (status.checkout ? [status.checkout] : ['gateway'])
-  if (options.includes('dollar-wallet') && (status.quote?.displayCurrency === 'USD' || !options.includes('gateway'))) return 'balance'
-  return 'gateway'
-}
-
 /// A month of PLUS from the wallet in the buyer's own currency (dollars abroad), no renewal.
 export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' }> {
   return api('/launcher/plus/wallet/buy', { method: 'POST', body: JSON.stringify({ tier, requestId }) })
