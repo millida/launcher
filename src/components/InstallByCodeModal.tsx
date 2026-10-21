@@ -7,6 +7,7 @@ import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { installSharedPack, packPreview, type PackPreview } from '../ipc/commands'
 import { apiErrorText } from '../lib/apiError'
+import { OwnJarsConsent, approvedOwnJars, needsOwnJarsConsent } from './OwnJarsConsent'
 import { useT } from '../i18n'
 
 /// Сырой ответ сервера («Unexpected token '<'», JSON) игроку не показываем:
@@ -30,6 +31,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
   const [preview, setPreview] = useState<PackPreview | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [trusted, setTrusted] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -41,6 +43,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
     if (!hasTauri()) return
     setBusy(true)
     setError('')
+    setTrusted(false)
     packPreview(value)
       .then(setPreview)
       .catch((e) => setError(humanError(e, t('Код не найден'))))
@@ -56,7 +59,7 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
   const install = () => {
     if (!preview) return
     setBusy(true)
-    installSharedPack(preview.code)
+    installSharedPack(preview.code, approvedOwnJars(preview, trusted))
       .then((p) => {
         showToast(t('Сборка «{name}» установлена', { name: p.name }), 'ok')
         void useProfiles.getState().refresh()
@@ -127,11 +130,12 @@ export function InstallByCodeModal({ onClose, initialCode = '' }: Props) {
                 .join(' · ')}
             </span>
             {preview.summary ? <p className="safety-why">{preview.summary}</p> : null}
+            <OwnJarsConsent preview={preview} trusted={trusted} onTrusted={setTrusted} />
           </div>
         ) : null}
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
-          <button className="btn md primary" style={{ flex: 1 }} disabled={!preview || busy} onClick={install}>
+          <button className="btn md primary" style={{ flex: 1 }} disabled={!preview || busy || (needsOwnJarsConsent(preview) && !trusted)} onClick={install}>
             <Icon id="i-download" /> {busy ? t('Ставим…') : t('Установить')}
           </button>
           <button className="btn md secondary" onClick={onClose}>

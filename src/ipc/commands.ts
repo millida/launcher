@@ -1407,8 +1407,15 @@ export interface PackPreview {
   updatedAt: string
   sizeBytes: number
   mods?: PackPreviewFile[]
+  customMods?: PackPreviewOwnJar[]
   overrides?: string[]
   dropped?: string[]
+}
+
+export interface PackPreviewOwnJar {
+  name: string
+  size: number
+  sha512: string
 }
 
 export interface PackPreviewFile {
@@ -1422,7 +1429,8 @@ export const shareProfile = (profile: string, summary?: string) =>
   invoke<SharedPack>('share_profile', { profile, summary })
 export const unshareProfile = (code: string) => invoke<void>('unshare_profile', { code })
 export const packPreview = (code: string) => invoke<PackPreview>('pack_preview', { code })
-export const installSharedPack = (code: string) => invoke<Profile>('install_shared_pack', { code })
+export const installSharedPack = (code: string, approvedJars: string[] = []) =>
+  invoke<Profile>('install_shared_pack', { code, approvedJars })
 
 // ---- Cloud sync ----
 

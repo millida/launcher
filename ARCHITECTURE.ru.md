@@ -233,9 +233,9 @@ macOS его не играет), выбор файла пользователе�
 
 1. **Секреты только в Rust.** [secrets.rs](src-tauri/src/secrets.rs) — свой
    сейф: `secrets.bin` шифруется AES-256-GCM (свежий nonce на запись, имя ключа
-   как AAD), ключ `vault.key` — 32 случайных байта, обёрнутые DPAPI на Windows
+   как AAD), ключ `device.key` — 32 случайных байта, обёрнутые DPAPI на Windows
    и с правами 0600 на Unix, итоговый ключ шифра выводится HKDF-SHA256 из
-   `vault.key` и идентификатора машины. Скопированные на другую машину файлы
+   `device.key` и идентификатора машины. Скопированные на другую машину файлы
    бесполезны. Системная связка ключей намеренно не используется: хеш бинарника
    меняется при каждом автообновлении, и Keychain на macOS начинает вечно
    спрашивать пароль.
@@ -379,7 +379,7 @@ macOS его не играет), выбор файла пользователе�
 ## Данные на диске
 
 - Данные лаунчера — `data_dir()/net.millida.launcher`: `profiles.json`,
-  `secrets.bin`, `vault.key`, `game-root.txt`, скачанные JRE в `java/`.
+  `secrets.bin`, `device.key`, `game-root.txt`, скачанные JRE в `java/`.
   На Windows это `%APPDATA%`, на macOS `~/Library/Application Support`,
   на Linux `~/.local/share`.
 - Файлы игры — `game_root()`, по умолчанию `<данные>/minecraft`: `versions`,

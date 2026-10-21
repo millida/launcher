@@ -94,9 +94,9 @@ export function PartyHost() {
       {packAsk ? (
         <PackConfirmModal
           ask={packAsk}
-          close={(ok) => {
+          close={(answer) => {
             set({ packAsk: null })
-            packAsk.resolve(ok)
+            packAsk.resolve(answer)
           }}
         />
       ) : null}

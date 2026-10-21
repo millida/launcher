@@ -468,8 +468,12 @@ pub async fn pack_preview(code: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub async fn install_shared_pack(app: tauri::AppHandle, code: String) -> Result<engine::Profile, String> {
-    engine::install_shared_pack(app, code).await
+pub async fn install_shared_pack(
+    app: tauri::AppHandle,
+    code: String,
+    approved_jars: Option<Vec<String>>,
+) -> Result<engine::Profile, String> {
+    engine::install_shared_pack(app, code, approved_jars.unwrap_or_default()).await
 }
 
 #[tauri::command]

@@ -25,7 +25,7 @@ What helps us understand faster:
 - steps to reproduce, or a minimal proof of concept;
 - the practical impact: what exactly the attacker gets;
 - logs or files, if they are needed to understand the problem. Please do not send tokens or the contents of `secrets.bin`
-  and `vault.key`.
+  and `device.key`.
 
 ## Timing
 

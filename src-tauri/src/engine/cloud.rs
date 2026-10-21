@@ -182,7 +182,7 @@ pub async fn cloud_pull(app: AppHandle, only: Option<Vec<String>>, apply_prefs: 
                 continue;
             }
         };
-        match install_manifest(&app, &manifest, Some(entry.name.clone())).await {
+        match install_manifest(&app, &manifest, Some(entry.name.clone()), None).await {
             Ok(_) => {
                 if !entry.group.is_empty() {
                     set_profile_group(&entry.name, &entry.group);

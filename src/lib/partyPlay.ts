@@ -29,6 +29,7 @@ import {
   setPartyTarget,
   startPartyLaunch,
   usePartyStore,
+  type PackConfirmAnswer,
 } from '../state/party'
 import { t } from '../i18n'
 
@@ -110,7 +111,7 @@ export async function localHave(target: PartyTarget): Promise<PartyHave | null> 
   return (await localBuild(target)) ? identityOf(target) : null
 }
 
-function askPackConfirm(code: string, title: string): Promise<boolean> {
+function askPackConfirm(code: string, title: string): Promise<PackConfirmAnswer> {
   return new Promise((resolve) => usePartyStore.getState().set({ packAsk: { code, title, resolve } }))
 }
 
@@ -156,9 +157,10 @@ export async function prepareTarget(target: PartyTarget): Promise<boolean> {
     })
     return ok ? installCatalog(target.ref, target.title) : false
   }
-  if (!(await askPackConfirm(target.ref, target.title))) return false
+  const answer = await askPackConfirm(target.ref, target.title)
+  if (!answer.ok) return false
   try {
-    const prof = await installSharedPack(target.ref)
+    const prof = await installSharedPack(target.ref, answer.jars)
     const preview = await packPreview(target.ref)
     if (preview.updatedAt !== target.version) {
       showToast(t('Лидер успел поменять сборку — дождись новой версии'), 'error')
