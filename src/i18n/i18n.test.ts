@@ -16,8 +16,12 @@ describe('lookup falls back own language -> English -> Russian key', () => {
   ]
   for (const c of cases)
     test(c.locale + ' ' + c.key, () => {
-      expect(lookup(c.locale, c.key, c.locale === 'en' ? english : own, english), c.why).toBe(c.want)
+      expect(lookup(c.locale, c.key, c.locale === 'en' ? english : c.locale === 'ru' ? undefined : own, english), c.why).toBe(c.want)
     })
+  test('ru with a fix from the site', () => {
+    expect(lookup('ru', 'Далее', { 'Далее': 'Дальше' }, english), 'the only Russian table is the site fixes').toBe('Дальше')
+    expect(lookup('ru', 'Назад', { 'Далее': 'Дальше' }, english), 'a key without a fix stays the text').toBe('Назад')
+  })
 })
 
 describe('interpolate', () => {

@@ -14,11 +14,11 @@ export function placeholdersOf(text: string): string[] {
   return Array.from(text.matchAll(PLACEHOLDER), (m) => m[0]).sort()
 }
 
-/// The Russian source string is the key, so Russian needs no table. A missing
-/// translation falls back to English before Russian: a half-translated screen in
-/// English is readable for far more players than one in Russian.
+/// The Russian source string is the key, so Russian needs no table; its only table holds
+/// fixes from the site (see remote.ts). A missing translation falls back to English before
+/// Russian: a half-translated screen in English is readable for far more players than one in Russian.
 export function lookup(locale: Locale, key: string, own: Table | null | undefined, english: Table | null | undefined): string {
-  if (locale === 'ru') return key
+  if (locale === 'ru') return own?.[key] || key
   const hit = own?.[key]
   if (hit) return hit
   const en = english?.[key]
