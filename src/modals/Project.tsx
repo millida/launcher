@@ -769,7 +769,7 @@ export function ProjectModal() {
               {pj.tags.slice(0, 4).map((c) => (
                 <span className="pjx-chip soft" key={c}>
                   {!isCf && !isMl && MR_CATS.has(c) ? <i className="pjx-mi" style={maskIcon('/mr-icons/categories/' + c + '.svg')} aria-hidden="true" /> : null}
-                  {RU_LOADER(c)}
+                  {!ruReader && RU_LOADER(c) === c && /[а-яё]/i.test(c) ? t(c.charAt(0).toUpperCase() + c.slice(1)) : RU_LOADER(c)}
                 </span>
               ))}
             </div>

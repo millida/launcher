@@ -506,6 +506,7 @@ export function CallPanel() {
   const camOf = useCall((s) => s.camOf)
   const camFull = useCall((s) => s.camFull)
   const volume = useCall((s) => s.volume)
+  const relayed = useCall((s) => s.relayed)
   const set = useCall((s) => s.set)
   const peer = parts[0]
   const peerMuted = mode === 'dm' && !!peer?.muted
@@ -529,7 +530,7 @@ export function CallPanel() {
   if (status === 'incoming') return <IncomingCard />
 
   const q = qualityLabel(quality?.rttMs ?? null, quality?.lossPct ?? 0)
-  const state = status === 'outgoing' ? t('Звоним…') : status === 'connecting' ? t('Соединяем…') : q.text
+  const state = status === 'outgoing' ? t('Звоним…') : status === 'connecting' ? t('Соединяем…') : relayed && !quality ? '' : q.text
   const placed = box.x !== null && box.y !== null
   const dockStyle = placed
     ? { left: box.x + 'px', top: box.y + 'px', bottom: 'auto', width: box.w + 'px' }
@@ -587,7 +588,7 @@ export function CallPanel() {
                 <span className={'call-dock-state ' + (status === 'active' ? q.cls : 'wait')}>
                   {status === 'active' ? <Timer from={answeredAt} /> : null}
                   {status === 'active' ? ' · ' : ''}
-                  {mode === 'room' && status === 'active' ? t('{n} в разговоре', { n: parts.length + 1 }) + ' · ' : ''}
+                  {mode === 'room' && status === 'active' ? t('{n} в разговоре', { n: parts.length + 1 }) + (state ? ' · ' : '') : ''}
                   {state}
                   {peerMuted ? ' · ' + t('без микрофона') : ''}
                 </span>
