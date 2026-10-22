@@ -3,7 +3,7 @@ import { listenWindowVisibility } from '../ipc/events'
 import { showToast, useUi } from './ui'
 import { hydratePrefs, readPref, writePref } from '../lib/prefs'
 import { hasTauri } from '../ipc/tauri'
-import { convertFileSrc, musicAdd, musicRemove, musicTracks, openMusicFolder } from '../ipc/commands'
+import { convertFileSrc, mainWindowVisible, musicAdd, musicRemove, musicTracks, openMusicFolder } from '../ipc/commands'
 import { MAX_LINKS, SERVICE_NAME, parseMusicLink, restoreLinks, type MusicLink } from '../lib/musicLinks'
 import { embedKey, embedPause, embedPlay, embedRestart, embedStep, embedStop, type EmbedHooks, type EmbedNow } from '../lib/musicEmbed'
 import { t } from '../i18n'
@@ -272,6 +272,27 @@ function autoPause(fadeMs: number) {
   apply(fadeMs)
 }
 
+// The launcher started by the OS sits in the tray from its first frame, and the
+// hide event fires before anyone listens, so the starting state is asked for.
+let windowHidden = false
+let visibilityReported = false
+
+function startVisibility(): Promise<void> {
+  if (!hasTauri()) return Promise.resolve()
+  return mainWindowVisible()
+    .then((visible) => {
+      if (!visibilityReported) windowHidden = !visible
+    })
+    .catch((e: unknown) => console.error('[music] window visibility', e))
+}
+
+function onWindowVisibility(visible: boolean) {
+  visibilityReported = true
+  windowHidden = !visible
+  if (visible) resumeMusic()
+  else suspendMusic()
+}
+
 function autoResume(fadeMs: number) {
   if (!autoPaused) return
   autoPaused = false
@@ -447,7 +468,7 @@ export function initMusic() {
 
   // The store was built from web storage, which can be a start behind the disk
   // copy; the volume the user actually set is applied before anything plays.
-  void hydratePrefs().then(() => {
+  void Promise.all([hydratePrefs(), startVisibility()]).then(() => {
     useMusic.setState({ level: storedLevel(), muted: storedMuted() })
     apply()
     return boot()
@@ -458,7 +479,7 @@ export function initMusic() {
 
   // Hidden in the tray the webview keeps running, so audio has to be stopped
   // explicitly — otherwise the launcher looks closed but still plays.
-  void listenWindowVisibility((visible) => (visible ? resumeMusic() : suspendMusic()))
+  void listenWindowVisibility(onWindowVisibility)
 }
 
 /** Радио играет: слышно прямо сейчас (или ждёт жеста пользователя, чтобы начать). */
@@ -513,6 +534,10 @@ function autostart() {
   if (localStorage.getItem('m-mus-auto') === '0') return
   // A pause the user asked for outlives the restart, so autostart stays quiet.
   if (!storedPlaying()) return
+  if (windowHidden) {
+    autoPaused = true
+    return
+  }
   autoPaused = false
   useMusic.setState({ playing: true })
   apply(FADE_MS)

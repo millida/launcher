@@ -220,6 +220,7 @@ permissions = [
   "allow-frontend-ready",
   "allow-tray-available",
   "allow-hide-to-tray",
+  "allow-main-window-visible",
   "allow-show-from-tray",
   "allow-set-restore-on-exit",
   "allow-ui-prefs",

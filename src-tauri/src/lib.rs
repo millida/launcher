@@ -465,6 +465,7 @@ pub fn run() {
             commands::system::frontend_ready,
             commands::system::tray_available,
             commands::system::hide_to_tray,
+            commands::system::main_window_visible,
             commands::system::show_from_tray,
             commands::system::set_restore_on_exit,
             commands::system::ui_prefs,

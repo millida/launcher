@@ -1222,6 +1222,7 @@ export const clearCache = () => invoke<number>('clear_cache')
 
 export const trayAvailable = () => invoke<boolean>('tray_available')
 export const hideToTray = () => invoke<void>('hide_to_tray')
+export const mainWindowVisible = () => invoke<boolean>('main_window_visible')
 export const showFromTray = () => invoke<void>('show_from_tray')
 export const setRestoreOnExitNative = (on: boolean) => invoke<void>('set_restore_on_exit', { on })
 

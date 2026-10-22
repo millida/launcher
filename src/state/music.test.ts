@@ -54,7 +54,10 @@ Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
 })
 
-mock.module('../ipc/tauri', () => ({ hasTauri: () => false, tauri: () => null }))
+let tauriPresent = false
+let showWindow: ((visible: boolean) => void) | null = null
+
+mock.module('../ipc/tauri', () => ({ hasTauri: () => tauriPresent, tauri: () => null }))
 mock.module('../ipc/commands', () => ({
   convertFileSrc: (p: string) => p,
   downloadMcMusic: () => Promise.resolve(),
@@ -62,8 +65,14 @@ mock.module('../ipc/commands', () => ({
   musicAdd: () => Promise.resolve({ added: 0, too_big: [] }),
   musicRemove: () => Promise.resolve(),
   openMusicFolder: () => Promise.resolve(),
+  mainWindowVisible: () => Promise.resolve(false),
 }))
-mock.module('../ipc/events', () => ({ listenWindowVisibility: () => Promise.resolve(null) }))
+mock.module('../ipc/events', () => ({
+  listenWindowVisibility: (fn: (visible: boolean) => void) => {
+    showWindow = fn
+    return Promise.resolve(null)
+  },
+}))
 mock.module('./ui', () => ({ showToast() {}, useUi: { getState: () => ({ logged: true }) } }))
 mock.module('../lib/prefs', () => ({
   hydratePrefs: () => Promise.resolve(),
@@ -78,8 +87,11 @@ const { useMusic } = mus
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+tauriPresent = true
 mus.initMusic()
 await new Promise((r) => setTimeout(r, 500))
+const startedInTray = { playing: useMusic.getState().playing, paused: audios[0]?.paused ?? true }
+tauriPresent = false
 const el = () => audios[0]
 const fire = (name: string) => (handlers[name] || []).forEach((fn) => fn())
 
@@ -92,6 +104,17 @@ function ready() {
     playing: false,
   })
 }
+
+// A system start puts the launcher straight into the tray: players took the
+// music for a launcher that was not running and could not find what to close.
+test('запуск вместе с системой в трей молчит и начинает играть при открытии окна', async () => {
+  expect(startedInTray.playing, 'скрытый при старте лаунчер не должен включать радио').toBe(false)
+  expect(startedInTray.paused, 'звук из трея при старте системы выглядит как вирус').toBe(true)
+  showWindow?.(true)
+  await wait(1100)
+  expect(useMusic.getState().playing, 'открыли окно из трея — радио обязано заиграть').toBe(true)
+  expect(el().paused).toBe(false)
+}, 10000)
 
 // Вход → вердикт. Каждый кейс закреплён за реальной жалобой: пауза, которую
 // нажал пользователь, обязана пережить любое автоматическое возобновление.
