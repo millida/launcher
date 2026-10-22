@@ -62,6 +62,10 @@ pub fn restore_after_game(app: &AppHandle) {
     }
 }
 
+pub fn main_visible(app: &AppHandle) -> bool {
+    app.get_webview_window("main").is_none_or(|w| w.is_visible().unwrap_or(true))
+}
+
 pub fn hide_main(app: &AppHandle) {
     if crate::exiting() {
         return;

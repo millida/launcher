@@ -205,6 +205,11 @@ pub fn tray_available() -> bool { crate::tray::available() }
 #[tauri::command]
 pub fn hide_to_tray(app: tauri::AppHandle) { crate::tray::hide_main(&app); }
 
+/// A start by the OS hides the window before the webview listens, so the
+/// visibility event is missed and the UI has to ask once on boot.
+#[tauri::command]
+pub fn main_window_visible(app: tauri::AppHandle) -> bool { crate::tray::main_visible(&app) }
+
 #[tauri::command]
 pub fn show_from_tray(app: tauri::AppHandle) { crate::tray::show_main(&app); }
 

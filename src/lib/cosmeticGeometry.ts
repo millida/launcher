@@ -256,6 +256,10 @@ function cubeQuads(
   return quads
 }
 
+export function isBoundingBox(boneName: unknown): boolean {
+  return typeof boneName === 'string' && boneName.startsWith('bbox_')
+}
+
 /**
  * Разбирает файл модели. Принимает и содержимое `minecraft:geometry`, и объект
  * целиком: сервис отдаёт модель завёрнутой, а файл из пачки лежит как есть.
@@ -299,7 +303,7 @@ export function readCosmeticMesh(source: unknown, extraInflate = 0): CosmeticMes
       // знак дважды и тем возвращает исходные углы, и шляпа с крылом смотрят
       // вверх, а не вниз.
       rotation: [rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0],
-      quads: (bone.cubes ?? [])
+      quads: (isBoundingBox(bone.name) ? [] : (bone.cubes ?? []))
         .filter((cube) => (cube.size ?? []).some((side) => side !== 0))
         .flatMap((cube) => cubeQuads(cube, bone, pivot, texW, texH, extraInflate)),
       ...(typeof bone.side === 'string' && bone.side.trim() ? { side: bone.side.trim().toLowerCase() } : {}),

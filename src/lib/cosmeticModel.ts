@@ -183,6 +183,13 @@ function pixelated(texture: Texture) {
   texture.colorSpace = SRGBColorSpace
 }
 
+// WebGL adds emissive colour regardless of alpha, while the game blends the glow map as an overlay:
+// the colour hidden under its fully transparent texels must not reach the screen.
+function glowing(texture: Texture) {
+  pixelated(texture)
+  texture.premultiplyAlpha = true
+}
+
 export function buildCosmetic(
   model: unknown,
   textureUrl: string,
@@ -225,7 +232,7 @@ export function buildCosmetic(
   // почти чёрная: без неё на фигуре они выходят тёмными пятнами. Лента
   // кадров у свечения та же, что у основной картинки, — двигаем их вместе.
   glow = glowUrl ? new TextureLoader().load(glowUrl, alignGlow) : null
-  if (glow) pixelated(glow)
+  if (glow) glowing(glow)
   const material = new MeshLambertMaterial({
     map: texture,
     transparent: true,
