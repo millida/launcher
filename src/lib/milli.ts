@@ -5,7 +5,7 @@ import { hasTauri } from '../ipc/tauri'
 import { DEMO_USER } from './demo'
 import { LOCKED_SLUGS } from './aiBuilder'
 import type { PlanItem } from '../ipc/commands'
-import { formatFixed, formatNumber, getLocale, t } from '../i18n'
+import { formatFixed, formatNumber, formatRelative, getLocale, pluralForm, t } from '../i18n'
 
 /*
  * Милли — ИИ-сборщик чатом. Клиент адресов `/catalog/milli/*` (контракт —
@@ -533,26 +533,12 @@ export function milliEnhancedOn(s: Pick<MilliStatus, 'plus' | 'features'> | null
   return wanted && !!s?.plus && s.features?.enhanced !== false
 }
 
-const plural = (n: number, one: string, few: string, many: string) => {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
-
 /** Когда снова можно спросить: «через 40 мин», «через 5 ч», «через 3 дня». */
 export function milliResetText(resetAt: string, now: number = Date.now()): string {
   const at = Date.parse(resetAt)
   if (!Number.isFinite(at)) return ''
   const ms = at - now
-  if (ms <= 60_000) return t('через минуту')
-  const min = Math.ceil(ms / 60_000)
-  if (min < 60) return t('через {n} мин', { n: min })
-  const h = Math.round(min / 60)
-  if (h < 24) return t('через {n} ч', { n: h })
-  const d = Math.round(h / 24)
-  return plural(d, t('через {n} день', { n: d }), t('через {n} дня', { n: d }), t('через {n} дней', { n: d }))
+  return formatRelative(now + Math.max(ms, 60_000), { ceil: 'day' }, now)
 }
 
 // ─── Сборка → установка ──────────────────────────────────────────────────
@@ -808,16 +794,8 @@ async function demoRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ─── Сводка сборки (футер карточки, «Скопировать список», .mrpack) ─────────
 
-const pluralRu = (n: number, one: string, few: string, many: string) => {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
-
 /** «212 модов» */
-export const milliModsLabel = (n: number) => n + ' ' + pluralRu(n, t('мод'), t('мода'), t('модов'))
+export const milliModsLabel = (n: number) => n + ' ' + pluralForm(n, t('мод'), t('мода'), t('модов'))
 
 /** Оценка веса: средние файлы Modrinth (мод ~5 МБ, РП ~25 МБ, шейдер ~2 МБ). */
 export const milliSizeMb = (p: Pick<MilliPack, 'mods' | 'resourcepacks' | 'shaders'>) => p.mods.length * 5 + p.resourcepacks.length * 25 + p.shaders.length * 2

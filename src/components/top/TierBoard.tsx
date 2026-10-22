@@ -127,7 +127,7 @@ function myLine(p: TierPlayer, kit: string, order: string[]): { line: Line; next
       line: {
         pos: p.rank ?? 0,
         name: p.name,
-        sub: p.title,
+        sub: p.title ? t(p.title) : p.title,
         badge: p.overallTier && tierRank(p.overallTier) !== null ? p.overallTier.toUpperCase() : undefined,
         region: p.region,
         kits: all.slice(0, 6),
@@ -235,7 +235,7 @@ function PlayerCard({ p, modes, mine, pos, onClose }: { p: TierPlayer; modes: Ti
         <span className="tl-card-cap">{mine ? t('Ты') : t('Игрок')}</span>
         <b className="tl-card-nick">{p.name}</b>
         <span className="tl-card-meta">
-          {p.title} · {points(p.points)}
+          {p.title ? t(p.title) : p.title} · {points(p.points)}
           {pos ? ' · ' + t('#{n} в общем', { n: pos }) : ''}
         </span>
         {mine ? (
@@ -303,7 +303,7 @@ export function linesOf(kit: string, period: TierPeriod, top: TierTopEntry[] | n
       return {
         pos: e.pos,
         name: e.name,
-        sub: e.title,
+        sub: e.title ? t(e.title) : e.title,
         badge: e.overallTier && tierRank(e.overallTier) !== null ? e.overallTier.toUpperCase() : undefined,
         region: e.region,
         kits: all.slice(0, 6),

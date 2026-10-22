@@ -1,5 +1,5 @@
 import type { Profile } from '../ipc/commands'
-import { formatFixed, getLocale, intlTag, t } from '../i18n'
+import { formatFixed, formatRelative, intlTag, pluralForm, t } from '../i18n'
 
 export const fmt = (n: number): string =>
   n >= 1e6
@@ -233,14 +233,7 @@ export function onAvatarError(e: { currentTarget: HTMLImageElement }, size = 32,
   img.src = monogramAvatar(nick || img.dataset.nick || img.alt, size)
 }
 
-export const plural = (n: number, one: string, few: string, many: string): string => {
-  if (getLocale() !== 'ru') return Math.abs(n) === 1 ? one : many
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few
-  return many
-}
+export const plural = (n: number, one: string, few: string, many: string): string => pluralForm(n, one, few, many)
 
 export const fmtPlaytime = (seconds?: number): string => {
   const s = Math.max(0, Math.round(seconds || 0))
@@ -251,25 +244,10 @@ export const fmtPlaytime = (seconds?: number): string => {
   return h >= 100 ? t('{h} ч', { h }) : t('{h} ч {m} м', { h, m })
 }
 
-export const whenText = (tsSeconds?: number): string => {
-  if (!tsSeconds) return ''
-  const days = (Date.now() / 1000 - tsSeconds) / 86400
-  if (days < 1) return t('сегодня')
-  if (days < 2) return t('вчера')
-  if (days < 30) return t('{n} дн назад', { n: Math.round(days) })
-  const mo = Math.round(days / 30)
-  return mo < 12 ? t('{n} мес назад', { n: mo }) : t('{n} г назад', { n: Math.round(days / 365) })
-}
+export const whenText = (tsSeconds?: number): string =>
+  tsSeconds ? formatRelative(tsSeconds * 1000, { floor: 'day' }) : ''
 
-export const agoText = (ts?: number): string => {
-  if (!ts) return ''
-  const m = Math.round(Date.now() / 1000 - ts) / 60
-  return m < 60
-    ? t('{n} мин назад', { n: Math.round(m) })
-    : m < 1440
-      ? t('{n} ч назад', { n: Math.round(m / 60) })
-      : t('{n} дн назад', { n: Math.round(m / 1440) })
-}
+export const agoText = (ts?: number): string => (ts ? formatRelative(ts * 1000, { style: 'short' }) : '')
 
 export interface MotdPart {
   text: string

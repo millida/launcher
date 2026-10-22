@@ -238,7 +238,7 @@ fn worker(generation: u64, rx: Receiver<Job>) {
                 *lock(&LAST_TRY) = None;
                 let slug = lock(&LAST_SLUG).clone();
                 let presence = Presence {
-                    details: "В лаунчере".into(),
+                    details: crate::engine::ui("В лаунчере"),
                     state: "Millida Launcher".into(),
                     profile_slug: slug,
                     ..Presence::default()
@@ -355,16 +355,20 @@ fn apply(client: &mut Option<DiscordIpcClient>, since: &mut Option<i64>, p: &Pre
     let big_text = if p.large_text.is_empty() { "Millida Launcher" } else { p.large_text.as_str() };
     let join_ok = p.playing && p.join_url.starts_with(JOIN_PREFIX) && p.join_url.len() <= 512;
     let profile = profile_url(&p.profile_slug);
+    let join_label = crate::engine::ui("Зайти на сервер");
+    let download_label = crate::engine::ui("Скачать лаунчер");
+    let profile_label = crate::engine::ui("Профиль Millida");
+    let small_text = crate::engine::ui(if p.playing { "В игре" } else { "В лаунчере" });
     let buttons = if join_ok {
         vec![
-            activity::Button::new("Зайти на сервер", p.join_url.as_str()),
-            activity::Button::new("Скачать лаунчер", SITE_URL),
+            activity::Button::new(&join_label, p.join_url.as_str()),
+            activity::Button::new(&download_label, SITE_URL),
         ]
     } else {
         vec![
-            activity::Button::new("Скачать лаунчер", SITE_URL),
+            activity::Button::new(&download_label, SITE_URL),
             match profile.as_deref() {
-                Some(url) => activity::Button::new("Профиль Millida", url),
+                Some(url) => activity::Button::new(&profile_label, url),
                 None => activity::Button::new("Discord Millida", DISCORD_URL),
             },
         ]
@@ -378,7 +382,7 @@ fn apply(client: &mut Option<DiscordIpcClient>, since: &mut Option<i64>, p: &Pre
                 .large_image(big)
                 .large_text(big_text)
                 .small_image("logo")
-                .small_text(if p.playing { "В игре" } else { "В лаунчере" }),
+                .small_text(&small_text),
         )
         .buttons(buttons);
     if let Some(ts) = *since {

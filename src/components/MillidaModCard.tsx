@@ -5,7 +5,7 @@ import {
   type MillidaModState,
 } from '../ipc/commands'
 import { Icon } from './Icon'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 /**
  * Карточка мода Millida в выбранной сборке: лаунчер сам подбирает вариант под
@@ -23,7 +23,7 @@ export function MillidaModCard({ profile }: { profile: string }) {
       setError('')
     } catch (e) {
       setState(null)
-      setError(String(e))
+      setError(tx(e))
     }
   }, [profile])
 
@@ -44,7 +44,7 @@ export function MillidaModCard({ profile }: { profile: string }) {
     try {
       setState(await run(profile))
     } catch (e) {
-      setError(String(e))
+      setError(tx(e))
       void refresh()
     } finally {
       setBusy(false)

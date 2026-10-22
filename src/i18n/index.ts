@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
 import { create } from 'zustand'
 import { readPref, writePref } from '../lib/prefs'
-import { translate, type Table, type Vars } from './core'
+import { localizeCore, translate, type Table, type Vars } from './core'
 import { cachedFixes, fetchFixes } from './remote'
+import { pluralIn, relativeTimeIn, type RelativeOptions } from './relative'
 import {
   AVAILABLE_LOCALES,
   FALLBACK_LOCALE,
@@ -166,6 +167,12 @@ export function t(key: string, vars?: Vars): string {
   return translate(code, key, vars, tables[code], tables[FALLBACK_LOCALE])
 }
 
+export function tx(raw: unknown): string {
+  const text = raw instanceof Error ? raw.message : String(raw ?? '')
+  const code = useI18n.getState().locale
+  return localizeCore(code, text, tables[code], tables[FALLBACK_LOCALE])
+}
+
 export function useLocale(): Locale {
   return useI18n((s) => s.locale)
 }
@@ -187,6 +194,14 @@ export const formatFixed = (value: number, digits: number): string =>
 
 export function formatDate(value: Date | number, options?: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(intlTag(), options).format(value)
+}
+
+export function formatRelative(then: number, options?: RelativeOptions, now: number = Date.now()): string {
+  return relativeTimeIn(intlTag(), then, now, options)
+}
+
+export function pluralForm(n: number, one: string, few: string, many: string): string {
+  return pluralIn(intlTag(), n, one, few, many)
 }
 
 void activate(useI18n.getState().locale)

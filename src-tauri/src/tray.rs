@@ -1,15 +1,25 @@
 // Tray icon: show, minimize, quit. No network, no disk.
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Wry};
 
 /// The tray icon can fail to appear (e.g. Linux without appindicator); hiding
 /// the window is gated on this flag and falls back to minimizing.
 static READY: AtomicBool = AtomicBool::new(false);
 
 pub fn available() -> bool { READY.load(Ordering::Relaxed) }
+
+static ITEMS: OnceLock<(MenuItem<Wry>, MenuItem<Wry>)> = OnceLock::new();
+
+pub fn relabel() {
+    if let Some((open, exit)) = ITEMS.get() {
+        let _ = open.set_text(crate::engine::ui("Открыть лаунчер"));
+        let _ = exit.set_text(crate::engine::ui("Выход"));
+    }
+}
 
 pub fn show_main(app: &AppHandle) {
     if crate::exiting() {
@@ -83,8 +93,8 @@ fn quit(app: &AppHandle) {
 
 pub fn init(app: &AppHandle) {
     let items = (
-        MenuItem::with_id(app, "tray-open", "Открыть лаунчер", true, None::<&str>),
-        MenuItem::with_id(app, "tray-quit", "Выход", true, None::<&str>),
+        MenuItem::with_id(app, "tray-open", crate::engine::ui("Открыть лаунчер"), true, None::<&str>),
+        MenuItem::with_id(app, "tray-quit", crate::engine::ui("Выход"), true, None::<&str>),
     );
     let (open, exit) = match items {
         (Ok(o), Ok(e)) => (o, e),
@@ -118,6 +128,7 @@ pub fn init(app: &AppHandle) {
         b = b.icon(icon);
     }
     if b.build(app).is_ok() {
+        let _ = ITEMS.set((open, exit));
         READY.store(true, Ordering::Relaxed);
     }
 }

@@ -173,8 +173,8 @@ pub async fn import_pack_file(app: AppHandle, path: Option<String>) -> Result<Pr
     let _ = path;
     let picked = pick_file(
         dialog()
-            .add_filter("Сборка Minecraft", &["mrpack", "zip"])
-            .set_title("Файл сборки (.mrpack или .zip)"),
+            .add_filter(crate::engine::ui("Сборка Minecraft"), &["mrpack", "zip"])
+            .set_title(crate::engine::ui("Файл сборки (.mrpack или .zip)")),
     )
     .await
     .ok_or("Отменено")?;

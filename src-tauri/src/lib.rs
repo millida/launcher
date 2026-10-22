@@ -254,6 +254,8 @@ pub fn run() {
             commands::system::remember_install_id,
             commands::system::autostart_state,
             commands::system::autostart_set,
+            commands::system::ui_text_keys,
+            commands::system::set_ui_texts,
             app_icon::set_app_icon,
             commands::system::device_specs,
             webview_health::take_webview_failure,

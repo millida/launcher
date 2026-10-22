@@ -15,7 +15,7 @@ const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 /// has no profile to attach it to yet, so the data URL is simply returned.
 pub async fn pick_cover_image() -> Result<Option<String>, String> {
     let picked = pick_file(
-        dialog().add_filter("Картинка", &["png", "jpg", "jpeg", "webp"]).set_title("Обложка сборки"),
+        dialog().add_filter(crate::engine::ui("Картинка"), &["png", "jpg", "jpeg", "webp"]).set_title(crate::engine::ui("Обложка сборки")),
     )
     .await;
     let Some(src) = picked else { return Ok(None) };

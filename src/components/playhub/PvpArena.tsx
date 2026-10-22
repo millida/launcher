@@ -205,7 +205,7 @@ export function PvpArena() {
           <h1>{t('PvP-арена')}</h1>
           <span className="ar-sub">
             {t('Millida SMP · дуэли по тир-листу')}
-            {me ? ' · ' + me.title + ' · ' + plural(me.points, t('{n} очко', { n: me.points }), t('{n} очка', { n: me.points }), t('{n} очков', { n: me.points })) : ''}
+            {me ? ' · ' + t(me.title) + ' · ' + plural(me.points, t('{n} очко', { n: me.points }), t('{n} очка', { n: me.points }), t('{n} очков', { n: me.points })) : ''}
           </span>
         </span>
         <button className="btn sm secondary" data-track="arena_open_top" onClick={() => openTop('tiers')}>

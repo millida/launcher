@@ -15,6 +15,7 @@ mod selfupdate;
 mod selfheal;
 mod external;
 mod dialogs;
+mod ui_text;
 
 pub use paths::*;
 pub use prefs::*;
@@ -32,3 +33,4 @@ pub use selfupdate::*;
 pub use selfheal::*;
 pub use external::*;
 pub use dialogs::*;
+pub use ui_text::*;

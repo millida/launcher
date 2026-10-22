@@ -43,7 +43,7 @@ import { BenchConfig } from './bench/BenchConfig'
 import { benchChosen } from './bench/benchTabs'
 import { Art, XpOrb } from './MilliModTip'
 import '../../styles/pixel/milli-pack.css'
-import { t, useT } from '../../i18n'
+import { t, tx, useT } from '../../i18n'
 
 /*
  * Карточка сборки в ленте Милли — всё внутри маленького чата (решение
@@ -262,7 +262,7 @@ function useInstall() {
     if (!started) setPhase('plan')
   }
   const pct = phase === 'done' ? 100 : Math.round(task?.pct ?? 0)
-  const msg = phase === 'done' ? t('Сборка готова') : task?.msg || task?.label || t('Создаём…')
+  const msg = phase === 'done' ? t('Сборка готова') : tx(task?.msg || task?.label || '') || t('Создаём…')
   return { phase, built, code, pct, msg, install, reset: () => setPhase('plan') }
 }
 

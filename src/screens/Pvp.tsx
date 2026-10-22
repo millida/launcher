@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import { Icon } from '../components/Icon'
-import { t, useT } from '../i18n'
+import { formatRelative, t, useT } from '../i18n'
 import { Head } from '../components/Head'
 import { api } from '../lib/api'
 import { quickJoin } from '../lib/joinServer'
@@ -63,15 +63,6 @@ const avatarUrl = (nick: string) => 'https://api.millida.net/v2/heads/avatar/' +
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
-}
-
-function ago(ts: number): string {
-  const m = Math.max(0, Math.round((Date.now() - ts) / 60_000))
-  if (m < 1) return t('сейчас')
-  if (m < 60) return t('{n} мин', { n: m })
-  const h = Math.round(m / 60)
-  if (h < 24) return t('{n} ч', { n: h })
-  return t('{n} дн', { n: Math.round(h / 24) })
 }
 
 export function Pvp({ on }: { on: boolean }) {
@@ -878,7 +869,7 @@ function MyMatches({ nick, all }: { nick: string; all?: boolean }) {
               <Head nick={m.opponent} size={32} src={avatarUrl(m.opponent)} />
               <span>
                 <b>{m.opponent}</b>
-                <i>{t('{time} назад', { time: ago(m.playedAt) })}</i>
+                <i>{formatRelative(m.playedAt, { style: 'short' })}</i>
               </span>
             </span>
             <span className="pv-m-elo">{m.type === 'ranked' && m.delta ? <em className={m.delta > 0 ? 'up' : 'down'}>{(m.delta > 0 ? '+' : '') + m.delta} ELO</em> : null}</span>
@@ -948,7 +939,7 @@ function MyPlace() {
           <Head nick={me.name} size={64} src={avatarUrl(me.name)} />
           <span className="pv-me-txt">
             <b>{me.name}</b>
-            <i>{me.title}</i>
+            <i>{t(me.title)}</i>
           </span>
           <div className="pv-me-stat">
             <i>{t('Общий рейтинг · очки за тиры во всех китах')}</i>

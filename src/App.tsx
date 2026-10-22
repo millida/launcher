@@ -58,6 +58,7 @@ import { RoomModals } from './components/RoomManage'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
 import { initInstalls } from './state/installs'
+import { syncNativeTexts } from './lib/nativeTexts'
 import { initCalls } from './state/call'
 import { loadProfileSettings } from './ipc/commands'
 import { ServerDetail } from './components/ServerDetail'
@@ -370,6 +371,7 @@ export function App() {
     initGameInvites()
     initOverlayLink()
     initInstalls()
+    syncNativeTexts()
     // Сборки обновляются только при «Играть» (владелец 08.10.2026: фоновая докачка мешала) — initPackAutoUpdate не запускаем.
     const releaseRealtime = retainRealtime()
     const stopRelay = initRealtimeRelay()

@@ -207,6 +207,7 @@ export function Plus({ on }: { on: boolean }) {
 
   const price = plus?.priceKopecks || (rules?.packs as { plus?: { priceKopecks?: number } } | undefined)?.plus?.priceKopecks || 0
   const small = useMemo(() => [...(rules?.packs.items || [])].sort((a, b) => a.kopecks - b.kopecks)[0], [rules])
+  const smallPrice = small ? rubyPackPrice(small.code) : null
   const rate = rules?.packs.rubiesPerRuble || 0
   const whole = useMemo(() => {
     const pct = (rules?.chests.items || []).map((c) => c.wholePayerPct || 0).filter((v) => v > 0)
@@ -306,7 +307,7 @@ export function Plus({ on }: { on: boolean }) {
         title={
           <Em text={t('[{n}] рубинов в месяц', { n: n(PLUS.rubies) })} />
         }
-        sub={small ? t('«{title}» за {price} — {n}', { title: small.title, price: rubyPackPrice(small.code) ?? '', n: n(small.rubies) }) : undefined}
+        sub={small && smallPrice ? t('«{title}» за {price} — {n}', { title: small.title, price: smallPrice, n: n(small.rubies) }) : undefined}
       >
         <div className="lp-ruby-row">
           <div>

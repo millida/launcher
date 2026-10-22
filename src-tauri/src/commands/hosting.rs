@@ -143,7 +143,7 @@ pub async fn host_download(app: AppHandle, id: String, path: Option<String>) -> 
         urlencoding_encode(&p)
     );
     let title = name.clone();
-    let dest = engine::save_file(engine::dialog().set_file_name(&title).set_title("Куда сохранить")).await;
+    let dest = engine::save_file(engine::dialog().set_file_name(&title).set_title(crate::engine::ui("Куда сохранить"))).await;
     let Some(dest) = dest else { return Ok(None) };
 
     let mut res = engine::client()
@@ -207,7 +207,7 @@ async fn refusal(res: reqwest::Response) -> String {
 /// single request, so the download is export, poll until ready, then fetch the
 /// archive in Range chunks that each fit under the shield's request ceiling.
 async fn download_world(app: &AppHandle, id: &str, token: &str) -> Result<Option<String>, String> {
-    let dest = engine::save_file(engine::dialog().set_file_name("world.tar.gz").set_title("Куда сохранить")).await;
+    let dest = engine::save_file(engine::dialog().set_file_name("world.tar.gz").set_title(crate::engine::ui("Куда сохранить"))).await;
     let Some(dest) = dest else { return Ok(None) };
     let base = format!("{}/hosting/servers/{}/world", engine::MILLIDA_API, id);
 
@@ -430,7 +430,7 @@ fn urlencoding_encode(s: &str) -> String {
 pub async fn host_upload(id: String, dir: String) -> Result<Option<String>, String> {
     check_id(&id)?;
     let token = token()?;
-    let picked = engine::pick_file(engine::dialog().set_title("Файл для сервера")).await;
+    let picked = engine::pick_file(engine::dialog().set_title(crate::engine::ui("Файл для сервера"))).await;
     let Some(src) = picked else { return Ok(None) };
     let name = src
         .file_name()

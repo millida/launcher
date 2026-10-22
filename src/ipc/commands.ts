@@ -1042,6 +1042,10 @@ export const autostartState = () => invoke<boolean>('autostart_state')
 export const setAppIcon = (id: string) => invoke<void>('set_app_icon', { id })
 export const autostartSet = (on: boolean) => invoke<boolean>('autostart_set', { on })
 
+export const uiTextKeys = () => invoke<string[]>('ui_text_keys', {})
+
+export const setUiTexts = (texts: Record<string, string>) => invoke<number>('set_ui_texts', { texts })
+
 export interface DeviceSpecs {
   os: string
   os_version: string

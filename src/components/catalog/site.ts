@@ -9,7 +9,7 @@ import { cfProjectOf } from '../../lib/millidaCatalog'
 import { SECTION_SOURCE, listingQuery } from './sections'
 import type { CatalogSortId, PriceFilter, SectionSlug, SectionSource, SideFilter } from './sections'
 import type { CatalogFile, Pricing } from './paid'
-import { getLocale, intlTag, t, type Locale } from '../../i18n'
+import { formatRelative, getLocale, intlTag, t, type Locale } from '../../i18n'
 import { withCatalogLang } from './catalogLang'
 import { marketPacks } from '../../lib/paidPacks'
 import { plural } from '../../lib/format'
@@ -508,13 +508,7 @@ export function relativeTime(iso?: string | null): string {
   if (!iso) return ''
   const at = Date.parse(iso)
   if (Number.isNaN(at)) return ''
-  const diffMin = Math.floor((Date.now() - at) / 60000)
-  if (diffMin < 1) return t('только что')
-  if (diffMin < 60) return plural(diffMin, t('{n} минуту назад', { n: diffMin }), t('{n} минуты назад', { n: diffMin }), t('{n} минут назад', { n: diffMin }))
-  const h = Math.floor(diffMin / 60)
-  if (h < 24) return plural(h, t('{n} час назад', { n: h }), t('{n} часа назад', { n: h }), t('{n} часов назад', { n: h }))
-  const d = Math.floor(h / 24)
-  if (d < 7) return plural(d, t('{n} день назад', { n: d }), t('{n} дня назад', { n: d }), t('{n} дней назад', { n: d }))
+  if (Date.now() - at < 7 * 86_400_000) return formatRelative(at, { ceil: 'day' })
   return new Date(at).toLocaleDateString(intlTag(), { day: 'numeric', month: 'long' })
 }
 

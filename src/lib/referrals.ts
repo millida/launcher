@@ -1,6 +1,6 @@
 // Inviting friends: requests to the Millida API (invite status, rewards). The core adds the token.
 import { api } from './api'
-import { t } from '../i18n'
+import { pluralForm as plural, t } from '../i18n'
 
 export type InviteFriendStatus = 'pending' | 'qualified' | 'rejected'
 export type InviteWait = 'play' | 'email' | 'queue' | null
@@ -122,14 +122,6 @@ export function withInviteRef(url: string): string {
   } catch {
     return url
   }
-}
-
-const plural = (n: number, one: string, few: string, many: string) => {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return one
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
-  return many
 }
 
 export const daysText = (n: number) => n + ' ' + plural(n, t('день'), t('дня'), t('дней'))

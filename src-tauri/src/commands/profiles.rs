@@ -415,7 +415,7 @@ pub async fn scan_imports() -> Result<Vec<engine::FoundInstance>, String> {
 /// `None` — диалог закрыли.
 #[tauri::command]
 pub async fn pick_import_dir() -> Result<Option<Vec<engine::FoundInstance>>, String> {
-    let Some(dir) = engine::pick_folder(engine::dialog().set_title("Папка со сборками")).await else {
+    let Some(dir) = engine::pick_folder(engine::dialog().set_title(crate::engine::ui("Папка со сборками"))).await else {
         return Ok(None);
     };
     super::blocking(move || engine::scan_import_dir(&dir)).await.map(Some)

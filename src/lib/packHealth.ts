@@ -1,5 +1,5 @@
 import { api } from './api'
-import { t } from '../i18n'
+import { formatRelative, t } from '../i18n'
 
 /**
  * Здоровье сборки каталога: когда её последний раз удачно запускали и какая
@@ -30,9 +30,7 @@ function ago(iso: string, now: number): string {
   const min = (now - Date.parse(iso)) / 60_000
   if (!Number.isFinite(min)) return ''
   if (min < 5) return t('только что')
-  if (min < 60) return t('{n} мин назад', { n: Math.round(min) })
-  if (min < 1440) return t('{n} ч назад', { n: Math.round(min / 60) })
-  return t('{n} дн назад', { n: Math.round(min / 1440) })
+  return formatRelative(Date.parse(iso), { style: 'short' }, now)
 }
 
 /** Строка под кнопкой. null — данных нет, строки на странице нет. */

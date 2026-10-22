@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { formatFixed, intlTag, useT } from '../i18n'
+import { formatFixed, intlTag, tx, useT } from '../i18n'
 import { TopbarPortal } from '../components/TopbarPortal'
 import { HostingManage } from './HostingManage'
 import { api, hasMillidaAccount, openExt } from '../lib/api'
@@ -171,7 +171,7 @@ export function Hosting({ on }: { on: boolean }) {
       if (silent) return
       // Текст ошибки нужен логам, а не игроку: на экране — фраза и «Повторить».
       console.error('[hosting] servers/me', e)
-      setErr('' + e)
+      setErr(tx(e))
       setView('error')
       return
     }

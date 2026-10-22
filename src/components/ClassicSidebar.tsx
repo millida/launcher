@@ -18,7 +18,7 @@ import { useHasMillida } from '../state/auth'
 import { usePlus } from '../state/plus'
 import { PL_STAGES, cancelPrelaunch } from '../lib/launch'
 import { preloadScreen } from '../screens/registry'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 
 /** hub: раздел «Во что играем» — false «Мои сборки» (сборки и рекомендации), true «Каталог». */
 const NAV: { id: ScreenId; icon: string; label: string; pill?: string; hub?: boolean }[] = [
@@ -181,7 +181,7 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
           <div className="dl-card">
             <div className="dl-top">
               <Icon id="i-download" />
-              <span className="dl-name">{prelaunch.msg || prelaunch.sub}</span>
+              <span className="dl-name">{tx(prelaunch.msg || prelaunch.sub)}</span>
               <span className="dl-pct" id="dlPct">
                 {Math.round(prelaunch.pct)}%
               </span>

@@ -16,7 +16,7 @@ import type { SiteSlug } from '../catalog/site'
 import { pickFile } from '../catalog/paid'
 import { installCatalogFile } from '../../ipc/commands'
 import '../../styles/pixel/moddl.css'
-import { t, useT } from '../../i18n'
+import { t, tx, useT } from '../../i18n'
 
 /*
  * «Добавить моды» как в Prism Launcher (владелец 07.10.2026: «прям один в один»):
@@ -243,7 +243,7 @@ export function ModDownloader({
         })
         if (!offset && listRef.current) listRef.current.scrollTop = 0
       })
-      .catch((e) => my === seq.current && (setHits([]), setErr('' + e)))
+      .catch((e) => my === seq.current && (setHits([]), setErr(tx(e))))
   }
   useEffect(() => {
     const t = window.setTimeout(() => load(0), q ? 280 : 0)

@@ -99,12 +99,15 @@ static ETAG_CACHE: std::sync::Mutex<std::collections::BTreeMap<String, Tagged>> 
 /// must never be replayed to the next one signed in on the same launcher.
 /// The market is part of it too: the same rating address answers with another
 /// catalogue for another market.
-fn etag_key(token: Option<&String>, url: &str, market: Option<&str>) -> String {
-    let account = token.map(|t| sha256_hex(t.as_bytes())).unwrap_or_default();
-    match market {
-        Some(m) => format!("{}\n{}\n{}", account, m, url),
-        None => format!("{}\n{}", account, url),
+fn etag_key(token: Option<&String>, url: &str, market: Option<&str>, lang: Option<&str>) -> String {
+    let mut key = token.map(|t| sha256_hex(t.as_bytes())).unwrap_or_default();
+    if let Some(m) = market {
+        key = format!("{}\n{}", key, m);
     }
+    if let Some(l) = lang {
+        key = format!("{}\nlang={}", key, l);
+    }
+    format!("{}\n{}", key, url)
 }
 
 /// The API splits the server rating by market and reads it from this header; a
@@ -121,8 +124,10 @@ pub fn market_header(raw: Option<&str>) -> Result<Option<&'static str>, String> 
 }
 
 /// The server prices by the interface language (Russian in rubles, any other in dollars),
-/// so money requests carry it. Only the launcher's own codes pass.
+/// and texts follow it too, so every request carries it. Only the launcher's own codes pass.
 const LANGS: [&str; 18] = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt-BR", "id", "ur", "ru", "de", "ja", "vi", "te", "tr", "ko", "pl"];
+
+const LANG_HEADER: &str = "X-Lang";
 
 pub fn lang_header(raw: Option<&str>) -> Result<Option<&'static str>, String> {
     match raw.map(str::trim).unwrap_or_default() {
@@ -238,7 +243,7 @@ pub async fn millida_api_in(
         return Err("bad method".into());
     }
     let token = token.filter(|t| !t.is_empty());
-    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url, market));
+    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url, market, lang));
     let known = conditional.as_deref().and_then(remembered);
     let build_on = |c: reqwest::Client| {
         let mut req = match m.as_str() {
@@ -256,7 +261,7 @@ pub async fn millida_api_in(
             req = req.header(MARKET_HEADER, mk);
         }
         if let Some(l) = lang {
-            req = req.header(reqwest::header::ACCEPT_LANGUAGE, l);
+            req = req.header(reqwest::header::ACCEPT_LANGUAGE, l).header(LANG_HEADER, l);
         }
         if let Some(b) = body.as_ref() {
             req = req.json(b);
@@ -930,7 +935,7 @@ mod tests {
         let alice = "token-alice".to_string();
         let bob = "token-bob".to_string();
         let mut cache: BTreeMap<String, Tagged> = BTreeMap::new();
-        remember_in(&mut cache, etag_key(Some(&alice), url, None), "\"v1\"".into(), "{\"items\":[]}".into());
+        remember_in(&mut cache, etag_key(Some(&alice), url, None, None), "\"v1\"".into(), "{\"items\":[]}".into());
         // (account, address, expected etag, why this case is pinned)
         let cases: [(Option<&String>, &str, Option<&str>, &str); 4] = [
             (Some(&alice), url, Some("\"v1\""), "the same session asks again and gets a 304 instead of 1.4 MB"),
@@ -939,12 +944,16 @@ mod tests {
             (Some(&alice), "https://api.millida.net/v2/cosmetics/owned", None, "one address never answers for another"),
         ];
         for (account, address, expected, why) in cases {
-            let got = cache.get(&etag_key(account, address, None)).map(|t| t.etag.as_str());
+            let got = cache.get(&etag_key(account, address, None, None)).map(|t| t.etag.as_str());
             assert_eq!(got, expected, "{}", why);
         }
         assert!(
-            !cache.contains_key(&etag_key(Some(&alice), url, Some("EN"))),
+            !cache.contains_key(&etag_key(Some(&alice), url, Some("EN"), None)),
             "a rating cached for the Russian market must never answer for the English one",
+        );
+        assert!(
+            !cache.contains_key(&etag_key(Some(&alice), url, None, Some("en"))),
+            "names cached in one interface language must never be replayed after switching to another",
         );
     }
 

@@ -1,6 +1,6 @@
 import { offPlatformReason } from './offPlatform'
 import { moneyShortfall, shortfallText } from './money'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 /// Разбор один на весь лаунчер: раньше каждый экран решал сам, и «не нашли
 /// такого ника» доезжало до игрока как «войди в аккаунт» — человек шёл
@@ -91,7 +91,7 @@ export function apiErrorText(e: unknown, fallback: string): string {
   if (/^unauthorized$/i.test(raw)) return STATUS_TEXT[401]
 
   const bare = /^http \d{3}$/i.test(raw) || NOISE.some((pattern) => pattern.test(raw))
-  if (!bare) return raw
+  if (!bare) return tx(raw)
 
   if (status) {
     const known = STATUS_TEXT[status]

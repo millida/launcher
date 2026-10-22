@@ -45,6 +45,10 @@ export interface FoundUser {
   isFriend?: boolean
   pending?: boolean
   text?: string
+  online?: boolean
+  playingOn?: string | null
+  rank?: number
+  lastSeen?: number | null
 }
 
 export interface ChatAttachment {

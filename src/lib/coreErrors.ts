@@ -1,4 +1,4 @@
-import { t } from '../i18n'
+import { tx } from '../i18n'
 
 /// The core answers in Russian and the webview recognises these replies by their exact text,
 /// so they live here once; what the player sees goes through t().
@@ -15,4 +15,4 @@ export const isPickCancelled = (e: unknown): boolean => String(e).includes(CORE_
 export const mentionsCancel = (e: unknown): boolean => String(e).includes(CORE_CANCEL_STEM)
 
 /// A known core reply is shown translated; anything else passes through as the core wrote it.
-export const coreErrorText = (e: unknown): string => t(errorMessage(e))
+export const coreErrorText = (e: unknown): string => tx(errorMessage(e))
