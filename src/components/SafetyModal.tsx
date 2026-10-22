@@ -5,7 +5,7 @@ import { hasTauri } from '../ipc/tauri'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
 import { quarantineMods, scanModSafety, type ModVerdict, type SafetyReport } from '../ipc/commands'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 
 const VERDICTS: Record<ModVerdict['verdict'], { label: string; tone: string; help: string }> = {
   blocked: {
@@ -66,7 +66,7 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
       .then(setReport)
       .catch((e) => {
         console.error('scanModSafety', e)
-        setError('' + e)
+        setError(tx(e))
       })
       .finally(() => setBusy(false))
   }

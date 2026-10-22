@@ -40,5 +40,5 @@ test('нет данных — строки нет', () => {
 })
 
 test('давний запуск — в днях', () => {
-  expect(healthLine(h({ lastOkAt: '2026-09-22T12:00:00Z' }), NOW)?.when).toBe('запускали 3 дн назад')
+  expect(healthLine(h({ lastOkAt: '2026-09-22T12:00:00Z' }), NOW)?.when).toBe('запускали 3 дн. назад')
 })

@@ -1,7 +1,7 @@
 import { Icon } from './Icon'
 import { PL_STAGES, REPAIR_STAGES, cancelPrelaunch } from '../lib/launch'
 import { useUi } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 export function Prelaunch() {
   const t = useT()
@@ -22,7 +22,7 @@ export function Prelaunch() {
             <span className="st-ic">
               {i < pl.stage ? <Icon id="i-check" /> : i === pl.stage ? <span className="spin"></span> : null}
             </span>
-            {i === pl.stage && pl.msg ? pl.msg : t(st)}
+            {i === pl.stage && pl.msg ? tx(pl.msg) : t(st)}
           </div>
         ))}
       </div>

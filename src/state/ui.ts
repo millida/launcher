@@ -2,6 +2,7 @@ import { startTransition } from 'react'
 import { create } from 'zustand'
 import { playSound } from '../lib/sound'
 import { TOAST_TEXT_MAX, clipText } from '../lib/format'
+import { tx } from '../i18n'
 import type { SoundEvent } from '../lib/sound'
 
 export type ScreenId =
@@ -133,7 +134,7 @@ export const useUi = create<UiState>((set, get) => ({
     const k = kind || (ERROR_RE.test(msg) ? 'error' : 'ok')
     // A build name or a server answer can be arbitrarily long; the toast is a
     // notice, not a place to read one, so it carries a bounded text.
-    set({ toastMsg: clipText(msg, TOAST_TEXT_MAX), toastKind: k, toastShow: true, toastAction: action || null })
+    set({ toastMsg: clipText(tx(msg), TOAST_TEXT_MAX), toastKind: k, toastShow: true, toastAction: action || null })
     if (sound !== false) playSound(sound || (k === 'error' ? 'error' : 'success'))
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => get().hideToast(), action ? TOAST_ACTION_MS : TOAST_MS)

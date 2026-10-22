@@ -226,12 +226,21 @@ export interface VideoWp {
 
 // `src` is empty when the clip was not fetched from the CDN (see assets.json): the poster
 // stays in the repo, so such a wallpaper degrades to a still frame instead of a black box.
-export const VIDEOS: VideoWp[] = [
-  { id: 'bg1', get name() { return t('Вишнёвая роща') }, src: '', poster: '/bg/bg1.jpg' },
-  { id: 'bg2', get name() { return t('Уютная пещера') }, src: '', poster: '/bg/bg2.jpg' },
-  { id: 'bg3', get name() { return t('Солнечный город') }, src: '', poster: '/bg/bg3.jpg' },
-  { id: 'bg4', get name() { return t('У камина') }, src: '', poster: '/bg/bg4.jpg' },
-].map((v) => (__BUNDLED_VIDEOS__.includes(v.id) ? { ...v, src: '/bg/' + v.id + '.mp4' } : v))
+const VIDEO_NAMES: ReadonlyArray<readonly [id: string, name: string]> = [
+  ['bg1', 'Вишнёвая роща'],
+  ['bg2', 'Уютная пещера'],
+  ['bg3', 'Солнечный город'],
+  ['bg4', 'У камина'],
+]
+
+export const VIDEOS: VideoWp[] = VIDEO_NAMES.map(([id, name]) => ({
+  id,
+  get name() {
+    return t(name)
+  },
+  src: __BUNDLED_VIDEOS__.includes(id) ? '/bg/' + id + '.mp4' : '',
+  poster: '/bg/' + id + '.jpg',
+}))
 
 export const isVideoWp = (id: string) => VIDEOS.some((v) => v.id === id)
 

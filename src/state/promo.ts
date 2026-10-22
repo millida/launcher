@@ -1,6 +1,6 @@
 // "For you" tiles on the home screen: the server and promo list is loaded from api.millida.net/v2/launcher/promo and cached in localStorage.
 import { create } from 'zustand'
-import { LAUNCHER_API } from '../lib/api'
+import { LAUNCHER_API, langHeaders } from '../lib/api'
 
 export const ANARCHY_ID = 'MCRU_ANARCHY'
 export const FOR_YOU_CARDS = ['hosting', ANARCHY_ID, 'ONEBLOCK'] as const
@@ -129,7 +129,7 @@ async function refresh(): Promise<void> {
   const mine = ++seq
   lastAt = Date.now()
   try {
-    const r = await fetch(LAUNCHER_API + '/launcher/promo')
+    const r = await fetch(LAUNCHER_API + '/launcher/promo', { headers: langHeaders() })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const body = (await r.json()) as { promo?: unknown }
     if (mine !== seq) return

@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Head } from '../Head'
-import { agoText } from '../../lib/format'
 import { quickJoin } from '../../lib/joinServer'
 import { rememberServerName } from '../../state/playStats'
 import { openChat, openFriendProfile } from '../../state/friends'
@@ -11,35 +10,16 @@ import { invitePlay } from '../../state/playInvite'
 import type { Friend } from '../../state/friends'
 import { useFriendStreaks } from '../../state/friendStreaks'
 import { StreakFire } from './StreakFire'
+import { friendServer, statusText } from '../../lib/friendStatus'
 import { t, useT } from '../../i18n'
 
-/** Адрес сервера друга: поле называется по-разному в разных ответах сервера. */
-export const friendServer = (f: Friend): string | undefined =>
-  f.serverIp ||
-  (f as { server?: string }).server ||
-  (f as { serverAddress?: string }).serverAddress
-
-/// Отметка «был в сети» приходит и в секундах, и в миллисекундах — приводим к
-/// секундам по величине, а не по вере в одну из двух форм.
-const seenAgo = (lastSeen?: number | null): string =>
-  lastSeen ? agoText(lastSeen > 1e12 ? Math.round(lastSeen / 1000) : lastSeen) : ''
+export { friendServer, statusText } from '../../lib/friendStatus'
 
 /// Публичный показатель — целые часы: «4 ч 0 м» в строке списка читается хуже,
 /// чем «4 ч», а минуты тут ничего не решают.
 export const hoursText = (seconds: number): string => {
   const h = Math.floor(seconds / 3600)
   return h >= 1 ? t('{n} ч', { n: h }) : t('{n} мин', { n: Math.max(1, Math.round(seconds / 60)) })
-}
-
-/** Одна строка состояния: где человек сейчас или когда был. */
-export function statusText(f: Friend): string {
-  if (f.playing) {
-    const where = f.serverName || friendServer(f)
-    return where ? t('В игре · {where}', { where }) : f.text || t('В игре')
-  }
-  if (f.online) return f.text || (f.place === 'web' ? t('На сайте') : t('В сети'))
-  const ago = seenAgo(f.lastSeen)
-  return f.text || (ago ? t('Был {ago}', { ago }) : t('Был давно'))
 }
 
 const MENU_W = 220

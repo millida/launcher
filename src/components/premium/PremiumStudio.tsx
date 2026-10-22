@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
-import { api, LAUNCHER_API, mirrorAsset } from '../../lib/api'
+import { api, LAUNCHER_API, langHeaders, mirrorAsset } from '../../lib/api'
 import { hasTauri } from '../../ipc/tauri'
 import { loadProfileSettings, millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
@@ -25,7 +25,7 @@ const GIVE_UP_MS = 20_000
 
 /** Открытый список без входа: черновиков для проверяющих в нём нет, студии они и не нужны. */
 function packsFromWeb(): Promise<MillidaPack[]> {
-  return fetch(LAUNCHER_API + '/catalog/packs').then((r) => (r.ok ? r.json() : Promise.reject(new Error('http ' + r.status))))
+  return fetch(LAUNCHER_API + '/catalog/packs', { headers: langHeaders() }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('http ' + r.status))))
 }
 
 /**

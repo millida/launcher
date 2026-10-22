@@ -126,9 +126,9 @@ pub async fn save_screenshot_as(profile: String, name: String) -> Result<Option<
     let src = shot_path(&profile, &name)?;
     let picked = save_file(
         dialog()
-            .add_filter("Изображение PNG", &["png"])
+            .add_filter(crate::engine::ui("Изображение PNG"), &["png"])
             .set_file_name(&name)
-            .set_title("Куда сохранить скриншот"),
+            .set_title(crate::engine::ui("Куда сохранить скриншот")),
     )
     .await;
     let Some(out) = picked else { return Ok(None) };

@@ -14,7 +14,7 @@ import { PlanButtons } from './premium/PremiumBuy'
 import { LOADER, gb, loadPackDownloads, loadPackView, modsFromText, packPluses, plusIcon } from './premium/packView'
 import type { PackView } from './premium/packView'
 import '../styles/pixel/packkey.css'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 interface Props {
   slug: string
@@ -62,7 +62,7 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
     setError('')
     redeemPackKey(slug, code.trim())
       .then(onUnlocked)
-      .catch((e) => setError(String(e).replace(/^pack-access:\s*/, '')))
+      .catch((e) => setError(tx(String(e).replace(/^(Error:\s*)?pack-access:\s*/, ''))))
       .finally(() => setBusy(false))
   }
 

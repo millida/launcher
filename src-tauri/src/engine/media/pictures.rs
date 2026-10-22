@@ -186,9 +186,9 @@ pub async fn save_picture_as(src: PictureRef) -> Result<Option<String>, String> 
     let bytes = bytes_of(&src).await?;
     let picked = save_file(
         dialog()
-            .add_filter("Изображение", &[ext])
+            .add_filter(crate::engine::ui("Изображение"), &[ext])
             .set_file_name(&name)
-            .set_title("Куда сохранить изображение"),
+            .set_title(crate::engine::ui("Куда сохранить изображение")),
     )
     .await;
     let Some(out) = picked else { return Ok(None) };

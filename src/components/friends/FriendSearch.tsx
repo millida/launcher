@@ -10,6 +10,7 @@ import type { FoundUser } from '../../state/friends'
 import { norm } from './friendsView'
 import { newFriend } from './RequestsTab'
 import { t, useT } from '../../i18n'
+import { foundStatusText } from '../../lib/friendStatus'
 
 const TECHNICAL_NICK = /^(skins|smx|guest|user)_\d{6,}$/i
 export const isTechnicalNick = (nick?: string) => TECHNICAL_NICK.test((nick || '').trim())
@@ -120,7 +121,7 @@ export function AddRows({
           <Head nick={u.nickname} size={40} />
           <span className="fr-body">
             <span className="fr-nick">{u.nickname}</span>
-            <span className="fr-status">{u.text || t('Игрок Millida')}</span>
+            <span className="fr-status">{foundStatusText(u)}</span>
           </span>
           <button
             className="btn sm secondary fr-send"

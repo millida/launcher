@@ -25,6 +25,68 @@ export function lookup(locale: Locale, key: string, own: Table | null | undefine
   return en || key
 }
 
+const CORE_SLOT = /\{\d+\}/
+const CYRILLIC = /[А-Яа-яЁё]/
+const MAX_DEPTH = 3
+
+interface CoreTemplate {
+  key: string
+  re: RegExp
+  slots: string[]
+}
+
+const templateCache = new WeakMap<object, CoreTemplate[]>()
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+function coreTemplates(table: Table): CoreTemplate[] {
+  const known = templateCache.get(table)
+  if (known) return known
+  const list: CoreTemplate[] = []
+  for (const key of Object.keys(table)) {
+    if (!CORE_SLOT.test(key) || !CYRILLIC.test(key.replace(/\{\d+\}/g, ''))) continue
+    const slots: string[] = []
+    const source = key
+      .split(/(\{\d+\})/)
+      .map((part) => {
+        if (!/^\{\d+\}$/.test(part)) return escapeRe(part)
+        slots.push(part.slice(1, -1))
+        return '([\\s\\S]*?)'
+      })
+      .join('')
+    list.push({ key, re: new RegExp('^' + source + '$'), slots })
+  }
+  list.sort((a, b) => b.key.replace(/\{\d+\}/g, '').length - a.key.replace(/\{\d+\}/g, '').length)
+  templateCache.set(table, list)
+  return list
+}
+
+export function localizeCore(
+  locale: Locale,
+  raw: string,
+  own: Table | null | undefined,
+  english: Table | null | undefined,
+  depth = 0,
+): string {
+  const text = raw.replace(/^Error:\s*/, '')
+  if (locale === 'ru') return own?.[text] || text
+  if (!CYRILLIC.test(text) || depth > MAX_DEPTH) return text
+  const exact = own?.[text] || english?.[text]
+  if (exact) return exact
+  const source = english ?? own
+  if (!source) return text
+  for (const tpl of coreTemplates(source)) {
+    const m = tpl.re.exec(text)
+    if (!m) continue
+    const vars: Record<string, string> = {}
+    tpl.slots.forEach((slot, i) => {
+      vars[slot] = localizeCore(locale, m[i + 1] ?? '', own, english, depth + 1)
+    })
+    return interpolate(lookup(locale, tpl.key, own, english), vars)
+  }
+  return text
+}
+
 export function translate(locale: Locale, key: string, vars: Vars | undefined, own: Table | null | undefined, english: Table | null | undefined): string {
   return interpolate(lookup(locale, key, own, english), vars)
 }

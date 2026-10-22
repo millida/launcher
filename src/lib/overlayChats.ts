@@ -1,7 +1,8 @@
 import { plural } from './format'
+import { statusText } from './friendStatus'
 import type { Friend } from '../state/friends'
 import type { Room } from '../state/rooms'
-import { intlTag, t } from '../i18n'
+import { formatRelative, intlTag, t } from '../i18n'
 
 export interface OverlayChatItem {
   key: string
@@ -38,7 +39,7 @@ export function chatItems(friends: Friend[], rooms: Room[], filter = ''): Overla
       id: f.userId,
       room: false,
       title,
-      subtitle: f.text || (f.online ? t('В сети') : ''),
+      subtitle: f.online ? statusText(f) : '',
       nicks: [title],
       unread: f.unread || 0,
       ts: f.lastMessageAt || 0,
@@ -77,7 +78,7 @@ export function chatWhen(ts: number, now = Date.now()): string {
   const yesterday = new Date(now - 86_400_000)
   if (d.toDateString() === today.toDateString())
     return d.toLocaleTimeString(intlTag(), { hour: '2-digit', minute: '2-digit' })
-  if (d.toDateString() === yesterday.toDateString()) return t('вчера')
+  if (d.toDateString() === yesterday.toDateString()) return formatRelative(now - 86_400_000, { floor: 'day' }, now)
   return d.toLocaleDateString(intlTag(), { day: 'numeric', month: 'short' }).replace('.', '')
 }
 

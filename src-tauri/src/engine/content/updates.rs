@@ -217,11 +217,11 @@ pub fn content_exts(kind: &str) -> &'static [&'static str] {
 pub async fn pick_content_files(kind: String) -> Result<Vec<String>, String> {
     let exts = content_exts(&kind);
     let (filter, title) = match kind.as_str() {
-        "mod" => ("Моды", "Выбери моды"),
-        "resourcepack" => ("Ресурспаки", "Выбери ресурспаки"),
-        "datapack" => ("Дата-паки", "Выбери дата-паки"),
-        "shader" => ("Шейдеры", "Выбери шейдеры"),
-        _ => ("Файлы", "Выбери файлы"),
+        "mod" => (crate::engine::ui("Моды"), crate::engine::ui("Выбери моды")),
+        "resourcepack" => (crate::engine::ui("Ресурспаки"), crate::engine::ui("Выбери ресурспаки")),
+        "datapack" => (crate::engine::ui("Дата-паки"), crate::engine::ui("Выбери дата-паки")),
+        "shader" => (crate::engine::ui("Шейдеры"), crate::engine::ui("Выбери шейдеры")),
+        _ => (crate::engine::ui("Файлы"), crate::engine::ui("Выбери файлы")),
     };
     let picked = pick_files(dialog().add_filter(filter, exts).set_title(title)).await.unwrap_or_default();
     grant_user_files(&picked);

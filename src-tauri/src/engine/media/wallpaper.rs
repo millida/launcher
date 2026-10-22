@@ -34,7 +34,7 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// Native file dialog: an HTML <input type=file> aborts WKWebView on macOS, so
 /// the file is picked here and returned as a data URL.
 pub async fn pick_texture() -> Result<Option<PickedTexture>, String> {
-    let picked = pick_file(dialog().add_filter("PNG", &["png"]).set_title("Скин или плащ (PNG)")).await;
+    let picked = pick_file(dialog().add_filter("PNG", &["png"]).set_title(crate::engine::ui("Скин или плащ (PNG)"))).await;
     let Some(p) = picked else { return Ok(None) };
     let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
     if bytes.len() > 2_000_000 {
@@ -52,8 +52,8 @@ pub async fn pick_texture() -> Result<Option<PickedTexture>, String> {
 pub async fn pick_wallpaper() -> Result<Option<CustomWallpaper>, String> {
     let picked = pick_file(
         dialog()
-            .add_filter("Фон", &["png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov", "m4v"])
-            .set_title("Свой фон лаунчера"),
+            .add_filter(crate::engine::ui("Фон"), &["png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov", "m4v"])
+            .set_title(crate::engine::ui("Свой фон лаунчера")),
     )
     .await;
     let Some(src) = picked else { return Ok(None) };

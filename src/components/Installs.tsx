@@ -2,7 +2,7 @@ import { Icon } from './Icon'
 import { PauseInstall } from './PauseInstall'
 import { runningMsg, stopInstall, useInstalls } from '../state/installs'
 import { useUi } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 export function Installs({ inLobby = false }: { inLobby?: boolean }) {
   const t = useT()
@@ -18,7 +18,7 @@ export function Installs({ inLobby = false }: { inLobby?: boolean }) {
           <div className="inst-body">
             <div className="inst-name">{task.title || t('Установка')}</div>
             <div className="inst-msg">
-              {task.state === 'error' ? t(task.msg) : task.state === 'done' ? t('Готово') : runningMsg(task, task.msg || t('Готовим…'))}
+              {task.state === 'error' ? tx(task.msg) : task.state === 'done' ? t('Готово') : runningMsg(task, tx(task.msg) || t('Готовим…'))}
             </div>
             {task.state === 'run' ? (
               <div className="inst-bar">

@@ -1,0 +1,994 @@
+{
+ "Повелитель огня": {
+  "en": "Fire Lord",
+  "pt-BR": "Senhor do Fogo",
+  "es": "Señor del fuego",
+  "de": "Herr des Feuers",
+  "tr": "Ateş Lordu",
+  "pl": "Władca ognia"
+ },
+ "Смешанное пламя": {
+  "en": "Mixed Flame",
+  "pt-BR": "Chama Mista",
+  "es": "Llama mixta",
+  "de": "Gemischte Flamme",
+  "tr": "Karışık Alev",
+  "pl": "Mieszany płomień"
+ },
+ "Пламя душ": {
+  "en": "Soul Flame",
+  "pt-BR": "Chama das Almas",
+  "es": "Llama de almas",
+  "de": "Seelenflamme",
+  "tr": "Ruh Alevi",
+  "pl": "Płomień dusz"
+ },
+ "Духовное пламя": {
+  "en": "Spirit Flame",
+  "pt-BR": "Chama Espiritual",
+  "es": "Llama espiritual",
+  "de": "Geisterflamme",
+  "tr": "Ruhani Alev",
+  "pl": "Duchowy płomień"
+ },
+ "Неон RGB": {
+  "en": "RGB Neon",
+  "pt-BR": "Neon RGB",
+  "es": "Neón RGB",
+  "de": "RGB-Neon",
+  "tr": "RGB Neon",
+  "pl": "Neon RGB"
+ },
+ "Магма": {
+  "en": "Magma",
+  "pt-BR": "Magma",
+  "es": "Magma",
+  "de": "Magma",
+  "tr": "Magma",
+  "pl": "Magma"
+ },
+ "Влюблённое сердце": {
+  "en": "Heart in Love",
+  "pt-BR": "Coração Apaixonado",
+  "es": "Corazón enamorado",
+  "de": "Verliebtes Herz",
+  "tr": "Aşık Kalp",
+  "pl": "Zakochane serce"
+ },
+ "Повелитель молний": {
+  "en": "Lightning Lord",
+  "pt-BR": "Senhor dos Raios",
+  "es": "Señor del rayo",
+  "de": "Herr der Blitze",
+  "tr": "Şimşek Lordu",
+  "pl": "Władca piorunów"
+ },
+ "Агера": {
+  "en": "Agera",
+  "pt-BR": "Agera",
+  "es": "Agera",
+  "de": "Agera",
+  "tr": "Agera",
+  "pl": "Agera"
+ },
+ "Демон-повелитель": {
+  "en": "Demon Lord",
+  "pt-BR": "Senhor Demônio",
+  "es": "Señor demonio",
+  "de": "Dämonenfürst",
+  "tr": "İblis Lordu",
+  "pl": "Władca demonów"
+ },
+ "Падший ангел": {
+  "en": "Fallen Angel",
+  "pt-BR": "Anjo Caído",
+  "es": "Ángel caído",
+  "de": "Gefallener Engel",
+  "tr": "Düşmüş Melek",
+  "pl": "Upadły anioł"
+ },
+ "Повелитель нежити": {
+  "en": "Lord of the Undead",
+  "pt-BR": "Senhor dos Mortos-Vivos",
+  "es": "Señor de los no muertos",
+  "de": "Herr der Untoten",
+  "tr": "Ölümsüzler Lordu",
+  "pl": "Władca nieumarłych"
+ },
+ "Странник-страж": {
+  "en": "Wandering Guardian",
+  "pt-BR": "Guardião Errante",
+  "es": "Guardián errante",
+  "de": "Wandernder Wächter",
+  "tr": "Gezgin Muhafız",
+  "pl": "Wędrowny strażnik"
+ },
+ "Сущность Края": {
+  "en": "End Entity",
+  "pt-BR": "Entidade do End",
+  "es": "Ente del End",
+  "de": "Wesen des Endes",
+  "tr": "End Varlığı",
+  "pl": "Istota Kresu"
+ },
+ "Готический рыцарь": {
+  "en": "Gothic Knight",
+  "pt-BR": "Cavaleiro Gótico",
+  "es": "Caballero gótico",
+  "de": "Gotischer Ritter",
+  "tr": "Gotik Şövalye",
+  "pl": "Gotycki rycerz"
+ },
+ "Полый страж": {
+  "en": "Hollow Guardian",
+  "pt-BR": "Guardião Oco",
+  "es": "Guardián hueco",
+  "de": "Hohler Wächter",
+  "tr": "Boş Muhafız",
+  "pl": "Pusty strażnik"
+ },
+ "Лиминальный лазутчик": {
+  "en": "Liminal Infiltrator",
+  "pt-BR": "Infiltrador Liminal",
+  "es": "Infiltrado liminal",
+  "de": "Liminaler Späher",
+  "tr": "Liminal Sızıcı",
+  "pl": "Liminalny zwiadowca"
+ },
+ "Грозовой рыцарь": {
+  "en": "Storm Knight",
+  "pt-BR": "Cavaleiro da Tempestade",
+  "es": "Caballero de la tormenta",
+  "de": "Sturmritter",
+  "tr": "Fırtına Şövalyesi",
+  "pl": "Burzowy rycerz"
+ },
+ "Дух солнца": {
+  "en": "Sun Spirit",
+  "pt-BR": "Espírito do Sol",
+  "es": "Espíritu del sol",
+  "de": "Sonnengeist",
+  "tr": "Güneş Ruhu",
+  "pl": "Duch słońca"
+ },
+ "Боевой мех": {
+  "en": "Battle Mech",
+  "pt-BR": "Mech de Combate",
+  "es": "Mech de combate",
+  "de": "Kampfmech",
+  "tr": "Savaş Robotu",
+  "pl": "Mech bojowy"
+ },
+ "Хакер": {
+  "en": "Hacker",
+  "pt-BR": "Hacker",
+  "es": "Hacker",
+  "de": "Hacker",
+  "tr": "Hacker",
+  "pl": "Haker"
+ },
+ "Космонавт": {
+  "en": "Astronaut",
+  "pt-BR": "Astronauta",
+  "es": "Astronauta",
+  "de": "Astronaut",
+  "tr": "Astronot",
+  "pl": "Kosmonauta"
+ },
+ "Ледяная магия": {
+  "en": "Ice Magic",
+  "pt-BR": "Magia de Gelo",
+  "es": "Magia de hielo",
+  "de": "Eismagie",
+  "tr": "Buz Büyüsü",
+  "pl": "Lodowa magia"
+ },
+ "Котик": {
+  "en": "Kitty",
+  "pt-BR": "Gatinho",
+  "es": "Gatito",
+  "de": "Kätzchen",
+  "tr": "Kedicik",
+  "pl": "Kotek"
+ },
+ "Пёс": {
+  "en": "Doggo",
+  "pt-BR": "Cachorrinho",
+  "es": "Perrito",
+  "de": "Hündchen",
+  "tr": "Köpek",
+  "pl": "Piesek"
+ },
+ "Дракончик": {
+  "en": "Little Dragon",
+  "pt-BR": "Dragãozinho",
+  "es": "Dragoncito",
+  "de": "Drachenbaby",
+  "tr": "Yavru Ejderha",
+  "pl": "Smoczek"
+ },
+ "Танцующий дракон": {
+  "en": "Dancing Dragon",
+  "pt-BR": "Dragão Dançante",
+  "es": "Dragón danzante",
+  "de": "Tanzender Drache",
+  "tr": "Dans Eden Ejderha",
+  "pl": "Tańczący smok"
+ },
+ "Лето": {
+  "en": "Summer",
+  "pt-BR": "Verão",
+  "es": "Verano",
+  "de": "Sommer",
+  "tr": "Yaz",
+  "pl": "Lato"
+ },
+ "Цветочная фея": {
+  "en": "Flower Fairy",
+  "pt-BR": "Fada das Flores",
+  "es": "Hada de las flores",
+  "de": "Blumenfee",
+  "tr": "Çiçek Perisi",
+  "pl": "Kwiatowa wróżka"
+ },
+ "Дождливый день": {
+  "en": "Rainy Day",
+  "pt-BR": "Dia Chuvoso",
+  "es": "Día lluvioso",
+  "de": "Regentag",
+  "tr": "Yağmurlu Gün",
+  "pl": "Deszczowy dzień"
+ },
+ "Баскетболист": {
+  "en": "Basketball Player",
+  "pt-BR": "Jogador de Basquete",
+  "es": "Baloncestista",
+  "de": "Basketballspieler",
+  "tr": "Basketbolcu",
+  "pl": "Koszykarz"
+ },
+ "Аниме-самурай": {
+  "en": "Anime Samurai",
+  "pt-BR": "Samurai Anime",
+  "es": "Samurái anime",
+  "de": "Anime-Samurai",
+  "tr": "Anime Samuray",
+  "pl": "Samuraj anime"
+ },
+ "Пламя": {
+  "en": "Flame",
+  "pt-BR": "Chama",
+  "es": "Llama",
+  "de": "Flamme",
+  "tr": "Alev",
+  "pl": "Płomień"
+ },
+ "Тьма": {
+  "en": "Darkness",
+  "pt-BR": "Escuridão",
+  "es": "Oscuridad",
+  "de": "Dunkelheit",
+  "tr": "Karanlık",
+  "pl": "Ciemność"
+ },
+ "Будущее": {
+  "en": "Future",
+  "pt-BR": "Futuro",
+  "es": "Futuro",
+  "de": "Zukunft",
+  "tr": "Gelecek",
+  "pl": "Przyszłość"
+ },
+ "Уют": {
+  "en": "Cozy",
+  "pt-BR": "Aconchego",
+  "es": "Acogedor",
+  "de": "Gemütlichkeit",
+  "tr": "Rahatlık",
+  "pl": "Przytulność"
+ },
+ "Крылья": {
+  "en": "Wings",
+  "pt-BR": "Asas",
+  "es": "Alas",
+  "de": "Flügel",
+  "tr": "Kanatlar",
+  "pl": "Skrzydła"
+ },
+ "Питомцы": {
+  "en": "Pets",
+  "pt-BR": "Pets",
+  "es": "Mascotas",
+  "de": "Haustiere",
+  "tr": "Evcil Hayvanlar",
+  "pl": "Zwierzaki"
+ },
+ "Эмоции": {
+  "en": "Emotes",
+  "pt-BR": "Emotes",
+  "es": "Emotes",
+  "de": "Emotes",
+  "tr": "İfadeler",
+  "pl": "Emotki"
+ },
+ "Мифический": {
+  "en": "Mythic",
+  "pt-BR": "Mítico",
+  "es": "Mítico",
+  "de": "Mythisch",
+  "tr": "Mitik",
+  "pl": "Mityczny"
+ },
+ "Осколочный": {
+  "en": "Shard",
+  "pt-BR": "De Fragmentos",
+  "es": "De fragmentos",
+  "de": "Splitter",
+  "tr": "Parça",
+  "pl": "Odłamkowy"
+ },
+ "Горсть": {
+  "en": "Handful",
+  "pt-BR": "Punhado",
+  "es": "Puñado",
+  "de": "Handvoll",
+  "tr": "Avuç",
+  "pl": "Garść"
+ },
+ "Кошель": {
+  "en": "Purse",
+  "pt-BR": "Porta-moedas",
+  "es": "Monedero",
+  "de": "Geldbeutel",
+  "tr": "Cüzdan",
+  "pl": "Sakiewka"
+ },
+ "Мешочек": {
+  "en": "Pouch",
+  "pt-BR": "Bolsinha",
+  "es": "Bolsita",
+  "de": "Beutel",
+  "tr": "Kese",
+  "pl": "Woreczek"
+ },
+ "Сундучок": {
+  "en": "Small Chest",
+  "pt-BR": "Bauzinho",
+  "es": "Cofrecito",
+  "de": "Kleine Truhe",
+  "tr": "Küçük Sandık",
+  "pl": "Skrzyneczka"
+ },
+ "Ларец": {
+  "en": "Coffer",
+  "pt-BR": "Arca",
+  "es": "Arca",
+  "de": "Schatulle",
+  "tr": "Mücevher Kutusu",
+  "pl": "Szkatuła"
+ },
+ "Клад": {
+  "en": "Hoard",
+  "pt-BR": "Tesouro",
+  "es": "Tesoro",
+  "de": "Hort",
+  "tr": "Define",
+  "pl": "Skarb"
+ },
+ "Тайник": {
+  "en": "Stash",
+  "pt-BR": "Esconderijo",
+  "es": "Alijo",
+  "de": "Versteck",
+  "tr": "Zula",
+  "pl": "Skrytka"
+ },
+ "Сокровищница": {
+  "en": "Treasury",
+  "pt-BR": "Câmara do Tesouro",
+  "es": "Cámara del tesoro",
+  "de": "Schatzkammer",
+  "tr": "Hazine Odası",
+  "pl": "Komnata skarbów"
+ },
+ "Казна": {
+  "en": "Vault",
+  "pt-BR": "Cofre",
+  "es": "Bóveda",
+  "de": "Tresor",
+  "tr": "Kasa",
+  "pl": "Skarbiec"
+ },
+ "Стартовый": {
+  "en": "Starter",
+  "pt-BR": "Inicial",
+  "es": "Inicial",
+  "de": "Starter",
+  "tr": "Başlangıç",
+  "pl": "Startowy"
+ },
+ "Предложение месяца": {
+  "en": "Offer of the Month",
+  "pt-BR": "Oferta do Mês",
+  "es": "Oferta del mes",
+  "de": "Angebot des Monats",
+  "tr": "Ayın Teklifi",
+  "pl": "Oferta miesiąca"
+ },
+ "Первый час": {
+  "en": "First Hour",
+  "pt-BR": "Primeira Hora",
+  "es": "Primera hora",
+  "de": "Erste Stunde",
+  "tr": "İlk Saat",
+  "pl": "Pierwsza godzina"
+ },
+ "Десять часов": {
+  "en": "Ten Hours",
+  "pt-BR": "Dez Horas",
+  "es": "Diez horas",
+  "de": "Zehn Stunden",
+  "tr": "On Saat",
+  "pl": "Dziesięć godzin"
+ },
+ "Пятьдесят часов": {
+  "en": "Fifty Hours",
+  "pt-BR": "Cinquenta Horas",
+  "es": "Cincuenta horas",
+  "de": "Fünfzig Stunden",
+  "tr": "Elli Saat",
+  "pl": "Pięćdziesiąt godzin"
+ },
+ "Сто часов": {
+  "en": "One Hundred Hours",
+  "pt-BR": "Cem Horas",
+  "es": "Cien horas",
+  "de": "Hundert Stunden",
+  "tr": "Yüz Saat",
+  "pl": "Sto godzin"
+ },
+ "Двести пятьдесят часов": {
+  "en": "Two Hundred Fifty Hours",
+  "pt-BR": "Duzentas e Cinquenta Horas",
+  "es": "Doscientas cincuenta horas",
+  "de": "Zweihundertfünfzig Stunden",
+  "tr": "İki Yüz Elli Saat",
+  "pl": "Dwieście pięćdziesiąt godzin"
+ },
+ "Обычная": {
+  "en": "Common",
+  "pt-BR": "Comum",
+  "es": "Común",
+  "de": "Gewöhnlich",
+  "tr": "Yaygın",
+  "pl": "Zwykła"
+ },
+ "Необычная": {
+  "en": "Uncommon",
+  "pt-BR": "Incomum",
+  "es": "Poco común",
+  "de": "Ungewöhnlich",
+  "tr": "Sıra Dışı",
+  "pl": "Niezwykła"
+ },
+ "Редкая": {
+  "en": "Rare",
+  "pt-BR": "Raro",
+  "es": "Rara",
+  "de": "Selten",
+  "tr": "Nadir",
+  "pl": "Rzadka"
+ },
+ "Эпическая": {
+  "en": "Epic",
+  "pt-BR": "Épico",
+  "es": "Épica",
+  "de": "Episch",
+  "tr": "Destansı",
+  "pl": "Epicka"
+ },
+ "Легендарная": {
+  "en": "Legendary",
+  "pt-BR": "Lendário",
+  "es": "Legendaria",
+  "de": "Legendär",
+  "tr": "Efsanevi",
+  "pl": "Legendarna"
+ },
+ "Мифическая": {
+  "en": "Mythic",
+  "pt-BR": "Mítico",
+  "es": "Mítica",
+  "de": "Mythisch",
+  "tr": "Mitik",
+  "pl": "Mityczna"
+ },
+ "Невозможная": {
+  "en": "Impossible",
+  "pt-BR": "Impossível",
+  "es": "Imposible",
+  "de": "Unmöglich",
+  "tr": "İmkânsız",
+  "pl": "Niemożliwa"
+ },
+ "Обычный сундук": {
+  "en": "Common Chest",
+  "pt-BR": "Baú Comum",
+  "es": "Cofre común",
+  "de": "Gewöhnliche Truhe",
+  "tr": "Yaygın Sandık",
+  "pl": "Zwykła skrzynia"
+ },
+ "Редкий сундук": {
+  "en": "Rare Chest",
+  "pt-BR": "Baú Raro",
+  "es": "Cofre raro",
+  "de": "Seltene Truhe",
+  "tr": "Nadir Sandık",
+  "pl": "Rzadka skrzynia"
+ },
+ "Эпический сундук": {
+  "en": "Epic Chest",
+  "pt-BR": "Baú Épico",
+  "es": "Cofre épico",
+  "de": "Epische Truhe",
+  "tr": "Destansı Sandık",
+  "pl": "Epicka skrzynia"
+ },
+ "Легендарный сундук": {
+  "en": "Legendary Chest",
+  "pt-BR": "Baú Lendário",
+  "es": "Cofre legendario",
+  "de": "Legendäre Truhe",
+  "tr": "Efsanevi Sandık",
+  "pl": "Legendarna skrzynia"
+ },
+ "Полсотни часов": {
+  "en": "Fifty Hours",
+  "pt-BR": "Cinquenta Horas",
+  "es": "Cincuenta horas",
+  "de": "Fünfzig Stunden",
+  "tr": "Elli Saat",
+  "pl": "Pięćdziesiąt godzin"
+ },
+ "Сотня часов": {
+  "en": "Hundred Hours",
+  "pt-BR": "Cem Horas",
+  "es": "Cien horas",
+  "de": "Hundert Stunden",
+  "tr": "Yüz Saat",
+  "pl": "Sto godzin"
+ },
+ "Пятьсот часов": {
+  "en": "Five Hundred Hours",
+  "pt-BR": "Quinhentas Horas",
+  "es": "Quinientas horas",
+  "de": "Fünfhundert Stunden",
+  "tr": "Beş Yüz Saat",
+  "pl": "Pięćset godzin"
+ },
+ "Первый заход": {
+  "en": "First Session",
+  "pt-BR": "Primeira Sessão",
+  "es": "Primera sesión",
+  "de": "Erste Sitzung",
+  "tr": "İlk Oturum",
+  "pl": "Pierwsza sesja"
+ },
+ "Двадцать пять заходов": {
+  "en": "Twenty-Five Sessions",
+  "pt-BR": "Vinte e Cinco Sessões",
+  "es": "Veinticinco sesiones",
+  "de": "Fünfundzwanzig Sitzungen",
+  "tr": "Yirmi Beş Oturum",
+  "pl": "Dwadzieścia pięć sesji"
+ },
+ "Сто заходов": {
+  "en": "One Hundred Sessions",
+  "pt-BR": "Cem Sessões",
+  "es": "Cien sesiones",
+  "de": "Hundert Sitzungen",
+  "tr": "Yüz Oturum",
+  "pl": "Sto sesji"
+ },
+ "Три сервера": {
+  "en": "Three Servers",
+  "pt-BR": "Três Servidores",
+  "es": "Tres servidores",
+  "de": "Drei Server",
+  "tr": "Üç Sunucu",
+  "pl": "Trzy serwery"
+ },
+ "Десять серверов": {
+  "en": "Ten Servers",
+  "pt-BR": "Dez Servidores",
+  "es": "Diez servidores",
+  "de": "Zehn Server",
+  "tr": "On Sunucu",
+  "pl": "Dziesięć serwerów"
+ },
+ "Две сборки": {
+  "en": "Two Modpacks",
+  "pt-BR": "Dois Modpacks",
+  "es": "Dos modpacks",
+  "de": "Zwei Modpacks",
+  "tr": "İki Mod Paketi",
+  "pl": "Dwa modpacki"
+ },
+ "Пять сборок": {
+  "en": "Five Modpacks",
+  "pt-BR": "Cinco Modpacks",
+  "es": "Cinco modpacks",
+  "de": "Fünf Modpacks",
+  "tr": "Beş Mod Paketi",
+  "pl": "Pięć modpacków"
+ },
+ "Первый друг": {
+  "en": "First Friend",
+  "pt-BR": "Primeiro Amigo",
+  "es": "Primer amigo",
+  "de": "Erster Freund",
+  "tr": "İlk Arkadaş",
+  "pl": "Pierwszy przyjaciel"
+ },
+ "Пять друзей": {
+  "en": "Five Friends",
+  "pt-BR": "Cinco Amigos",
+  "es": "Cinco amigos",
+  "de": "Fünf Freunde",
+  "tr": "Beş Arkadaş",
+  "pl": "Pięciu przyjaciół"
+ },
+ "Своя компания": {
+  "en": "Your Own Crew",
+  "pt-BR": "Sua Própria Turma",
+  "es": "Tu propio grupo",
+  "de": "Eigene Truppe",
+  "tr": "Kendi Ekibin",
+  "pl": "Własna ekipa"
+ },
+ "Неделя подряд": {
+  "en": "One-Week Streak",
+  "pt-BR": "Uma Semana Seguida",
+  "es": "Una semana seguida",
+  "de": "Eine Woche am Stück",
+  "tr": "Bir Hafta Üst Üste",
+  "pl": "Tydzień z rzędu"
+ },
+ "Две недели подряд": {
+  "en": "Two-Week Streak",
+  "pt-BR": "Duas Semanas Seguidas",
+  "es": "Dos semanas seguidas",
+  "de": "Zwei Wochen am Stück",
+  "tr": "İki Hafta Üst Üste",
+  "pl": "Dwa tygodnie z rzędu"
+ },
+ "Месяц подряд": {
+  "en": "One-Month Streak",
+  "pt-BR": "Um Mês Seguido",
+  "es": "Un mes seguido",
+  "de": "Ein Monat am Stück",
+  "tr": "Bir Ay Üst Üste",
+  "pl": "Miesiąc z rzędu"
+ },
+ "Тридцать входов": {
+  "en": "Thirty Logins",
+  "pt-BR": "Trinta Logins",
+  "es": "Treinta conexiones",
+  "de": "Dreißig Logins",
+  "tr": "Otuz Giriş",
+  "pl": "Trzydzieści logowań"
+ },
+ "Сто входов": {
+  "en": "One Hundred Logins",
+  "pt-BR": "Cem Logins",
+  "es": "Cien conexiones",
+  "de": "Hundert Logins",
+  "tr": "Yüz Giriş",
+  "pl": "Sto logowań"
+ },
+ "Пять сундуков": {
+  "en": "Five Chests",
+  "pt-BR": "Cinco Baús",
+  "es": "Cinco cofres",
+  "de": "Fünf Truhen",
+  "tr": "Beş Sandık",
+  "pl": "Pięć skrzyń"
+ },
+ "Двадцать пять сундуков": {
+  "en": "Twenty-Five Chests",
+  "pt-BR": "Vinte e Cinco Baús",
+  "es": "Veinticinco cofres",
+  "de": "Fünfundzwanzig Truhen",
+  "tr": "Yirmi Beş Sandık",
+  "pl": "Dwadzieścia pięć skrzyń"
+ },
+ "Первая вещь из мастерской": {
+  "en": "First Workshop Item",
+  "pt-BR": "Primeiro Item da Oficina",
+  "es": "Primer objeto del taller",
+  "de": "Erster Gegenstand aus der Werkstatt",
+  "tr": "Atölyeden İlk Eşya",
+  "pl": "Pierwsza rzecz z warsztatu"
+ },
+ "Мастер": {
+  "en": "Master",
+  "pt-BR": "Mestre",
+  "es": "Maestro",
+  "de": "Meister",
+  "tr": "Usta",
+  "pl": "Mistrz"
+ },
+ "Четыре посылки": {
+  "en": "Four Parcels",
+  "pt-BR": "Quatro Pacotes",
+  "es": "Cuatro paquetes",
+  "de": "Vier Pakete",
+  "tr": "Dört Koli",
+  "pl": "Cztery paczki"
+ },
+ "Месяц с Millida": {
+  "en": "A Month with Millida",
+  "pt-BR": "Um Mês com a Millida",
+  "es": "Un mes con Millida",
+  "de": "Ein Monat mit Millida",
+  "tr": "Millida ile Bir Ay",
+  "pl": "Miesiąc z Millida"
+ },
+ "Год с Millida": {
+  "en": "A Year with Millida",
+  "pt-BR": "Um Ano com a Millida",
+  "es": "Un año con Millida",
+  "de": "Ein Jahr mit Millida",
+  "tr": "Millida ile Bir Yıl",
+  "pl": "Rok z Millida"
+ },
+ "Наиграй час в OneBlock": {
+  "en": "Play one hour on OneBlock",
+  "pt-BR": "Jogue uma hora no OneBlock",
+  "es": "Juega una hora en OneBlock",
+  "de": "Spielen Sie eine Stunde OneBlock",
+  "tr": "OneBlock'ta bir saat oyna",
+  "pl": "Zagraj godzinę na OneBlock"
+ },
+ "Наиграй час на Анархии": {
+  "en": "Play one hour on Anarchy",
+  "pt-BR": "Jogue uma hora no Anarchy",
+  "es": "Juega una hora en Anarchy",
+  "de": "Spielen Sie eine Stunde auf Anarchy",
+  "tr": "Anarchy'de bir saat oyna",
+  "pl": "Zagraj godzinę na Anarchy"
+ },
+ "Анархии": {
+  "en": "Anarchy",
+  "pt-BR": "Anarchy",
+  "es": "Anarchy",
+  "de": "Anarchy",
+  "tr": "Anarchy",
+  "pl": "Anarchy"
+ },
+ "Драконы": {
+  "en": "Dragons",
+  "pt-BR": "Dragões",
+  "es": "Dragones",
+  "de": "Drachen",
+  "tr": "Ejderhalar",
+  "pl": "Smoki"
+ },
+ "Демоны": {
+  "en": "Demons",
+  "pt-BR": "Demônios",
+  "es": "Demonios",
+  "de": "Dämonen",
+  "tr": "İblisler",
+  "pl": "Demony"
+ },
+ "Ангелы": {
+  "en": "Angels",
+  "pt-BR": "Anjos",
+  "es": "Ángeles",
+  "de": "Engel",
+  "tr": "Melekler",
+  "pl": "Anioły"
+ },
+ "Огонь": {
+  "en": "Fire",
+  "pt-BR": "Fogo",
+  "es": "Fuego",
+  "de": "Feuer",
+  "tr": "Ateş",
+  "pl": "Ogień"
+ },
+ "Лёд": {
+  "en": "Ice",
+  "pt-BR": "Gelo",
+  "es": "Hielo",
+  "de": "Eis",
+  "tr": "Buz",
+  "pl": "Lód"
+ },
+ "Край": {
+  "en": "The End",
+  "pt-BR": "O End",
+  "es": "El End",
+  "de": "Das Ende",
+  "tr": "End",
+  "pl": "Kres"
+ },
+ "Кибер": {
+  "en": "Cyber",
+  "pt-BR": "Cyber",
+  "es": "Ciber",
+  "de": "Cyber",
+  "tr": "Siber",
+  "pl": "Cyber"
+ },
+ "Природа": {
+  "en": "Nature",
+  "pt-BR": "Natureza",
+  "es": "Naturaleza",
+  "de": "Natur",
+  "tr": "Doğa",
+  "pl": "Natura"
+ },
+ "Океан": {
+  "en": "Ocean",
+  "pt-BR": "Oceano",
+  "es": "Océano",
+  "de": "Ozean",
+  "tr": "Okyanus",
+  "pl": "Ocean"
+ },
+ "Ужасы": {
+  "en": "Horror",
+  "pt-BR": "Terror",
+  "es": "Terror",
+  "de": "Horror",
+  "tr": "Korku",
+  "pl": "Horror"
+ },
+ "Рыцари": {
+  "en": "Knights",
+  "pt-BR": "Cavaleiros",
+  "es": "Caballeros",
+  "de": "Ritter",
+  "tr": "Şövalyeler",
+  "pl": "Rycerze"
+ },
+ "Космос": {
+  "en": "Space",
+  "pt-BR": "Espaço",
+  "es": "Espacio",
+  "de": "Weltraum",
+  "tr": "Uzay",
+  "pl": "Kosmos"
+ },
+ "Аниме": {
+  "en": "Anime",
+  "pt-BR": "Anime",
+  "es": "Anime",
+  "de": "Anime",
+  "tr": "Anime",
+  "pl": "Anime"
+ },
+ "Новичок команды": {
+  "en": "Team Rookie",
+  "pt-BR": "Novato da Equipe",
+  "es": "Novato del equipo",
+  "de": "Team-Neuling",
+  "tr": "Takım Çaylağı",
+  "pl": "Nowicjusz drużyny"
+ },
+ "Вожак": {
+  "en": "Leader",
+  "pt-BR": "Líder",
+  "es": "Líder",
+  "de": "Anführer",
+  "tr": "Lider",
+  "pl": "Przywódca"
+ },
+ "Команда": {
+  "en": "Team",
+  "pt-BR": "Equipe",
+  "es": "Equipo",
+  "de": "Team",
+  "tr": "Takım",
+  "pl": "Drużyna"
+ },
+ "Искра": {
+  "en": "Spark",
+  "pt-BR": "Faísca",
+  "es": "Chispa",
+  "de": "Funke",
+  "tr": "Kıvılcım",
+  "pl": "Iskra"
+ },
+ "Лидер стаи": {
+  "en": "Pack Leader",
+  "pt-BR": "Líder da Matilha",
+  "es": "Líder de la manada",
+  "de": "Rudelführer",
+  "tr": "Sürü Lideri",
+  "pl": "Przywódca stada"
+ },
+ "Алмаз": {
+  "en": "Diamond",
+  "pt-BR": "Diamante",
+  "es": "Diamante",
+  "de": "Diamant",
+  "tr": "Elmas",
+  "pl": "Diament"
+ },
+ "Аметист": {
+  "en": "Amethyst",
+  "pt-BR": "Ametista",
+  "es": "Amatista",
+  "de": "Amethyst",
+  "tr": "Ametist",
+  "pl": "Ametyst"
+ },
+ "Живой вожак": {
+  "en": "Animated Leader",
+  "pt-BR": "Líder Animado",
+  "es": "Líder animado",
+  "de": "Animierter Anführer",
+  "tr": "Hareketli Lider",
+  "pl": "Animowany przywódca"
+ },
+ "Легенда": {
+  "en": "Legend",
+  "pt-BR": "Lenda",
+  "es": "Leyenda",
+  "de": "Legende",
+  "tr": "Efsane",
+  "pl": "Legenda"
+ },
+ "Ровно сколько нужно": {
+  "en": "Exactly What You Need",
+  "pt-BR": "Exatamente o que você precisa",
+  "es": "Justo lo que necesitas",
+  "de": "Genau so viel wie nötig",
+  "tr": "Tam ihtiyacın kadar",
+  "pl": "Dokładnie tyle, ile trzeba"
+ },
+ "Комплект «{0}»": {
+  "en": "“{0}” bundle",
+  "pt-BR": "Conjunto “{0}”",
+  "es": "Conjunto «{0}»",
+  "de": "Set „{0}“",
+  "tr": "“{0}” seti",
+  "pl": "Zestaw „{0}”"
+ },
+ "Редкая+ в каждом ящике": {
+  "en": "Rare+ in every case",
+  "pt-BR": "Rara+ em cada caixa",
+  "es": "Rara+ en cada caja",
+  "de": "Selten+ in jeder Kiste",
+  "tr": "Her kasada Nadir+",
+  "pl": "Rzadka+ w każdej skrzynce"
+ },
+ "Эпическая+ в каждом ящике": {
+  "en": "Epic+ in every case",
+  "pt-BR": "Épica+ em cada caixa",
+  "es": "Épica+ en cada caja",
+  "de": "Episch+ in jeder Kiste",
+  "tr": "Her kasada Destansı+",
+  "pl": "Epicka+ w każdej skrzynce"
+ },
+ "Эмоция в каждом ящике": {
+  "en": "An emote in every case",
+  "pt-BR": "Um emote em cada caixa",
+  "es": "Un emote en cada caja",
+  "de": "Ein Emote in jeder Kiste",
+  "tr": "Her kasada bir ifade",
+  "pl": "Emotka w każdej skrzynce"
+ },
+ "Вещь в каждом ящике": {
+  "en": "An item in every case",
+  "pt-BR": "Um item em cada caixa",
+  "es": "Un objeto en cada caja",
+  "de": "Ein Gegenstand in jeder Kiste",
+  "tr": "Her kasada bir eşya",
+  "pl": "Przedmiot w każdej skrzynce"
+ }
+}

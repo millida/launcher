@@ -4,8 +4,7 @@
  * сборкой игрока, подписи вида материала. Под тесты (projectView.test.ts).
  */
 
-import { formatDate, getLocale, t } from '../i18n'
-import { plural } from '../lib/format'
+import { formatDate, formatRelative, t } from '../i18n'
 
 /** Лицензия из Modrinth: SPDX-id, своё имя и ссылка на текст. */
 export interface LicenseInfo {
@@ -159,30 +158,18 @@ export function orderGallery<T extends { featured?: boolean; ordering?: number }
     .map((x) => x.g)
 }
 
-const RU_MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
-
 /**
  * «сегодня», «вчера», «5 дней назад», «3 недели назад», «12 марта», «12 марта 2024» —
  * когда вышел файл или обновился проект. `now` — для тестов.
  */
-const RU_MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
-
 export function agoLabel(iso: string | null | undefined, now: number = Date.now(), short = false): string {
   if (!iso) return ''
   const ts = Date.parse(iso)
   if (Number.isNaN(ts)) return ''
-  const days = Math.floor((now - ts) / 86400000)
-  if (days < 1) return t('сегодня')
-  if (days < 2) return t('вчера')
-  if (days < 7) return plural(days, t('{n} день назад', { n: days }), t('{n} дня назад', { n: days }), t('{n} дней назад', { n: days }))
-  if (days < 30) {
-    const w = Math.floor(days / 7)
-    return plural(w, t('{n} неделю назад', { n: w }), t('{n} недели назад', { n: w }), t('{n} недель назад', { n: w }))
-  }
+  if (now - ts < 30 * 86400000) return formatRelative(ts, { floor: 'day', ceil: 'week' }, now)
   const d = new Date(ts)
   const same = d.getFullYear() === new Date(now).getFullYear()
-  if (getLocale() !== 'ru') return formatDate(d, { day: 'numeric', month: short ? 'short' : 'long', year: same ? undefined : 'numeric' })
-  return d.getDate() + ' ' + (short ? RU_MONTHS_SHORT : RU_MONTHS)[d.getMonth()] + (same ? '' : ' ' + d.getFullYear())
+  return formatDate(d, { day: 'numeric', month: short ? 'short' : 'long', year: same ? undefined : 'numeric' })
 }
 
 /// Значки README (shields.io и родня): «Mod Loader: Fabric», «Discord», «downloads».

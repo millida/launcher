@@ -173,6 +173,8 @@ function ImportStep() {
   const existing = new Set(profiles.map((p) => p.name))
   const importable = (list || []).filter((it) => !existing.has(it.name) && !done[foundKey(it)])
   const selected = importable.filter((it) => picked[foundKey(it)])
+  const allPicked = importable.length > 0 && selected.length === importable.length
+  const toggleAll = () => setPicked((p) => ({ ...p, ...Object.fromEntries(importable.map((it) => [foundKey(it), !allPicked])) }))
 
   const runImport = async () => {
     let ok = 0
@@ -261,9 +263,16 @@ function ImportStep() {
         )}
       </div>
       <div className="onb-inline">
-        <button className="btn sm secondary" onClick={fromFile} disabled={fileBusy || !!busy}>
-          <Icon id="i-box2" /> {fileBusy ? t('Импортируем…') : t('Импорт из файла')}
-        </button>
+        <div className="onb-inline-start">
+          <button className="btn sm secondary" onClick={fromFile} disabled={fileBusy || !!busy}>
+            <Icon id="i-box2" /> {fileBusy ? t('Импортируем…') : t('Импорт из файла')}
+          </button>
+          {importable.length > 1 ? (
+            <button className="btn sm ghost" onClick={toggleAll} disabled={!!busy}>
+              {allPicked ? t('Снять выбор') : t('Выбрать все')}
+            </button>
+          ) : null}
+        </div>
         {importable.length ? (
           <button className="btn sm primary" onClick={() => void runImport()} disabled={!selected.length || !!busy}>
             {busy ? t('Переносим…') : t('Перенести ({n})', { n: selected.length })}

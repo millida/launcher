@@ -47,10 +47,10 @@ test('главная картинка галереи — первой', () => {
 test('давность — словами', () => {
   const now = Date.parse('2026-10-04T12:00:00Z')
   expect(agoLabel('2026-10-04T08:00:00Z', now)).toBe('сегодня')
-  expect(agoLabel('2026-10-02T08:00:00Z', now)).toBe('2 дня назад')
+  expect(agoLabel('2026-10-02T08:00:00Z', now)).toBe('позавчера')
   expect(agoLabel('2026-09-20T08:00:00Z', now)).toBe('2 недели назад')
   expect(agoLabel('2026-03-12T08:00:00Z', now)).toBe('12 марта')
-  expect(agoLabel('2024-03-12T08:00:00Z', now)).toBe('12 марта 2024')
+  expect(agoLabel('2024-03-12T08:00:00Z', now)).toBe('12 марта 2024 г.')
   expect(agoLabel(null, now)).toBe('')
 })
 

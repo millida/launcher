@@ -3,6 +3,16 @@
 use crate::engine;
 
 #[tauri::command]
+pub fn ui_text_keys() -> Vec<&'static str> { engine::UI_TEXT_KEYS.to_vec() }
+
+#[tauri::command]
+pub fn set_ui_texts(texts: std::collections::HashMap<String, String>) -> usize {
+    let applied = engine::set_ui_texts(texts);
+    crate::tray::relabel();
+    applied
+}
+
+#[tauri::command]
 pub fn game_dir() -> String { engine::game_root().to_string_lossy().to_string() }
 
 /// Runs on the blocking pool: moving tens of gigabytes would otherwise freeze
@@ -21,7 +31,7 @@ pub async fn set_game_dir(app: tauri::AppHandle, path: String, move_data: bool) 
 pub async fn pick_game_dir() -> Result<Option<String>, String> {
     let start = engine::game_root();
     let picked =
-        engine::pick_folder(engine::dialog().set_directory(&start).set_title("Папка игры Millida")).await;
+        engine::pick_folder(engine::dialog().set_directory(&start).set_title(crate::engine::ui("Папка игры Millida"))).await;
     let Some(d) = picked else { return Ok(None) };
     let d = engine::game_root_from_pick(d);
     // refused at pick time, so the player sees why right away
@@ -65,7 +75,7 @@ pub fn open_music_folder() { engine::open_music_folder(); }
 /// The file picker is the only way in: the webview never names a source path.
 #[tauri::command]
 pub async fn music_add() -> Result<engine::MusicAdded, String> {
-    let d = engine::dialog().set_title("Своя музыка").add_filter("Музыка", &engine::MUSIC_EXTS);
+    let d = engine::dialog().set_title(crate::engine::ui("Своя музыка")).add_filter(crate::engine::ui("Музыка"), &engine::MUSIC_EXTS);
     let Some(paths) = engine::pick_files(d).await else {
         return Ok(engine::MusicAdded { added: 0, too_big: vec![] });
     };

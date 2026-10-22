@@ -11,7 +11,7 @@ import { cfgSet, type CfgSpec } from './milliCfg'
 import { canLocal, diaryAdd, diaryMarkUndone, dropFactsCache, filesRead, filesWrite, sizeText, snapshot, snapshotRestore } from './milliLocal'
 import { milliPathOk } from './milliPaths'
 import { milliEmote } from '../components/milli/milliEmotions'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 type Step<O extends MilliStep['op']> = Extract<MilliStep, { op: O }>
 
@@ -80,7 +80,7 @@ async function editFile(profile: string, path: string, edit: (text: string, exis
   if (!f) return { ok: false, detail: t('нет файла') }
   if (f.exists && f.text == null) return { ok: false, detail: t('файл не читается') }
   const r = edit(f.text ?? '', f.exists)
-  if (!r.ok) return { ok: false, detail: t(r.error) }
+  if (!r.ok) return { ok: false, detail: tx(r.error) }
   if (r.text === (f.text ?? '')) return { ok: true, detail: t('уже так') }
   const [w] = await filesWrite(profile, [{ path, text: r.text, expect: f.exists ? f.sha1 : '' }])
   dropFactsCache()

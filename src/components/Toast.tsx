@@ -2,7 +2,7 @@ import { Icon } from './Icon'
 import { useUi } from '../state/ui'
 import { cancelPrelaunch } from '../lib/launch'
 import { prelaunchPct, prelaunchStageName } from '../lib/launchView'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 export function Toast() {
   const toastMsg = useUi((s) => s.toastMsg)
@@ -13,7 +13,7 @@ export function Toast() {
   return (
     <div className={'toast ' + toastKind + (toastShow ? ' show' : '') + (toastAction ? ' has-act' : '')} id="toast">
       <Icon id={toastKind === 'error' ? 'i-alert' : 'i-check'} />
-      <span id="toastMsg">{toastMsg}</span>
+      <span id="toastMsg">{tx(toastMsg)}</span>
       {toastAction ? (
         <button
           className="toast-act"
@@ -42,7 +42,7 @@ export function LaunchToast() {
       <span className="spin" aria-hidden="true"></span>
       <span className="launch-toast-body">
         <span className="launch-toast-row">
-          <span className="launch-toast-name">{t(prelaunchStageName(pl))}</span>
+          <span className="launch-toast-name">{tx(prelaunchStageName(pl))}</span>
           <b className="launch-toast-pct">{pct + '%'}</b>
         </span>
         <span className="launch-toast-bar">

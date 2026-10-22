@@ -38,7 +38,7 @@ pub async fn test_java(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn pick_java_path() -> Result<Option<engine::JavaInfo>, String> {
-    let mut d = engine::dialog().set_title("Файл java (java.exe / bin/java)");
+    let mut d = engine::dialog().set_title(crate::engine::ui("Файл java (java.exe / bin/java)"));
     if cfg!(target_os = "windows") {
         d = d.add_filter("Java", &["exe"]);
     }

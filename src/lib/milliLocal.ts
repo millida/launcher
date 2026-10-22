@@ -369,17 +369,4 @@ export function sizeText(bytes: number): string {
   return t('{n} ГБ', { n: formatFixed(mb / 1024, 1) })
 }
 
-/** «сегодня 14:05», «вчера 21:30», «пн 12:00», «3 окт». */
-export function whenText(ms: number, now = Date.now()): string {
-  const d = new Date(ms)
-  const n = new Date(now)
-  const hm = d.toTimeString().slice(0, 5)
-  const day = (x: Date) => Math.floor((x.getTime() - x.getTimezoneOffset() * 60000) / 86400000)
-  const diff = day(n) - day(d)
-  if (diff === 0) return t('сегодня {time}', { time: hm })
-  if (diff === 1) return t('вчера {time}', { time: hm })
-  if (diff < 7) return [t('вс'), t('пн'), t('вт'), t('ср'), t('чт'), t('пт'), t('сб')][d.getDay()] + ' ' + hm
-  return d.getDate() + ' ' + [t('янв'), t('фев'), t('мар'), t('апр'), t('мая'), t('июн'), t('июл'), t('авг'), t('сен'), t('окт'), t('ноя'), t('дек')][d.getMonth()]
-}
-
 export type { MilliAction }

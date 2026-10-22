@@ -9,6 +9,8 @@ permissions = [
   "allow-remember-install-id",
   "allow-autostart-state",
   "allow-autostart-set",
+  "allow-ui-text-keys",
+  "allow-set-ui-texts",
   "allow-set-app-icon",
   "allow-device-specs",
   "allow-take-webview-failure",

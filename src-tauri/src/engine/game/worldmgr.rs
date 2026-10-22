@@ -273,9 +273,9 @@ pub async fn export_world(profile: String, folder: String) -> Result<Option<Stri
     let src = world_dir(&profile, &folder)?;
     let picked = save_file(
         dialog()
-            .add_filter("Архив мира", &["zip"])
+            .add_filter(crate::engine::ui("Архив мира"), &["zip"])
             .set_file_name(format!("{}.zip", folder))
-            .set_title("Куда сохранить мир"),
+            .set_title(crate::engine::ui("Куда сохранить мир")),
     )
     .await;
     let Some(out) = picked else { return Ok(None) };
@@ -293,8 +293,8 @@ pub async fn import_world(profile: String) -> Result<WorldInfo, String> {
     assert_world_idle(&profile)?;
     let picked = pick_file(
         dialog()
-            .add_filter("Архив мира", &["zip"])
-            .set_title("Архив мира (.zip)"),
+            .add_filter(crate::engine::ui("Архив мира"), &["zip"])
+            .set_title(crate::engine::ui("Архив мира (.zip)")),
     )
     .await
     .ok_or("Отменено")?;

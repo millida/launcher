@@ -2,9 +2,9 @@
 // the token itself. The direct fetch below has no token, it is a fallback for the browser in development. The Modrinth catalog goes through our API (/launcher/mr).
 import { hasTauri } from '../ipc/tauri'
 import { millidaApi, openUrl, type ApiMarket } from '../ipc/commands'
-import { getMarket } from '../i18n'
+import { getLocale, getMarket } from '../i18n'
 import { hasMillidaSession } from './secure'
-import { moneyLangFor, shortfallMarker } from './money'
+import { shortfallMarker } from './money'
 import { DEMO_USER, ECONOMY_SHOWCASE, demoAnswer } from './demo'
 
 // Dev-приложение открыто с http://localhost:5173, а прод по CORS пускает только
@@ -52,7 +52,12 @@ export const SUPPORT_URL = 'https://millida.net/chats?tab=support'
 // No Authorization here: authenticated calls go through the core, which holds
 // the token. The plain fetch path is the unauthenticated browser fallback.
 export function apiHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json' }
+  return { 'Content-Type': 'application/json', ...langHeaders() }
+}
+
+export function langHeaders(): Record<string, string> {
+  const lang = getLocale()
+  return { 'Accept-Language': lang, 'X-Lang': lang }
 }
 
 /// The API keeps a separate server rating per market and picks it by header, the
@@ -75,7 +80,7 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
   // браузере — иначе магазин в приложении пустой. Только dev-сборка.
   if (import.meta.env.DEV && ECONOMY_SHOWCASE && !DEMO_USER) {
     const demo = demoAnswer(pathname, opts)
-    if (demo) return (await demo) as T
+    if (demo) return (await import('./demoText')).localizeDemoAnswer((await demo) as T)
   }
   if (hasTauri()) {
     let body: unknown
@@ -89,7 +94,7 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
     try {
       const method = ((opts && opts.method) || 'GET').toUpperCase()
       const market = marketFor(pathname)
-      const lang = moneyLangFor(pathname)
+      const lang = getLocale()
       const run = () => millidaApi<T>(pathname, method, body, market, lang)
       return await (method === 'GET' ? sharedGet(pathname, (market ?? '') + '|' + (lang ?? ''), run) : run())
     } catch (e) {
@@ -102,17 +107,16 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
   // уходит на прод живым — рейтинг, каталог, тарифы и цены остаются настоящими.
   if (import.meta.env.DEV && (DEMO_USER || ECONOMY_SHOWCASE)) {
     const demo = demoAnswer(pathname, opts)
-    if (demo) return (await demo) as T
+    if (demo) return (await import('./demoText')).localizeDemoAnswer((await demo) as T)
   }
   const market = marketFor(pathname)
-  const lang = moneyLangFor(pathname)
+  const lang = getLocale()
   const run = async (): Promise<T> => {
     const r = await fetch(LAUNCHER_API + pathname, {
       ...opts,
       headers: {
         ...apiHeaders(),
         ...(market ? { 'X-Market': market } : {}),
-        ...(lang ? { 'Accept-Language': lang } : {}),
         ...((opts && (opts.headers as Record<string, string>)) || {}),
       },
     })
