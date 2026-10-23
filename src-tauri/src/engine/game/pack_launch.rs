@@ -532,8 +532,24 @@ pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
     if kept.is_empty() {
         return Err("Сервер не выдал ключ запуска сборки".into());
     }
-    remember_launch_token(slug, &kept, now_secs());
+    if keeps_launch_spare(&res) {
+        remember_launch_token(slug, &kept, now_secs());
+    } else {
+        forget_launch_token(slug);
+    }
     Ok(kept)
+}
+
+/// A seller ticket is burnt on its first use: replayed after an outage it only
+/// makes the pack say «ticket expired» on every press until the spare runs out.
+fn keeps_launch_spare(res: &Value) -> bool {
+    res["oneShot"].as_bool() != Some(true)
+}
+
+fn forget_launch_token(slug: &str) {
+    if let Some(path) = token_cache_path(slug) {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// How long a launch key issued to this computer stands in for an unreachable
@@ -824,6 +840,19 @@ pub fn pack_version_json(spec: &PackLaunch, extra_jvm: &[String]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_one_shot_launch_key_is_never_kept_as_a_spare() {
+        let cases = [
+            (json!({ "jvmArgs": ["-Darcania.ticket=a.b"], "oneShot": true }), false, "seller ticket burns on first use: a replay only says «ticket expired»"),
+            (json!({ "jvmArgs": ["-Dpack.key=x"] }), true, "static key keeps working through an API outage"),
+            (json!({ "jvmArgs": ["-Dpack.key=x"], "oneShot": false }), true, "an explicit no keeps the spare"),
+            (json!({ "jvmArgs": ["-Dpack.key=x"], "oneShot": "yes" }), true, "only a real boolean drops the spare"),
+        ];
+        for (res, keep, why) in cases {
+            assert_eq!(keeps_launch_spare(&res), keep, "{why}");
+        }
+    }
 
     #[test]
     fn only_an_outage_falls_back_to_the_cached_launch_key() {
