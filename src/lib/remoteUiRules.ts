@@ -2,6 +2,16 @@
 // and which links it may open. No imports, so the rules are unit-tested on their own.
 export const REMOTE_UI_SITE = 'https://millida.net'
 
+export interface RemoteJoinServer {
+  address: string
+  name: string
+  version?: string
+  licensed?: boolean
+  slug?: string
+  logo?: string | null
+  banner?: string | null
+}
+
 export interface RemoteUiBridge {
   v: 1
   locale: string
@@ -12,7 +22,8 @@ export interface RemoteUiBridge {
     item: { section: string; slug: string; name?: string; source?: 'millida' | 'modrinth' | 'curseforge'; pid?: string; cfid?: number },
     target?: { kind: 'build' | 'server'; id?: string },
   ): Promise<void>
-  join(server: { address: string; name: string; version?: string }): Promise<void>
+  /** The rating screen also sends the server's card (slug, pictures, license) so the lobby can show it. */
+  join(server: RemoteJoinServer): Promise<void>
   /**
    * Sends a file from the screen to the hosting API as the signed-in player (raw bytes, the token stays in
    * the core). Only the hosting upload routes are open; `path` carries its own query. A file-manager chunk

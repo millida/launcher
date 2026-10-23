@@ -118,23 +118,23 @@
 /* ===== Карточки библиотеки: только обложка (08.10.2026) =====
    Серой подложки под картинкой нет: название крупно поверх низа обложки,
    под ним одна короткая строка. Компактно — больше карточек в ряду. */
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) {
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) {
   display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--m-inset);
 }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-art { position: absolute; inset: 0; aspect-ratio: auto; height: 100%; }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-art::after {
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) > .ph-card-art { position: absolute; inset: 0; aspect-ratio: auto; height: 100%; }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) > .ph-card-art::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
   background: linear-gradient(0deg, rgba(4, 6, 5, .97) 0%, rgba(4, 6, 5, .93) 34%, rgba(4, 6, 5, .6) 52%, rgba(4, 6, 5, 0) 74%);
 }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-body {
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) > .ph-card-body {
   position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; padding: 0 12px 10px; gap: 3px; background: none;
 }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) > .ph-card-body b {
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) > .ph-card-body b {
   font: 900 17px/1.08 var(--m-font); letter-spacing: -.01em; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .55);
 }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) .ph-card-meta { font: 700 12px/1.1 var(--m-font); color: rgba(255, 255, 255, .78); }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):hover { background: var(--m-inset); }
-.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2) .ph-card-tag { z-index: 2; top: 8px; left: 8px; height: 20px; padding: 0 6px; font-size: 10.5px; }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) .ph-card-meta { font: 700 12px/1.1 var(--m-font); color: rgba(255, 255, 255, .78); }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st):hover { background: var(--m-inset); }
+.hub-pane .ph-card:not(.skel-card):not(.ph-mt):not(.fy-more):not(.hh-cont2):not(.ph-st) .ph-card-tag { z-index: 2; top: 8px; left: 8px; height: 20px; padding: 0 6px; font-size: 10.5px; }
 .hub-pane .hub-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 1240px) { .hub-pane .hub-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 1040px) { .hub-pane .hub-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

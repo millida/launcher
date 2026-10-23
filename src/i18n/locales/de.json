@@ -5662,5 +5662,11 @@
   "Специалист": "Specialist",
   "Кадет": "Cadet",
   "Новичок": "Novice",
-  "Рекрут": "Recruit"
+  "Рекрут": "Recruit",
+  "Метка": "Wegpunkt",
+  "Метка «{name}»": "Wegpunkt „{name}“",
+  "Верхний мир": "Oberwelt",
+  "Незер": "Nether",
+  "Энд": "Ende",
+  "Скопировать координаты": "Koordinaten kopieren"
 }

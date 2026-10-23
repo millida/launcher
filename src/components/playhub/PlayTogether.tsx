@@ -137,7 +137,7 @@ export function PlayTogether({ onPack, onMap, onItem, lead, onMore }: { onPack: 
             return (
               <button
                 key={p.section + '/' + p.card.slug}
-                className="ph-card"
+                className="ph-card fy-card"
                 data-sound="open"
                 data-kind={p.section === 'maps' ? 'map' : 'pack'}
                 data-id={p.card.slug}

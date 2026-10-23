@@ -2,7 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { FilterPill } from '../components/FilterPill'
 import { ServerRow } from '../components/ServerRow'
-import { openExt } from '../lib/api'
+import { RemoteScreen } from '../components/RemoteScreen'
+import { api, openExt } from '../lib/api'
+import { quickJoin } from '../lib/joinServer'
+import { joinAddr } from '../lib/ownServer'
+import { remoteUiEnabled } from '../lib/remoteUi'
+import { makeRemoteBridge } from '../lib/remoteUiBridge'
+import { sitePath, type RemoteJoinServer } from '../lib/remoteUiRules'
+import type { SnapshotServer } from '../lib/snapshot'
+import { serverMode, useLobby } from '../state/lobbyMode'
+import { openServerDetail } from '../state/serverDetail'
+import { setScreen } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { t, useT } from '../i18n'
 import {
@@ -13,7 +23,9 @@ import {
   isFiltered,
   loadLiveRating,
   loadMoreServers,
+  toCard,
   useServers,
+  type RatingServer,
 } from '../state/servers'
 
 const SORTS = (): [string, string][] => [
@@ -40,7 +52,74 @@ const ONLINE_FILTERS = (): [string, string][] => [
 
 const SEARCH_DELAY = 400
 
+const RATING_SERVER = /^(?:\/[a-z]{2}(?:-[A-Za-z]{2})?)?\/rating\/servers\/([\w.-]+)\/?$/
+const HOSTING = /^(?:\/[a-z]{2}(?:-[A-Za-z]{2})?)?\/hosting\/?$/
+
+/** A server from the website rating joins like a row of the built-in list: the lobby remembers it, then the game starts. */
+async function joinFromRating(srv: RemoteJoinServer): Promise<void> {
+  const sv: SnapshotServer = {
+    rank: 0,
+    name: srv.name,
+    slug: srv.slug || '',
+    desc: '',
+    ip: srv.address,
+    online: 0,
+    isOnline: true,
+    banner: srv.banner || undefined,
+    logo: srv.logo || undefined,
+    versions: srv.version ? [srv.version] : [],
+    cat: '',
+    motd: '',
+    lic: srv.licensed ? 'LICENSE' : '',
+  }
+  useLobby.getState().pick(serverMode(sv))
+  await quickJoin(joinAddr(sv), sv.name || t('Сервер'), !!srv.licensed, sv.versions, sv.slug || undefined).catch(() => {})
+}
+
+/** The server card opens the launcher's own card with «Играть»; if the rating does not answer, the site page opens. */
+async function openRatingServer(slug: string, path: string): Promise<void> {
+  try {
+    openServerDetail(toCard(await api<RatingServer>('/rating/servers/' + encodeURIComponent(slug)), 0))
+  } catch {
+    const url = sitePath(path)
+    if (url) openExt(url)
+  }
+}
+
+function openRatingPath(path: string): boolean {
+  const route = path.split(/[?#]/)[0]!
+  const server = RATING_SERVER.exec(route)
+  if (server) {
+    void openRatingServer(server[1]!, path)
+    return true
+  }
+  if (HOSTING.test(route)) {
+    setScreen('hosting')
+    return true
+  }
+  return false
+}
+
+/**
+ * The rating is the website's /rating screen (catalog, modes, versions, new servers) from the site bundle; the
+ * built-in list stays for launchers whose bundle is missing, unsigned or older than the rating screen.
+ */
 export function Servers({ on }: { on: boolean }) {
+  const [remoteFailed, setRemoteFailed] = useState(false)
+  if (remoteUiEnabled() && !remoteFailed)
+    return (
+      <section className={'screen' + (on ? ' on' : '')} id="s-servers">
+        <RemoteScreen
+          screen="rating"
+          onFail={() => setRemoteFailed(true)}
+          bridge={() => makeRemoteBridge({ join: joinFromRating, navigate: openRatingPath })}
+        />
+      </section>
+    )
+  return <NativeServers on={on} />
+}
+
+function NativeServers({ on }: { on: boolean }) {
   const t = useT()
   const { list, total, status, error, loadingMore, category, sort, license, online, version, versions, search } =
     useServers()

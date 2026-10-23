@@ -5,6 +5,7 @@ import { useProfiles } from '../state/profiles'
 import { openSettings, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
+import { markCoords, markDimension, markPreview, parseMark, type SharedMark } from '../lib/waypointShare'
 import { Head } from './Head'
 import { ELT_IDS, EltText, eltAlias, eltCode, eltUrl, loadEltAliases } from '../lib/eltaller'
 import { fmtPlaytime, onAvatarError, whenText } from '../lib/format'
@@ -75,6 +76,45 @@ function InviteCard({ addr, name, version, me }: { addr: string; name: string; v
         <Icon id="i-login" />
         {busy ? t('Заходим…') : t('Зайти')}
       </button>
+    </div>
+  )
+}
+
+function MarkCard({ mark, me }: { mark: SharedMark; me?: boolean }) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const copy = () =>
+    void copyText(markCoords(mark)).then((ok) =>
+      ok ? showToast(t('Скопировано')) : showToast(t('Не удалось скопировать'), 'error'),
+    )
+  const join = () => {
+    setBusy(true)
+    void quickJoin(mark.address, mark.address)
+      .catch(() => {})
+      .finally(() => setBusy(false))
+  }
+  return (
+    <div className={'msg-invite' + (me ? ' me' : '')}>
+      <span className="msg-invite-ic">
+        <Icon id="i-map" />
+      </span>
+      <span className="msg-invite-body">
+        <b>{t('Метка')}</b>
+        <span className="msg-invite-name">{mark.name}</span>
+        <span className="msg-invite-addr">
+          {markCoords(mark)} · {markDimension(mark.dimension)} · {mark.address}
+        </span>
+      </span>
+      <button className="btn sm" data-track="chat_mark_copy" onClick={copy}>
+        <Icon id="i-copy" />
+        {t('Скопировать координаты')}
+      </button>
+      {isServerAddr(mark.address) ? (
+        <button className="btn sm primary" disabled={busy} data-track="chat_mark_join" data-src="friend" onClick={join}>
+          <Icon id="i-login" />
+          {busy ? t('Заходим…') : t('Зайти на сервер')}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -348,7 +388,10 @@ function ReactionArt({ emoji }: { emoji: string }) {
 
 function replyLabel(m: { text: string; deleted?: boolean; kind?: string | null }): string {
   if (m.deleted) return t('Сообщение удалено')
-  if (m.text) return m.text
+  if (m.text) {
+    const mark = parseMark(m.text)
+    return mark ? markPreview(mark) : m.text
+  }
   if (m.kind === 'voice') return t('Голосовое сообщение')
   if (m.kind === 'image') return t('Картинка')
   if (m.kind === 'sticker') return t('Стикер')
@@ -1029,6 +1072,7 @@ export function ChatThread() {
         {chatMsgs.map((m, i) => {
           const inv = m.text ? parseInvite(m.text) : null
           const callLog = m.text ? parseCallLog(m.text) : null
+          const mark = m.text && !m.deleted ? parseMark(m.text) : null
           const key = m.id || m.localId || 'i' + i
           const newDay = dayKey(m.ts) !== dayKey(chatMsgs[i - 1]?.ts)
           const day = newDay && m.ts ? <div className="chat-day">{dayLabel(m.ts)}</div> : null
@@ -1037,6 +1081,13 @@ export function ChatThread() {
               <Fragment key={key}>
                 {day}
                 <InviteCard addr={inv.addr} name={inv.name} version={inv.version} me={m.me} />
+              </Fragment>
+            )
+          if (mark)
+            return (
+              <Fragment key={key}>
+                {day}
+                <MarkCard mark={mark} me={m.me} />
               </Fragment>
             )
           if (callLog && !chatRoom)

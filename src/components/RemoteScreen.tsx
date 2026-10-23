@@ -36,6 +36,8 @@ export function RemoteScreen({ screen, bridge, onFail }: { screen: string; bridg
         if (off) return
         const loadMs = Math.round(performance.now() - t0)
         if (!r || !ref.current) return failRef.current()
+        // A bundle built before this screen existed is still good for the others: fall back without marking it bad.
+        if (!Object.prototype.hasOwnProperty.call(r.module.screens ?? {}, screen)) return failRef.current()
         try {
           handle = r.module.mount(ref.current, bridgeRef.current(), {
             screen,
