@@ -1,6 +1,5 @@
 import { useTopBar } from '../state/topbar'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { blockFor, serverTint } from '../components/catalog/itemView'
 import type { CSSProperties, ReactNode } from 'react'
 import { modeBackground, modeLook } from '../components/playhub/modeArt'
 import { modeScene } from '../components/iso/modeScenes'
@@ -34,11 +33,11 @@ import type { FeedSort, HubPack, LiveMode, ModeStats, ServerModeDef } from '../c
 import { HeroSkel } from '../components/playhub/HubTop'
 import { PackPage, prefetchPackPage } from '../components/playhub/PackPage'
 import { diskGet, diskSet } from '../lib/diskCache'
-import { copyText } from '../lib/clipboard'
 import { backfillPackIcons } from '../lib/packIcons'
 import { setPackPrefetcher } from '../components/catalog/packPrefetch'
 import { MyBuildCard, useMyBuilds } from '../components/playhub/MyBuilds'
 import { ServerFeed } from '../components/playhub/ServerFeed'
+import { ServerTile, ServerTileSkel } from '../components/playhub/ServerTile'
 import { ModeTile } from '../components/playhub/ModeTile'
 import { useHubTab } from '../components/playhub/hubTab'
 import type { HubSection } from '../components/playhub/hubTab'
@@ -91,28 +90,6 @@ function CardSkel({ n }: { n: number }) {
   )
 }
 
-/** Картинка карточки. Не загрузилась (зеркало CDN не ответило) — прячем, а не рисуем «битую» иконку. */
-/**
- * Картинка сервера с запасом (владелец 30.09.2026: «у серверов нет значков»):
- * нет логотипа или он не загрузился — блок Minecraft на цвете от имени сервера,
- * тот же у сервера при каждом заходе. Пустой квадрат больше не показывается.
- */
-function SrvArt({ src, name, className, tint }: { src?: string | null; name: string; className: string; tint?: string }) {
-  const [bad, setBad] = useState(false)
-  useEffect(() => setBad(false), [src])
-  if (src && !bad)
-    return (
-      <span className={className}>
-        <img src={src} alt="" loading="lazy" draggable={false} onError={() => setBad(true)} />
-      </span>
-    )
-  return (
-    <span className={className + ' is-art'} style={{ backgroundColor: tint || serverTint(name) }}>
-      <img className="ph-srv-block" src={blockArt(blockFor(name))} alt="" draggable={false} />
-    </span>
-  )
-}
-
 const img = (src: string | null | undefined) =>
   src ? (
     <img
@@ -147,16 +124,6 @@ function Players({ n, approx }: { n: number; approx?: boolean }) {
       {(approx ? '~' : '') + fmtN(n)}
     </>
   )
-}
-
-const verKey = (v: string) => v.split('.').map((x) => Number(x) || 0).reduce((acc, n) => acc * 1000 + n, 0)
-/** «1.8–1.21»: от младшей к старшей, как бы рейтинг их ни упорядочил. */
-function versionSpan(list: string[]): string {
-  if (!list.length) return ''
-  const sorted = [...list].sort((a, b) => verKey(a) - verKey(b))
-  const lo = sorted[0]!
-  const hi = sorted[sorted.length - 1]!
-  return lo === hi ? lo : lo + '–' + hi
 }
 
 const servers = (n: number) => plural(n, t('{n} сервер', { n: fmtN(n) }), t('{n} сервера', { n: fmtN(n) }), t('{n} серверов', { n: fmtN(n) }))
@@ -257,7 +224,9 @@ function ModePage({
         search={search}
         sort={sort}
         onFirstPage={(total, s) => setFound({ search: s, total })}
-        render={(s, i) => <ServerRow s={s} def={def} pos={i} current={current} onPlay={onPick} />}
+        className="ph-st-grid"
+        skeleton={() => <ServerTileSkel />}
+        render={(s, i) => <ServerTile s={s} pos={i} on={sameMode(current, serverMode(s))} src="mode" onPlay={onPick} />}
       />
     </div>
   )
@@ -348,102 +317,10 @@ function AllServers({ current, onPick }: { current: LobbyMode | null; onPick: (s
         category={cat || undefined}
         search={search}
         sort={sort}
-        className="srv2-grid"
-        skeleton={() => <span className="srv2-card skel" aria-hidden="true" />}
-        render={(s, i) => <ServerCard s={s} pos={i} current={current} onPlay={onPick} />}
+        className="ph-st-grid"
+        skeleton={() => <ServerTileSkel />}
+        render={(s, i) => <ServerTile s={s} pos={i} on={sameMode(current, serverMode(s))} src="catalog_servers" onPlay={onPick} />}
       />
-    </div>
-  )
-}
-
-/** Карточка сервера витрины: баннер, значок, онлайн, строка о сервере, адрес, «Играть». */
-function ServerCard({ s, pos, current, onPlay }: { s: SnapshotServer; pos?: number; current: LobbyMode | null; onPlay: (s: SnapshotServer) => void }) {
-  const t = useT()
-  const on = sameMode(current, serverMode(s))
-  const [copied, setCopied] = useState(false)
-  const span = versionSpan(s.versions)
-  const about = s.desc || s.motd
-  return (
-    <article className={'srv2-card' + (on ? ' on' : '') + (s.isOnline ? '' : ' off')} data-kind="server" data-id={s.slug || s.ip} data-pos={pos} data-src="catalog_servers">
-      <SrvArt className="srv2-ban" src={s.banner} name={s.slug || s.name || s.ip} />
-      <div className="srv2-body">
-        <SrvArt className="srv2-logo" src={s.logo} name={s.slug || s.name || s.ip} />
-        <div className="srv2-top">
-          <h3 className="srv2-name">{s.name}</h3>
-          <span className={'srv2-online' + (s.isOnline ? '' : ' is-off')}>{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : t('офлайн')}</span>
-        </div>
-        {about ? <p className="srv2-about">{about}</p> : <p className="srv2-about is-empty">{t('Сервер без описания')}</p>}
-        <div className="srv2-tags">
-          {s.cat ? <span className="srv2-tag is-cat">{s.cat}</span> : null}
-          {span ? <span className="srv2-tag">{span}</span> : null}
-          {s.lic === 'CRACKED' ? <span className="srv2-tag is-free">{t('Вход по нику')}</span> : s.lic === 'LICENSE' ? <span className="srv2-tag">{t('Лицензия')}</span> : null}
-        </div>
-        <div className="srv2-foot">
-          {s.ip ? (
-            <button
-              type="button"
-              className="srv2-ip"
-              title={t('Скопировать адрес')}
-              data-track="server_copy_ip"
-              onClick={() => {
-                void copyText(s.ip).then((ok) => {
-                  if (!ok) return
-                  setCopied(true)
-                  window.setTimeout(() => setCopied(false), 1400)
-                })
-              }}
-            >
-              <Icon id={copied ? 'i-check' : 'i-copy'} />
-              <span>{copied ? t('Скопировано') : s.ip}</span>
-            </button>
-          ) : (
-            <span />
-          )}
-          <button className="btn sm primary srv2-play" data-track="play" onClick={() => onPlay(s)}>
-            <Icon id="i-play" /> {t('Играть')}
-          </button>
-        </div>
-      </div>
-    </article>
-  )
-}
-
-function ServerRow({
-  s,
-  def,
-  pos,
-  current,
-  onPlay,
-}: {
-  s: SnapshotServer
-  def?: ServerModeDef
-  pos?: number
-  current: LobbyMode | null
-  onPlay: (s: SnapshotServer) => void
-}) {
-  const t = useT()
-  const on = sameMode(current, serverMode(s))
-  return (
-    <div
-      className={'ph-srv' + (on ? ' on' : '') + (s.isOnline ? '' : ' off')}
-      data-kind="server"
-      data-id={s.slug || s.ip}
-      data-pos={pos}
-      data-src={def ? 'mode' : 'hub_card'}
-    >
-      <SrvArt className="ph-srv-logo" src={s.logo} name={s.slug || s.name || s.ip} />
-      <SrvArt className="ph-srv-ban" src={s.banner} name={s.slug || s.name || s.ip} tint={def ? def.color : undefined} />
-      <span className="ph-srv-body">
-        <b>{s.name}</b>
-        <span className="ph-srv-meta">
-          {versionSpan(s.versions) ? <span>{versionSpan(s.versions)}</span> : null}
-          {s.lic === 'CRACKED' ? <span>{t('Вход по нику')}</span> : s.lic ? <span>{t('Лицензия')}</span> : null}
-        </span>
-      </span>
-      <span className="ph-srv-online">{s.isOnline ? <Players n={s.online} approx={s.onlineApprox} /> : t('офлайн')}</span>
-      <button className="btn md primary" data-track="play" onClick={() => onPlay(s)}>
-        <Icon id="i-play" /> {t('Играть')}
-      </button>
     </div>
   )
 }
@@ -1019,7 +896,12 @@ export function PlayHub({ on }: { on?: boolean }) {
         'servers',
         t('Серверы'),
         <>
-          <ServerFeed limit={6} render={(s, i) => <ServerRow s={s} pos={i} current={current} onPlay={(x) => launch(serverMode(x))} />} />
+          <ServerFeed
+            limit={6}
+            className="ph-st-grid is-shelf"
+            skeleton={() => <ServerTileSkel />}
+            render={(s, i) => <ServerTile s={s} pos={i} on={sameMode(current, serverMode(s))} src="hub_card" onPlay={(x) => launch(serverMode(x))} />}
+          />
           <button className="btn md secondary hub-srv-more" data-sound="nav" data-track="hub_all_servers" onClick={() => setScreen('servers')}>
             {t('Все серверы')} <Icon id="i-chev-r" />
           </button>

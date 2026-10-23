@@ -12,13 +12,13 @@ import { hasTauri, tauri } from '../ipc/tauri'
 import { runInstall } from '../state/installs'
 import { useProfiles } from '../state/profiles'
 import { t } from '../i18n'
-import { REMOTE_UI_SITE, RemoteApiError, remoteApiAllowed, remoteApiError, remoteUploadAllowed, sitePath, uploadParts, type RemoteUiBridge } from './remoteUiRules'
+import { REMOTE_UI_SITE, RemoteApiError, remoteApiAllowed, remoteApiError, remoteUploadAllowed, sitePath, uploadParts, type RemoteJoinServer, type RemoteUiBridge } from './remoteUiRules'
 
 export type { RemoteUiBridge }
 
 export function makeRemoteBridge(host: {
   navigate?: (path: string) => boolean
-  join: (server: { address: string; name: string; version?: string }) => Promise<void> | void
+  join: (server: RemoteJoinServer) => Promise<void> | void
 }): RemoteUiBridge {
   return {
     v: 1,

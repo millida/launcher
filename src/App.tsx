@@ -68,6 +68,7 @@ import { createPresenceMemo, presenceEvents, presenceText, presenceTitle } from 
 import { initDesktopToasts, showAwayCard, showDesktopToast } from './lib/desktopToast'
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
+import { markPreview, parseMark } from './lib/waypointShare'
 import { effectiveNick, getAccount, getMillidaAccount, isGameAccountKind, isMillidaKind, useAccounts } from './state/accounts'
 import { markMillidaEver, millidaEver } from './state/onboarding'
 import { OnboardingModal } from './modals/Onboarding'
@@ -212,6 +213,8 @@ function previewOf(m: PolledMessage): string {
   if (m.attachment?.kind === 'image') return t('Картинка')
   const call = parseCallLog(text)
   if (call) return call.outcome === 'done' ? t('Звонок завершён') : t('Пропущенный звонок')
+  const mark = parseMark(text)
+  if (mark) return markPreview(mark)
   return parseInvite(text) ? t('Приглашение на сервер') : text
 }
 import { refreshPlayStats, rememberServerName, serverNameFor, watchPlaytimeWhileRunning } from './state/playStats'

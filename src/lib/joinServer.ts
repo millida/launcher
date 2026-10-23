@@ -186,7 +186,8 @@ async function millidaSmpBuild(wanted: string[]): Promise<string | null> {
   return made
 }
 
-export async function quickJoin(ip: string, name: string, licensed?: boolean, versions?: string[]): Promise<void> {
+/** `ratedSlug` — the caller already knows the rating card (the website rating screen lists servers the local page has not loaded). */
+export async function quickJoin(ip: string, name: string, licensed?: boolean, versions?: string[], ratedSlug?: string): Promise<void> {
   if (!hasTauri()) {
     showToast(t('Подключение к серверу доступно в приложении'), 'error')
     return Promise.reject(new Error('no-tauri'))
@@ -195,7 +196,7 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
   // Адрес и имя пишем только для серверов рейтинга: приватный сервер друга
   // (домашний IP, название) в телеметрию не уходит (аудит 24.09.2026).
   const key = addrKey(ip)
-  const rated = key ? useServers.getState().list.find((s) => s.slug && addrKey(s.ip) === key) : undefined
+  const rated = ratedSlug ? { slug: ratedSlug } : key ? useServers.getState().list.find((s) => s.slug && addrKey(s.ip) === key) : undefined
   track('server_join', {
     ...(rated ? { addr: ip.slice(0, 64), name: name.slice(0, 64), slug: rated.slug.slice(0, 80) } : { rated: false }),
     ...launchAttribution('other'),
