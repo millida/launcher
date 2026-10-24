@@ -350,7 +350,8 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .lang-pop-tile:focus-visible{box-shadow:inset 0 0 0 2px var(--m-accent)}
 .lang-pop-tile:active{transform:scale(.985)}
 .lang-pop-tile[aria-selected='true']{background:var(--m-accent-soft)}
-.lang-pop-flag{flex:none;width:22px;height:22px;display:block}
+.lang-pop-flag{flex:none;width:36px;height:28px;display:block}
+:root{--pxf-frame:#121316;--pxf-white:#ffffff;--pxf-white-d:#c9ccd3;--pxf-red:#e30a17;--pxf-red-d:#b50812;--pxf-crimson:#c60b1e;--pxf-crimson-d:#9e0818;--pxf-blue:#0039a6;--pxf-blue-d:#002d84;--pxf-azure:#0057b7;--pxf-azure-d:#004592;--pxf-cobalt:#0055a4;--pxf-cobalt-d:#004483;--pxf-navy:#002776;--pxf-navy-d:#001f5e;--pxf-yellow:#fedd00;--pxf-yellow-d:#cbb100;--pxf-gold:#ffc400;--pxf-gold-d:#cc9d00;--pxf-green:#009739;--pxf-green-d:#00782d;--pxf-forest:#01411c;--pxf-forest-d:#013316;--pxf-black:#000000;--pxf-black-d:#000000;--pxf-saffron:#ff9933;--pxf-saffron-d:#cc7a29;}
 .lang-pop-native{flex:1;min-width:0;font-size:13px;font-weight:650;line-height:1.25;color:var(--m-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lang-pop-tile[aria-selected='true'] .lang-pop-native{color:var(--m-accent)}
 :root:not([data-theme-pack]) .lang-pop-tile{border-radius:0;clip-path:var(--px-5)}

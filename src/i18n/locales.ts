@@ -1,3 +1,5 @@
+import type { FlagCountry } from '../components/pxFlags'
+
 export type Locale =
   | 'en'
   | 'zh'
@@ -35,8 +37,8 @@ export interface LocaleInfo {
   native: string
   english: string
   intl: string
-  /// File in public/flags; English shows the US flag and Telugu the Indian one, as the site does.
-  flag: string
+  /// Pixel flag; English shows the US flag and Telugu the Indian one, as the site does.
+  flag: FlagCountry
   rtl: boolean
 }
 
