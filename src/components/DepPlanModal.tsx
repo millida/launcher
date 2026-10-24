@@ -5,7 +5,7 @@ import { backdropClose } from '../lib/dismiss'
 import { autoItems, depSummary, fmtBytes, planItem } from '../lib/deps'
 import type { DepNode } from '../ipc/commands'
 import { mirrorAsset } from '../lib/api'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 function DepRow({
   node,
@@ -96,7 +96,7 @@ export function DepPlanModal() {
                     borderRadius: '10px',
                   }}
                 >
-                  <Icon id="i-alert" /> {t('«{a}» и «{b}» несовместимы: {reason}', { a: c.title, b: c.with, reason: c.reason })}
+                  <Icon id="i-alert" /> {t('«{a}» и «{b}» несовместимы: {reason}', { a: c.title, b: c.with, reason: tx(c.reason) })}
                 </p>
               ))}
             </>

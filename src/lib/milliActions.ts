@@ -13,7 +13,7 @@
 import { create } from 'zustand'
 import { markFixApplied } from './repair'
 import type { MilliMessage } from './milli'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 import { describeSteps } from './milliStepText'
 
 // ─── Контракт (синхронно с milli-server/src/types.ts MilliAction) ───────────
@@ -367,7 +367,7 @@ const firstDetail = (rows: Record<string, RowResult>) => Object.values(rows).fin
 export function errText(e: unknown): string {
   const s = String((e as { message?: string } | null)?.message ?? e ?? '').replace(/^Error:\s*/, '').trim()
   if (/not found|unknown command|command .* not/i.test(s)) return t('Обнови лаунчер')
-  return s.slice(0, 80) || t('Не вышло')
+  return tx(s).slice(0, 80) || t('Не вышло')
 }
 
 // ─── Карточка не из ответа сервера ──────────────────────────────────────────

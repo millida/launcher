@@ -10,7 +10,7 @@ import { useMigrate } from '../state/migrate'
 import { useProfiles } from '../state/profiles'
 import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
 import { closeModal, showToast, useUi } from '../state/ui'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 
 const loaders = (): [string, string][] => [
   ['vanilla', t('Ванилла')],
@@ -81,7 +81,7 @@ export function MigrateBuildModal() {
       },
       onError: (e) => {
         setBusy(false)
-        showToast(t('Перенести не вышло: {error}', { error: String(e) }), 'error')
+        showToast(t('Перенести не вышло: {error}', { error: tx(e) }), 'error')
       },
     })
     if (!started) setBusy(false)
@@ -135,7 +135,7 @@ export function MigrateBuildModal() {
           {loading ? (
             <PlanSkeleton />
           ) : error ? (
-            <p className="faint-note">{t('Не удалось проверить моды: {error}', { error })}</p>
+            <p className="faint-note">{t('Не удалось проверить моды: {error}', { error: tx(error) })}</p>
           ) : plan ? (
             <>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -161,7 +161,7 @@ export function MigrateBuildModal() {
                   {it.ok ? (
                     <span className="pill">{it.version_number || version}</span>
                   ) : (
-                    <span style={{ fontSize: '12px', color: 'var(--m-fg-subtle)' }}>{it.note}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--m-fg-subtle)' }}>{tx(it.note)}</span>
                   )}
                 </div>
               ))}

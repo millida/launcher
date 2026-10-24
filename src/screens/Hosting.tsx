@@ -185,7 +185,7 @@ export function Hosting({ on }: { on: boolean }) {
     noteMyServers(arr)
     try {
       const primary = arr.find((s) => s.address)
-      if (primary) localStorage.setItem('m-host-pin', JSON.stringify({ name: primary.name || 'Мой сервер', addr: primary.address }))
+      if (primary) localStorage.setItem('m-host-pin', JSON.stringify({ name: primary.name || t('Мой сервер'), addr: primary.address }))
       else localStorage.removeItem('m-host-pin')
     } catch {}
   }
@@ -224,7 +224,7 @@ export function Hosting({ on }: { on: boolean }) {
       showToast(t('Вход на сервер — в приложении'))
       return
     }
-    const sname = s.name || 'Мой сервер'
+    const sname = s.name || t('Мой сервер')
     // Свой сервер тоже не пустит клиент чужой версии: сборку выбираем (или
     // предлагаем создать) под версию, на которой он крутится.
     const wanted = serverVersions(s.version ? [s.version] : [])

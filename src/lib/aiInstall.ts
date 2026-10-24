@@ -9,6 +9,7 @@ import { milliItems } from './milli'
 import type { MilliChosen, MilliConfig, MilliLoader, MilliPack } from './milli'
 import { benchChosen, clampOption, jvmArgsFor, ramGbFor } from '../components/milli/bench/benchTabs'
 import { track } from './telemetry'
+import { setBuildRamMb } from './ramPref'
 import { runInstall, useInstalls } from '../state/installs'
 import { useMods } from '../state/mods'
 import { useProfiles } from '../state/profiles'
@@ -120,8 +121,8 @@ function withoutRemoved(chosen: MilliChosen, removed: string[] | undefined): Mil
 }
 
 /**
- * Настройки Милли без правки Rust: ОЗУ — ползунком профиля (`m-ram-<имя>`, его
- * читает запуск, `lib/launch.ts ramMbFor`), JVM — `save_profile_settings`
+ * Настройки Милли без правки Rust: ОЗУ — памятью сборки в ядре (`lib/ramPref.ts`,
+ * её же берёт запуск), JVM — `save_profile_settings`
  * (ширину, высоту и путь к Java сохраняем как были). options.txt и
  * iris.properties сюда не пишем: команды ядра для них нет — они едут в
  * overrides серверного .mrpack. Сбой тут не мешает установке модов.
@@ -131,9 +132,7 @@ async function applyMilliConfig(profile: string, cfg: MilliConfig): Promise<void
     const total = await deviceSpecs()
       .then((s) => s.ram_mb || 0)
       .catch(() => 0)
-    try {
-      localStorage.setItem('m-ram-' + profile, String(ramGbFor(cfg.ramMb, total)))
-    } catch {}
+    if (!(await setBuildRamMb(profile, ramGbFor(cfg.ramMb, total) * 1024))) console.error('[milli] memory of the build was not saved')
   }
   const args = jvmArgsFor(cfg.jvm)
   if (args) {

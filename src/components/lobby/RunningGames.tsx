@@ -3,7 +3,7 @@ import { Icon } from '../Icon'
 import { stopGame } from '../../ipc/commands'
 import { syncRunningGame, useGame } from '../../state/game'
 import { showToast } from '../../state/ui'
-import { useT } from '../../i18n'
+import { tx, useT } from '../../i18n'
 
 /// One tab per running game, so with two builds open each can be stopped on its own:
 /// the big button only ever stops the build it shows.
@@ -17,7 +17,7 @@ export function RunningGames() {
   const stop = (profile: string) => {
     setStopping(profile)
     stopGame(profile)
-      .catch((e) => showToast(t('Не удалось остановить игру: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось остановить игру: {error}', { error: tx(e) }), 'error'))
       .finally(() => {
         setStopping(null)
         syncRunningGame()

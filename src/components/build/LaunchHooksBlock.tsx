@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { hasTauri } from '../../ipc/tauri'
 import { launchHooks, setLaunchHooks, type LaunchHooks } from '../../ipc/commands'
 import { showToast } from '../../state/ui'
-import { useT } from '../../i18n'
+import { tx, useT } from '../../i18n'
 
 const EMPTY: LaunchHooks = { wrapper: '', preLaunch: '', postExit: '', env: {} }
 
@@ -47,7 +47,7 @@ export function LaunchHooksBlock({ profile }: { profile: string | null }) {
         setPost(h.postExit)
         setEnvText(envToText(h.env))
       })
-      .catch((e) => showToast(t('Не удалось прочитать команды запуска: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось прочитать команды запуска: {error}', { error: tx(e) }), 'error'))
   }, [profile, t])
 
   const dirty = wrapper !== saved.wrapper || pre !== saved.preLaunch || post !== saved.postExit || envText !== envToText(saved.env)

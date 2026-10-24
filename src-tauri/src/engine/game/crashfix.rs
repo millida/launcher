@@ -73,6 +73,9 @@ pub struct CrashDiag {
     /// Jar нашего мода, с которым шла игра: по нему рубильник на сервере считает вылеты точно по версии.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub mod_jar: String,
+    /// How the process ended: decimal code, NTSTATUS in hex or `sig<N>`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub exit: String,
 }
 
 impl CrashDiag {
@@ -89,6 +92,11 @@ impl CrashDiag {
 
     pub fn with_log_file(mut self, log_file: Option<String>) -> Self {
         self.log_file = log_file;
+        self
+    }
+
+    pub fn with_exit(mut self, exit: String) -> Self {
+        self.exit = exit;
         self
     }
 }
@@ -543,15 +551,12 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
 
     if (low.contains("оператив") || low.contains("памяти")) && reason != SYSTEM_MEMORY_REASON {
         let tuning = tune_profile(profile);
-        actions.insert(
-            0,
-            CrashAction::new(
-                "set-ram",
-                format!("Выделить {} ГБ памяти", tuning.ram_mb / 1024),
-                tuning.ram_mb.to_string(),
-                &tuning.reasons.join(". "),
-            ),
-        );
+        if let Some(mb) = heap_after_oom(tuned_ram_mb(profile, 0), tuning.total_ram_mb) {
+            actions.insert(
+                0,
+                CrashAction::new("set-ram", format!("Выделить {} ГБ памяти", mb / 1024), mb.to_string(), &tuning.reasons.join(". ")),
+            );
+        }
     }
 
     if low.contains("java") && (low.contains("верси") || low.contains("нужна")) {
@@ -598,6 +603,7 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
         cause: String::new(),
         log_file: None,
         mod_jar: String::new(),
+        exit: String::new(),
     }
 }
 
@@ -700,12 +706,10 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
         }
         "set-ram" => {
             let mb: u32 = arg.parse().map_err(|_| "Некорректный объём памяти".to_string())?;
-            if !(512..=65536).contains(&mb) {
+            if mb == 0 {
                 return Err("Такой объём памяти лаунчер не выставит".into());
             }
-            let mut patch = serde_json::Map::new();
-            patch.insert("ramMb".into(), serde_json::json!(mb));
-            merge_settings(&profile, patch);
+            set_profile_ram(&profile, mb)?;
             Ok(format!("Сборке выделено {} ГБ", mb / 1024))
         }
         "install-deps" => {

@@ -24,7 +24,7 @@ import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
 import '../../styles/pixel/playhub.css'
 import { trackImportFailure } from '../../lib/importTrack'
-import { t, useT } from '../../i18n'
+import { t, tx, useT } from '../../i18n'
 import { isPickCancelled } from '../../lib/coreErrors'
 
 /**
@@ -79,7 +79,7 @@ export function removeBuild(name: string, after?: () => void) {
       })
       .catch((e) => {
         void useProfiles.getState().refresh()
-        showToast(t('Не удалось удалить: {error}', { error: String(e) }), 'error')
+        showToast(t('Не удалось удалить: {error}', { error: tx(e) }), 'error')
       })
   })
 }
@@ -204,7 +204,7 @@ export function BuildIconPicker({ name, icon, onClose }: { name: string; icon?: 
       <IconPicker
         icon={buildIconOf({ name, icon })}
         onClose={onClose}
-        onPick={(v) => void saveIcon(name, v).catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: String(e) }), 'error'))}
+        onPick={(v) => void saveIcon(name, v).catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: tx(e) }), 'error'))}
       />
     </span>
   )

@@ -48,7 +48,7 @@ import { usePackKey } from '../state/packKey'
 import { uiConfirm } from '../state/confirm'
 import { detectSlimFromUrl } from './skinArms'
 import { setScreen, showToast } from '../state/ui'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 /// «Установить» из каталога Millida — одна точка и для кнопки на сайте
 /// (millida://install/…), и для библиотеки внутри лаунчера. Решение «откуда
@@ -472,7 +472,7 @@ async function applySkin(slug: string, opts: CatalogInstallOpts): Promise<boolea
     showToast(t('Скин надет — виден в игре после перезахода'), 'ok', 'install')
     return true
   } catch (e) {
-    showToast(t('Не удалось надеть скин: {error}', { error: String(e) }), 'error')
+    showToast(t('Не удалось надеть скин: {error}', { error: tx(e) }), 'error')
     return false
   }
 }
@@ -511,7 +511,7 @@ async function applyCape(slug: string): Promise<boolean> {
     showToast(t('Плащ «{name}» надет', { name: cape.name }), 'ok', 'install')
     return true
   } catch (e) {
-    showToast(t('Не удалось надеть плащ: {error}', { error: String(e) }), 'error')
+    showToast(t('Не удалось надеть плащ: {error}', { error: tx(e) }), 'error')
     return false
   }
 }

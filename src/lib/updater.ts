@@ -18,7 +18,7 @@ import { useUpdate } from '../state/update'
 import { openExt } from './api'
 import { reportError } from './crash'
 import { cancelAppExit, trackAppExit, trackFailure } from './telemetry'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 export interface UpdateInfo {
   version: string
@@ -460,7 +460,7 @@ export async function applyFallback(): Promise<void> {
     st.set({ busy: false, failed: true })
     if (noticeIfTranslocated(e)) return
     updateFailed('updater-fallback', e)
-    showToast(t('Обновиться не вышло: {error}', { error: String(e) }), 'error')
+    showToast(t('Обновиться не вышло: {error}', { error: tx(e) }), 'error')
   }
 }
 
@@ -508,7 +508,7 @@ export async function applyUpdate(): Promise<void> {
     if (await probeFallback()) await applyFallback()
     else {
       st.set({ failed: true })
-      showToast(t('Не удалось обновиться: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось обновиться: {error}', { error: tx(e) }), 'error')
     }
   }
 }
@@ -547,7 +547,7 @@ export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
     updateFailed('updater', e)
     const f = await probeFallback()
     if (f) return pending
-    if (loud) showToast(t('Не удалось проверить обновления: {error}', { error: String(e) }), 'error')
+    if (loud) showToast(t('Не удалось проверить обновления: {error}', { error: tx(e) }), 'error')
     return null
   }
 }

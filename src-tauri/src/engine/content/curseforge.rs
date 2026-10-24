@@ -418,8 +418,20 @@ pub(crate) async fn cf_install_file(profile: &str, kind: &str, mod_id: u32, file
     let fname = safe_file_name(file["fileName"].as_str().ok_or("нет имени файла")?)?;
     let dest = safe_child(&profile_dir(profile).join(content_dir(kind)), &fname)?;
     let sha1 = cf_sha1(file);
+    let fresh = !dest.exists();
     let dl = cf_download(file, &fname, &dest).await
         .map_err(|e| format!("Не скачался файл с CurseForge: {}", e))?;
+    if kind == "mod" {
+        if let Some(pin) = loader_pin(profile) {
+            if let Some(range) = file_loader_shortfall(&dest, &fname, &pin) {
+                if fresh {
+                    // Removes only the jar this call has just downloaded: the loader would refuse it on the next start.
+                    let _ = std::fs::remove_file(&dest);
+                }
+                return Err(loader_too_old_text(&fname, &pin, &range));
+            }
+        }
+    }
     let (title, icon, summary) = match cf_get(&format!("v1/mods/{}", mod_id), &[]).await {
         Ok(j) => (
             j["data"]["name"].as_str().unwrap_or("").to_string(),

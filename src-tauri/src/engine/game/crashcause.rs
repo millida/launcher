@@ -327,9 +327,23 @@ fn is_resolution_line(low: &str) -> bool {
         return false;
     }
     low.contains("requested by:")
-        || (low.contains("requires") && low.contains("mod '"))
+        || names_fabric_requirement(low)
         || low.contains(", which is missing")
         || low.contains("but only the wrong version is present")
+}
+
+/// Fabric's own template: «Mod 'Sodium' (sodium) 0.6.0 requires …» — the quoted
+/// name is followed by the id in brackets. Lithium prints «Mod 'supplementaries'
+/// attempted to override option …» and «Option '…' requires '…'» on every start
+/// of a build that has both, and a loose match took that line for the reason of
+/// every crash: the real exception never reached the statistics, and with no
+/// exception in the reason a crash during loading read as a graphics failure.
+fn names_fabric_requirement(low: &str) -> bool {
+    low.match_indices("mod '").any(|(at, head)| {
+        low[at + head.len()..]
+            .split_once('\'')
+            .is_some_and(|(_, after)| after.starts_with(" (") && after.contains(" requires "))
+    })
 }
 
 /// Первая осмысленная причина вылета, как её сказала сама игра. Сырая, до
@@ -1304,6 +1318,13 @@ mod tests {
                  # Problematic frame:\n# C  [atio6axx.dll+0x196200]\n#",
                 "EXCEPTION_ACCESS_VIOLATION (0xc0000005) | C [atio6axx.dll+0x196200]",
                 "hs_err: код и кадр",
+            ),
+            (
+                "[Lithium] Mod 'supplementaries' attempted to override option 'mixin' with an invalid value, ignoring[15:36:35.807] [main/INFO] [LithiumConfig/]: Option 'mixin.experimental.entity.block_caching.suffocation' requires 'mixin.util.block_tracking=true' but found 'false'.\n\
+                 ---- Minecraft Crash Report ----\nDescription: Initializing game\n\n\
+                 java.lang.IllegalStateException: Failed to bake models\n\tat net.foo.Bar.baz(Bar.java:1)",
+                "java.lang.IllegalStateException: Failed to bake models",
+                "All of Aeronautics 24.10: строка Lithium о своих настройках стояла причиной 314 вылетов за три дня вместо исключения",
             ),
         ];
         for (text, want, why) in cases {

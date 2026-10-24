@@ -226,7 +226,7 @@ fn is_catalog_pack(profile: &str) -> bool {
     catalog_pack_settings(&profile_settings(profile))
 }
 
-fn catalog_pack_settings(settings: &Value) -> bool {
+pub(crate) fn catalog_pack_settings(settings: &Value) -> bool {
     settings["catalogPackSlug"].as_str().is_some_and(|s| !s.is_empty())
 }
 
@@ -975,6 +975,53 @@ pub(crate) fn relations_on<'a>(m: &'a LocalMeta, runs: &[String]) -> Option<(&'a
     })
 }
 
+/// The loader a build is pinned to. An unpinned build gets the newest stable
+/// loader at launch, so no jar can ask for more than it will have.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LoaderPin {
+    pub loader_id: String,
+    pub version: String,
+}
+
+pub(crate) fn pin_of(loader_id: &str, loader_version: Option<&str>, game_version: &str) -> Option<LoaderPin> {
+    if !matches!(loader_id, "fabric" | "forge" | "neoforge") {
+        return None;
+    }
+    let raw = loader_version?.trim();
+    let version = raw.strip_prefix(&format!("{}-", game_version)).unwrap_or(raw).trim();
+    (!version.is_empty()).then(|| LoaderPin { loader_id: loader_id.to_string(), version: version.to_string() })
+}
+
+pub(crate) fn loader_pin(profile: &str) -> Option<LoaderPin> {
+    let p = load_profiles().into_iter().find(|p| p.name == profile)?;
+    pin_of(&p.loader_id(), p.loader_version.as_deref(), &p.version)
+}
+
+/// The loader range a jar demands and the pinned loader does not meet. Modrinth
+/// and CurseForge pick files by game version and loader name only, so a file
+/// that needs NeoForge 21.1.252 installs into a build pinned to 21.1.248 and the
+/// loader refuses it on the next start. Only the manifest of the build's own
+/// loader is read: a Fabric jar under Connector asks Fabric Loader, not NeoForge.
+pub(crate) fn loader_shortfall(m: &LocalMeta, pin: &LoaderPin) -> Option<String> {
+    let range = m.relations.iter().find(|r| r.loader == pin.loader_id)?.loader_range.trim();
+    if range.is_empty() {
+        return None;
+    }
+    let predicate = if range.starts_with(['[', '(']) { maven_range(range) } else { range.to_string() };
+    (!version_satisfies(&pin.version, &predicate)).then(|| range.to_string())
+}
+
+pub(crate) fn file_loader_shortfall(path: &std::path::Path, file_name: &str, pin: &LoaderPin) -> Option<String> {
+    loader_shortfall(&read_file_meta(path, "mod", file_name), pin)
+}
+
+pub(crate) fn loader_too_old_text(title: &str, pin: &LoaderPin, range: &str) -> String {
+    format!(
+        "«{}» требует загрузчик {} {} — в сборке {}. Обнови загрузчик в настройках сборки или поставь другую версию мода",
+        title, pin.loader_id, range, pin.version
+    )
+}
+
 /// Checks a build as it stands: hard dependencies nobody satisfies, mods that
 /// declare each other incompatible, and files built for another version or
 /// loader. Everything that can be fixed comes back with the fix attached.
@@ -1404,7 +1451,7 @@ mod tests {
             requires: relations.first().map(|(_, r)| owned(r)).unwrap_or_default(),
             relations: relations
                 .iter()
-                .map(|(l, r)| LoaderRelations { loader: l.to_string(), requires: owned(r), breaks: vec![] })
+                .map(|(l, r)| LoaderRelations { loader: l.to_string(), requires: owned(r), breaks: vec![], ..Default::default() })
                 .collect(),
             ..Default::default()
         }
@@ -1513,6 +1560,37 @@ mod tests {
     /// must never touch an ordinary mod. The catalogue branch reads profile
     /// settings from disk; a name with no profile behind it stands in for a
     /// hand-built Fabric instance, where Fabric API updates as usual.
+    #[test]
+    fn loader_shortfall_is_judged_against_the_pinned_loader() {
+        let jar = |loader: &str, range: &str| LocalMeta {
+            relations: vec![LoaderRelations { loader: loader.into(), loader_range: range.into(), ..Default::default() }],
+            ..Default::default()
+        };
+        let pin = |loader: &str, v: &str| pin_of(loader, Some(v), "1.21.1").unwrap_or(LoaderPin { loader_id: String::new(), version: String::new() });
+        let multi = LocalMeta {
+            relations: vec![
+                LoaderRelations { loader: "fabric".into(), loader_range: ">=0.16.0".into(), ..Default::default() },
+                LoaderRelations { loader: "neoforge".into(), loader_range: "[21.1.252,)".into(), ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        let cases: [(LocalMeta, LoaderPin, Option<&str>, &str); 8] = [
+            (multi, pin("neoforge", "21.1.248"), Some("[21.1.252,)"), "a multi-loader jar is judged by the manifest of the build's loader"),
+            (jar("neoforge", "[21.1.252,)"), pin("neoforge", "21.1.248"), Some("[21.1.252,)"), "Quark 487 on All of Aeronautics"),
+            (jar("neoforge", "[21.1.252,)"), pin("neoforge", "21.1.262"), None, "a newer loader takes it"),
+            (jar("neoforge", "[21.1,22)"), pin("neoforge", "21.1.248"), None, "an open range up to the next line"),
+            (jar("forge", "[47.2,)"), pin("forge", "1.21.1-47.1.3"), Some("[47.2,)"), "a pin written with the game version in front"),
+            (jar("fabric", ">=0.16.0"), pin("fabric", "0.15.11"), Some(">=0.16.0"), "Fabric predicate syntax"),
+            (jar("fabric", ">=0.16.0"), pin("neoforge", "21.1.248"), None, "a bridged Fabric jar asks Fabric Loader, not NeoForge"),
+            (jar("neoforge", ""), pin("neoforge", "21.1.248"), None, "no requirement"),
+        ];
+        for (m, p, want, why) in cases {
+            assert_eq!(loader_shortfall(&m, &p).as_deref(), want, "{why}");
+        }
+        assert_eq!(pin_of("neoforge", None, "1.21.1"), None, "unpinned: the launch takes the newest stable loader");
+        assert_eq!(pin_of("vanilla", Some("x"), "1.21.1"), None, "vanilla has no loader to outgrow");
+    }
+
     #[test]
     fn fabric_api_is_pinned_on_bridged_and_catalogue_builds() {
         let bridged = ["fabric".to_string()];

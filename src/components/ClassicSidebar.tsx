@@ -195,7 +195,7 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
                   <span className="dl-step-ic">
                     {i < prelaunch.stage ? <Icon id="i-check" /> : i === prelaunch.stage ? <span className="spin"></span> : null}
                   </span>
-                  {st}
+                  {t(st)}
                 </div>
               ))}
               <button className="btn sm ghost" style={{ width: '100%', marginTop: '6px' }} onClick={cancelPrelaunch}>

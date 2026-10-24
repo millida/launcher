@@ -195,6 +195,8 @@ export interface CrashInfo {
   logFile?: string
   /// Jar нашего мода, с которым шла игра («millida-mod-fabric-1.20.1-0.2.18.jar»).
   modJar?: string
+  /// How the game process ended: decimal code, Windows NTSTATUS in hex or `sig<N>`.
+  exit?: string
 }
 export interface PackAccessLost {
   profile: string

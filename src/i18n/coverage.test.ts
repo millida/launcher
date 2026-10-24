@@ -44,6 +44,11 @@ describe('core messages are translated whole, with their inserted parts translat
     { locale: 'en', raw: 'Совсем новая ошибка ядра', want: 'Совсем новая ошибка ядра', why: 'an unknown text is shown as written rather than dropped' },
     { locale: 'ru', raw: 'Error: Готово', want: 'Готово', why: 'Russian shows the core text itself' },
     { locale: 'en', raw: 'HTTP 500', want: 'HTTP 500', why: 'text without Cyrillic is never touched' },
+    { locale: 'en', raw: 'Готово; нет связи', want: 'Done; no connection', why: 'reasons the core joined with "; " are translated one by one' },
+    { locale: 'en', raw: 'Не удалось открыть папку: Готово; нет связи', want: 'Could not open the folder: Done; no connection', why: 'a joined list inside a template slot is translated as well' },
+    { locale: 'en', raw: 'https://cdn.example/x.jar: нет связи', want: 'https://cdn.example/x.jar: no connection', why: 'an address put in front of a reason keeps the address and translates the reason' },
+    { locale: 'en', raw: 'Готово: C:\\Games\\x.jar', want: 'Done: C:\\Games\\x.jar', why: 'a stage put in front of a path is translated, the path is kept' },
+    { locale: 'en', raw: 'Готово, совсем новая ошибка', want: 'Готово, совсем новая ошибка', why: 'a split that leaves any part untranslated is not taken, so no half-English sentence appears' },
   ]
   for (const c of cases)
     test(c.why, () => {

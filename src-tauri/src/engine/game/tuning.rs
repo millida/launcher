@@ -214,6 +214,29 @@ pub fn auto_tune_on(profile: &str) -> bool {
     s["autoTune"].as_bool().unwrap_or(true)
 }
 
+/// The build's own memory setting, the one value every memory control writes:
+/// the slider, the crash dialog, Milli and the pre-launch advice. 0 is auto.
+/// A second copy in the webview's storage used to win over it, so a crash
+/// fix or a pack's own memory changed nothing the launch actually took.
+pub(crate) fn ram_setting(mb: u32) -> Result<serde_json::Value, String> {
+    match mb {
+        0 => Ok(serde_json::Value::Null),
+        m if (512..=65536).contains(&m) => Ok(serde_json::json!(m)),
+        _ => Err("Такой объём памяти лаунчер не выставит".into()),
+    }
+}
+
+pub fn set_profile_ram(profile: &str, mb: u32) -> Result<(), String> {
+    let value = ram_setting(mb)?;
+    if !crate::engine::load_profiles().iter().any(|p| p.name == profile) {
+        return Err("Сборка не найдена".into());
+    }
+    let mut patch = serde_json::Map::new();
+    patch.insert("ramMb".into(), value);
+    crate::engine::merge_settings(profile, patch);
+    Ok(())
+}
+
 pub fn set_auto_tune(profile: &str, on: bool) {
     let mut patch = serde_json::Map::new();
     patch.insert("autoTune".into(), serde_json::json!(on));
@@ -388,6 +411,22 @@ pub fn tuned_ram_mb(profile: &str, requested: u32) -> u32 {
     tune_profile(profile).ram_mb
 }
 
+/// Heap to offer after the game ran out of the `used_mb` it had. The tuned value
+/// is what the game just ran out of: offered again, the button pinned the same
+/// heap and the next start died the same way. The step goes over the swap-wary
+/// ceiling of auto-tuning, since the heap has proven too small, but never into
+/// the reserve the system keeps. `None` when there is nothing more to give.
+pub fn heap_after_oom(used_mb: u32, total_mb: u64) -> Option<u32> {
+    if total_mb == 0 {
+        return None;
+    }
+    let cap = total_mb.saturating_sub(reserved_mb(total_mb)).min(MAX_HEAP_MB as u64) as u32;
+    let next = used_mb.saturating_add(OOM_STEP_MB).min(cap);
+    (next > used_mb).then_some(next)
+}
+
+const OOM_STEP_MB: u32 = 2048;
+
 /// What auto-tuning is measured against: half the machine, the rule launchers
 /// used before anyone looked at the pack.
 pub(crate) fn default_half_ram() -> u32 {
@@ -460,6 +499,42 @@ mod tests {
     }
 
     use super::*;
+
+    /// requested megabytes -> what lands in the build's settings.
+    #[test]
+    fn every_memory_control_writes_one_validated_value() {
+        let cases: [(u32, Result<serde_json::Value, ()>, &str); 5] = [
+            (0, Ok(serde_json::Value::Null), "0 is auto: the key goes, tuning decides"),
+            (6144, Ok(serde_json::json!(6144)), "the slider at 6 GB"),
+            (512, Ok(serde_json::json!(512)), "the smallest heap the launcher sets"),
+            (511, Err(()), "below that the game does not start"),
+            (65537, Err(()), "a value from a broken payload is refused, not clamped"),
+        ];
+        for (mb, want, why) in cases {
+            assert_eq!(ram_setting(mb).map_err(|_| ()), want, "{mb} MB: {why}");
+        }
+    }
+
+    /// (heap the game ran out of, machine) -> heap the crash dialog offers.
+    #[test]
+    fn a_heap_that_ran_out_is_never_offered_again() {
+        let cases: [(u32, u64, Option<u32>, &str); 6] = [
+            (6040, 16251, Some(8088), "All of Aeronautics 24.10: auto gave 6040 MB, the button offered «5 ГБ» — the same heap"),
+            (4029, 8059, Some(6011), "8 GB machine: up to what is left after the 2 GB the system keeps"),
+            (6011, 8059, None, "8 GB machine at its reserve: no button that pins the same heap"),
+            (2048, 4096, None, "4 GB machine: the reserve leaves nothing above 2 GB"),
+            (10240, 32768, Some(12288), "a 32 GB machine stops at the heap ceiling of the launcher"),
+            (4096, 0, None, "machine size unknown: nothing to measure the step against"),
+        ];
+        for (used, total, want, why) in cases {
+            let got = heap_after_oom(used, total);
+            assert_eq!(got, want, "ran out at {used} MB on {total} MB, offered {got:?}. Why pinned: {why}");
+            if let Some(mb) = got {
+                assert!(mb > used, "the offer must be more than the heap that ran out");
+                assert!(mb as u64 <= total - reserved_mb(total), "the offer must leave the system its reserve");
+            }
+        }
+    }
 
     /// mods x machine -> heap. Every row is a machine we actually see in
     /// support: the point of the table is that no row ends up with a heap the

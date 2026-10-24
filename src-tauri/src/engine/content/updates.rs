@@ -27,6 +27,15 @@ fn changelog_of(v: &Value) -> String {
     text.chars().take(CHANGELOG_MAX_CHARS).collect::<String>() + "…"
 }
 
+/// A catalogue pack ships its mods as one tested set on a pinned loader, and it
+/// changes them only with a version of its own. Modrinth picks the newest file by
+/// game version and loader name, never by loader version, so a bulk update pulled
+/// mods that ask for a newer NeoForge than the pack runs, and the pack stopped
+/// starting until it was reinstalled.
+fn mods_update_freely(kind: &str, settings: &Value) -> bool {
+    kind != "mod" || !catalog_pack_settings(settings)
+}
+
 fn pinned(profile: &str, e: &ContentEntry) -> bool {
     is_content_locked(profile, &e.kind, &e.project_id, &e.file_name)
 }
@@ -108,6 +117,9 @@ async fn latest_versions(
 }
 
 pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateInfo>, String> {
+    if !mods_update_freely(&kind, &profile_settings(&profile)) {
+        return Ok(vec![]);
+    }
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
@@ -165,6 +177,13 @@ async fn apply_update(profile: &str, kind: &str, file_name: &str, ver: &Value) -
     let on = safe_child(&dir, &file_name)?;
     let was_disabled = off.exists() && !on.exists();
     let newname = install_project_version(profile, kind, &project, ver).await?;
+    // A new version may bring a requirement the old one did not have (Advanced
+    // Loot Info 2 needs ACI); swapping the jar alone left a build that stops on
+    // the loader's list of missing mods.
+    let missed = install_required(&ctx_of(profile, kind), mr_deps(ver)).await;
+    if !missed.is_empty() {
+        eprintln!("[update] {}: не встали зависимости новой версии: {}", newname, missed.join("; "));
+    }
     if newname != file_name {
         let mut held = false;
         for cand in [on, off] {
@@ -206,6 +225,9 @@ pub async fn update_content(profile: String, kind: String, file_name: String) ->
 
 /// Resolves versions once for the whole batch instead of per file.
 pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
+    if !mods_update_freely(&kind, &profile_settings(&profile)) {
+        return Ok(0);
+    }
     let prof = load_profiles().into_iter().find(|p| p.name == profile);
     let gv = prof.as_ref().map(|p| p.version.clone()).unwrap_or_default();
     let loader_id = prof.map(|p| p.loader_id()).unwrap_or_else(|| "vanilla".into());
@@ -303,6 +325,13 @@ pub async fn add_local_file(profile: String, kind: String, src: String) -> Resul
         return Err("Это не файл".into());
     }
     let fname = safe_file_name(&srcp.file_name().ok_or("нет имени файла")?.to_string_lossy())?;
+    if kind == "mod" {
+        if let Some(pin) = loader_pin(&profile) {
+            if let Some(range) = file_loader_shortfall(&srcp, &fname, &pin) {
+                return Err(loader_too_old_text(&fname, &pin, &range));
+            }
+        }
+    }
     let dir = profile_dir(&profile).join(content_dir(&kind));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = safe_child(&dir, &fname)?;
@@ -353,6 +382,23 @@ mod channel_tests {
         assert_eq!(steady_update("b1", Some(&beta), None), Some(Step::Take(&beta)), "no release for this build: the project ships betas only");
         assert_eq!(steady_update("x", None, Some(&old)), Some(Step::Take(&old)));
         assert_eq!(steady_update("x", None, None), None, "Modrinth does not know the file: per-project lookup");
+    }
+
+    /// (content kind, build settings) -> are its files offered as updates.
+    #[test]
+    fn a_catalogue_pack_keeps_the_mods_it_shipped() {
+        let pack = json!({ "catalogPackSlug": "aeronautics" });
+        let own = json!({ "ramMb": 6144 });
+        let cases: [(&str, &serde_json::Value, bool, &str); 5] = [
+            ("mod", &pack, false, "All of Aeronautics: Quark 487 and Almanac 1.26 asked NeoForge newer than the pack's 21.1.248"),
+            ("mod", &own, true, "a build the player assembled updates as before"),
+            ("mod", &json!({ "catalogPackSlug": "" }), true, "an empty slug is not a catalogue pack"),
+            ("resourcepack", &pack, true, "resource packs do not load against the loader version"),
+            ("shader", &pack, true, "shader packs do not load against the loader version"),
+        ];
+        for (kind, settings, want, why) in cases {
+            assert_eq!(mods_update_freely(kind, settings), want, "{kind} / {settings}: {why}");
+        }
     }
 }
 

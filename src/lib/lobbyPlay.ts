@@ -13,7 +13,7 @@ import { keyCatalogPack } from './installKeys'
 import { catalogInstallTracker } from './install'
 import { ONEBLOCK_PACK, targetsAnarchy, targetsOwnServer } from './ownServer'
 import { playAnarchy } from './anarchy'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 const launch = (name: string) => (hasTauri() ? realLaunch(name) : startPrelaunch(name))
 
@@ -78,7 +78,7 @@ export async function playOwnServer(profiles: Profile[]): Promise<void> {
     run: () => installCatalogPack(ONEBLOCK_PACK),
     onError: (e) => {
       if (String(e).startsWith(PACK_ACCESS_PREFIX)) openPremiumPack(ONEBLOCK_PACK)
-      else showToast(t('OneBlock не установился: {error}. Нажми «Играть» ещё раз.', { error: String(e) }), 'error')
+      else showToast(t('OneBlock не установился: {error}. Нажми «Играть» ещё раз.', { error: tx(e) }), 'error')
     },
     onDone: (p) => {
       installed()

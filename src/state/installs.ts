@@ -7,7 +7,7 @@ import { installTarget } from '../lib/errorReport'
 import { trackFailure } from '../lib/telemetry'
 import { buildTag } from '../lib/telemetryPrivacy'
 import { showToast } from './ui'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 import { CORE_INSTALL_CANCELLED, CORE_PICK_CANCELLED } from '../lib/coreErrors'
 
 // Install jobs live in the core and outlive the component that started them, so
@@ -133,7 +133,7 @@ interface RunOptions<T> {
 export function runInstall<T>(o: RunOptions<T>): boolean {
   const cur = useInstalls.getState().tasks[o.key]
   if (cur && cur.state === 'run') {
-    showToast(cur.msg ? t('«{name}» уже ставится: {status}', { name: cur.title || o.title || '', status: cur.msg }) : t('«{name}» уже ставится', { name: cur.title || o.title || '' }))
+    showToast(cur.msg ? t('«{name}» уже ставится: {status}', { name: cur.title || o.title || '', status: tx(cur.msg) }) : t('«{name}» уже ставится', { name: cur.title || o.title || '' }))
     return false
   }
   clearTimeout(hideTimers[o.key])
@@ -186,7 +186,7 @@ export function stopInstall(key: string): void {
       // и «Отменить» выглядело сломанным. Убираем карточку сами.
       if (!stopped) useInstalls.getState().drop(key)
     })
-    .catch((e) => showToast(t('Не удалось отменить: {error}', { error: String(e) }), 'error'))
+    .catch((e) => showToast(t('Не удалось отменить: {error}', { error: tx(e) }), 'error'))
 }
 
 /// Пауза держит уже скачанное: ядро рвёт соединение и после «Продолжить»
@@ -200,7 +200,7 @@ export function togglePause(key: string): void {
       if (ok) useInstalls.getState().patch(key, { paused })
       else useInstalls.getState().patch(key, { pausable: false, paused: false })
     })
-    .catch((e) => showToast(paused ? t('Не удалось поставить на паузу: {error}', { error: String(e) }) : t('Не удалось продолжить: {error}', { error: String(e) }), 'error'))
+    .catch((e) => showToast(paused ? t('Не удалось поставить на паузу: {error}', { error: tx(e) }) : t('Не удалось продолжить: {error}', { error: tx(e) }), 'error'))
 }
 
 export const runningMsg = (task: InstallTask, text: string): string =>

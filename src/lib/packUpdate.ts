@@ -1,7 +1,7 @@
 import { PACK_ACCESS_PREFIX, type ProfileSettings } from '../ipc/commands'
 import type { PackView } from '../components/premium/packView'
 import { apiErrorText } from './apiError'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 export interface PackUpdate {
   slug: string
@@ -82,7 +82,7 @@ function failureReason(e: unknown): string {
     .trim()
   const at = text.indexOf(PACK_ACCESS_PREFIX)
   const reason = (at >= 0 ? text.slice(at + PACK_ACCESS_PREFIX.length) : text).trim()
-  return reason || t('причина неизвестна')
+  return reason ? tx(reason) : t('причина неизвестна')
 }
 
 /**

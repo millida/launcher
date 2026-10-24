@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 import { BuildCard } from '../components/BuildCard'
 import { fmtPlaytime, plural, whenText } from '../lib/format'
 import { useProfiles } from '../state/profiles'
@@ -90,7 +90,7 @@ export function Builds({ on }: { on: boolean }) {
       }
       setProfileGroup(p.name, target)
         .then(() => useProfiles.getState().refresh())
-        .catch((err) => showToast(t('Не удалось перенести: {error}', { error: String(err) }), 'error'))
+        .catch((err) => showToast(t('Не удалось перенести: {error}', { error: tx(err) }), 'error'))
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)

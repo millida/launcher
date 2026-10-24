@@ -218,17 +218,17 @@ pub(crate) fn net_err(e: &reqwest::Error) -> String {
     let detail = cause.to_string();
     let low = detail.to_lowercase();
     let hint = if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
-        " — соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения"
+        "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения"
     } else if low.contains("dns") || low.contains("failed to lookup") || low.contains("resolve") {
-        " — адрес сервера не определился: проверь DNS, VPN и антивирус"
+        "адрес сервера не определился: проверь DNS, VPN и антивирус"
     } else if e.is_timeout() || low.contains("timed out") {
-        " — сервер не ответил вовремя: проверь интернет и VPN"
+        "сервер не ответил вовремя: проверь интернет и VPN"
     } else if e.is_connect() {
-        " — соединение не установилось: проверь брандмауэр, VPN и антивирус"
+        "соединение не установилось: проверь брандмауэр, VPN и антивирус"
     } else {
-        ""
+        return format!("нет связи ({})", detail);
     };
-    format!("нет связи ({}{})", detail, hint)
+    format!("нет связи ({} — {})", detail, hint)
 }
 
 /// Digest kind announced by the source: Modrinth publishes sha1/sha512, Mojang

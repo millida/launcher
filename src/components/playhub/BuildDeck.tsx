@@ -12,7 +12,7 @@ import { showToast } from '../../state/ui'
 import { buildIconOf, parseIcon } from '../../lib/buildIcon'
 import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
-import { useT } from '../../i18n'
+import { tx, useT } from '../../i18n'
 
 /**
  * «Мои сборки» во вкладке «Собрать» — верстак: крупные карточки своих сборок
@@ -146,7 +146,7 @@ function DeckCard({
           <IconPicker
             icon={buildIconOf(p)}
             onClose={() => setEdit(false)}
-            onPick={(icon) => void saveIcon(p.name, icon).catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: String(e) }), 'error'))}
+            onPick={(icon) => void saveIcon(p.name, icon).catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: tx(e) }), 'error'))}
           />
         </span>
       ) : null}

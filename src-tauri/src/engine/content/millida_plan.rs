@@ -363,6 +363,15 @@ async fn plan_job(app: &AppHandle, job: &Job, req: &CatalogPlanReq) -> Result<Ca
         staged.push((f, tmp));
     }
     job.check()?;
+    // Checked while everything is still staged: a plan whose mod asks for a
+    // newer loader than the build is pinned to leaves the build untouched.
+    if let Some(pin) = loader_pin(&req.profile) {
+        for (f, tmp) in staged.iter().filter(|(f, _)| f.kind == "mod") {
+            if let Some(range) = file_loader_shortfall(tmp, &f.name, &pin) {
+                return Err(loader_too_old_text(&f.title, &pin, &range));
+            }
+        }
+    }
 
     job.emit(app, 90.0, "Кладём в сборку…");
     for (f, tmp) in staged {

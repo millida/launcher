@@ -8,7 +8,7 @@ import { useModpackVersions } from '../state/modpack'
 import { useProfiles } from '../state/profiles'
 import { openImage } from '../components/ImageLightbox'
 import { backdropClose } from '../lib/dismiss'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 export function ScreenshotsOverlay() {
   const t = useT()
@@ -119,7 +119,7 @@ export function ModpackVersionsOverlay() {
                               },
                               onError: (er) => {
                                 setLabel(v.id, t('Установить'))
-                                showToast(t('Не вышло поставить: {error}', { error: String(er) }), 'error')
+                                showToast(t('Не вышло поставить: {error}', { error: tx(er) }), 'error')
                               },
                             })
                             if (started) setLabel(v.id, t('Ставим…'))

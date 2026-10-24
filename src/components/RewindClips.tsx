@@ -20,7 +20,7 @@ import {
 } from '../ipc/commands'
 import { listenRewindClip, listenRewindState } from '../ipc/events'
 import { hotkeyFromEvent } from '../lib/rewindHotkey'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 
 const seconds = (): [number, string][] => [
   [15, t('{n} с', { n: 15 })],
@@ -127,7 +127,8 @@ export function RewindClips() {
   const s = state?.settings
   const supported = state?.supported ?? false
   const status = state?.status
-  const problem = status?.hotkeyProblem || status?.videoProblem || null
+  const rawProblem = status?.hotkeyProblem || status?.videoProblem || null
+  const problem = rawProblem ? tx(rawProblem) : null
 
   return (
     <>
@@ -155,7 +156,7 @@ export function RewindClips() {
             <Row title={t('Кадров в секунду')} keys="fps частота">
               <Segs<number> value={s.fps} options={FPS} onPick={(v) => save({ fps: v })} />
             </Row>
-            <Row title={t('Звук игры')} hint={status?.audioProblem ?? undefined} keys="звук аудио">
+            <Row title={t('Звук игры')} hint={status?.audioProblem ? tx(status.audioProblem) : undefined} keys="звук аудио">
               <Toggle label={t('Звук игры')} on={s.gameAudio} onChange={() => save({ gameAudio: !s.gameAudio })} />
             </Row>
             <Row title={t('Микрофон')} keys="микрофон голос">

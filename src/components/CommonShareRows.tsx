@@ -3,7 +3,7 @@ import { commonShareState, setCommonShare } from '../ipc/commands'
 import type { CommonShare } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 type Part = keyof CommonShare
 
@@ -45,7 +45,7 @@ export function CommonShareRows({ profile }: { profile: string }) {
         if (my === seq.current) setState(s)
         showToast(next[part] ? t('Общее с другими сборками — с этого запуска') : t('Теперь только в этой сборке'), 'ok')
       })
-      .catch((e) => showToast(t('Не удалось сохранить: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось сохранить: {error}', { error: tx(e) }), 'error'))
       .finally(() => setBusy(false))
   }
 

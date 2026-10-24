@@ -15,7 +15,7 @@ import { usePackCode } from '../state/packCode'
 import { showReward } from '../components/reward/RewardReveal'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { trackImportFailure } from '../lib/importTrack'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 import { isPickCancelled } from '../lib/coreErrors'
 
 const imported = (p: { name: string; icon?: string | null }) =>
@@ -103,7 +103,7 @@ export function ImportModal() {
         setFailed(false)
         setList((cur) => [...(cur || []), ...l.filter((x) => !(cur || []).some((c) => c.path === x.path))])
       })
-      .catch((e) => showToast(t('Папка не открылась: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Папка не открылась: {error}', { error: tx(e) }), 'error'))
   }
 
   const scan = () => {

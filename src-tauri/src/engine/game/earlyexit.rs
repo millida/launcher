@@ -64,11 +64,10 @@ fn is_key(line: &str) -> bool {
 /// Код выхода по-человечески. Отрицательный код на Windows — это NTSTATUS,
 /// и в десятичном виде (-1073741819) его не узнать: 0xC0000005 узнают все.
 pub(crate) fn exit_code_text(code: Option<i32>) -> (String, Option<&'static str>) {
-    let Some(c) = code else { return ("без кода".into(), None) };
+    let (Some(c), Some(tag)) = (code, exit_tag(code)) else { return ("без кода".into(), None) };
     if c >= 0 {
-        return (c.to_string(), None);
+        return (tag, None);
     }
-    let hex = format!("0x{:08X}", c as u32);
     let what = match c as u32 {
         0xC000_0005 => Some("нарушение доступа к памяти — обнови драйвер видеокарты и проверь, не мешает ли антивирус"),
         0xC000_0135 | 0xC000_007B => Some("не найдена системная библиотека — поставь Microsoft Visual C++ Redistributable"),
@@ -78,7 +77,29 @@ pub(crate) fn exit_code_text(code: Option<i32>) -> (String, Option<&'static str>
         0xC000_0017 | 0xC000_012D => Some("не хватило памяти — закрой лишние программы или уменьши память игре"),
         _ => None,
     };
-    (hex, what)
+    (tag, what)
+}
+
+/// The exit code as support reads it: decimal, or the NTSTATUS in hex.
+pub(crate) fn exit_tag(code: Option<i32>) -> Option<String> {
+    code.map(|c| if c >= 0 { c.to_string() } else { format!("0x{:08X}", c as u32) })
+}
+
+/// How the game process ended, for the crash statistics. A log that stops in
+/// the middle of loading with no exception and no JVM report says nothing by
+/// itself; the code tells a driver fault from a kill or an exit of the game's own.
+pub(crate) fn exit_of(status: &std::process::ExitStatus) -> String {
+    if let Some(tag) = exit_tag(status.code()) {
+        return tag;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(sig) = status.signal() {
+            return format!("sig{}", sig);
+        }
+    }
+    String::new()
 }
 
 /// Сводка первой строкой, полный хвост лога — ниже. Сводка: код и одна-две
@@ -197,12 +218,12 @@ pub(crate) fn antivirus_hint(e: &std::io::Error, av: Option<&str>) -> String {
     let busy = e.raw_os_error() == Some(32);
     let missing = spawn_missing(e);
     match (av, spawn_flagged_as_virus(e), denied, busy, missing) {
-        (Some(name), true, _, _, _) => format!(". Антивирус {} принял Java за угрозу и заблокировал. Верни файл из карантина и добавь папку лаунчера в исключения {}", name, name),
-        (None, true, _, _, _) => ". Антивирус принял Java за угрозу и заблокировал. Верни файл из карантина и добавь папку лаунчера в исключения антивируса".into(),
-        (Some(name), _, true, _, _) => format!(". Java не дал запустить антивирус {} — добавь папку лаунчера в его исключения и запусти ещё раз", name),
-        (None, _, true, _, _) => ". Java не дал запустить антивирус — добавь папку лаунчера в его исключения и запусти ещё раз".into(),
-        (_, _, _, true, _) => ". Файл Java занят другой программой (чаще всего антивирусом) — подожди минуту и запусти ещё раз".into(),
-        (Some(name), _, _, _, true) => format!(". Файл Java пропал сразу после установки — его удаляет антивирус {}. Верни файл из карантина и добавь папку лаунчера в исключения", name),
+        (Some(name), true, _, _, _) => format!("Антивирус {} принял Java за угрозу и заблокировал. Верни файл из карантина и добавь папку лаунчера в исключения {}", name, name),
+        (None, true, _, _, _) => "Антивирус принял Java за угрозу и заблокировал. Верни файл из карантина и добавь папку лаунчера в исключения антивируса".into(),
+        (Some(name), _, true, _, _) => format!("Java не дал запустить антивирус {} — добавь папку лаунчера в его исключения и запусти ещё раз", name),
+        (None, _, true, _, _) => "Java не дал запустить антивирус — добавь папку лаунчера в его исключения и запусти ещё раз".into(),
+        (_, _, _, true, _) => "Файл Java занят другой программой (чаще всего антивирусом) — подожди минуту и запусти ещё раз".into(),
+        (Some(name), _, _, _, true) => format!("Файл Java пропал сразу после установки — его удаляет антивирус {}. Верни файл из карантина и добавь папку лаунчера в исключения", name),
         _ => String::new(),
     }
 }
@@ -211,7 +232,13 @@ pub(crate) fn antivirus_hint(e: &std::io::Error, av: Option<&str>) -> String {
 pub(crate) fn spawn_failure(e: &std::io::Error, java: &Path) -> String {
     let needs_av = spawn_blocked(e) || spawn_missing(e);
     let av = if needs_av { running_antivirus() } else { None };
-    format!("Запуск Java: {} — {}{}", e, mask_home(&java.to_string_lossy()), antivirus_hint(e, av))
+    let path = mask_home(&java.to_string_lossy());
+    let hint = antivirus_hint(e, av);
+    if hint.is_empty() {
+        format!("Запуск Java: {} — {}", e, path)
+    } else {
+        format!("Запуск Java: {} — {}. {}", e, path, hint)
+    }
 }
 
 #[cfg(test)]
@@ -239,6 +266,21 @@ mod tests {
         assert!(msg.starts_with("Игра не запустилась (код 0xC0000005 — нарушение доступа к памяти"), "{msg}");
         assert_eq!(exit_code_text(Some(1)).0, "1");
         assert_eq!(exit_code_text(None).0, "без кода");
+    }
+
+    /// exit code -> what the game_crash event carries as `exit`.
+    #[test]
+    fn crash_statistics_get_the_exit_code_support_reads() {
+        let cases: [(Option<i32>, Option<&str>, &str); 5] = [
+            (Some(1), Some("1"), "an exception escaped main: the JVM exits with 1"),
+            (Some(0), Some("0"), "a clean exit that still left a crash report"),
+            (Some(-1073741819), Some("0xC0000005"), "access violation in a driver, as Windows names it"),
+            (Some(-1073740791), Some("0xC0000409"), "fail-fast of a native library"),
+            (None, None, "killed by a signal: no code, the caller names the signal"),
+        ];
+        for (code, want, why) in cases {
+            assert_eq!(exit_tag(code).as_deref(), want, "{code:?}: {why}");
+        }
     }
 
     #[test]

@@ -177,8 +177,6 @@ function applyShader(profile: string, path: string, file: string | null): Promis
   }
 }
 
-const ramKey = (p: string) => 'm-ram-' + p
-
 registerStep('ram', {
   run: async (s, { profile }) => {
     const { mb } = s as Step<'ram'>
@@ -190,14 +188,9 @@ registerStep('ram', {
     // Не больше половины ОЗУ ПК (и не больше 16 ГБ), не меньше 2 ГБ; 0 — авто.
     const cap = total ? Math.max(2, Math.min(16, Math.floor(total / 1024 / 2))) : 16
     const gb = mb <= 0 ? 0 : Math.max(2, Math.min(cap, Math.round(mb / 1024)))
-    let prev = 0
-    try {
-      prev = parseInt(localStorage.getItem(ramKey(profile)) || '0', 10) || 0
-      if (gb) localStorage.setItem(ramKey(profile), String(gb))
-      else localStorage.removeItem(ramKey(profile))
-    } catch {
-      return { ok: false, detail: t('не сохранилось') }
-    }
+    const { buildRamGb, setBuildRamMb } = await import('./ramPref')
+    const prev = await buildRamGb(profile).catch(() => 0)
+    if (prev !== gb && !(await setBuildRamMb(profile, gb * 1024))) return { ok: false, detail: t('не сохранилось') }
     const h = (g: number) => (g ? t('{n} ГБ', { n: g }) : t('авто'))
     if (prev === gb) return { ok: true, detail: t('уже так') }
     dropFactsCache()

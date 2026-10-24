@@ -18,7 +18,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 8;
+const META_REV: u32 = 9;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -39,6 +39,11 @@ pub struct LoaderRelations {
     pub loader: String,
     pub requires: Vec<String>,
     pub breaks: Vec<BreakRule>,
+    /// The version of this loader the manifest demands, as the author wrote it:
+    /// a Maven range in mods.toml (`[21.1.252,)`), a predicate in fabric.mod.json
+    /// (`>=0.16.0`). Empty when it asks for none.
+    #[serde(default)]
+    pub loader_range: String,
 }
 
 /// Metadata read from the content file itself (fabric.mod.json, mods.toml,
@@ -430,6 +435,23 @@ fn forge_relations(text: &str) -> (String, Vec<String>, Vec<String>) {
     (own, requires, breaks)
 }
 
+/// The range a mods.toml puts on the loader itself. The loader is never a
+/// dependency to install, so `forge_relations` drops it with the other
+/// environment ids; this is the one place its version survives.
+fn forge_loader_range(text: &str, loader: &str) -> String {
+    toml_sections(text)
+        .into_iter()
+        .filter(|(header, _)| header.starts_with("dependencies."))
+        .find(|(_, kv)| kv.get("modId").is_some_and(|id| id == loader) && kv.get("type").is_none_or(|t| !t.eq_ignore_ascii_case("incompatible")))
+        .and_then(|(_, kv)| kv.get("versionRange").cloned())
+        .map(|r| r.trim().to_string())
+        .unwrap_or_default()
+}
+
+fn fabric_loader_range(v: &Value) -> String {
+    v["depends"]["fabricloader"].as_str().unwrap_or("").trim().to_string()
+}
+
 /// Forge's versionRange uses Maven interval syntax, which the launcher does
 /// not parse — kept as an unconditional break rather than guessed at.
 fn forge_breaks(ids: Vec<String>) -> Vec<BreakRule> {
@@ -449,7 +471,8 @@ fn loader_relations(jar: &mut Jar) -> Vec<LoaderRelations> {
     for (file, quilt) in [("fabric.mod.json", false), ("quilt.mod.json", true)] {
         let Some(v) = entry_text(jar, file).and_then(|t| lenient_json(&t)) else { continue };
         let (requires, breaks) = fabric_rules(&v, quilt);
-        out.push(LoaderRelations { loader: (if quilt { "quilt" } else { "fabric" }).into(), requires, breaks });
+        let loader_range = if quilt { String::new() } else { fabric_loader_range(&v) };
+        out.push(LoaderRelations { loader: (if quilt { "quilt" } else { "fabric" }).into(), requires, breaks, loader_range });
     }
     for file in ["META-INF/neoforge.mods.toml", "META-INF/mods.toml"] {
         let Some(text) = entry_text(jar, file) else { continue };
@@ -459,7 +482,8 @@ fn loader_relations(jar: &mut Jar) -> Vec<LoaderRelations> {
             continue;
         }
         let (_, requires, breaks) = forge_relations(&text);
-        out.push(LoaderRelations { loader: loader.into(), requires, breaks: forge_breaks(breaks) });
+        let loader_range = forge_loader_range(&text, loader);
+        out.push(LoaderRelations { loader: loader.into(), requires, breaks: forge_breaks(breaks), loader_range });
     }
     out
 }
@@ -963,6 +987,54 @@ viewing mod.
         ];
         for (loader, want, why) in cases {
             assert_eq!(of(loader), want, "{}: {}", loader, why);
+        }
+    }
+
+    /// manifest -> the range it puts on its own loader. The loader is never a
+    /// mod to install, so this is the only trace of what version it must be.
+    #[test]
+    fn each_manifest_keeps_the_loader_version_it_demands() {
+        let quark = b"modLoader=\"javafml\"
+[[mods]]
+modId=\"quark\"
+[[dependencies.quark]]
+modId=\"neoforge\"
+type=\"required\"
+versionRange=\"[21.1.252,)\"
+[[dependencies.quark]]
+modId=\"minecraft\"
+versionRange=\"[1.21.1]\"
+";
+        let forge = b"modLoader=\"javafml\"
+[[mods]]
+modId=\"jei\"
+[[dependencies.jei]]
+modId=\"forge\"
+mandatory=true
+versionRange=\"[47.2,)\"
+";
+        let clash = b"[[mods]]
+modId=\"x\"
+[[dependencies.x]]
+modId=\"neoforge\"
+type=\"incompatible\"
+versionRange=\"[21.0,)\"
+";
+        let fabric = br#"{"id":"sodium","depends":{"fabricloader":">=0.16.0","minecraft":"1.21.1"}}"#;
+        type Case<'a> = (&'a str, &'a str, &'a [u8], &'a str, &'a str, &'a str);
+        let cases: [Case; 5] = [
+            ("quark.jar", "META-INF/neoforge.mods.toml", quark, "neoforge", "[21.1.252,)", "Quark 487: the range that stopped All of Aeronautics on 21.1.248"),
+            ("jei.jar", "META-INF/mods.toml", forge, "forge", "[47.2,)", "Forge spells the requirement with `mandatory`"),
+            ("x.jar", "META-INF/neoforge.mods.toml", clash, "neoforge", "", "an incompatibility is not a requirement"),
+            ("sodium.jar", "fabric.mod.json", fabric, "fabric", ">=0.16.0", "Fabric puts the loader in `depends`"),
+            ("plain.jar", "fabric.mod.json", br#"{"id":"plain","depends":{"minecraft":"*"}}"#, "fabric", "", "no requirement on the loader"),
+        ];
+        for (name, entry, body, loader, want, why) in cases {
+            let jar = tmp(name);
+            make_jar(&jar, &[(entry, body)]);
+            let m = read_file_meta(&jar, "mod", name);
+            let got = m.relations.iter().find(|r| r.loader == loader).map(|r| r.loader_range.clone()).unwrap_or_default();
+            assert_eq!(got, want, "{name}: {why}");
         }
     }
 

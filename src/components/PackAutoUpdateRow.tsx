@@ -3,7 +3,7 @@ import { packAutoUpdate, setPackAutoUpdate } from '../ipc/commands'
 import type { PackAutoUpdate } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 
 export function packAutoUpdateNote(s: PackAutoUpdate): string | null {
   if (s.on && s.modified) return t('Твои изменения модов заменятся версией автора')
@@ -40,7 +40,7 @@ export function PackAutoUpdateRow({ profile }: { profile: string }) {
         if (my === seq.current) setState(s)
         showToast(next ? t('Сборка будет обновляться сама') : t('Сборка обновляется только по кнопке «Обновить»'))
       })
-      .catch((e) => showToast(t('Не удалось сохранить автообновление: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось сохранить автообновление: {error}', { error: tx(e) }), 'error'))
       .finally(() => setBusy(false))
   }
 

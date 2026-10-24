@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 import { PixelField } from '../components/lobby/PixelField'
 import { SKINS_IMPORT_EVENT, SKINS_UPLOAD_EVENT } from '../state/topbar'
 import { HEAD_FROM_CPU, getAccount, useAccounts } from '../state/accounts'
@@ -855,7 +855,7 @@ export function Skins({ on }: { on: boolean }) {
         const list = migrated || (await listTextures(kind))
         if (alive) apply(list)
       } catch (e) {
-        showToast(t('Не удалось прочитать свои текстуры: {error}', { error: String(e) }), 'error')
+        showToast(t('Не удалось прочитать свои текстуры: {error}', { error: tx(e) }), 'error')
       }
     }
     void load('skins', 'm-my-skins', setMySkins)
@@ -908,7 +908,7 @@ export function Skins({ on }: { on: boolean }) {
         if (w.active.skinUrl) setSkinSrc(w.active.skinUrl)
       }
       await syncLocalSkin(w.active.skinUrl, w.active.model === 'slim').catch((e) =>
-        showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: String(e) }), 'error'),
+        showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: tx(e) }), 'error'),
       )
       if (!wardrobeVariantRef.current) {
         wardrobeVariantRef.current = true
@@ -1356,7 +1356,7 @@ export function Skins({ on }: { on: boolean }) {
         sub: t('Уже в гардеробе'),
       })
     } catch (e) {
-      showToast(t('Не удалось забрать награду: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось забрать награду: {error}', { error: tx(e) }), 'error')
     } finally {
       setClaiming('')
     }
@@ -1778,7 +1778,7 @@ export function Skins({ on }: { on: boolean }) {
     ]).then(([millida, license]) => {
       if (millida.status === 'rejected')
         showToast(apiErrorText(millida.reason, t('Плащ не надет — попробуй ещё раз')), 'error')
-      if (license.status === 'rejected') showToast(t('Плащ лицензии не переключился: {error}', { error: String(license.reason) }), 'error')
+      if (license.status === 'rejected') showToast(t('Плащ лицензии не переключился: {error}', { error: tx(license.reason) }), 'error')
       if (license.status === 'fulfilled' && license.value) showToast(t('Плащ «{name}» надет на лицензию', { name: c.name }))
       else if (millida.status === 'fulfilled' && millida.value) showToast(t('Плащ «{name}» надет', { name: c.name }))
       else if (millida.status === 'fulfilled' && license.status === 'fulfilled') showToast(t('Плащ: {name}', { name: c.name }))
@@ -2255,7 +2255,7 @@ export function Skins({ on }: { on: boolean }) {
       })
       .catch((e) => {
         trackFailure('skins', e, { step: 'skin_pick' })
-        showToast(t('Не удалось загрузить: {error}', { error: String(e) }), 'error')
+        showToast(t('Не удалось загрузить: {error}', { error: tx(e) }), 'error')
       })
   }
   pickSkinRef.current = pickSkin
@@ -2294,7 +2294,7 @@ export function Skins({ on }: { on: boolean }) {
         setActiveWardrobe(null)
         setActiveMy(next[0]?.file ?? null)
       } catch (e) {
-        showToast(t('В каталог аккаунта не сохранилось: {error}', { error: String(e) }), 'error')
+        showToast(t('В каталог аккаунта не сохранилось: {error}', { error: tx(e) }), 'error')
       }
     }
     const title = name.replace(/\.png$/i, '')
@@ -2329,7 +2329,7 @@ export function Skins({ on }: { on: boolean }) {
       setImportUrl('')
       setImportOpen(false)
     } catch (e) {
-      showToast(t('Не удалось забрать скин: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось забрать скин: {error}', { error: tx(e) }), 'error')
     } finally {
       setImporting(false)
     }
@@ -2354,7 +2354,7 @@ export function Skins({ on }: { on: boolean }) {
       setImportUrl('')
       setImportOpen(false)
     } catch (e) {
-      showToast(t('Не удалось забрать скин игрока: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось забрать скин игрока: {error}', { error: tx(e) }), 'error')
     } finally {
       setImporting(false)
     }
@@ -2375,14 +2375,14 @@ export function Skins({ on }: { on: boolean }) {
         appliedRef.current = item.url
         if (!stale()) showToast(t('Скин «{name}» надет', { name: item.name }))
       } catch (e) {
-        if (!stale()) showToast(t('Не удалось надеть скин: {error}', { error: String(e) }), 'error')
+        if (!stale()) showToast(t('Не удалось надеть скин: {error}', { error: tx(e) }), 'error')
         return
       }
       if (stale()) return
       try {
         await syncLocalSkin(item.url, item.model === 'slim')
       } catch (e) {
-        showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: String(e) }), 'error')
+        showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: tx(e) }), 'error')
       }
     })
   }
@@ -2424,7 +2424,7 @@ export function Skins({ on }: { on: boolean }) {
       if (wasActive) void dropLocalSkin()
       void deleteTexture('skins', target.file)
         .then(setMySkins)
-        .catch((e) => showToast(t('Не удалось удалить: {error}', { error: String(e) }), 'error'))
+        .catch((e) => showToast(t('Не удалось удалить: {error}', { error: tx(e) }), 'error'))
     }, SKIN_UNDO_MS)
     showToast(t('Скин «{name}» удалён', { name: target.name }), undefined, undefined, {
       label: t('Отменить'),
@@ -2441,7 +2441,7 @@ export function Skins({ on }: { on: boolean }) {
     if (cape === 'my:' + i) chooseCape('none')
     void deleteTexture('capes', target.file)
       .then(setMyCapes)
-      .catch((e) => showToast(t('Не удалось удалить: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось удалить: {error}', { error: tx(e) }), 'error'))
   }
 
   const selectCatalog = (it: CatalogSkin) => {
@@ -2605,7 +2605,7 @@ export function Skins({ on }: { on: boolean }) {
       if (stale()) return
       if (hasTauri())
         await setLocalSkin(skin, capePng ?? '', slimArms).catch((e) => {
-          throw new Error(t('скин не сохранился на этом компьютере: {error}', { error: String(e) }))
+          throw new Error(t('скин не сохранился на этом компьютере: {error}', { error: tx(e) }))
         })
       const acc = getAccount()
       let licensed = false
@@ -2614,7 +2614,7 @@ export function Skins({ on }: { on: boolean }) {
         licensed = await applyLicensedCape()
       } catch (e) {
         trackFailure('skins', e, { step: 'license_cape' })
-        showToast(t('Плащ лицензии не переключился: {error}', { error: String(e) }), 'error')
+        showToast(t('Плащ лицензии не переключился: {error}', { error: tx(e) }), 'error')
       }
       // Скин на лицензию уходит независимо от аккаунта Millida: раньше он был
       // привязан к загрузке в каталог, и без входа в Millida на аккаунте
@@ -2628,7 +2628,7 @@ export function Skins({ on }: { on: boolean }) {
             licensed = true
           } catch (e) {
             trackFailure('skins', e, { step: 'license_skin' })
-            showToast(t('На лицензию скин не уехал: {error}', { error: String(e) }), 'error')
+            showToast(t('На лицензию скин не уехал: {error}', { error: tx(e) }), 'error')
           }
         }
       }
@@ -2906,7 +2906,7 @@ export function Skins({ on }: { on: boolean }) {
               target ? switchLicensedCape(target.accId, target.msId) : Promise.resolve(false),
             ])
             if (millida.status === 'rejected') throw millida.reason
-            if (license.status === 'rejected') showToast(t('Плащ лицензии не переключился: {error}', { error: String(license.reason) }), 'error')
+            if (license.status === 'rejected') showToast(t('Плащ лицензии не переключился: {error}', { error: tx(license.reason) }), 'error')
           }
         }
       }

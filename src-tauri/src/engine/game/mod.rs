@@ -40,6 +40,7 @@ mod lagwatch;
 mod livelog;
 
 pub(crate) use mcmeta::*;
+pub(crate) use crashcause::maven_range;
 pub use java::*;
 pub(crate) use mic_sign::grant_java_microphone;
 pub use install::*;

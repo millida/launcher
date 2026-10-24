@@ -230,12 +230,11 @@ fn make_runnable(_exe: &Path) -> Result<(), String> {
 
 fn spawn_failure_text(e: &std::io::Error, exe: &Path) -> String {
     let name = exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let hint = if e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5) | Some(225)) {
-        ". Запуск запретил антивирус — добавь папку лаунчера в его исключения и запусти ещё раз"
+    if e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5) | Some(225)) {
+        format!("Не удалось запустить игру «{}»: {}. Запуск запретил антивирус — добавь папку лаунчера в его исключения и запусти ещё раз", name, e)
     } else {
-        ""
-    };
-    format!("Не удалось запустить игру «{}»: {}{}", name, e, hint)
+        format!("Не удалось запустить игру «{}»: {}", name, e)
+    }
 }
 
 /// Starts a native catalogue game. None of the Minecraft preparation applies:
@@ -347,7 +346,9 @@ pub(crate) async fn launch_native(
         };
         // Repairs, Java and mod fixes rebuild a Minecraft profile; on a native
         // game they would only break the folder.
-        let mut diag = diagnose(&pname, &reason, &crash_tail(&log_text), &log_text).classified("native", String::new());
+        let mut diag = diagnose(&pname, &reason, &crash_tail(&log_text), &log_text)
+            .classified("native", String::new())
+            .with_exit(status.as_ref().map(super::earlyexit::exit_of).unwrap_or_default());
         diag.actions.retain(|a| NATIVE_CRASH_ACTIONS.contains(&a.kind.as_str()));
         let _ = app2.emit("game-crash", diag);
         if !review_ok {

@@ -6,6 +6,7 @@
 import { tauri, hasTauri } from '../ipc/tauri'
 import type { DiaryChange, MilliAction, MilliStep } from './milliActions'
 import { formatFixed, t } from '../i18n'
+import { buildRamGb } from './ramPref'
 
 // ─── IPC ─────────────────────────────────────────────────────────────────
 
@@ -291,10 +292,7 @@ export async function gatherFacts(profile: string | null): Promise<MilliLocalFac
     local ? activeShader(profile) : Promise.resolve(''),
     local ? worldBackups(profile).catch(() => [] as WorldBackup[]) : Promise.resolve([] as WorldBackup[]),
   ])
-  let ramGb = 0
-  try {
-    ramGb = parseInt(localStorage.getItem('m-ram-' + profile) || '0', 10) || 0
-  } catch {}
+  const ramGb = await buildRamGb(profile).catch(() => 0)
   const facts: MilliLocalFacts = {
     profile,
     mc: p.version,

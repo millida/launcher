@@ -7,7 +7,7 @@ import { showToast } from '../state/ui'
 import { track } from '../lib/telemetry'
 import { Icon } from './Icon'
 import { apiErrorText } from '../lib/apiError'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 const HEALTHY = new Set(['ok', 'never_launched', 'vanilla'])
 
@@ -117,7 +117,7 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
                 background: report.verdict === 'ok' ? 'var(--m-inset)' : 'var(--m-danger-soft, var(--m-inset))',
               }}
             >
-              {report.text}
+              {tx(report.text)}
             </div>
             <div style={{ marginTop: '14px', display: 'grid', gap: '8px' }}>
               {report.builds.map((b) => (
@@ -127,12 +127,12 @@ export function SkinDiag({ nick, online, onClose }: { nick: string; online: bool
                     {b.mc} · {b.loader}
                   </span>
                   <div style={{ color: HEALTHY.has(b.state) ? 'var(--m-fg-muted)' : 'var(--m-danger, #e5484d)' }}>
-                    {b.text}
+                    {tx(b.text)}
                     {b.conflict ? ' (' + b.conflict + ')' : ''}
                   </div>
                   {b.problems.map((p) => (
                     <div key={p} style={{ color: 'var(--m-fg-faint)', fontFamily: 'monospace', fontSize: '11.5px' }}>
-                      {p}
+                      {tx(p)}
                     </div>
                   ))}
                 </div>

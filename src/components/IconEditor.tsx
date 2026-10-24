@@ -10,7 +10,7 @@ import {
   swatchBackground,
 } from '../lib/iconArt'
 import type { IconRecipe } from '../lib/iconArt'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 export function IconEditor({
   title,
@@ -43,7 +43,7 @@ export function IconEditor({
       .catch((e) => {
         if (!alive) return
         setPreview(null)
-        setError(t('Не удалось собрать иконку: {error}. Выбери другой символ', { error: String(e) }))
+        setError(t('Не удалось собрать иконку: {error}. Выбери другой символ', { error: tx(e) }))
       })
     return () => {
       alive = false
@@ -73,7 +73,7 @@ export function IconEditor({
       .then((icon) => onSave(icon, recipe))
       .catch((e) => {
         setSaving(false)
-        setError(t('Не удалось собрать иконку: {error}. Выбери другой символ', { error: String(e) }))
+        setError(t('Не удалось собрать иконку: {error}. Выбери другой символ', { error: tx(e) }))
       })
   }
 

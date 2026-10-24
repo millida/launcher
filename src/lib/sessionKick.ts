@@ -6,7 +6,7 @@ import { getAccount } from '../state/accounts'
 import { refreshMsAccounts, ensureMsAuth, startMsLogin } from '../state/msLogin'
 import { showToast } from '../state/ui'
 import { joinWithAuth, showLaunchError } from './launch'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 const EXIT_WAIT_MS = 30_000
 
@@ -67,7 +67,7 @@ async function offer(server: string) {
     })
     if (choice === 'yes') await renewAndRejoin(server, profile)
   } catch (e) {
-    showToast(t('Не удалось обновить вход: {error}', { error: String(e) }), 'error')
+    showToast(t('Не удалось обновить вход: {error}', { error: tx(e) }), 'error')
   } finally {
     asking = false
   }

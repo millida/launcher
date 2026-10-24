@@ -8,7 +8,7 @@ import { pickCoverImage } from '../../ipc/commands'
 import { showToast } from '../../state/ui'
 import { backdropClose } from '../../lib/dismiss'
 import '../../styles/pixel/buildicon.css'
-import { useT } from '../../i18n'
+import { tx, useT } from '../../i18n'
 
 /**
  * Квадратная иконка сборки как у проекта в Modrinth: квадрат 72 px глубокого
@@ -84,7 +84,7 @@ export function IconPicker({
     if (hasTauri()) {
       pickCoverImage()
         .then((data) => data && onPick(data))
-        .catch((e) => showToast(t('Картинка не подошла: {error}', { error: String(e) }), 'error'))
+        .catch((e) => showToast(t('Картинка не подошла: {error}', { error: tx(e) }), 'error'))
       return
     }
     file.current?.click()

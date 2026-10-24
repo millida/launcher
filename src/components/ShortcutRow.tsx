@@ -6,7 +6,7 @@ import type { ContextItem } from './ContextMenu'
 import { createBuildShortcut, listServers, listWorlds } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 const MAX_TARGETS = 8
 
@@ -21,7 +21,7 @@ export function ShortcutRow({ profile }: { profile: string }) {
     setBusy(true)
     createBuildShortcut(profile, world, server)
       .then(() => showToast(t('Ярлык на рабочем столе'), 'ok'))
-      .catch((e) => showToast(t('Не удалось создать ярлык: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось создать ярлык: {error}', { error: tx(e) }), 'error'))
       .finally(() => setBusy(false))
   }
 

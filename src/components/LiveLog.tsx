@@ -11,7 +11,7 @@ import { readPref, writePref } from '../lib/prefs'
 import { lastCrash, markFixApplied } from '../lib/repair'
 import { useCrash } from '../state/crash'
 import { showToast } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 const PREF = 'm-live-log'
 const REDRAW_MS = 150
@@ -125,11 +125,11 @@ export function LiveLog() {
               })
             : t('Игра ещё ничего не написала')}
         </pre>
-        {crash ? <p className="crash-reason" style={{ marginTop: '12px' }}>{crash.reason}</p> : null}
+        {crash ? <p className="crash-reason" style={{ marginTop: '12px' }}>{tx(crash.reason)}</p> : null}
         <div className="crash-acts">
           {fix ? (
             <button className="btn lg primary" data-track="live_log_fix" disabled={fixing} onClick={repair}>
-              <Icon id="i-restart" /> {fixing ? t('Чиним…') : fix.label}
+              <Icon id="i-restart" /> {fixing ? t('Чиним…') : tx(fix.label)}
             </button>
           ) : null}
           <div className="crash-acts-min">

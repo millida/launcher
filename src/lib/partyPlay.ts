@@ -31,7 +31,7 @@ import {
   usePartyStore,
   type PackConfirmAnswer,
 } from '../state/party'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 const PACKS_KEY = 'm-party-packs'
 
@@ -126,7 +126,7 @@ function installCatalog(slug: string, title: string): Promise<boolean> {
         if (String(e).startsWith(PACK_ACCESS_PREFIX)) {
           const hit = useLobby.getState().premium.find((p) => p.slug === slug || p.id === slug)
           openPremiumPack(hit ? hit.id : slug)
-        } else showToast(t('Сборка не установилась: {error}', { error: String(e) }), 'error')
+        } else showToast(t('Сборка не установилась: {error}', { error: tx(e) }), 'error')
         resolve(false)
       },
       onCancel: () => resolve(false),
@@ -170,7 +170,7 @@ export async function prepareTarget(target: PartyTarget): Promise<boolean> {
     await useProfiles.getState().refresh()
     return true
   } catch (e) {
-    showToast(t('Сборка не установилась: {error}', { error: String(e) }), 'error')
+    showToast(t('Сборка не установилась: {error}', { error: tx(e) }), 'error')
     return false
   }
 }
@@ -326,7 +326,7 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
   let current = party
   if (!current.target || !(await targetMatchesMode(current.target, mode))) {
     const target = await targetForMode(mode).catch((e) => {
-      showToast(t('Не удалось подготовить выбор для пати: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось подготовить выбор для пати: {error}', { error: tx(e) }), 'error')
       return null
     })
     if (!target) return
