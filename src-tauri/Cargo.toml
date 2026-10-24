@@ -1,6 +1,6 @@
 [package]
 name = "millida-launcher"
-version = "2.0.262"
+version = "2.0.263"
 description = "Millida Launcher — безопасный лаунчер Minecraft"
 authors = ["Millida"]
 edition = "2021"
