@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
+import { PxFlag } from './PxFlag'
 import { AVAILABLE_LOCALES, localeInfo, setLocale, useLocale, useT, type Locale } from '../i18n'
 
 const GAP = 6
@@ -194,7 +195,7 @@ export function LangPicker({ className = '', variant = 'corner' }: { className?:
                       onClick={() => pick(l.code)}
                       onFocus={() => setActive(index)}
                     >
-                      <img src={'/flags/' + l.flag + '.svg'} alt="" width={22} height={22} className="lang-pop-flag" draggable={false} />
+                      <PxFlag country={l.flag} className="lang-pop-flag" />
                       <span className="lang-pop-native" lang={l.code} dir={l.rtl ? 'rtl' : 'ltr'}>
                         {l.native}
                       </span>
