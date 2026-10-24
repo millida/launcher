@@ -61,6 +61,8 @@ const TARGETS: Target[] = [
     register: 'friendly informal "ty" (lowercase) as games address players; impersonal forms on buttons and labels',
     terms: ['rank: ranga', 'chest: skrzynia', 'modpack: modpack', 'offline account: konto offline', 'Survival: Przetrwanie', 'Creative: Kreatywny', 'skin: skin', 'cape: peleryna', 'launcher: launcher', 'balance: saldo'],
   },
+  { code: 'uk', name: 'Ukrainian', register: 'friendly informal "ти" as games address players; impersonal forms on buttons and labels' },
+  { code: 'sr', name: 'Serbian (Latin script)', register: 'friendly informal "ti"; Latin script only, never Cyrillic' },
 ]
 
 const PLACEHOLDER = /\{\w+\}/g

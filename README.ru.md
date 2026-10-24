@@ -126,7 +126,7 @@ Windows — «Параметры» → «Приложения»; macOS — в к
 
 ## Разработчикам
 
-Rust-ядро (Tauri 2) и интерфейс на React, лицензия [GPL-3.0-only](LICENSE).
+Rust-ядро (Tauri 2) и интерфейс на React, лицензия [GPL-3.0-only](LICENSE). Флаги в выборе языка — [Twemoji](https://github.com/jdecked/twemoji), CC-BY 4.0.
 
 [Как собрать самому](BUILDING.ru.md) · [Устройство](ARCHITECTURE.ru.md) · [Как прислать правку](CONTRIBUTING.ru.md) · [Уязвимости](SECURITY.ru.md) · [Название и логотип](TRADEMARK.ru.md)
 

@@ -7,13 +7,17 @@ const GAP = 6
 const EDGE = 8
 const TYPEAHEAD_RESET_MS = 700
 
+function gridColumns(grid: HTMLElement): number {
+  return Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length)
+}
+
 /// The sign-in form is cut by a pixel clip-path, so the list lives in a portal on body.
 export function LangPicker({ className = '', variant = 'corner' }: { className?: string; variant?: 'corner' | 'field' }) {
   const t = useT()
   const locale = useLocale()
   const button = useRef<HTMLButtonElement>(null)
   const pop = useRef<HTMLDivElement>(null)
-  const list = useRef<HTMLUListElement>(null)
+  const grid = useRef<HTMLUListElement>(null)
   const typed = useRef({ text: '', at: 0 })
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
@@ -31,7 +35,7 @@ export function LangPicker({ className = '', variant = 'corner' }: { className?:
     const count = AVAILABLE_LOCALES.length
     const next = ((index % count) + count) % count
     setActive(next)
-    list.current?.querySelectorAll<HTMLElement>('[role="option"]')[next]?.focus()
+    grid.current?.querySelectorAll<HTMLElement>('[role="option"]')[next]?.focus()
   }, [])
 
   useLayoutEffect(() => {
@@ -43,8 +47,10 @@ export function LangPicker({ className = '', variant = 'corner' }: { className?:
       const below = window.innerHeight - anchor.bottom - GAP - EDGE
       const up = below < box.height && anchor.top - GAP - EDGE > below
       const top = up ? anchor.top - GAP - box.height : anchor.bottom + GAP
+      const rtl = getComputedStyle(button.current ?? document.documentElement).direction === 'rtl'
+      const start = rtl ? anchor.left : anchor.right - box.width
       setPos({
-        left: Math.max(EDGE, Math.min(anchor.right - box.width, window.innerWidth - box.width - EDGE)),
+        left: Math.max(EDGE, Math.min(start, window.innerWidth - box.width - EDGE)),
         top: Math.max(EDGE, Math.min(top, window.innerHeight - box.height - EDGE)),
       })
     }
@@ -77,15 +83,27 @@ export function LangPicker({ className = '', variant = 'corner' }: { className?:
     if (code !== locale) void setLocale(code)
   }
 
-  const onListKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+  const onGridKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    const el = grid.current
+    const columns = el ? gridColumns(el) : 1
+    const ahead = el && getComputedStyle(el).direction === 'rtl' ? -1 : 1
+    const count = AVAILABLE_LOCALES.length
     switch (e.key) {
+      case 'ArrowRight':
+        e.preventDefault()
+        focusAt(active + ahead)
+        return
+      case 'ArrowLeft':
+        e.preventDefault()
+        focusAt(active - ahead)
+        return
       case 'ArrowDown':
         e.preventDefault()
-        focusAt(active + 1)
+        if (active + columns < count) focusAt(active + columns)
         return
       case 'ArrowUp':
         e.preventDefault()
-        focusAt(active - 1)
+        if (active - columns >= 0) focusAt(active - columns)
         return
       case 'Home':
       case 'PageUp':
@@ -162,7 +180,7 @@ export function LangPicker({ className = '', variant = 'corner' }: { className?:
               <div id={headingId} className="lang-pop-cap">
                 {t('Язык интерфейса')}
               </div>
-              <ul ref={list} role="listbox" aria-labelledby={headingId} className="lang-pop-list" onKeyDown={onListKey}>
+              <ul ref={grid} role="listbox" aria-labelledby={headingId} className="lang-pop-grid" onKeyDown={onGridKey}>
                 {AVAILABLE_LOCALES.map((l, index) => {
                   const selected = l.code === locale
                   return (
@@ -171,17 +189,15 @@ export function LangPicker({ className = '', variant = 'corner' }: { className?:
                       role="option"
                       aria-selected={selected}
                       tabIndex={index === active ? 0 : -1}
-                      className="lang-pop-opt"
+                      className="lang-pop-tile"
+                      title={l.english !== l.native ? l.english : undefined}
                       onClick={() => pick(l.code)}
                       onFocus={() => setActive(index)}
                     >
-                      <span className="lang-pop-names">
-                        <span className="lang-pop-native" lang={l.code} dir={l.rtl ? 'rtl' : 'ltr'}>
-                          {l.native}
-                        </span>
-                        {l.english !== l.native ? <span className="lang-pop-english">{l.english}</span> : null}
+                      <img src={'/flags/' + l.flag + '.svg'} alt="" width={22} height={22} className="lang-pop-flag" draggable={false} />
+                      <span className="lang-pop-native" lang={l.code} dir={l.rtl ? 'rtl' : 'ltr'}>
+                        {l.native}
                       </span>
-                      <Icon id="i-check" className="icon lang-pop-check" />
                     </li>
                   )
                 })}
