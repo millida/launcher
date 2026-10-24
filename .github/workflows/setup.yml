@@ -100,7 +100,7 @@ jobs:
         shell: pwsh
         env:
           SETUP: ${{ secrets.WINDOWS_SIGN_SETUP }}
-        run: if ($env:SETUP) { Invoke-Expression $env:SETUP } else { echo "No signing in CI: the certificate owner will sign it" }
+        run: if ($env:SETUP) { Invoke-Expression $env:SETUP } else { echo "No signing in CI - the certificate owner will sign it" }
 
       - name: Sign
         shell: pwsh
@@ -162,10 +162,46 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  linux-arm64:
+    name: Linux arm64 stub
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04-arm
+    container: ubuntu:22.04
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates curl git build-essential pkg-config
+
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Build
+        working-directory: installer
+        env:
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=/build
+        run: |
+          cargo test --locked
+          cargo build --release --locked --target aarch64-unknown-linux-gnu
+
+      - name: Lay out
+        run: |
+          mkdir -p out
+          cp installer/target/aarch64-unknown-linux-gnu/release/MillidaLauncherSetup out/millida-launcher-setup-linux-aarch64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: setup-linux-arm64
+          path: out/*
+          if-no-files-found: error
+
   release:
     name: GitHub release
     if: github.event_name == 'push'
-    needs: [windows, sign, linux]
+    needs: [windows, sign, linux, linux-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -190,6 +226,7 @@ jobs:
           subject-path: |
             assets/MillidaLauncherSetup*.exe
             assets/millida-launcher-setup-linux-x86_64
+            assets/millida-launcher-setup-linux-aarch64
             assets/install.sh
 
       # Never "Latest": that badge belongs to the launcher releases.

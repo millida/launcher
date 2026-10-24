@@ -39,6 +39,10 @@ jobs:
     name: ${{ matrix.label }}
     if: github.repository == 'millida/launcher'
     runs-on: ${{ matrix.os }}
+    # An optional target that fails leaves its players on the previous version
+    # instead of holding back everyone else; the release job checks that every
+    # required target uploaded its bundles.
+    continue-on-error: ${{ matrix.optional == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +67,18 @@ jobs:
             updater_dir: appimage
             updater_pattern: "*.AppImage"
             updater_extra: "deb:*.deb:linux-x86_64-deb rpm:*.rpm:linux-x86_64-rpm"
+          - label: Linux arm64
+            platform: linux
+            # Native arm64 runner, free for public repositories; the same old
+            # base image as x64 for the same glibc reason.
+            os: ubuntu-24.04-arm
+            container: ubuntu:22.04
+            target: aarch64-unknown-linux-gnu
+            updater_key: linux-aarch64
+            updater_dir: appimage
+            updater_pattern: "*.AppImage"
+            updater_extra: "deb:*.deb:linux-aarch64-deb rpm:*.rpm:linux-aarch64-rpm"
+            optional: true
     container: ${{ matrix.container }}
     env:
       SIGNING_POLICY: ${{ inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY }}
@@ -276,7 +292,7 @@ jobs:
       # curve25519.c has no runtime dispatch, so BMI2 or AVX2 in its object file
       # means the build drifted past baseline x86-64.
       - name: Verify baseline instruction set
-        if: matrix.platform == 'linux'
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           set -eu
@@ -398,7 +414,10 @@ jobs:
   release:
     name: GitHub release
     needs: [build, macos]
-    if: github.event_name == 'push'
+    # Not a plain success check: an optional matrix leg may fail. Required
+    # targets are enforced by release-assets.mjs, and a leg uploads its bundles
+    # only as its last step, so a missing bundle means a failed build.
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.macos.result == 'success' && needs.build.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
