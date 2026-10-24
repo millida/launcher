@@ -406,6 +406,9 @@
 }
 /* Заливка — плотный акцент, без градиента. */
 :root:root .m-slider-fill { background: var(--m-accent); }
+/* Дорожка видна на тёмной подложке: светлее фона, чтобы был виден весь диапазон. */
+:root:root .m-slider-track { height: 8px; background: color-mix(in srgb, var(--m-fg) 22%, transparent); }
+.set-range { font: 700 12px/1 var(--m-font); color: var(--m-fg-3, var(--m-fg)); opacity: 0.7; white-space: nowrap; }
 :root:root .m-slider-thumb { border-radius: 0; --px-n: 4px; clip-path: var(--px-4); border: 0; --px-ol: var(--m-accent); --px-ol-w: 2px; }
 
 /* ============ Подложки ============ */

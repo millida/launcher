@@ -38,6 +38,7 @@ import { initRenderGate } from './lib/renderGate'
 import { initJankWatch } from './lib/jank'
 import { webviewFailure } from './lib/webviewHealth'
 import { installAspectRatioFallback } from './lib/aspectRatioFallback'
+import { installBrokenImageGuard } from './lib/brokenImages'
 
 if (!import.meta.env.DEV) {
   document.addEventListener('contextmenu', (e) => {
@@ -78,5 +79,6 @@ if (isOverlay) {
 }
 
 installAspectRatioFallback()
+installBrokenImageGuard()
 
 createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

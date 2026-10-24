@@ -19,6 +19,7 @@ export type Locale =
   | 'pl'
   | 'uk'
   | 'sr'
+  | 'sk'
 
 export type Market = 'RU' | 'INTL'
 
@@ -61,6 +62,7 @@ export const LOCALES: readonly LocaleInfo[] = [
   { code: 'pl', native: 'Polski', english: 'Polish', intl: 'pl-PL', flag: 'pl', rtl: false },
   { code: 'uk', native: 'Українська', english: 'Ukrainian', intl: 'uk-UA', flag: 'ua', rtl: false },
   { code: 'sr', native: 'Srpski', english: 'Serbian', intl: 'sr-Latn-RS', flag: 'rs', rtl: false },
+  { code: 'sk', native: 'Slovenčina', english: 'Slovak', intl: 'sk-SK', flag: 'sk', rtl: false },
 ]
 
 export const SOURCE_LOCALE: Locale = 'ru'
@@ -79,7 +81,7 @@ export const isLocale = (v: unknown): v is Locale => typeof v === 'string' && CO
 /// The translated tables wait for review behind this single switch.
 export const EXTRA_LOCALES_PUBLIC = true
 
-export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl', 'zh', 'hi', 'ar', 'fr', 'bn', 'id', 'ur', 'ja', 'vi', 'te', 'ko', 'uk', 'sr']
+export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl', 'zh', 'hi', 'ar', 'fr', 'bn', 'id', 'ur', 'ja', 'vi', 'te', 'ko', 'uk', 'sr', 'sk']
 
 const AVAILABLE = new Set<Locale>(['ru', 'en', ...(EXTRA_LOCALES_PUBLIC ? EXTRA_LOCALES : [])])
 

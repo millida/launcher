@@ -6161,5 +6161,17 @@
   "папку агента создал другой пользователь Windows": "folder agen dibuat oleh pengguna Windows lain",
   "запасная папка есть только в Windows": "folder cadangan hanya ada di Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Skinmu tidak akan terlihat di game ini: modpack vanilla hanya mengambil skin dari akun. Masuk dengan akun Millida atau lisensi — atau main di modpack yang memakai mod.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» membutuhkan loader {1} {2}, modpack memakai {3}. Perbarui loader di pengaturan modpack atau pasang versi mod yang lain"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» membutuhkan loader {1} {2}, modpack memakai {3}. Perbarui loader di pengaturan modpack atau pasang versi mod yang lain",
+  "Каталог сборок не ответил": "Katalog modpack tidak merespons",
+  "Поиск: Arcania, Create, Cobblemon…": "Cari: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "Server dibuat, tetapi modpack “{name}” gagal dipasang: {error}. Pasang dari panel server",
+  "Со сборкой «{name}»": "Dengan modpack “{name}”",
+  "каталог не ответил": "katalog tidak merespons",
+  "Серверу от {n} ГБ": "Server mulai {n} GB",
+  "Код выдаёт автор сборки после покупки": "Kode diberikan oleh pembuat modpack setelah pembelian",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Pilih build-mu di «Hari ini main» dan kami perbaiki",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Tidak ada koneksi. Gambar dan data baru muncul saat koneksi kembali",
+  "Память (RAM)": "Memori (RAM)",
+  "Помощь": "Bantuan",
+  "У каждой сборки своя": "Diatur per build"
 }

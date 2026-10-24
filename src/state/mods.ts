@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls, millidaPacks, packReviewQueue } from '../ipc/commands'
 import type { MillidaPack } from '../ipc/commands'
-import { fmt } from '../lib/format'
+import { clipWords, fmt } from '../lib/format'
 import { MODRINTH_API, mirrorAsset } from '../lib/api'
 import { cachedCatalog } from '../lib/catalogCache'
 import { mergeSources } from '../lib/modMerge'
@@ -81,7 +81,7 @@ function packToHit(p: MillidaPack): ModHit {
     // это присвоение: сборки собирали не мы, и в каталоге они лежат по
     // договорённости, а не потому что стали нашими.
     author: p.author || '',
-    desc: (p.summary || '').slice(0, 120),
+    desc: clipWords(p.summary || '', 120),
     dl: p.downloads,
     icon: p.cover || undefined,
     cats: [p.game, p.loader].filter(Boolean).slice(0, 2),
@@ -252,7 +252,7 @@ function cfToHit(h: {
   return {
     title: h.name,
     author: 'CurseForge',
-    desc: (h.summary || '').slice(0, 120),
+    desc: clipWords(h.summary || '', 120),
     dl: h.downloads,
     icon: mirrorAsset(h.logo),
     cats: [],
@@ -315,7 +315,7 @@ export function mrToHit(h: any): ModHit {
   return {
     title: h.title,
     author: h.author,
-    desc: h.description.slice(0, 120),
+    desc: clipWords(h.description, 120),
     dl: h.downloads,
     icon: mirrorAsset(h.icon_url),
     cats: (h.display_categories || h.categories || []).slice(0, 2),

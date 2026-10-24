@@ -252,7 +252,11 @@ export async function loadFeedPage(
   const q = new URLSearchParams({ limit: '30', offset: String(offset), sort })
   if (category) q.set('category', category)
   if (search) q.set('search', searchTerm(search))
-  const r = await api<{ servers?: RatingServer[]; total?: number }>('/rating/servers?' + q.toString())
+  // Зависший запрос не должен держать серые плитки вечно: через 15 с — «Повторить».
+  const r = await Promise.race([
+    api<{ servers?: RatingServer[]; total?: number }>('/rating/servers?' + q.toString()),
+    new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), 15000)),
+  ])
   const raw = Array.isArray(r.servers) ? r.servers : []
   return {
     servers: raw.map((s, i) => toCard(s, offset + i + 1)),

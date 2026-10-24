@@ -6157,5 +6157,20 @@
   "папку агента создал другой пользователь Windows": "thư mục agent do người dùng Windows khác tạo",
   "запасная папка есть только в Windows": "thư mục dự phòng chỉ có trên Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Skin sẽ không hiển thị trong game này: gói mod vanilla chỉ lấy skin từ tài khoản. Hãy đăng nhập bằng tài khoản Millida hoặc tài khoản có bản quyền — hoặc chơi gói mod có mod.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» cần trình tải {1} {2}, modpack đang có {3}. Hãy cập nhật trình tải trong cài đặt modpack hoặc cài phiên bản mod khác"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» cần trình tải {1} {2}, modpack đang có {3}. Hãy cập nhật trình tải trong cài đặt modpack hoặc cài phiên bản mod khác",
+  "Каталог сборок не ответил": "Danh mục modpack không phản hồi",
+  "Поиск: Arcania, Create, Cobblemon…": "Tìm: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "Đã tạo máy chủ nhưng modpack “{name}” cài không được: {error}. Hãy cài từ bảng điều khiển máy chủ",
+  "Со сборкой «{name}»": "Với modpack “{name}”",
+  "каталог не ответил": "danh mục không phản hồi",
+  "Серверу от {n} ГБ": "Máy chủ từ {n} GB",
+  "Код выдаёт автор сборки после покупки": "Mã do tác giả bản dựng cấp sau khi mua",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Chọn bản dựng của bạn trong «Hôm nay chơi» và chúng tôi sẽ sửa",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Không có kết nối. Hình ảnh và dữ liệu mới sẽ hiện khi có mạng lại",
+  "Память (RAM)": "Bộ nhớ (RAM)",
+  "Помощь": "Trợ giúp",
+  "У каждой сборки своя": "Riêng cho từng bản dựng",
+  "доступность размер текста шрифт масштаб контраст зрение": "trợ năng cỡ chữ phông chữ tỉ lệ tương phản thị lực",
+  "контраст зрение яркий текст доступность": "tương phản thị lực chữ sáng trợ năng",
+  "размер текста шрифт крупнее масштаб зрение доступность": "cỡ chữ phông chữ lớn hơn tỉ lệ thị lực trợ năng"
 }

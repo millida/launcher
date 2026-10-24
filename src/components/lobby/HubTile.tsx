@@ -115,7 +115,12 @@ export function HubTile({ kind, className, daily }: { kind: HubTileKind; classNa
         : gift
           ? t('Есть новое')
           : null
-      : null
+      : kind === 'server'
+        ? // Плитка называет хостинг: слова «сервер» в лобби не было нигде (QA 24.10.2026).
+          servers
+          ? t('Мои серверы')
+          : t('Свой сервер')
+        : null
   const ribbon = pvp ? t('Новое') : daily || skin || shop ? null : servers ? null : t('Бесплатно')
   return (
     <button

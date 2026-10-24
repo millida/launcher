@@ -74,7 +74,9 @@
   font-size: 11px; font-weight: 900; letter-spacing: 0.01em; white-space: nowrap; pointer-events: none;
   background: var(--rar); color: #0b0d0c; --px-n: 4px; clip-path: var(--px-4);
 }
-.rar-chip[data-rar='EPIC'], .rar-chip[data-rar='MYTHIC'], .rar-chip[data-rar='RELIC'] { color: #fff; }
+.rar-chip[data-rar='EPIC'], .rar-chip[data-rar='MYTHIC'] { color: #fff; }
+/* Невозможная: жемчужный цвет — светлый, поэтому плашка тёмная, как у .rar-plate (белое на светло-сером не читалось). */
+.rar-chip[data-rar='RELIC'] { background: #060608; color: var(--rar); }
 .ch-tile-art { position: relative; }
 .mc-art { display: grid; place-items: center; }
 

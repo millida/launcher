@@ -122,14 +122,17 @@
 .mlf:hover { transform: translateY(-2px); }
 .mlf:active { transform: translateY(2px); }
 .mlf .milli { width: 60px; height: 60px; margin: -6px 0 -8px; }
+.msf-wrap { position: absolute; z-index: 60; right: 22px; bottom: 22px; }
 .msf {
-  position: absolute; z-index: 60; right: 22px; bottom: 22px;
-  width: 52px; height: 52px; display: grid; place-items: center; cursor: pointer;
+  position: relative; height: 44px; padding: 0 16px 4px 12px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font: 900 14px/1 var(--m-font);
   color: var(--px-on-accent); background-color: var(--m-accent);
   --px-n: 5px; clip-path: var(--px-5);
   --px-ol: var(--px-btn-ol); --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
   transition: transform 120ms var(--m-ease-smooth), background-color var(--m-t-fast);
 }
+/* Меню «Помощь» открывается вверх: .ml-menu ниже по файлу ставит top — перебиваем вложенностью (живой тест 24.10). */
+.msf-wrap .msf-menu { top: auto; bottom: calc(100% + 8px); transform-origin: 100% 100%; }
 .msf:hover { transform: translateY(-2px); }
 .msf:active { transform: translateY(2px); }
 

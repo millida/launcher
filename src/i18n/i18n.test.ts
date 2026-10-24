@@ -38,6 +38,9 @@ describe('system language', () => {
     { tags: ['sr-RS'], want: 'sr', why: 'Serbian has its own table' },
     { tags: ['sr-Latn-RS'], want: 'sr', why: 'a Latin-script Serbian system gets the Serbian table' },
     { tags: ['sr-Cyrl-RS'], want: 'sr', why: 'a Cyrillic-script Serbian system reads the Latin table better than English' },
+    { tags: ['sk-SK'], want: 'sk', why: 'Slovak has its own table' },
+    { tags: ['sk'], want: 'sk', why: 'a bare Slovak tag gets the Slovak table' },
+    { tags: ['cs-CZ'], want: 'en', why: 'Czech is not mapped to Slovak, that is a separate language decision' },
     { tags: ['hr-HR'], want: 'en', why: 'Croatian is not mapped to Serbian, that is a separate language decision' },
     { tags: ['be-BY'], want: 'ru', why: 'Belarusian readers get Russian' },
     { tags: ['kk-KZ'], want: 'ru', why: 'Kazakh readers get Russian' },
@@ -54,16 +57,16 @@ describe('system language', () => {
     })
 })
 
-test('the launcher knows exactly the 20 agreed languages in picker order, right-to-left only for Arabic and Urdu', () => {
+test('the launcher knows exactly the 21 agreed languages in picker order, right-to-left only for Arabic and Urdu', () => {
   expect(LOCALES.map((l) => l.code), 'the language list and its order in the picker are a product decision; change them on purpose, not by accident').toEqual([
-    'ru', 'en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl', 'uk', 'sr',
+    'ru', 'en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl', 'uk', 'sr', 'sk',
   ])
   expect(LOCALES.filter((l) => l.rtl).map((l) => l.code), 'only these scripts are written right to left').toEqual(['ar', 'ur'])
 })
 
 test('translated languages stay out of the pickers until the switch is turned on', () => {
   const want: Locale[] = EXTRA_LOCALES_PUBLIC
-    ? ['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl', 'uk', 'sr']
+    ? ['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl', 'uk', 'sr', 'sk']
     : ['en', 'ru']
   expect(AVAILABLE_LOCALES.map((l) => l.code).sort(), 'offering a language is the owner decision behind EXTRA_LOCALES_PUBLIC').toEqual(want.sort())
 })

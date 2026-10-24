@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "folder agenta je napravio drugi Windows korisnik",
   "запасная папка есть только в Windows": "rezervni folder postoji samo na Windowsu",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Skin se u ovoj igri neće videti: vanila modpak ga uzima samo sa naloga. Prijavi se Millida nalogom ili licencom — ili igraj na modpaku sa modovima.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "„{0}“ zahteva loader {1} {2} — u modpaku je {3}. Ažuriraj loader u podešavanjima modpaka ili instaliraj drugu verziju moda"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "„{0}“ zahteva loader {1} {2} — u modpaku je {3}. Ažuriraj loader u podešavanjima modpaka ili instaliraj drugu verziju moda",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Izaberi svoj build u „Danas igramo“ i popravljamo ga",
+  "каталог не ответил": "katalog nije odgovorio",
+  "Каталог сборок не ответил": "Katalog modpackova nije odgovorio",
+  "Код выдаёт автор сборки после покупки": "Autor modpacka ti daje kod nakon kupovine",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Nema veze. Slike i sveži podaci pojaviće se kada se veza vrati",
+  "Память (RAM)": "Memorija (RAM)",
+  "Поиск: Arcania, Create, Cobblemon…": "Pretraga: Arcania, Create, Cobblemon…",
+  "Помощь": "Pomoć",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "Server je napravljen, ali modpack „{name}“ nije instaliran: {error}. Instaliraj ga iz server panela",
+  "Серверу от {n} ГБ": "Server od {n} GB",
+  "Со сборкой «{name}»": "Sa modpackom „{name}“",
+  "У каждой сборки своя": "Podešava se po buildu"
 }

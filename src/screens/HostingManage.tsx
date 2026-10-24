@@ -576,7 +576,7 @@ export function HostingManage({
   const MAIN_TABS: [string, string, string][] = [
     ['overview', 'i-play', t('Обзор')],
     ['console', 'i-list', t('Консоль')],
-    ['content', 'i-blocks', t('Моды')],
+    ['content', 'i-blocks', /^(paper|spigot|bukkit|purpur|folia|pufferfish|leaf|velocity|bungee|waterfall)/i.test((detail || server).core || '') ? t('Плагины') : t('Моды')],
     ['players', 'i-users', t('Игроки')],
     ['world', 'i-map', t('Мир')],
   ]

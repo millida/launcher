@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "la carpeta del agente la creó otro usuario de Windows",
   "запасная папка есть только в Windows": "la carpeta de respaldo solo existe en Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Tu skin no se verá en este juego: un modpack vanilla la toma solo de la cuenta. Inicia sesión con una cuenta de Millida o con una licencia — o juega en un modpack con mods.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» necesita el cargador {1} {2}; el modpack tiene {3}. Actualiza el cargador en los ajustes del modpack o instala otra versión del mod"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» necesita el cargador {1} {2}; el modpack tiene {3}. Actualiza el cargador en los ajustes del modpack o instala otra versión del mod",
+  "Каталог сборок не ответил": "El catálogo de modpacks no respondió",
+  "Поиск: Arcania, Create, Cobblemon…": "Buscar: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "El servidor se creó, pero el modpack «{name}» no se instaló: {error}. Instálalo desde el panel del servidor",
+  "Со сборкой «{name}»": "Con el modpack «{name}»",
+  "каталог не ответил": "el catálogo no respondió",
+  "Память (RAM)": "Memoria (RAM)",
+  "У каждой сборки своя": "Cada build tiene la suya",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Sin conexión. Las imágenes y los datos nuevos aparecerán cuando vuelva",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Elige tu build en «Hoy jugamos» y la repararemos",
+  "Помощь": "Ayuda",
+  "Серверу от {n} ГБ": "Servidor desde {n} GB",
+  "Код выдаёт автор сборки после покупки": "El autor del modpack te da el código tras la compra"
 }

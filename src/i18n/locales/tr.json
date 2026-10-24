@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "ajan klasörünü başka bir Windows kullanıcısı oluşturmuş",
   "запасная папка есть только в Windows": "yedek klasör yalnızca Windows'ta var",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Bu oyunda skinin görünmeyecek: vanilla mod paketi skini yalnızca hesaptan alır. Millida hesabıyla ya da lisansla giriş yap — veya modlu bir mod paketinde oyna.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» {1} {2} yükleyicisini istiyor, modpack'te {3} var. Yükleyiciyi modpack ayarlarından güncelle ya da modun başka bir sürümünü kur"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» {1} {2} yükleyicisini istiyor, modpack'te {3} var. Yükleyiciyi modpack ayarlarından güncelle ya da modun başka bir sürümünü kur",
+  "Каталог сборок не ответил": "Modpack kataloğu yanıt vermedi",
+  "Поиск: Arcania, Create, Cobblemon…": "Ara: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "Sunucu oluşturuldu ama “{name}” modpack’i kurulamadı: {error}. Sunucu panelinden kur",
+  "Со сборкой «{name}»": "“{name}” modpack’iyle",
+  "каталог не ответил": "katalog yanıt vermedi",
+  "Память (RAM)": "Bellek (RAM)",
+  "У каждой сборки своя": "Her yapı için ayrı",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Bağlantı yok. Görseller ve yeni veriler bağlantı gelince görünecek",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "“Bugün oynuyoruz” bölümünden yapını seç, onarırız",
+  "Помощь": "Yardım",
+  "Серверу от {n} ГБ": "Sunucu {n} GB'tan başlar",
+  "Код выдаёт автор сборки после покупки": "Kodu, satın alma sonrası modpack yazarı verir"
 }

@@ -92,7 +92,10 @@ export const catalogQuote = (rubKopecks: number, line?: 'RUB'): Quote | null =>
 
 export const plusPrice = (tier: 'PLUS' | 'DIAMOND'): string | null => quoteText(plusQuote(tier))
 
-export const rubyPackPrice = (code: string): string | null => quoteText(rubyQuote(code))
+/// The pack's own ruble price backs a missing price-list entry: the list can lag behind the packs.
+/// Only for a ruble account, where the pack's kopecks are exactly what is charged.
+export const rubyPackPrice = (code: string, packKopecks?: number): string | null =>
+  quoteText(rubyQuote(code) ?? (packKopecks && accountCurrency() === 'RUB' ? catalogQuote(packKopecks) : null))
 
 export const rubyPackWas = (code: string, packKopecks: number, wasKopecks: number): string | null =>
   quoteText(scaleQuote(rubyQuote(code), packKopecks, wasKopecks))

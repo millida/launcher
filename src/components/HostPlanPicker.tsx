@@ -10,7 +10,13 @@ import { mirrorAsset } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
 import { showReward } from './reward/RewardReveal'
 import { formatFixed, intlTag, t, useT } from '../i18n'
+import { withCatalogLang } from './catalog/catalogLang'
+import { hostingPackCards, packInstallRequest, type PackCard } from './hostingPackCards'
+import { loadHostingPacks } from './playhub/data'
 import { affords, balanceText, hostingPlanPrice, hostingQuote, openTopup, refreshMoney, shortfallFor, showMoneyError, showShortfall, useMoney } from '../lib/useMoney'
+
+/** Импортёр дописывает к названию сборки «— скачать сборку…»: в выборе это шум. */
+const packTitle = (title: string): string => title.replace(/\s+[—–-]\s+(скачать|download).*$/i, '')
 
 export interface HostPlan {
   code: string
@@ -119,6 +125,10 @@ export function HostPlanPicker({
   const [maps, setMaps] = useState<CurseMap[] | null>(null)
   const [mapPick, setMapPick] = useState<CurseMap | null>(null)
   const [mapErr, setMapErr] = useState('')
+  const [packQuery, setPackQuery] = useState('')
+  const [packs, setPacks] = useState<PackCard[] | null>(null)
+  const [packPick, setPackPick] = useState<PackCard | null>(null)
+  const [packErr, setPackErr] = useState(false)
   const millidaAcc = getMillidaAccount()
   const ownNick = (millidaAcc && millidaAcc.nick) || ''
   const autoAddress = ownNick && !name.trim() ? hostAddressPreview(ownNick) : ''
@@ -157,6 +167,36 @@ export function HostPlanPicker({
       clearTimeout(timer)
     }
   }, [mode, playKind, mapQuery])
+
+  // Сборки для сервера: тот же список и порядок, что в мастере на сайте (каталог, hostable, релевантность хостинга).
+  useEffect(() => {
+    if (mode !== 'create' || playKind !== 'modpack') return
+    let dead = false
+    const timer = setTimeout(() => {
+      setPacks(null)
+      setPackErr(false)
+      const q = packQuery.trim() ? '&q=' + encodeURIComponent(packQuery.trim()) : ''
+      Promise.all([
+        api(withCatalogLang('/catalog/listing?section=modpacks&sort=hosting&perPage=12&hostable=1' + q)),
+        loadHostingPacks(),
+      ])
+        .then(([r, known]) => {
+          if (dead) return
+          const items: PackCard[] = Array.isArray(r?.items) ? r.items : []
+          setPacks(hostingPackCards(items, new Set(known.map((k) => k.key))))
+        })
+        .catch(() => {
+          if (!dead) {
+            setPacks([])
+            setPackErr(true)
+          }
+        })
+    }, 350)
+    return () => {
+      dead = true
+      clearTimeout(timer)
+    }
+  }, [mode, playKind, packQuery])
 
   const pick = async (p: HostPlan) => {
     if (busy) return
@@ -214,6 +254,23 @@ export function HostPlanPicker({
               t('Сервер создан, но карта «{name}» не поставилась: {error}. Поставь её в панели сервера', {
                 name: mapPick.name,
                 error: apiErrorText(e, t('каталог карт не ответил')),
+              }),
+              'error',
+            )
+          }
+        } else if (playKind === 'modpack' && packPick && srv && srv.id) {
+          // Сервер уже создан и оплачен: не вставшая сборка не должна выглядеть как «попробуй ещё раз».
+          try {
+            const req = packInstallRequest(packPick)
+            await api('/hosting/servers/' + srv.id + req.path, { method: 'POST', body: JSON.stringify(req.body) })
+            serverBorn(t('Со сборкой «{name}»', { name: packPick.title }))
+          } catch (e) {
+            console.error('[hosting] pack install', '' + e)
+            serverBorn(t('Появится в списке через минуту'))
+            showToast(
+              t('Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера', {
+                name: packPick.title,
+                error: apiErrorText(e, t('каталог не ответил')),
               }),
               'error',
             )
@@ -332,6 +389,60 @@ export function HostPlanPicker({
                   </div>
                 )}
               </div>
+            ) : null}
+
+            {playKind === 'modpack' ? (
+              <div className="field" style={{ marginBottom: '16px' }}>
+                <label>{packPick ? t('Сборка: {name}', { name: packPick.title }) : t('Выбери сборку')}</label>
+                <div className="input" style={{ marginBottom: '10px' }}>
+                  <input
+                    value={packQuery}
+                    onChange={(e) => setPackQuery(e.target.value)}
+                    placeholder={t('Поиск: Arcania, Create, Cobblemon…')}
+                    maxLength={60}
+                  />
+                </div>
+                {packErr ? (
+                  <p className="faint-note" style={{ color: 'var(--danger)' }}>
+                    {t('Каталог сборок не ответил')}
+                  </p>
+                ) : packs === null ? (
+                  <div style={{ display: 'grid', gap: '8px' }} aria-busy="true">
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} className="skel" style={{ display: 'block', height: '48px' }}></span>
+                    ))}
+                  </div>
+                ) : packs.length === 0 ? (
+                  <p className="faint-note">{t('Ничего не нашлось')}</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: '8px', maxHeight: '230px', overflowY: 'auto' }}>
+                    {packs.map((c) => (
+                      <button
+                        key={c.slug}
+                        className={'plan-card' + (packPick?.slug === c.slug ? ' cur' : '')}
+                        style={{ display: 'flex', gap: '10px', alignItems: 'center', textAlign: 'left', cursor: 'pointer' }}
+                        onClick={() => setPackPick(packPick?.slug === c.slug ? null : c)}
+                      >
+                        {c.icon || c.cover ? (
+                          <img src={mirrorAsset((c.icon || c.cover) as string)} alt="" width={36} height={36} style={{ borderRadius: '8px', flexShrink: 0, objectFit: 'cover' }} />
+                        ) : null}
+                        <span style={{ minWidth: 0 }}>
+                          <span className="plan-name" style={{ display: 'block' }}>{packTitle(c.title)}</span>
+                          <span className="plan-tag" style={{ display: 'block' }}>
+                            {c.downloads ? t('{n} загрузок', { n: c.downloads.toLocaleString(intlTag()) }) : ''}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {playKind === 'modpack' && packPick ? (
+              <p className="faint-note" style={{ marginBottom: '12px' }}>
+                {t('Со сборкой «{name}»', { name: packTitle(packPick.title) })}
+              </p>
             ) : null}
 
             {freeServer ? (

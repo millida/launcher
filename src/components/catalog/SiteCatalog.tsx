@@ -785,7 +785,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       onOpen={() => setOpen((v) => !v)}
       search={
         <div className="mr-smart">
-          <SearchField value={s.q} label={t('Что ищешь? Например: страшное с другом')} onCommit={commitSmart} />
+          <SearchField value={s.q} label={sec.kind === 'modpack' ? t('Что ищешь? Например: страшное с другом') : t('Поиск по разделу «{name}»', { name: sec.title })} onCommit={commitSmart} />
           {smart && smart.chips.length ? (
             <div className="mr-smart-chips" aria-live="polite">
               <span className="mr-smart-h">{t('Понял так:')}</span>
@@ -1104,9 +1104,9 @@ function GroupNav({
           })}
           {extras}
         </nav>
-        <button type="button" className="btn sm secondary mr-publish" data-track="cat_publish" onClick={onPublish}>
+        <button type="button" className="btn sm secondary mr-publish" aria-label={t('Выложить своё')} data-tip={t('Выложить своё')} data-track="cat_publish" onClick={onPublish}>
           <Icon id="i-upload" />
-          {t('Выложить своё')}
+          <span className="mr-publish-t">{t('Выложить своё')}</span>
         </button>
       </div>
       {!own && current.tabs.length > 1 ? (
@@ -1195,6 +1195,7 @@ export function SiteCatalog({
     ...(server ? [] : [{ id: 'purchases', label: t('Покупки'), node: <PurchasesPane onOpenPack={(slug) => openPack?.(slug)} />, px: 'wallet', tint: 'var(--m-sec-purchases)' }]),
   ]
   const ctx = useMemo(() => ({ store, target }), [store, target])
+  const offline = useOffline()
   const item = useItem((s) => s.cur)
   // Ушли из каталога или вошли в него снаружи — страница материала закрывается.
   useEffect(() => () => useItem.setState({ cur: null }), [])
@@ -1357,6 +1358,12 @@ export function SiteCatalog({
             {extras.filter((x) => !x.first).map(extraBtn)}
           </nav>
         )}
+        {offline ? (
+          <div className="cat-offline" role="status">
+            <Icon id="i-alert" />
+            {t('Нет сети — картинки и свежие данные появятся, когда она вернётся')}
+          </div>
+        ) : null}
         {item ? <ItemPage it={item} /> : null}
         <div className="mr-cat-body" hidden={!!item}>
           {body}
@@ -1364,6 +1371,21 @@ export function SiteCatalog({
       </div>
     </CatalogCtx.Provider>
   )
+}
+
+function useOffline(): boolean {
+  const [off, setOff] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false)
+  useEffect(() => {
+    const up = () => setOff(false)
+    const down = () => setOff(true)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
+  return off
 }
 
 const BUILD: CatalogTarget = { kind: 'build' }

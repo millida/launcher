@@ -517,7 +517,7 @@ export function useShop(on: boolean) {
           <PackCount n={pack.rubies} />
         </span>
       ),
-      confirm: missing?.topup ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) }) : (rubyPackPrice(pack.code) ?? ''),
+      confirm: missing?.topup ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) }) : (rubyPackPrice(pack.code, pack.kopecks) ?? ''),
       onCancel: () => result(false, 'cancel'),
       run: async () => {
         if (missing) {

@@ -321,5 +321,18 @@ export function buildCosmetic(
     }
   }
 
-  return Array.from(roots.entries()).map(([anchor, object]) => ({ anchor, object }))
+  // An emote file carries the whole player skeleton, its empty `cape` group
+  // included. Handed to the figure, that group counted as a worn cape and hid
+  // the account cape, and nothing brought it back once the emote ended.
+  return Array.from(roots.entries())
+    .filter(([, object]) => holdsMesh(object))
+    .map(([anchor, object]) => ({ anchor, object }))
+}
+
+function holdsMesh(root: Object3D): boolean {
+  let found = false
+  root.traverse((node) => {
+    if ((node as Mesh).isMesh) found = true
+  })
+  return found
 }

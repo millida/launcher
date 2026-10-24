@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "the agent folder was created by another Windows user",
   "запасная папка есть только в Windows": "the fallback folder exists only on Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Your skin won't be visible in this game: a vanilla modpack takes it only from the account. Sign in with a Millida account or a licensed one — or play a modded modpack.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» needs loader {1} {2}, the modpack has {3}. Update the loader in the modpack settings or install another version of the mod"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» needs loader {1} {2}, the modpack has {3}. Update the loader in the modpack settings or install another version of the mod",
+  "Каталог сборок не ответил": "The modpack catalog didn’t respond",
+  "Поиск: Arcania, Create, Cobblemon…": "Search: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "The server was created, but the modpack “{name}” didn’t install: {error}. Install it from the server panel",
+  "Со сборкой «{name}»": "With the “{name}” modpack",
+  "каталог не ответил": "the catalog didn’t respond",
+  "Память (RAM)": "Memory (RAM)",
+  "У каждой сборки своя": "Set per build",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "No connection. Pictures and fresh data will appear when it is back",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Pick your build in “Today we play” and we will fix it",
+  "Помощь": "Help",
+  "Серверу от {n} ГБ": "Server from {n} GB",
+  "Код выдаёт автор сборки после покупки": "The modpack author gives you the code after purchase"
 }
