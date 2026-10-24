@@ -64,6 +64,13 @@ jobs:
             os: ubuntu-latest
           - label: windows
             os: windows-latest
+          # cfg(target_arch = "aarch64") branches (LWJGL natives, VulkanMod) are
+          # compiled and tested only here. Advisory until the arm64 release is
+          # declared required.
+          - label: linux-arm64
+            os: ubuntu-24.04-arm
+            optional: true
+    continue-on-error: ${{ matrix.optional == true }}
     steps:
       - uses: actions/checkout@v4
 
