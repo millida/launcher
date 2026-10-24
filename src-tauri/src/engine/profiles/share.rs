@@ -393,6 +393,36 @@ pub async fn unshare_profile(code: String) -> Result<(), String> {
     Ok(())
 }
 
+/// A pack opened only to the author or the author's friends needs to know who
+/// is asking, so the account token goes along when there is one.
+async fn pack_detail(code: &str) -> Result<Value, String> {
+    millida_api_auth(format!("{}/{}", PACKS_PATH, code), "GET".into(), None)
+        .await
+        .map_err(|e| if e == "http 403" { CLOSED_PACK.to_string() } else { e })
+}
+
+const CLOSED_PACK: &str = "Автор открыл эту сборку только себе или друзьям — войди в аккаунт Millida, если ты его друг";
+
+pub const PACK_VISIBILITIES: [&str; 3] = ["link", "friends", "private"];
+
+/// Who may open the author's code: anyone with it, friends, or only the author.
+pub async fn set_pack_visibility(code: String, visibility: String) -> Result<String, String> {
+    let code = normalize_code(&code);
+    if !code_ok(&code) {
+        return Err("Некорректный код сборки".into());
+    }
+    if !PACK_VISIBILITIES.contains(&visibility.as_str()) {
+        return Err("Неизвестная видимость сборки".into());
+    }
+    let res = millida_api_auth(
+        format!("{}/{}/visibility", PACKS_PATH, code),
+        "PATCH".into(),
+        Some(serde_json::json!({ "visibility": visibility })),
+    )
+    .await?;
+    Ok(res["visibility"].as_str().unwrap_or(&visibility).to_string())
+}
+
 /// The manifest as published, before anything is downloaded: the player sees
 /// what they are about to install.
 pub async fn pack_preview(code: String) -> Result<Value, String> {
@@ -400,7 +430,7 @@ pub async fn pack_preview(code: String) -> Result<Value, String> {
     if !code_ok(&code) {
         return Err("Такого кода не бывает — проверь, что ввёл".into());
     }
-    let res = millida_api(format!("{}/{}", PACKS_PATH, code), "GET".into(), None, None).await?;
+    let res = pack_detail(&code).await?;
     let (manifest, dropped) = parse_manifest_report(&res["manifest"])?;
     let mods: Vec<Value> = manifest
         .files
@@ -1128,7 +1158,7 @@ pub async fn install_shared_pack(app: AppHandle, code: String, approved_jars: Ve
     if !code_ok(&code) {
         return Err("Такого кода не бывает — проверь, что ввёл".into());
     }
-    let res = millida_api(format!("{}/{}", PACKS_PATH, code), "GET".into(), None, None).await?;
+    let res = pack_detail(&code).await?;
     let manifest = parse_manifest(&res["manifest"])?;
     if manifest.files.is_empty() && manifest.jars.is_empty() {
         return Err("В этой сборке не осталось файлов, которые можно скачать".into());
@@ -1136,6 +1166,7 @@ pub async fn install_shared_pack(app: AppHandle, code: String, approved_jars: Ve
     emit_share_progress(&app, 5.0, "Читаем сборку…");
     let source = JarSource { code: &code, approved: &approved_jars };
     let profile = install_manifest(&app, &manifest, None, Some(source)).await?;
+    subscribe(&profile.name, &code, res["updatedAt"].as_str().unwrap_or(""), &manifest);
     // Reported after the files land, so a cancelled install does not inflate
     // anyone's counter.
     let _ = millida_api(format!("{}/{}/installed", PACKS_PATH, code), "POST".into(), None, None).await;
@@ -1143,9 +1174,362 @@ pub async fn install_shared_pack(app: AppHandle, code: String, approved_jars: Ve
     Ok(profile)
 }
 
+/// What a friend's build remembers about the pack it came from: the code to
+/// ask, the version it has, and every file that version put on disk with its
+/// sha1. The next version may replace or take away only a file that still
+/// holds exactly those bytes: anything the player added or edited stays.
+#[derive(Serialize, Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+struct Subscription {
+    code: String,
+    updated_at: String,
+    files: Vec<SubFile>,
+    jars: Vec<String>,
+    #[serde(default)]
+    overrides: Vec<SubFile>,
+    #[serde(default)]
+    game: String,
+    #[serde(default)]
+    loader: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+struct SubFile {
+    kind: String,
+    path: String,
+    #[serde(default)]
+    sha1: String,
+}
+
+const SUB_KEY: &str = "sharedFrom";
+
+fn sub_files(manifest: &PackManifest) -> Vec<SubFile> {
+    let catalog = manifest.files.iter().filter_map(|f| {
+        shared_entry_path(&f.kind, &f.path).ok().map(|path| SubFile { kind: f.kind.clone(), path, sha1: f.sha1.to_ascii_lowercase() })
+    });
+    let own = manifest
+        .jars
+        .iter()
+        .filter_map(|j| jar_ok(j).ok().map(|path| SubFile { kind: "mod".into(), path, sha1: j.sha1.to_ascii_lowercase() }));
+    catalog.chain(own).collect()
+}
+
+fn sub_overrides(manifest: &PackManifest) -> Vec<SubFile> {
+    manifest
+        .overrides
+        .iter()
+        .filter_map(|o| decode_override(o).ok().map(|(path, _)| SubFile { kind: OVERRIDE_KIND.into(), path, sha1: o.sha1.to_ascii_lowercase() }))
+        .collect()
+}
+
+fn subscribe(profile: &str, code: &str, updated_at: &str, manifest: &PackManifest) {
+    let sub = Subscription {
+        code: code.to_string(),
+        updated_at: updated_at.to_string(),
+        files: sub_files(manifest),
+        jars: manifest.jars.iter().map(|j| j.sha512.to_ascii_lowercase()).collect(),
+        overrides: sub_overrides(manifest),
+        game: manifest.game.clone(),
+        loader: manifest.loader.clone(),
+    };
+    save_subscription(profile, &sub);
+}
+
+fn save_subscription(profile: &str, sub: &Subscription) {
+    let mut patch = serde_json::Map::new();
+    patch.insert(SUB_KEY.into(), serde_json::to_value(sub).unwrap_or(Value::Null));
+    merge_settings(profile, patch);
+}
+
+fn subscription_of(profile: &str) -> Option<Subscription> {
+    let raw: Value = std::fs::read(profile_dir(profile).join("millida-settings.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())?;
+    let sub: Subscription = serde_json::from_value(raw.get(SUB_KEY)?.clone()).ok()?;
+    code_ok(&sub.code).then_some(sub)
+}
+
+/// What a new version would do to the build, shown before anything changes.
+#[derive(Serialize, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedChanges {
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    /// Old and new game version, when it changes.
+    pub game: Option<(String, String)>,
+    pub loader: Option<(String, String)>,
+    /// Settings files the author changed and the update will write.
+    pub configs: Vec<String>,
+    /// Files the player has (their own or edited) that the update leaves as they are.
+    pub kept: Vec<String>,
+    /// The author's new own jars, by name and sha512: code from a person, shown first.
+    pub new_jars: Vec<Value>,
+}
+
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedSync {
+    /// none: not a friend's build; current: nothing new; stale: a new version
+    /// waits, `changes` says what it brings; updated: it was installed; gone:
+    /// the code was revoked.
+    pub status: String,
+    pub code: String,
+    pub changes: SharedChanges,
+}
+
+fn sync_status(status: &str, code: &str) -> SharedSync {
+    SharedSync { status: status.into(), code: code.into(), ..Default::default() }
+}
+
+/// The update as it will be applied: the manifest without the files that would
+/// land on the player's own, and the old files that may go.
+struct UpdatePlan {
+    manifest: PackManifest,
+    gone: Vec<SubFile>,
+    /// Override records to remember: written ones, and the player's edits as
+    /// they were last synced, so an edit keeps being recognised as one.
+    overrides: Vec<SubFile>,
+    changes: SharedChanges,
+}
+
+fn same_sha(disk: Option<&str>, want: &str) -> bool {
+    disk.is_some_and(|h| h.eq_ignore_ascii_case(want))
+}
+
+/// `disk` reads the sha1 of a file in the build (None: no such file). Pure, so
+/// the rules about the player's files are tested without a disk.
+fn plan_update(sub: &Subscription, manifest: &PackManifest, disk: impl Fn(&str) -> Option<String>) -> UpdatePlan {
+    let old_files: HashMap<&str, &SubFile> = sub.files.iter().map(|f| (f.path.as_str(), f)).collect();
+    let mut kept = vec![];
+    // A file of the new version may take a path only if the path is free, holds
+    // the very same bytes, or holds the bytes this subscription put there.
+    let mut lands = |rel: &str, sha1: &str| -> bool {
+        let on_disk = disk(rel);
+        let free = on_disk.is_none()
+            || same_sha(on_disk.as_deref(), sha1)
+            || old_files.get(rel).is_some_and(|f| same_sha(on_disk.as_deref(), &f.sha1));
+        if !free {
+            kept.push(file_name_of(rel));
+        }
+        free
+    };
+    let mut m = manifest.clone();
+    m.files.retain(|f| shared_entry_path(&f.kind, &f.path).map(|rel| lands(&rel, &f.sha1)).unwrap_or(true));
+    m.jars.retain(|j| jar_ok(j).map(|rel| lands(&rel, &j.sha1)).unwrap_or(true));
+
+    let old_overrides: HashMap<&str, &SubFile> = sub.overrides.iter().map(|f| (f.path.as_str(), f)).collect();
+    let mut configs = vec![];
+    let mut remembered = vec![];
+    m.overrides.retain(|o| {
+        let Ok((rel, _)) = decode_override(o) else { return true };
+        let on_disk = disk(&rel);
+        if same_sha(on_disk.as_deref(), &o.sha1) {
+            remembered.push(SubFile { kind: OVERRIDE_KIND.into(), path: rel, sha1: o.sha1.to_ascii_lowercase() });
+            return false;
+        }
+        let untouched = on_disk.is_none() || old_overrides.get(rel.as_str()).is_some_and(|f| same_sha(on_disk.as_deref(), &f.sha1));
+        if untouched {
+            configs.push(rel.clone());
+            remembered.push(SubFile { kind: OVERRIDE_KIND.into(), path: rel, sha1: o.sha1.to_ascii_lowercase() });
+        } else {
+            kept.push(file_name_of(&rel));
+            if let Some(f) = old_overrides.get(rel.as_str()) {
+                remembered.push((*f).clone());
+            }
+        }
+        untouched
+    });
+
+    let fresh: HashSet<String> = sub_files(manifest).into_iter().map(|f| f.path).collect();
+    let before: HashSet<&str> = sub.files.iter().map(|f| f.path.as_str()).collect();
+    // A file the player replaced since the last sync is theirs now: it stays.
+    let gone: Vec<SubFile> = sub
+        .files
+        .iter()
+        .filter(|f| !fresh.contains(&f.path) && same_sha(disk(&f.path).as_deref(), &f.sha1))
+        .cloned()
+        .collect();
+    let added = sub_files(&m).into_iter().filter(|f| !before.contains(f.path.as_str())).map(|f| file_name_of(&f.path)).collect();
+    let changed = |a: &str, b: &str| (!a.is_empty() && a != b).then(|| (a.to_string(), b.to_string()));
+    let changes = SharedChanges {
+        added,
+        removed: gone.iter().map(|f| file_name_of(&f.path)).collect(),
+        game: changed(&sub.game, &manifest.game),
+        loader: changed(&sub.loader, &manifest.loader),
+        configs,
+        kept,
+        new_jars: vec![],
+    };
+    UpdatePlan { manifest: m, gone, overrides: remembered, changes }
+}
+
+fn disk_sha1(pdir: &Path, rel: &str) -> Option<String> {
+    let path = safe_join(pdir, rel).ok()?;
+    if path.is_file() { file_sha1(&path) } else { None }
+}
+
+/// Says what the author's newest version would change in a friend's build, and
+/// with `apply` installs it. Nothing is applied without the player asking:
+/// `apply` comes only from their button. `approved` are sha512s of the
+/// author's new own jars the player saw in that same prompt.
+pub async fn shared_pack_sync(app: AppHandle, profile: String, apply: bool, approved: Vec<String>) -> Result<SharedSync, String> {
+    let Some(sub) = subscription_of(&profile) else { return Ok(sync_status("none", "")) };
+    let res = match pack_detail(&sub.code).await {
+        Ok(r) => r,
+        Err(e) if e == "http 404" || e == CLOSED_PACK => return Ok(sync_status("gone", &sub.code)),
+        Err(e) => return Err(e),
+    };
+    let updated_at = res["updatedAt"].as_str().unwrap_or("").to_string();
+    if updated_at.is_empty() || updated_at == sub.updated_at {
+        return Ok(sync_status("current", &sub.code));
+    }
+    let manifest = parse_manifest(&res["manifest"])?;
+    let pdir = profile_dir(&profile);
+    let plan = {
+        let (dir, s, m) = (pdir.clone(), sub.clone(), manifest.clone());
+        tokio::task::spawn_blocking(move || plan_update(&s, &m, |rel| disk_sha1(&dir, rel)))
+            .await
+            .map_err(|e| e.to_string())?
+    };
+    let seen: HashSet<String> = sub.jars.iter().cloned().chain(approved.iter().map(|h| h.to_ascii_lowercase())).collect();
+    let unseen: Vec<Value> = plan
+        .manifest
+        .jars
+        .iter()
+        .filter(|j| !seen.contains(&j.sha512.to_ascii_lowercase()))
+        .map(|j| serde_json::json!({ "name": file_name_of(&j.path), "sha512": j.sha512 }))
+        .collect();
+    if !apply || !unseen.is_empty() {
+        let changes = SharedChanges { new_jars: unseen, ..plan.changes };
+        return Ok(SharedSync { status: "stale".into(), code: sub.code, changes });
+    }
+    emit_share_progress(&app, 5.0, "Обновляем сборку друга…");
+    let trusted: Vec<String> = seen.into_iter().collect();
+    let source = JarSource { code: &sub.code, approved: &trusted };
+    install_manifest(&app, &plan.manifest, Some(profile.clone()), Some(source)).await?;
+    for f in &plan.gone {
+        let Ok(path) = safe_join(&pdir, &f.path) else { continue };
+        // Re-checked right before removal: the game or the player may have
+        // touched the file while the update downloaded.
+        if !same_sha(file_sha1(&path).as_deref(), &f.sha1) {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("Не удалось убрать {} из сборки: {}. Закрой игру и запусти снова", file_name_of(&f.path), e)),
+        }
+        manifest_remove(&profile, &f.kind, &file_name_of(&f.path));
+    }
+    let next = Subscription {
+        code: sub.code.clone(),
+        updated_at,
+        files: sub_files(&plan.manifest),
+        jars: manifest.jars.iter().map(|j| j.sha512.to_ascii_lowercase()).collect(),
+        overrides: plan.overrides,
+        game: manifest.game.clone(),
+        loader: manifest.loader.clone(),
+    };
+    save_subscription(&profile, &next);
+    emit_share_progress(&app, 100.0, "Сборка друга обновлена");
+    Ok(SharedSync { status: "updated".into(), code: sub.code, changes: plan.changes })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sub_with(files: &[(&str, &str)], overrides: &[(&str, &str)]) -> Subscription {
+        let f = |kind: &str, (p, h): &(&str, &str)| SubFile { kind: kind.into(), path: p.to_string(), sha1: h.to_string() };
+        Subscription {
+            code: "AB23CD45".into(),
+            updated_at: "1".into(),
+            files: files.iter().map(|x| f("mod", x)).collect(),
+            overrides: overrides.iter().map(|x| f(OVERRIDE_KIND, x)).collect(),
+            game: "1.20.1".into(),
+            loader: "fabric".into(),
+            ..Default::default()
+        }
+    }
+
+    fn manifest_with(files: &[(&str, &str)], overrides: &[(&str, &[u8])]) -> PackManifest {
+        PackManifest {
+            format_version: PACK_FORMAT,
+            game: "1.20.1".into(),
+            loader: "fabric".into(),
+            files: files
+                .iter()
+                .map(|(p, h)| PackFile { path: p.to_string(), kind: "mod".into(), sha1: h.to_string(), url: "https://cdn.modrinth.com/x.jar".into(), ..Default::default() })
+                .collect(),
+            overrides: overrides
+                .iter()
+                .map(|(p, b)| PackOverride {
+                    path: p.to_string(),
+                    sha1: super::super::milli_local::sha1_hex(b),
+                    data: base64::engine::general_purpose::STANDARD.encode(b),
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn h(c: char) -> String {
+        c.to_string().repeat(40)
+    }
+
+    /// disk state, old and new version -> what the update removes. Only a file
+    /// that still holds the bytes the subscription put there may go.
+    #[test]
+    fn only_untouched_files_of_the_old_version_are_removed() {
+        let (a, b, x) = (h('a'), h('b'), h('e'));
+        let sub = sub_with(&[("mods/a.jar", a.as_str()), ("mods/b.jar", b.as_str())], &[]);
+        let next = manifest_with(&[("mods/a.jar", a.as_str())], &[]);
+        let table: [(Option<&str>, bool, &str); 3] = [
+            (Some(b.as_str()), true, "the author dropped b and b is as we installed it"),
+            (Some(x.as_str()), false, "the player replaced b with their own file: it stays"),
+            (None, false, "b is already gone: nothing to remove"),
+        ];
+        for (b_on_disk, removed, why) in table {
+            let plan = plan_update(&sub, &next, |rel| match rel {
+                "mods/a.jar" => Some(a.clone()),
+                "mods/b.jar" => b_on_disk.map(String::from),
+                _ => None,
+            });
+            assert_eq!(plan.gone.iter().any(|f| f.path == "mods/b.jar"), removed, "{why}");
+            assert!(!plan.gone.iter().any(|f| f.path == "mods/a.jar"), "a file the new version keeps must never be removed");
+        }
+    }
+
+    /// disk state -> whether the new version may write the path. A file the
+    /// subscription did not put there is the player's and is never overwritten.
+    #[test]
+    fn the_update_never_writes_over_the_players_files() {
+        let (a, c, mine) = (h('a'), h('c'), h('f'));
+        let old_cfg = h('1');
+        let sub = sub_with(&[("mods/a.jar", a.as_str())], &[("config/x.toml", old_cfg.as_str())]);
+        let cfg_new: &[u8] = b"new = 2";
+        let next = manifest_with(&[("mods/a.jar", c.as_str()), ("mods/new.jar", c.as_str())], &[("config/x.toml", cfg_new), ("config/y.toml", cfg_new)]);
+        let plan = plan_update(&sub, &next, |rel| match rel {
+            "mods/a.jar" => Some(a.clone()),
+            "mods/new.jar" => Some(mine.clone()),
+            "config/x.toml" => Some(h('9')),
+            "config/y.toml" => Some(h('8')),
+            _ => None,
+        });
+        let paths: Vec<&str> = plan.manifest.files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"mods/a.jar"), "a file the subscription installed is updated in place");
+        assert!(!paths.contains(&"mods/new.jar"), "the player's own file at that path must not be overwritten");
+        assert!(plan.manifest.overrides.is_empty(), "configs the player edited since the last sync, or that are their own, stay as they are");
+        assert_eq!(plan.changes.kept.len(), 3, "the player is told about every file left alone");
+        let edited = plan.overrides.iter().find(|f| f.path == "config/x.toml").expect("an edited config stays remembered");
+        assert_eq!(edited.sha1, h('1'), "it is remembered by the old bytes, so the edit is still recognised next time");
+        let untouched = plan_update(&sub, &next, |rel| (rel == "config/x.toml").then(|| h('1')));
+        assert_eq!(
+            untouched.changes.configs,
+            vec!["config/x.toml".to_string(), "config/y.toml".to_string()],
+            "an untouched or missing config takes the author's"
+        );
+    }
 
     /// url -> verdict. A manifest arrives from another player; its addresses are
     /// what the launcher would otherwise connect to.

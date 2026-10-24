@@ -1,0 +1,19 @@
+/* High contrast: text at full white on black surfaces, visible separations and a focus ring
+   on everything the keyboard reaches. Only the tokens change, so every screen follows. */
+:root[data-contrast="high"] {
+  --m-bg: #000000;
+  --m-surface: #000000;
+  --m-surface-2: #161616;
+  --m-raised: #1c1c1c;
+  --m-inset: #000000;
+  --m-border: rgba(255, 255, 255, .45);
+  --m-border-strong: rgba(255, 255, 255, .75);
+  --m-fg: #ffffff;
+  --m-fg-muted: #ffffff;
+  --m-fg-subtle: rgba(255, 255, 255, .9);
+  --m-fg-faint: rgba(255, 255, 255, .78);
+}
+:root[data-contrast="high"] :focus-visible {
+  outline: 3px solid var(--m-warning);
+  outline-offset: 2px;
+}

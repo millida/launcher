@@ -31,10 +31,10 @@
 .pty-head > b { font: 900 20px/1 var(--m-font); }
 .pty-count { font: 800 15px/1 var(--m-font); color: var(--m-fg-muted); }
 
-.pty-door { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px 1px; font: 800 12px/1 var(--m-font); color: var(--m-fg-muted); cursor: pointer; background-color: var(--m-surface-2); clip-path: var(--px-4); }
+.pty-door { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px 1px; font: 800 12px/1 var(--m-font); color: var(--m-fg-muted); cursor: pointer; background-color: var(--m-surface-2); clip-path: var(--px-4); }
 .pty-door svg { width: 13px; height: 13px; }
 .pty-door.on { color: #06200e; background-color: var(--m-accent); }
-.pty-seeking { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font: 800 12px/1 var(--m-font); color: var(--m-accent); }
+.pty-seeking { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 7px; font: 800 12px/1 var(--m-font); color: var(--m-accent); }
 .pty-seeking .party-dots i { background: var(--m-accent); }
 .pty-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; counter-reset: st; }
 .pty-steps li:nth-child(2) { flex: 1.5; }
@@ -56,7 +56,7 @@
 .pty-mate svg { width: 15px; height: 15px; flex: none; }
 .pty-crown { color: var(--m-warning); }
 .pty-ready { color: var(--m-accent); }
-.pty-mate-end { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.pty-mate-end { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 4px; }
 .pty-mic { color: var(--m-accent); }
 .pty-mic.off { color: var(--m-fg-subtle); }
 .pty-ico {
@@ -120,7 +120,7 @@
 /* Все готовы: отсчёт до общего старта и «Отмена». */
 .pty-going.count { align-items: center; background-color: var(--m-accent); color: #06200e; }
 .pty-going.count span { color: #06200e; font-size: 13px; font-variant-numeric: tabular-nums; }
-.pty-going.count .pty-mini { margin-left: auto; background-color: rgba(6, 32, 14, 0.2); color: #06200e; }
+.pty-going.count .pty-mini { margin-inline-start: auto; background-color: rgba(6, 32, 14, 0.2); color: #06200e; }
 
 /* ---------- Чат ---------- */
 .pty-chat {

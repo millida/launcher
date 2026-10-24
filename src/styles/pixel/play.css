@@ -32,7 +32,7 @@
   container-type: inline-size;
 }
 .pl-prem {
-  display: flex; flex-direction: column; text-align: left; padding: 0; overflow: hidden;
+  display: flex; flex-direction: column; text-align: start; padding: 0; overflow: hidden;
   background: var(--m-surface-2); color: inherit; border: 0; cursor: pointer;
   box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent; transition: transform var(--m-t-fast), box-shadow var(--m-t-fast);
 }

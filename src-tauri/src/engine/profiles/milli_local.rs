@@ -496,7 +496,7 @@ pub fn milli_snapshot_delete(pdir: &Path, id: &str) -> Result<(), String> {
 
 /// Backups are written by `backup_world` as `<world>-<unix secs>.zip`.
 pub fn milli_world_backups(pdir: &Path) -> Vec<WorldBackup> {
-    let mut out: Vec<WorldBackup> = std::fs::read_dir(pdir.join("backups"))
+    let mut out: Vec<WorldBackup> = std::fs::read_dir(crate::engine::backups_in(pdir))
         .map(|rd| {
             rd.flatten()
                 .filter_map(|e| {
@@ -574,7 +574,7 @@ fn escape_property(v: &str) -> String {
     out
 }
 
-fn set_property(text: &str, key: &str, value: &str) -> String {
+pub(crate) fn set_property(text: &str, key: &str, value: &str) -> String {
     let line = format!("{}={}", key, escape_property(value));
     let mut found = false;
     let mut out: Vec<String> = text

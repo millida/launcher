@@ -176,7 +176,7 @@
   background: var(--hs-pill);
   color: var(--hs-ink);
   border-radius: var(--m-r-card);
-  text-align: left;
+  text-align: start;
 }
 .hsx-stat img { width: 40px; height: 40px; flex: none; object-fit: contain; }
 .hsx-stat-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -304,7 +304,7 @@
   color: var(--m-fg-muted);
   border-radius: var(--m-r-ctl);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .hsx-more-item svg { width: 16px; height: 16px; }
 .hsx-more-item:hover { background: var(--m-raised); color: var(--m-fg); }
@@ -399,7 +399,7 @@
   color: var(--m-fg-muted);
   border-radius: var(--m-r-card);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .hsx-adv b { flex: 1; font-size: 15px; font-weight: 800; color: var(--m-fg); }
 .hsx-adv svg { width: 17px; height: 17px; }
@@ -484,9 +484,9 @@
 }
 @media (max-width: 1180px) {
   .hsx-graphs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .hsx-disk { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: left; }
+  .hsx-disk { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: start; }
   .hsx-disk img { margin: 0; }
-  .hsx-disk .hsx-meter { margin-left: auto; }
+  .hsx-disk .hsx-meter { margin-inline-start: auto; }
 }
 @media (max-width: 980px) {
   .hsx-scene,

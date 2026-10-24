@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useT } from '../i18n'
 import { BuildCard } from '../components/BuildCard'
@@ -12,7 +12,12 @@ import { quickJoin } from '../lib/joinServer'
 import { composeIcon, randomIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import type { IconRecipe } from '../lib/iconArt'
 import { hasTauri } from '../ipc/tauri'
-import { setProfileIcon } from '../ipc/commands'
+import { setProfileGroup, setProfileIcon } from '../ipc/commands'
+import { groupTree, normalizeGroup } from '../lib/buildGroups'
+import '../styles/pixel/build-extras.css'
+
+/** Pointer travel before a press on a card becomes a drag rather than a click. */
+const DRAG_START_PX = 6
 
 const SKIP_KEY = 'm-icon-art-skip'
 
@@ -41,17 +46,71 @@ export function Builds({ on }: { on: boolean }) {
   const hoursOf = (name: string) => stats.builds.find((b) => b.key === name) || null
   const lastServerName = stats.last_server_name || stats.last_server
 
-  const groupNames = Object.keys(
-    profiles.reduce<Record<string, boolean>>((acc, p) => {
-      const g = groups[p.name] || ''
-      if (g) acc[g] = true
-      return acc
-    }, {}),
-  ).sort()
-  const ungrouped = profiles.filter((p) => !(groups[p.name] || ''))
+  const groupOf = (name: string) => normalizeGroup(groups[name] || '')
+  const groupRows = groupTree(profiles.map((p) => groupOf(p.name)).filter(Boolean))
+  const ungrouped = profiles.filter((p) => !groupOf(p.name))
+
+  // Native HTML drag events do not reach the page while the window accepts
+  // dropped files, so a card is dragged with plain pointer events.
+  const press = useRef<{ name: string; x: number; y: number; active: boolean } | null>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [over, setOver] = useState<string | null>(null)
+  const dropAt = (x: number, y: number): string | null => {
+    const el = document.elementFromPoint(x, y)?.closest('[data-drop-group]') as HTMLElement | null
+    return el ? (el.dataset.dropGroup ?? null) : null
+  }
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const p = press.current
+      if (!p) return
+      if (!p.active && Math.hypot(e.clientX - p.x, e.clientY - p.y) < DRAG_START_PX) return
+      if (!p.active) {
+        p.active = true
+        setDragging(p.name)
+      }
+      setOver(dropAt(e.clientX, e.clientY))
+    }
+    const up = (e: PointerEvent) => {
+      const p = press.current
+      press.current = null
+      if (!p || !p.active) return
+      setDragging(null)
+      setOver(null)
+      const swallow = (ev: MouseEvent) => {
+        ev.stopPropagation()
+        ev.preventDefault()
+      }
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0)
+      const target = dropAt(e.clientX, e.clientY)
+      if (target === null || target === groupOf(p.name)) return
+      if (!hasTauri()) {
+        showToast(t('Доступно в приложении'))
+        return
+      }
+      setProfileGroup(p.name, target)
+        .then(() => useProfiles.getState().refresh())
+        .catch((err) => showToast(t('Не удалось перенести: {error}', { error: String(err) }), 'error'))
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+  }, [groups])
 
   const buildCard = (p: (typeof profiles)[number]) => (
-    <BuildCard key={p.name} p={p} hours={hoursOf(p.name)} withLast />
+    <div
+      key={p.name}
+      className={'bx-drag' + (dragging === p.name ? ' on' : '')}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return
+        press.current = { name: p.name, x: e.clientX, y: e.clientY, active: false }
+      }}
+    >
+      <BuildCard p={p} hours={hoursOf(p.name)} withLast />
+    </div>
   )
 
   const skipIcons = () => {
@@ -198,13 +257,22 @@ export function Builds({ on }: { on: boolean }) {
       <div className="build-grid" id="buildGrid">
         {profiles.length ? (
           <>
+            {dragging && groupRows.length ? (
+              <div className={'build-group-cap bx-drop' + (over === '' ? ' over' : '')} data-drop-group="">
+                {t('Без группы')}
+              </div>
+            ) : null}
             {ungrouped.map(buildCard)}
-            {groupNames.map((g) => (
-              <Fragment key={g}>
-                <div className="build-group-cap">
-                  {g}
+            {groupRows.map((g) => (
+              <Fragment key={g.path}>
+                <div
+                  className={'build-group-cap' + (dragging ? ' bx-drop' : '') + (over === g.path ? ' over' : '')}
+                  data-drop-group={g.path}
+                  style={g.depth ? { paddingLeft: g.depth * 14 + 'px' } : undefined}
+                >
+                  {g.label}
                 </div>
-                {profiles.filter((p) => (groups[p.name] || '') === g).map(buildCard)}
+                {profiles.filter((p) => groupOf(p.name) === g.path).map(buildCard)}
               </Fragment>
             ))}
           </>

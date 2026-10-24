@@ -111,7 +111,8 @@ pub fn pack_auto_update(profile: &str) -> PackAutoUpdate {
         return PackAutoUpdate { catalog: false, on: false, modified: false, chosen: None };
     }
     let chosen = settings[PACK_AUTO_UPDATE_KEY].as_bool();
-    let modified = mods_modified(&profile_dir(profile));
+    // A pinned file is the player's choice too: a pack update replaces the whole mods folder.
+    let modified = mods_modified(&profile_dir(profile)) || has_locked_content(profile);
     PackAutoUpdate { catalog: true, on: auto_update_on(chosen, modified), modified, chosen }
 }
 

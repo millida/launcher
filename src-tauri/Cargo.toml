@@ -1,6 +1,6 @@
 [package]
 name = "millida-launcher"
-version = "2.0.263"
+version = "2.0.264"
 description = "Millida Launcher — безопасный лаунчер Minecraft"
 authors = ["Millida"]
 edition = "2021"
@@ -63,6 +63,8 @@ minisign-verify = "0.2"
 semver = "1"
 base64 = "0.22"
 url = "2"
+# packwiz packs (pack.toml, index.toml, *.pw.toml)
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
 # game assets ship as ogg/vorbis, which WKWebView on macOS cannot play
 lewton = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }

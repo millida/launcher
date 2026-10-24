@@ -130,6 +130,10 @@ export interface FriendProfile {
   serverName?: string | null
   build?: string | null
   stats?: FriendStats | null
+  /** Where the friend is: the game, the launcher or the site. */
+  place?: 'game' | 'launcher' | 'web' | null
+  /** When the friendship became mutual, ms. Absent on servers that do not send it yet. */
+  friendsSince?: number | null
 }
 
 interface FriendsState {
@@ -581,6 +585,8 @@ export async function openFriendProfile(uid: string, nick: string) {
         serverName: p.serverName || null,
         build: p.build || null,
         stats: p.stats || null,
+        place: p.place === 'game' || p.place === 'launcher' || p.place === 'web' ? p.place : null,
+        friendsSince: typeof p.friendsSince === 'number' && p.friendsSince > 0 ? p.friendsSince : null,
       },
     })
   }

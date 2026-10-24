@@ -300,7 +300,76 @@ fn sweep_leftovers(root: &Path, base: &str) {
 /// повторами (антивирус держит свежие файлы) и запасным именем, если старую
 /// папку не удаётся убрать.
 async fn install_runtime(app: &AppHandle, major: u64, arch: Option<&'static str>) -> Result<PathBuf, String> {
-    let base = runtime_base(major, arch);
+    install_runtime_as(app, major, arch, JavaVendor::Temurin).await
+}
+
+/// The JRE a build runs on. Temurin is the default and falls back to Zulu when
+/// its mirror is unreachable; the other two are what the player picked and come
+/// only from their own vendor. Every package is checked by its sha256.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JavaVendor {
+    Temurin,
+    Zulu,
+    Semeru,
+}
+
+impl JavaVendor {
+    pub fn parse(s: &str) -> Option<JavaVendor> {
+        match s {
+            "temurin" => Some(JavaVendor::Temurin),
+            "zulu" => Some(JavaVendor::Zulu),
+            "semeru" => Some(JavaVendor::Semeru),
+            _ => None,
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            JavaVendor::Temurin => "temurin",
+            JavaVendor::Zulu => "zulu",
+            JavaVendor::Semeru => "semeru",
+        }
+    }
+
+    fn sources(self) -> &'static [&'static str] {
+        match self {
+            JavaVendor::Temurin => &["Adoptium", "Azul"],
+            JavaVendor::Zulu => &["Azul"],
+            JavaVendor::Semeru => &["Semeru"],
+        }
+    }
+
+    /// Folder name of the runtime: the default keeps the plain «21» every
+    /// existing install already uses.
+    fn base(self, major: u64, arch: Option<&str>) -> String {
+        match self {
+            JavaVendor::Temurin => runtime_base(major, arch),
+            other => format!("{}-{}", runtime_base(major, arch), other.id()),
+        }
+    }
+}
+
+pub fn profile_java_vendor(profile: &str) -> JavaVendor {
+    std::fs::read(profile_dir(profile).join("millida-settings.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|s| s["javaVendor"].as_str().and_then(JavaVendor::parse))
+        .unwrap_or(JavaVendor::Temurin)
+}
+
+pub(crate) async fn ensure_java_vendor(app: &AppHandle, major: u64, vendor: JavaVendor) -> Result<PathBuf, String> {
+    if vendor == JavaVendor::Temurin {
+        return ensure_java(app, major).await;
+    }
+    let major = if major == 16 { 17 } else { major };
+    if let Some(d) = managed_runtime(&vendor.base(major, None)) {
+        return Ok(java_bin(&d));
+    }
+    install_runtime_as(app, major, None, vendor).await.map(|d| java_bin(&d))
+}
+
+async fn install_runtime_as(app: &AppHandle, major: u64, arch: Option<&'static str>, vendor: JavaVendor) -> Result<PathBuf, String> {
+    let base = vendor.base(major, arch);
     let _guard = match INSTALL_LOCK.try_lock() {
         Ok(g) => g,
         Err(_) => {
@@ -316,7 +385,7 @@ async fn install_runtime(app: &AppHandle, major: u64, arch: Option<&'static str>
     std::fs::create_dir_all(&root).map_err(|e| io_fail("Установка Java", &root, &e))?;
     sweep_leftovers(&root, &base);
     let staging = root.join(format!(".{}-new-{}", base, unique_tag()));
-    if let Err(e) = install_java_arch(app, major, &staging, arch).await {
+    if let Err(e) = install_java_arch(app, major, &staging, arch, vendor.sources()).await {
         remove_dir_retrying(&staging).await;
         return Err(e);
     }
@@ -709,7 +778,22 @@ fn adoptium_mirror_url(major: u64, t: &Target, name: &str) -> Option<String> {
     safe.then(|| format!("{}/{}/jre/{}/{}/{}", ADOPTIUM_MIRROR, major, t.arch, t.os, name))
 }
 
-async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Option<&'static str>) -> Result<(), String> {
+/// IBM Semeru (OpenJ9) through the AdoptOpenJDK API, which answers with the
+/// same package record and sha256 as Adoptium does.
+async fn semeru_source(major: u64, t: &Target) -> Result<JavaPackage, String> {
+    let url = format!(
+        "https://api.adoptopenjdk.net/v3/assets/latest/{}/openj9?architecture={}&image_type=jre&os={}&vendor=ibm",
+        major, t.arch, t.os
+    );
+    let cache = data_dir().join("java").join(format!("semeru-{}-{}-{}.json", major, t.os, t.arch));
+    let assets = get_json_cached(&url, &cache).await?;
+    adoptium_package(&assets).ok_or_else(|| {
+        let _ = std::fs::remove_file(&cache);
+        "нет сборки JRE для этой системы".to_string()
+    })
+}
+
+async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Option<&'static str>, sources: &[&'static str]) -> Result<(), String> {
     emit(app, "java", 0.0, &format!("Скачиваем Java {}…", major));
     let cancel = launch_cancel_flag();
     let t = target_arch(arch);
@@ -722,11 +806,11 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
     let mut fetched = false;
     // A vendor is asked only after the previous one failed: an unreachable Azul
     // directory kept the player at 0% even when Adoptium had already answered.
-    'vendors: for vendor in ["Adoptium", "Azul"] {
-        let found = if vendor == "Adoptium" {
-            adoptium_source(major, &t).await
-        } else {
-            azul_source(major, &t).await
+    'vendors: for &vendor in sources {
+        let found = match vendor {
+            "Adoptium" => adoptium_source(major, &t).await,
+            "Semeru" => semeru_source(major, &t).await,
+            _ => azul_source(major, &t).await,
         };
         let pkg = match found {
             Err(e) => {
@@ -736,7 +820,7 @@ async fn install_java_arch(app: &AppHandle, major: u64, jdir: &Path, arch: Optio
             Ok(pkg) => pkg,
         };
         let mut urls = vec![(vendor, pkg.url.clone())];
-        if let Some(m) = pkg.name.as_deref().and_then(|n| adoptium_mirror_url(major, &t, n)) {
+        if let Some(m) = pkg.name.as_deref().filter(|_| vendor == "Adoptium").and_then(|n| adoptium_mirror_url(major, &t, n)) {
             urls.push(("зеркало", m));
         }
         for (label, url) in urls {

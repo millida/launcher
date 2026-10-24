@@ -196,6 +196,8 @@ export function realUpdated(card: Pick<SiteCard, 'updatedAt' | 'mrHit'>, files?:
 
 export interface SiteListing {
   section: string
+  /** Echo of the withMod filter; absent when the server does not filter by mod. */
+  withMod?: string | null
   /** Какие сортировки знает сервер (новый бэкенд); нет поля — только базовые три. */
   sorts?: string[]
   total: number
@@ -237,6 +239,7 @@ export interface ListingQuery {
   use?: string | null
   price?: PriceFilter | null
   side?: SideFilter | null
+  withMod?: string | null
 }
 
 export const PER_PAGE = 20

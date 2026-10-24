@@ -66,7 +66,7 @@
   clip-path: polygon(3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px), 0 3px, 3px 3px);
 }
 
-.tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
+.tb-right { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; min-width: 0; }
 /* Слот верхней полосы: магазин и хостинг переносят сюда баланс и действия. */
 .tb-slot:empty { display: none; }
 .tb-slot, .tb-actions { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }

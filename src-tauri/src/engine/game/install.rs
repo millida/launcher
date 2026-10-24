@@ -147,6 +147,13 @@ pub(crate) fn java_major_of(vjson: &Value, vid: &str) -> u64 {
     vjson["javaVersion"]["majorVersion"].as_u64().unwrap_or_else(|| java_major_for(vid))
 }
 
+fn natives_fetch_failure(cause: &str) -> String {
+    if cause == CANCELLED {
+        return cause.to_string();
+    }
+    format!("Не удалось скачать библиотеки игры, проверь сеть и запусти ещё раз. Причина: {}", cause)
+}
+
 /// Fingerprint of the version's native set; unchanged means no need to unpack
 /// the classifier jars again.
 fn natives_stamp_path(natives_dir: &Path) -> PathBuf {
@@ -298,6 +305,141 @@ async fn loader_lib_sha1(url: &str, declared: Option<String>) -> Result<String, 
 fn parse_sha1(text: &str) -> Option<String> {
     let hex = text.split_whitespace().next().unwrap_or_default().to_lowercase();
     (hex.len() == 40 && hex.chars().all(|c| c.is_ascii_hexdigit())).then_some(hex)
+}
+
+/// Mojang publishes Linux natives for x86_64 only, so on arm64 Linux LWJGL comes
+/// from its official builds on Maven Central, each checked against the sibling
+/// `.sha1` published there.
+const LINUX_ARM64: bool = cfg!(all(target_os = "linux", target_arch = "aarch64"));
+const LWJGL_MAVEN: &str = "https://repo1.maven.org/maven2";
+/// 3.2.2 (Minecraft 1.14-1.18) has no arm64 Linux build; 3.2.3 is the patch
+/// release that added one without changing the API.
+const LWJGL_ARM64_LEGACY: &str = "3.2.3";
+
+#[derive(Debug, PartialEq)]
+enum Arm64Lwjgl {
+    Keep,
+    /// Classpath jar and, for the natives-map layout of LWJGL 3.2, the jar the
+    /// natives are unpacked from.
+    Swap { name: String, artifact: String, natives: Option<String> },
+    Unsupported { version: String },
+}
+
+fn arm64_lwjgl_plan(lib: &Value) -> Arm64Lwjgl {
+    let Some(name) = lib["name"].as_str() else { return Arm64Lwjgl::Keep };
+    let parts: Vec<&str> = name.split(':').collect();
+    let (Some(&group), Some(&artifact), Some(&version)) = (parts.first(), parts.get(1), parts.get(2)) else {
+        return Arm64Lwjgl::Keep;
+    };
+    let classifier = parts.get(3).copied();
+    let linux_natives = lib["natives"].get("linux").is_some();
+    let sane = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-'));
+    if !sane(artifact) || !sane(version) {
+        return Arm64Lwjgl::Keep;
+    }
+    match group {
+        "org.lwjgl.lwjgl" if linux_natives => Arm64Lwjgl::Unsupported { version: version.to_string() },
+        "org.lwjgl" if linux_natives && (version.starts_with("3.0.") || version.starts_with("3.1.")) => {
+            Arm64Lwjgl::Unsupported { version: version.to_string() }
+        }
+        // Mojang lists each 3.2 module twice, classes alone and classes with
+        // natives: both move, or 3.2.2 classes would meet 3.2.3 natives.
+        "org.lwjgl" if classifier.is_none() && version.starts_with("3.2.") => Arm64Lwjgl::Swap {
+            name: format!("org.lwjgl:{}:{}", artifact, LWJGL_ARM64_LEGACY),
+            artifact: maven_path(&format!("org.lwjgl:{}:{}", artifact, LWJGL_ARM64_LEGACY)),
+            natives: linux_natives
+                .then(|| maven_path(&format!("org.lwjgl:{}:{}:natives-linux-arm64", artifact, LWJGL_ARM64_LEGACY))),
+        },
+        "org.lwjgl" if classifier == Some("natives-linux") => Arm64Lwjgl::Swap {
+            name: format!("org.lwjgl:{}:{}:natives-linux-arm64", artifact, version),
+            artifact: maven_path(&format!("org.lwjgl:{}:{}:natives-linux-arm64", artifact, version)),
+            natives: None,
+        },
+        _ => Arm64Lwjgl::Keep,
+    }
+}
+
+/// The sum is remembered next to the jar: it comes from the same Maven Central
+/// answer every time, and a launch should not wait on a dozen requests for it.
+async fn lwjgl_arm64_sha1(rel: &str, libs_root: &Path) -> Result<String, String> {
+    let cache = safe_join(libs_root, &format!("{}.sha1", rel))?;
+    if let Some(sum) = std::fs::read_to_string(&cache).ok().as_deref().and_then(parse_sha1) {
+        return Ok(sum);
+    }
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    let url = format!("{}/{}.sha1", LWJGL_MAVEN, rel);
+    match maven_sha1_via(&routes_round_trip(&url).await).await {
+        Ok(sum) => {
+            if let Some(dir) = cache.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(&cache, &sum);
+            Ok(sum)
+        }
+        Err(MavenMiss::Absent) => Err(format!(
+            "Для {} нет сборки LWJGL под ARM64 на Maven Central — эта версия Minecraft на Linux ARM64 пока не запускается",
+            name
+        )),
+        Err(MavenMiss::Unreachable(e)) => Err(format!(
+            "Не получили контрольную сумму {} с Maven Central: {}. Проверь соединение и запусти ещё раз",
+            name, e
+        )),
+    }
+}
+
+fn maven_download(rel: &str, sha1: &str) -> Value {
+    serde_json::json!({ "path": rel, "url": format!("{}/{}", LWJGL_MAVEN, rel), "sha1": sha1 })
+}
+
+/// Rewrites the LWJGL entries of a version json for arm64 Linux; everything
+/// else passes through untouched.
+async fn arm64_linux_libraries(libs: Vec<Value>, vid: &str, libs_root: &Path) -> Result<Vec<Value>, String> {
+    let plans: Vec<Arm64Lwjgl> = libs
+        .iter()
+        .map(|l| if rules_allow(&l["rules"]) { arm64_lwjgl_plan(l) } else { Arm64Lwjgl::Keep })
+        .collect();
+    if let Some(Arm64Lwjgl::Unsupported { version }) = plans.iter().find(|p| matches!(p, Arm64Lwjgl::Unsupported { .. })) {
+        return Err(format!(
+            "Minecraft {} не запускается на Linux ARM64: LWJGL {} не выпускался под ARM. Выбери версию 1.14 или новее",
+            vid, version
+        ));
+    }
+    let mut rels: Vec<String> = Vec::new();
+    for plan in &plans {
+        if let Arm64Lwjgl::Swap { artifact, natives, .. } = plan {
+            for rel in std::iter::once(artifact).chain(natives.iter()) {
+                if !rels.contains(rel) {
+                    rels.push(rel.clone());
+                }
+            }
+        }
+    }
+    let sums: Vec<Result<(String, String), String>> = futures::stream::iter(rels.into_iter().map(|rel| async move {
+        lwjgl_arm64_sha1(&rel, libs_root).await.map(|sum| (rel, sum))
+    }))
+    .buffer_unordered(PARALLEL_LIBS)
+    .collect()
+    .await;
+    let mut known = std::collections::HashMap::new();
+    for r in sums {
+        let (rel, sum) = r?;
+        known.insert(rel, sum);
+    }
+    let sum_of = |rel: &str| known.get(rel).cloned().ok_or_else(|| format!("Нет контрольной суммы для {}", rel));
+    let mut out = Vec::with_capacity(libs.len());
+    for (mut lib, plan) in libs.into_iter().zip(plans) {
+        if let Arm64Lwjgl::Swap { name, artifact, natives } = plan {
+            lib["name"] = Value::String(name);
+            let mut downloads = serde_json::json!({ "artifact": maven_download(&artifact, &sum_of(&artifact)?) });
+            if let Some(rel) = natives {
+                downloads["classifiers"] = serde_json::json!({ "natives-linux": maven_download(&rel, &sum_of(&rel)?) });
+                lib["natives"] = serde_json::json!({ "linux": "natives-linux" });
+            }
+            lib["downloads"] = downloads;
+        }
+        out.push(lib);
+    }
+    Ok(out)
 }
 
 /// What to tell the player when no installer candidate worked.
@@ -857,6 +999,7 @@ pub async fn install_loader_with_java(
 
     let mut cp: Vec<(String, PathBuf)> = vec![];
     let libs = vjson["libraries"].as_array().cloned().unwrap_or_default();
+    let libs = if LINUX_ARM64 { arm64_linux_libraries(libs, &vid, &libs_root).await? } else { libs };
     let mut jobs: Vec<LibJob> = vec![];
     let mut native_jobs: Vec<(LibJob, Value)> = vec![];
     for lib in libs.iter() {
@@ -877,7 +1020,7 @@ pub async fn install_loader_with_java(
         // natives: downloads.classifiers[ natives.<os> ], extracted into natives_dir
         if let Some(nat) = lib["natives"].as_object() {
             if let Some(key_tmpl) = nat.get(natives_os_key()).and_then(|v| v.as_str()) {
-                let arch = if cfg!(target_arch = "x86_64") { "64" } else { "32" };
+                let arch = if cfg!(target_pointer_width = "64") { "64" } else { "32" };
                 let key = key_tmpl.replace("${arch}", arch);
                 if let Some(cl) = lib["downloads"]["classifiers"].get(&key).and_then(|c| c.as_object()) {
                     if let (Some(u), Some(rel)) = (cl["url"].as_str(), cl["path"].as_str()) {
@@ -919,7 +1062,11 @@ pub async fn install_loader_with_java(
                 path: j.path.clone(),
             })
             .collect();
-        let _ = fetch_libs(&nat_libs, app, 45.0, 48.0, "Нативные библиотеки…").await;
+        // A missing native jar is not survivable: the game would start and die on
+        // UnsatisfiedLinkError with nothing pointing at the network.
+        fetch_libs(&nat_libs, app, 45.0, 48.0, "Нативные библиотеки…")
+            .await
+            .map_err(|e| natives_fetch_failure(&e))?;
         if !natives_up_to_date(&natives_dir, &stamp, deep_verify()) {
             emit(app, "files", 48.0, "Распаковываем нативные библиотеки…");
             let items: Vec<(PathBuf, Value)> =
@@ -944,11 +1091,12 @@ pub async fn install_loader_with_java(
         .ok_or_else(|| format!("В описании версии {} нет главного класса", vid))?
         .to_string();
     let mut merged = vjson.clone();
-    if loader == "fabric" || loader == "quilt" {
-        let (meta_base, title) = if loader == "quilt" {
-            ("https://meta.quiltmc.org/v3", "Quilt-лоадер…")
-        } else {
-            ("https://meta.fabricmc.net/v2", "Fabric-лоадер…")
+    if loader == "fabric" || loader == "quilt" || loader == "legacyfabric" {
+        let meta_base = fabric_like_meta(loader);
+        let title = match loader {
+            "quilt" => "Quilt-лоадер…",
+            "legacyfabric" => "Legacy Fabric…",
+            _ => "Fabric-лоадер…",
         };
         emit(app, "files", 52.0, title);
         let lcache = root.join("loader-cache");
@@ -994,7 +1142,11 @@ pub async fn install_loader_with_java(
         let mut ljobs: Vec<LibJob> = vec![];
         for lib in profile["libraries"].as_array().cloned().unwrap_or_default() {
             let Some(coord) = lib["name"].as_str() else { continue };
-            let base = lib["url"].as_str().unwrap_or(if loader == "quilt" { "https://maven.quiltmc.org/repository/release/" } else { "https://maven.fabricmc.net/" });
+            let base = lib["url"].as_str().unwrap_or(match loader {
+                "quilt" => "https://maven.quiltmc.org/repository/release/",
+                "legacyfabric" => "https://maven.legacyfabric.net/",
+                _ => "https://maven.fabricmc.net/",
+            });
             let rel = maven_path(coord);
             ljobs.push(LibJob {
                 url: format!("{}{}", base, rel),
@@ -1534,6 +1686,82 @@ mod tests {
         #[cfg(windows)]
         let status = std::os::windows::process::ExitStatusExt::from_raw(code as u32);
         std::process::Output { status, stdout: stdout.as_bytes().to_vec(), stderr: stderr.as_bytes().to_vec() }
+    }
+
+    #[test]
+    fn natives_fetch_failure_names_the_network_and_keeps_cancel() {
+        let said = natives_fetch_failure("таймаут — https://libraries.minecraft.net/x.jar");
+        assert!(said.contains("проверь сеть"), "the player must learn it is the network, got {said:?}");
+        assert!(said.contains("libraries.minecraft.net"), "the cause is the whole diagnosis, got {said:?}");
+        assert_eq!(natives_fetch_failure(CANCELLED), CANCELLED, "a cancel must stay recognisable as a cancel");
+    }
+
+    #[test]
+    fn arm64_linux_takes_lwjgl_from_its_official_arm_builds() {
+        let natives_map = serde_json::json!({ "linux": "natives-linux", "windows": "natives-windows" });
+        let swap = |name: &str, artifact: &str, natives: Option<&str>| Arm64Lwjgl::Swap {
+            name: name.into(),
+            artifact: artifact.into(),
+            natives: natives.map(String::from),
+        };
+        let cases: Vec<(Value, Arm64Lwjgl, &str)> = vec![
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl-glfw:3.3.3:natives-linux" }),
+                swap(
+                    "org.lwjgl:lwjgl-glfw:3.3.3:natives-linux-arm64",
+                    "org/lwjgl/lwjgl-glfw/3.3.3/lwjgl-glfw-3.3.3-natives-linux-arm64.jar",
+                    None,
+                ),
+                "1.19+: Mojang ships only x86_64 Linux natives, the arm64 jar of the same version replaces it",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl:3.2.2", "natives": natives_map }),
+                swap(
+                    "org.lwjgl:lwjgl:3.2.3",
+                    "org/lwjgl/lwjgl/3.2.3/lwjgl-3.2.3.jar",
+                    Some("org/lwjgl/lwjgl/3.2.3/lwjgl-3.2.3-natives-linux-arm64.jar"),
+                ),
+                "1.14-1.18: 3.2.2 has no arm64 build, classes and natives move together to 3.2.3",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl-glfw:3.2.2" }),
+                swap("org.lwjgl:lwjgl-glfw:3.2.3", "org/lwjgl/lwjgl-glfw/3.2.3/lwjgl-glfw-3.2.3.jar", None),
+                "the classes-only twin of a 3.2.2 module must not keep 3.2.2 on the classpath",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl:3.1.6", "natives": natives_map }),
+                Arm64Lwjgl::Unsupported { version: "3.1.6".into() },
+                "1.13: LWJGL 3.1 never had arm64 Linux natives",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl.lwjgl:lwjgl-platform:2.9.4-nightly-20150209", "natives": natives_map }),
+                Arm64Lwjgl::Unsupported { version: "2.9.4-nightly-20150209".into() },
+                "1.12.2 and older: LWJGL 2 has no ARM release at all",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl:3.3.3" }),
+                Arm64Lwjgl::Keep,
+                "the Java classes are the same on every architecture",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl:3.3.3:natives-macos-arm64" }),
+                Arm64Lwjgl::Keep,
+                "other systems' natives are dropped by their own rules, not here",
+            ),
+            (
+                serde_json::json!({ "name": "com.mojang:text2speech:1.12.4", "natives": natives_map }),
+                Arm64Lwjgl::Keep,
+                "the narrator fails softly without its natives and must not block the launch",
+            ),
+            (
+                serde_json::json!({ "name": "org.lwjgl:lwjgl:../../x:natives-linux" }),
+                Arm64Lwjgl::Keep,
+                "a version from remote json never becomes a path outside the coordinates",
+            ),
+        ];
+        for (lib, want, why) in cases {
+            assert_eq!(arm64_lwjgl_plan(&lib), want, "{}: {}", lib["name"], why);
+        }
     }
 
     #[test]

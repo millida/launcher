@@ -24,7 +24,7 @@
   height: clamp(220px, 30vh, 320px);
   padding: 22px 24px;
   overflow: hidden;
-  text-align: left;
+  text-align: start;
   color: var(--m-fg);
   background: var(--m-inset);
   --px-n: 10px; clip-path: var(--px-10);
@@ -71,7 +71,7 @@
   flex-direction: column;
   min-width: 0;
   padding: 0;
-  text-align: left;
+  text-align: start;
   color: inherit;
   background: var(--m-surface);
   --px-n: 10px; clip-path: var(--px-10);
@@ -315,7 +315,7 @@
 }
 
 /* ---------- перестройка 23.09.2026: сборка в герое, «Новая сборка», серверы ---------- */
-.ph-new { margin-left: auto; }
+.ph-new { margin-inline-start: auto; }
 .ph-hero { cursor: default; }
 .ph-hero-facts { font-size: 13px; font-weight: 600; color: var(--m-fg); opacity: 0.8; }
 .ph-hero-acts { position: relative; display: flex; align-items: center; gap: 10px; flex: none; }
@@ -558,7 +558,7 @@
 .pp-news-h { display: flex; align-items: baseline; gap: 10px; }
 .pp-news-h b { font: 800 15px/1.2 var(--m-font); color: var(--m-fg); }
 .pp-news-h span { font-size: 13px; color: var(--m-fg-subtle); }
-.pp-news-all { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); }
+.pp-news-all { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto; font: 700 13px/1 var(--m-font); color: var(--m-fg-muted); }
 .pp-news-all:hover { color: var(--m-fg); }
 .pp-news-all svg.icon { width: 12px; height: 12px; }
 .pp-news p { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; margin: 6px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--m-fg-muted); }
@@ -786,7 +786,7 @@
   gap: 12px;
   width: 100%;
   padding: 10px 12px;
-  text-align: left;
+  text-align: start;
   color: var(--m-fg);
   background: var(--m-surface-2);
   --px-n: 5px; clip-path: var(--px-5);
@@ -853,7 +853,7 @@
 .vp-off .vp-mod { opacity: 0.45; }
 .vp-fps { justify-content: space-between; height: 44px; }
 .vp-fps > span { flex: 1; }
-.ph-shelf-extra { margin-left: auto; }
+.ph-shelf-extra { margin-inline-start: auto; }
 
 /* ---------- «Мои сборки» (правка владельца 23.09.2026, 19:23) ---------- */
 .ph-shelf-extra { display: inline-flex; gap: 8px; }
@@ -947,7 +947,7 @@
 }
 .ph-mine-menu button {
   display: flex; align-items: center; gap: 10px; flex: 1 1 0; min-height: 24px; max-height: 32px; padding: 0 10px;
-  font: 700 13px/1 var(--m-font); color: var(--m-fg); text-align: left; background: transparent;
+  font: 700 13px/1 var(--m-font); color: var(--m-fg); text-align: start; background: transparent;
   clip-path: var(--px-4);
 }
 .ph-mine-menu button:hover, .ph-mine-menu button:focus-visible { background: var(--m-surface-2); outline: none; }
@@ -1111,7 +1111,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   width: 100%;
   padding: 10px 12px;
   font: 750 14px/1.2 var(--m-font);
-  text-align: left;
+  text-align: start;
   color: var(--m-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -1318,7 +1318,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .bd-act-ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; color: var(--m-fg-subtle); background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
 .bd-act-ic svg { width: 20px; height: 20px; }
 .bd-act.main .bd-act-ic, .bd-act:hover .bd-act-ic { color: var(--px-on-accent); background: var(--m-accent); }
-.bd-act-n { margin-left: auto; font: 700 12px/1 var(--m-font); color: var(--m-accent); }
+.bd-act-n { margin-inline-start: auto; font: 700 12px/1 var(--m-font); color: var(--m-accent); }
 
 /* Каталог во вкладке «Собрать» — без своей шапки экрана. */
 .hub-cat { display: flex; flex-direction: column; min-width: 0; }
@@ -1363,7 +1363,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
   gap: 12px;
   min-height: 48px;
   padding: 6px 10px;
-  text-align: left;
+  text-align: start;
   color: var(--m-fg);
   background: none;
   --px-n: 5px; clip-path: var(--px-5);
@@ -1433,6 +1433,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .hsv-dot { width: 8px; height: 8px; background: currentColor; }
 .hsv-addr { font-family: var(--m-font-mono, ui-monospace, monospace); }
 .hsv-acts { flex: none; display: flex; gap: 8px; }
+.hsv-paid { align-self: flex-start; padding: 2px 8px; font: 700 12px/1.4 var(--m-font); color: var(--m-accent); background: var(--m-accent-soft); }
 @media (max-width: 1000px) {
   .ph-card.hsv { flex-wrap: wrap; }
   .hsv-acts { flex-basis: 100%; }
@@ -1589,7 +1590,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
    справа (владелец 24.09.2026, 17:47). */
 .ph-card.fy-host {
   position: relative; display: grid; grid-template-columns: 44% 1fr; align-items: stretch;
-  min-height: 100%; padding: 0; overflow: hidden; text-align: left; background: #123a24;
+  min-height: 100%; padding: 0; overflow: hidden; text-align: start; background: #123a24;
 }
 .ph-card.fy-host:hover { background: #164a2d; }
 .fy-host-art { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; image-rendering: pixelated; }
@@ -1700,7 +1701,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .ph-card.ph-mt.is-own .ph-card-tag { z-index: 1; }
 .ph-mt-play {
   flex: none;
-  margin-left: auto;
+  margin-inline-start: auto;
   pointer-events: none;
 }
 .ph-card.ph-mt.is-own .ph-card-tag.excl { background: var(--m-rarity-legendary); color: var(--px-on-accent, #06200e); }
@@ -1915,7 +1916,7 @@ button.ph-hs:hover > .ph-hs-img { transform: scale(1.03); }
 .hub-cats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .hub-ctile {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0;
-  aspect-ratio: 1; padding: 12px 12px 0; overflow: hidden; border: 0; cursor: pointer; text-align: left; color: var(--m-fg);
+  aspect-ratio: 1; padding: 12px 12px 0; overflow: hidden; border: 0; cursor: pointer; text-align: start; color: var(--m-fg);
   --hc-f: rgba(0, 0, 0, 0.3);
   background: color-mix(in srgb, var(--cat-tint, var(--m-accent)) 14%, var(--m-surface));
   box-shadow: inset 0 0 0 2px var(--hc-f), inset 0 3px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 0 rgba(0, 0, 0, 0.28);

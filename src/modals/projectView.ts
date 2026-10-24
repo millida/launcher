@@ -220,3 +220,11 @@ export function isForeign(text: string): boolean {
   const lat = (plain.match(/[a-z]/gi) || []).length
   return lat > 40 && cyr < lat * 0.15
 }
+
+/** Two years without a release: the author has most likely left the project. */
+export const ABANDONED_MS = 2 * 365 * 24 * 3600 * 1000
+
+export function isAbandoned(updated: string | null | undefined, now = Date.now()): boolean {
+  const at = updated ? Date.parse(updated) : NaN
+  return Number.isFinite(at) && now - at > ABANDONED_MS
+}

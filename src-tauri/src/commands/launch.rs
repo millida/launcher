@@ -197,6 +197,30 @@ pub fn open_world_folder(profile: String, folder: String) -> Result<(), String> 
     engine::open_world_folder(&profile, &folder)
 }
 
+/// The lag helper's advice, shown on the island of the running game.
+#[tauri::command]
+pub fn game_notice(profile: String, title: String, detail: String) -> bool {
+    engine::post_game_notice(&profile, &title, &detail)
+}
+
+/// Everything the running game wrote since its launch, for a log view opened late.
+#[tauri::command]
+pub fn game_log_snapshot() -> engine::LiveLogSnapshot {
+    engine::live_log_snapshot()
+}
+
+/// Memory facts checked before a launch: is the heap enough for the build.
+#[tauri::command]
+pub async fn ram_check(profile: String, requested: Option<u32>) -> Result<engine::RamCheck, String> {
+    super::blocking(move || engine::ram_check(&profile, requested.unwrap_or(0))).await
+}
+
+/// Graphics picked for this PC, written once before a build's first start.
+#[tauri::command]
+pub async fn seed_video_options(profile: String, video: Option<Vec<(String, String)>>) -> Result<bool, String> {
+    super::blocking(move || engine::seed_video_options(&profile, video)).await?
+}
+
 /// Performs one of the actions offered under a crash report.
 #[tauri::command]
 pub async fn apply_crash_fix(app: tauri::AppHandle, profile: String, kind: String, arg: String) -> Result<String, String> {
@@ -222,3 +246,13 @@ pub async fn set_game_invite(slug: String, code: String) -> Result<bool, String>
 
 #[tauri::command]
 pub async fn claim_game_invites() -> Vec<String> { engine::claim_game_invites().await }
+
+#[tauri::command]
+pub fn launch_hooks(profile: String) -> engine::LaunchHooks {
+    engine::launch_hooks(&profile)
+}
+
+#[tauri::command]
+pub async fn set_launch_hooks(profile: String, hooks: engine::LaunchHooks) -> Result<bool, String> {
+    engine::set_launch_hooks(profile, hooks).await
+}

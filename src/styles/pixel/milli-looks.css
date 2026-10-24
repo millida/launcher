@@ -73,7 +73,7 @@
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
 }
 .lk-hero-top { position: absolute; z-index: 1; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-.lk-hero-top > :only-child { margin-left: auto; }
+.lk-hero-top > :only-child { margin-inline-start: auto; }
 .lk-chip {
   display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px 0 4px;
   font: 800 11px/1 var(--m-font); color: #fff; background: rgba(10, 11, 12, 0.72); cursor: help;
@@ -97,7 +97,7 @@
 .lk-swap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .lk-swap-it {
   position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 3px 3px 5px;
-  border: 0; cursor: pointer; color: var(--m-fg-muted); background: var(--m-surface); text-align: left;
+  border: 0; cursor: pointer; color: var(--m-fg-muted); background: var(--m-surface); text-align: start;
   --px-n: 4px; clip-path: var(--px-4);
 }
 .lk-swap-it:hover { background: var(--m-surface-2); color: var(--m-fg); }

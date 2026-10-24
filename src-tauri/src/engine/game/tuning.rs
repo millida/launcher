@@ -338,6 +338,41 @@ pub fn fit_jvm_args(args: &mut Vec<String>, java_major: Option<u32>) {
     }
 }
 
+/// Memory facts the launch screen checks before a start: the heap this launch
+/// will get, what the build needs, and what the PC has free right now.
+#[derive(Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RamCheck {
+    pub heap_mb: u32,
+    /// The build's own need by its mods and shaders, before the PC has a say.
+    pub need_mb: u32,
+    /// The most auto-tuning would give this build on this PC.
+    pub fit_mb: u32,
+    pub total_mb: u64,
+    pub available_mb: u64,
+    pub mods: u32,
+    /// The heap was set by hand (slider or a crash fix), not by auto-tuning.
+    pub manual: bool,
+    /// A catalogue pack states its own memory; the launch follows it.
+    pub pack_owned: bool,
+}
+
+pub fn ram_check(profile: &str, requested: u32) -> RamCheck {
+    let mods = count_files(profile, "mod");
+    let shaders = count_files(profile, "shader") > 0;
+    let tuning = tune_profile(profile);
+    RamCheck {
+        heap_mb: tuned_ram_mb(profile, requested),
+        need_mb: wanted_mb(mods, shaders),
+        fit_mb: tuning.ram_mb,
+        total_mb: tuning.total_ram_mb,
+        available_mb: available_ram_mb(),
+        mods,
+        manual: requested > 0 || manual_ram_mb(profile) > 0,
+        pack_owned: !crate::engine::fps_boost_applicable(profile),
+    }
+}
+
 /// Memory for a launch: an explicit request wins, otherwise the tuned value.
 pub fn tuned_ram_mb(profile: &str, requested: u32) -> u32 {
     if requested > 0 {

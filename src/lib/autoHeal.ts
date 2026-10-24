@@ -1,4 +1,4 @@
-import { applyCrashFix } from '../ipc/commands'
+import { applyCrashFix, stopGame } from '../ipc/commands'
 import type { CrashAction, CrashInfo } from '../ipc/events'
 import { hasTauri } from '../ipc/tauri'
 import { useCrash } from '../state/crash'
@@ -44,6 +44,17 @@ async function heal(info: CrashInfo, plan: CrashAction): Promise<void> {
   }
   showToast(t('Сборку починили — запускаем снова'), 'ok')
   realLaunch(info.profile)
+}
+
+/** После починки: дождаться, пока прежняя копия закроется, и запустить сборку снова. */
+export async function relaunchAfterFix(profile: string): Promise<void> {
+  if (useGame.getState().list.includes(profile)) await stopGame(profile).catch(() => {})
+  if (!(await gone(profile))) {
+    showToast(t('Сборку починили. Запусти игру'), 'ok')
+    return
+  }
+  showToast(t('Сборку починили — запускаем снова'), 'ok')
+  realLaunch(profile)
 }
 
 /**

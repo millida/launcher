@@ -104,7 +104,7 @@ fn meta_from(api: &Value, local: Option<&Value>) -> Result<PackMeta, String> {
 /// Client half of the pack. A pack without one is a server-only upload: there
 /// is nothing to install on this machine, and saying so beats installing the
 /// server half into a game folder.
-fn client_file(view: &Value) -> Result<(String, u64, String), String> {
+pub(super) fn client_file(view: &Value) -> Result<(String, u64, String), String> {
     let files = view["files"].as_array().cloned().unwrap_or_default();
     let file = files
         .iter()
@@ -348,6 +348,7 @@ async fn install_catalog_pack_job(
     let _ = std::fs::remove_file(pdir.join(MANIFEST_NAME));
     record_shipped(&pdir)?;
     record_shipped_mods(&pdir)?;
+    record_pack_origin_at(&pdir);
     trust_pack_launch(&pname, slug);
     restore_player_files(&pdir, slug);
 
@@ -538,6 +539,7 @@ async fn prepare_update(
         record_shipped(&to)?;
         record_shipped_mods(&to)?;
         carry_player_files(&from, &to, &slug)?;
+        record_pack_origin_at(&to);
         write_json_atomic(&to.join("millida-settings.json"), &settings)
     })
     .await

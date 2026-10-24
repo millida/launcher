@@ -17,6 +17,7 @@ use mpris as platform;
 use smtc as platform;
 
 use protocol::{Command, NowPlaying};
+pub use protocol::PerfSample;
 use std::sync::{Arc, Mutex, Weak};
 use tokio::sync::{broadcast, watch};
 
@@ -24,6 +25,9 @@ pub const PORT_ENV: &str = "MILLIDA_MEDIA_PORT";
 pub const KEY_ENV: &str = "MILLIDA_MEDIA_KEY";
 
 pub(crate) type Reading = Option<Arc<NowPlaying>>;
+
+/// Receives the mod's frame reports (`perf` lines) for the lag helper.
+pub type PerfSink = Arc<dyn Fn(PerfSample) + Send + Sync>;
 
 pub(crate) enum Control {
     Command(Command),
@@ -99,8 +103,9 @@ const NOTICE_BACKLOG: usize = 8;
 pub struct Notices(broadcast::Sender<Arc<str>>);
 
 impl Notices {
-    pub fn post(&self, kind: &str, title: &str, detail: &str, positive: bool) {
-        let _ = self.0.send(protocol::notice_message(kind, title, detail, positive).into());
+    /// False when no game listens, so the caller knows nobody saw the line.
+    pub fn post(&self, kind: &str, title: &str, detail: &str, positive: bool) -> bool {
+        self.0.send(protocol::notice_message(kind, title, detail, positive).into()).is_ok()
     }
 }
 
@@ -110,6 +115,10 @@ impl MediaLink {
     }
 
     pub fn start_with(music: bool) -> Option<MediaLink> {
+        MediaLink::start_watched(music, None)
+    }
+
+    pub fn start_watched(music: bool, perf: Option<PerfSink>) -> Option<MediaLink> {
         let hub = if music { Hub::shared()? } else { Hub::silent() };
         // Listens only on 127.0.0.1 (the system picks the port). The port and the key go to the game in the environment variables MILLIDA_MEDIA_PORT and MILLIDA_MEDIA_KEY.
         let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).ok()?;
@@ -117,7 +126,7 @@ impl MediaLink {
         let port = listener.local_addr().ok()?.port();
         let key = protocol::new_key();
         let (notices, _) = broadcast::channel(NOTICE_BACKLOG);
-        let task = tauri::async_runtime::spawn(server::serve(listener, key.clone(), hub, notices.clone()));
+        let task = tauri::async_runtime::spawn(server::serve(listener, key.clone(), hub, notices.clone(), perf));
         Some(MediaLink { port, key, notices, task })
     }
 

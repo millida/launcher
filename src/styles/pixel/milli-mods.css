@@ -47,7 +47,7 @@
 .mmd .mbl-group { height: 100%; display: flex; align-items: flex-end; gap: 6px; padding: 0 4px 4px; }
 .mmd .mbl-gbtn {
   flex: 1 1 auto; min-width: 0; height: 26px; display: flex; align-items: center; gap: 7px; padding: 0 6px 0 4px;
-  background: none; border: 0; color: var(--m-fg-muted); font: 800 12px/1 var(--m-font); cursor: pointer; text-align: left;
+  background: none; border: 0; color: var(--m-fg-muted); font: 800 12px/1 var(--m-font); cursor: pointer; text-align: start;
   box-shadow: inset 0 -1px 0 var(--m-border);
 }
 .mmd .mbl-gbtn:hover { color: var(--m-fg); background: var(--m-surface); }
@@ -57,7 +57,7 @@
   flex: none; padding: 2px 5px; font: 700 10.5px/1 'Monocraft', var(--m-mono); font-style: normal; color: var(--m-fg-subtle);
   background: var(--m-surface-2); font-variant-numeric: tabular-nums;
 }
-.mmd .mbl-chev { margin-left: auto; width: 10px; height: 10px; flex: none; color: var(--m-fg-faint); transition: transform 180ms var(--m-ease-move, ease); }
+.mmd .mbl-chev { margin-inline-start: auto; width: 10px; height: 10px; flex: none; color: var(--m-fg-faint); transition: transform 180ms var(--m-ease-move, ease); }
 .mmd .mbl-group.shut .mbl-chev { transform: rotate(-90deg); }
 .mmd .mbl-group.shut .mbl-gbtn { color: var(--m-fg-subtle); }
 .mmd .mbl-group.shut .mbl-gic { opacity: 0.6; }

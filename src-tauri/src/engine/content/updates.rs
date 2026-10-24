@@ -11,6 +11,24 @@ pub struct UpdateInfo {
     pub file_name: String,
     pub new_version_id: String,
     pub new_version_number: String,
+    pub old_version_number: String,
+    pub title: String,
+    /// The author's notes for the new version, shown before «Обновить всё».
+    pub changelog: String,
+}
+
+const CHANGELOG_MAX_CHARS: usize = 4000;
+
+fn changelog_of(v: &Value) -> String {
+    let text = v["changelog"].as_str().unwrap_or("").trim();
+    if text.chars().count() <= CHANGELOG_MAX_CHARS {
+        return text.to_string();
+    }
+    text.chars().take(CHANGELOG_MAX_CHARS).collect::<String>() + "…"
+}
+
+fn pinned(profile: &str, e: &ContentEntry) -> bool {
+    is_content_locked(profile, &e.kind, &e.project_id, &e.file_name)
 }
 
 /// What Modrinth's two bulk answers say about one installed file. `newest` is
@@ -108,7 +126,7 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateIn
         // A pack's load-bearing Fabric API is pinned to what it shipped: a newer
         // one on Modrinth installs by loader tag yet breaks the pack's bridge at
         // world load, so it is never offered as an update here.
-        if fabric_api_pinned(&profile, &bridge, &e.project_id) {
+        if fabric_api_pinned(&profile, &bridge, &e.project_id) || pinned(&profile, &e) {
             continue;
         }
         let Some(v) = latest.get(&e.file_name) else { continue };
@@ -118,6 +136,9 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateIn
                 file_name: e.file_name,
                 new_version_id: nid.to_string(),
                 new_version_number: v["version_number"].as_str().unwrap_or("").to_string(),
+                old_version_number: e.version_number,
+                title: e.title,
+                changelog: changelog_of(v),
             });
         }
     }
@@ -145,9 +166,16 @@ async fn apply_update(profile: &str, kind: &str, file_name: &str, ver: &Value) -
     let was_disabled = off.exists() && !on.exists();
     let newname = install_project_version(profile, kind, &project, ver).await?;
     if newname != file_name {
+        let mut held = false;
         for cand in [on, off] {
             // Deletes the old mod file from the same modpack after the new version is installed.
-            if cand.exists() { let _ = std::fs::remove_file(&cand); }
+            if cand.exists() && std::fs::remove_file(&cand).is_err() {
+                held = true;
+            }
+        }
+        // A running game holds the old jar open; left alone, both versions would load next time.
+        if held {
+            queue_delete(profile, kind, &file_name)?;
         }
         manifest_remove(profile, kind, &file_name);
     }
@@ -167,6 +195,9 @@ pub async fn update_content(profile: String, kind: String, file_name: String) ->
     let bridge = bridge_loaders(&profile, &loader_id, &kind);
     if fabric_api_pinned(&profile, &bridge, &entry.project_id) {
         return Err("Fabric API этой сборки закреплён под неё — обновлять его отдельно нельзя.".into());
+    }
+    if pinned(&profile, &entry) {
+        return Err("Версия этого файла закреплена — сними замок, чтобы обновить".into());
     }
     let ver = update_version_bridged(&entry.project_id, &entry.version_id, &gv, &loaders, &bridge).await
         .map_err(|e| format!("{}: {}", if entry.title.is_empty() { file_name.clone() } else { entry.title.clone() }, e))?;
@@ -192,7 +223,7 @@ pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
     warm_projects_meta(&ids).await;
     let mut n = 0;
     for e in entries {
-        if fabric_api_pinned(&profile, &bridge, &e.project_id) {
+        if fabric_api_pinned(&profile, &bridge, &e.project_id) || pinned(&profile, &e) {
             continue;
         }
         let Some(v) = latest.get(&e.file_name) else { continue };

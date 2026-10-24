@@ -290,6 +290,7 @@ pub(crate) async fn launch_native(
         let _ = child.kill();
         return Err(LAUNCH_CANCELLED.into());
     }
+    super::livelog::reset_live_log(&profile);
     let _ = app.emit("game-log-start", &profile);
     let log_file = Arc::new(Mutex::new(log_file));
     let server_now: ServerSlot = Arc::new(Mutex::new(None));

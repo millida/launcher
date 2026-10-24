@@ -5,6 +5,9 @@ import { useProfiles } from '../state/profiles'
 import { openSettings, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { encodeInvite, isServerAddr, parseInvite } from '../lib/invite'
+import { encodePartyCard, parsePartyCard, partyCardExpired, type PartyCardData } from '../lib/partyCard'
+import { prettyPartyCode } from '../lib/party'
+import { joinPartyByCode, partyInviteCode, usePartyStore } from '../state/party'
 import { markCoords, markDimension, markPreview, parseMark, type SharedMark } from '../lib/waypointShare'
 import { Head } from './Head'
 import { ELT_IDS, EltText, eltAlias, eltCode, eltUrl, loadEltAliases } from '../lib/eltaller'
@@ -48,7 +51,9 @@ import { Ticks } from './Ticks'
 import { StreakFire } from './friends/StreakFire'
 import { useFriendStreaks } from '../state/friendStreaks'
 import { timeHM } from '../lib/format'
-import { t, useT } from '../i18n'
+import { getLocale, t, useT } from '../i18n'
+import { banReason, ensureChatRules, useChatSafety } from '../state/chatSafety'
+import { maskProfanity } from '../lib/chatProfanity'
 
 function InviteCard({ addr, name, version, me }: { addr: string; name: string; version?: string; me?: boolean }) {
   const t = useT()
@@ -76,6 +81,34 @@ function InviteCard({ addr, name, version, me }: { addr: string; name: string; v
         <Icon id="i-login" />
         {busy ? t('Заходим…') : t('Зайти')}
       </button>
+    </div>
+  )
+}
+
+function PartyCard({ card, me }: { card: PartyCardData; me?: boolean }) {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const expired = partyCardExpired(card)
+  const join = () => {
+    setBusy(true)
+    void joinPartyByCode(card.code).finally(() => setBusy(false))
+  }
+  return (
+    <div className={'msg-invite' + (me ? ' me' : '')}>
+      <span className="msg-invite-ic">
+        <Icon id="i-users" />
+      </span>
+      <span className="msg-invite-body">
+        <b>{t('Приглашение в пати')}</b>
+        <span className="msg-invite-name">{card.capacity ? t('{size} из {capacity}', { size: card.size, capacity: card.capacity }) : prettyPartyCode(card.code)}</span>
+        <span className="msg-invite-addr">{expired ? t('Код истёк') : prettyPartyCode(card.code)}</span>
+      </span>
+      {me ? null : (
+        <button className="btn sm primary" disabled={busy || expired} data-track="chat_party_join" data-src="friend" onClick={join}>
+          <Icon id="i-login" />
+          {busy ? t('Заходим…') : t('Вступить')}
+        </button>
+      )}
     </div>
   )
 }
@@ -142,12 +175,22 @@ function CallLogCard({ log, me, uid, nick }: { log: CallLog; me?: boolean; uid: 
   )
 }
 
+/// The place comes from the friend's own heartbeat: the game, a launcher, or the site, which
+/// is any browser and so names no device.
+function placeText(p: FriendProfile): string {
+  if (p.place === 'game') return p.serverName || p.build ? t('В игре: {where}', { where: p.serverName || p.build || '' }) : t('В игре')
+  if (p.place === 'launcher') return t('В лаунчере')
+  return t('На сайте')
+}
+
 function FriendStats({ p }: { p: FriendProfile }) {
   const t = useT()
   const s = p.stats
   const joinable = p.playing && p.serverIp
   const lastServer = s?.lastServerName || s?.lastServer || ''
   const rows: Array<[string, string]> = []
+  if (p.place && p.online) rows.push([t('Сейчас'), placeText(p)])
+  if (p.friendsSince) rows.push([t('Друзья с'), new Date(p.friendsSince).toLocaleDateString(getLocale(), { day: 'numeric', month: 'long', year: 'numeric' })])
   if (s?.totalSeconds) rows.push([t('Всего в игре'), fmtPlaytime(s.totalSeconds)])
   if (s?.sessions) rows.push([t('Запусков'), String(s.sessions)])
   if (s?.lastBuild) rows.push([t('Последняя сборка'), s.lastBuild])
@@ -226,6 +269,7 @@ function OldSticker({ url, name }: { url: string; name?: string }) {
 
 function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => void }) {
   const t = useT()
+  const filter = useChatSafety((s) => s.filter)
   const att = m.attachment
   if (m.deleted) return <span className="msg-gone">{t('Сообщение удалено')}</span>
   const quotedFrom = m.replyTo?.me
@@ -255,7 +299,7 @@ function MessageBody({ m, onJump }: { m: ChatMessage; onJump: (id: string) => vo
         )
       ) : null}
       {att && att.kind === 'sticker' ? <OldSticker url={att.url} name={att.name} /> : null}
-      {m.text ? <span className="msg-text"><EltText text={m.text} /></span> : null}
+      {m.text ? <span className="msg-text"><EltText text={filter && !m.me ? maskProfanity(m.text) : m.text} /></span> : null}
     </>
   )
 }
@@ -466,6 +510,7 @@ function Composer() {
   const send = async (attachment?: ChatAttachment) => {
     const body = text.trim()
     if (!body && !attachment) return
+    if (!(await ensureChatRules())) return
     // Вложение всегда уходит новым сообщением: правка меняет только текст.
     if (editing && !attachment) {
       const id = editing.id || ''
@@ -484,7 +529,7 @@ function Composer() {
     try {
       await sendChat(body, attachment, quoted ? replyPreviewOf(quoted) : null)
     } catch (e) {
-      const held = offPlatformReason(e)
+      const held = offPlatformReason(e) || banReason(e)
       if (!held) trackFailure('chat', e, { step: 'send' })
       showToast(held || t('Сообщение не ушло — нажми «Повторить» под ним'), 'error')
     }
@@ -754,6 +799,14 @@ function InvitePlay({ target }: { target: InviteTarget }) {
       showToast(offPlatformReason(e) || t('Приглашение не ушло — нажми «Повторить» под ним'), 'error'),
     )
   }
+  const sendParty = async () => {
+    setOpen(false)
+    const issued = await partyInviteCode()
+    if (!issued) return
+    const party = usePartyStore.getState().party
+    const text = encodePartyCard({ code: issued.code, size: party?.members.length ?? 1, capacity: party?.capacity ?? 0, expiresAt: issued.expiresAt })
+    await sendChat(text).catch((e) => showToast(offPlatformReason(e) || t('Приглашение не ушло — нажми «Повторить» под ним'), 'error'))
+  }
   return (
     <div className="chat-invite-wrap">
       <button
@@ -769,6 +822,10 @@ function InvitePlay({ target }: { target: InviteTarget }) {
       </button>
       {open ? (
         <div className="chat-srv-pop" onClick={(e) => e.stopPropagation()}>
+          <button className="chat-srv-row mine" data-track="invite_party" onClick={() => void sendParty()}>
+            <Icon id="i-users" />
+            <span className="chat-srv-name">{t('Позвать в пати')}</span>
+          </button>
           {mine.map((s) => (
             <button key={s.id} className="chat-srv-row mine" data-track="invite_my_server" data-kind="own_server" onClick={() => send(s.address || '', serverTitle(s), s.version || null)}>
               <Icon id="i-server" />
@@ -818,6 +875,22 @@ function InvitePlay({ target }: { target: InviteTarget }) {
   )
 }
 
+/// Swear masking for other people's messages; on by default, the player may turn it off.
+function FilterToggle() {
+  const t = useT()
+  const { filter, setFilter } = useChatSafety()
+  return (
+    <button
+      className={'tb-btn' + (filter ? ' on' : '')}
+      title={filter ? t('Фильтр мата включён') : t('Фильтр мата выключен')}
+      aria-pressed={filter}
+      onClick={() => setFilter(!filter)}
+    >
+      <Icon id="i-shield" />
+    </button>
+  )
+}
+
 function CallButton({ uid, nick }: { uid: string; nick: string }) {
   const t = useT()
   const status = useCall((s) => s.status)
@@ -860,6 +933,7 @@ function RoomHead({ room }: { room: Room }) {
       </span>
       <InvitePlay target={{ id: room.id, nick: room.title, room: true }} />
       {callSupported() ? <RoomCallButton room={room} here={here} busy={status !== 'idle'} /> : null}
+      <FilterToggle />
       <button className="tb-btn" title={t('Участники группы')} data-track="room_manage" onClick={() => openRoomManage(room.id)}>
         <Icon id="i-dots" />
       </button>
@@ -893,6 +967,7 @@ function PeerHead({ uid, nick }: { uid: string; nick: string }) {
       </span>
       {uid ? <InvitePlay target={{ id: uid, nick }} /> : null}
       <CallButton uid={uid} nick={nick} />
+      <FilterToggle />
     </>
   )
 }
@@ -1073,6 +1148,7 @@ export function ChatThread() {
           const inv = m.text ? parseInvite(m.text) : null
           const callLog = m.text ? parseCallLog(m.text) : null
           const mark = m.text && !m.deleted ? parseMark(m.text) : null
+          const partyCard = m.text && !m.deleted ? parsePartyCard(m.text) : null
           const key = m.id || m.localId || 'i' + i
           const newDay = dayKey(m.ts) !== dayKey(chatMsgs[i - 1]?.ts)
           const day = newDay && m.ts ? <div className="chat-day">{dayLabel(m.ts)}</div> : null
@@ -1088,6 +1164,13 @@ export function ChatThread() {
               <Fragment key={key}>
                 {day}
                 <MarkCard mark={mark} me={m.me} />
+              </Fragment>
+            )
+          if (partyCard)
+            return (
+              <Fragment key={key}>
+                {day}
+                <PartyCard card={partyCard} me={m.me} />
               </Fragment>
             )
           if (callLog && !chatRoom)

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use super::jobs::{Halt, CANCELLED};
+use super::jobs::{count_downloaded, Halt, CANCELLED};
 
 /// Never leaves this layer: a paused stream ends with it, the caller waits at
 /// `Halt::gate` and asks for the rest of the file.
@@ -984,6 +984,7 @@ async fn fetch_once(
         }
         written += chunk.len() as u64;
         file.write_all(&chunk).map_err(|e| e.to_string())?;
+        count_downloaded(chunk.len());
         if let Some(report) = on {
             report(written, size);
         }
@@ -1257,6 +1258,7 @@ async fn fetch_span(
                         Ok(Some(Ok(chunk))) => {
                             let take = chunk.len().min((end - at) as usize);
                             file.write_all(&chunk[..take]).map_err(io)?;
+                            count_downloaded(take);
                             at += take as u64;
                             let now = got.fetch_add(take as u64, Ordering::Relaxed) + take as u64;
                             on(now, Some(total));
@@ -1408,6 +1410,7 @@ async fn resume_once(url: &str, part: &Path, have: u64, size: u64, cancel: &Halt
             return Err(format!("{}: файл больше ожидаемого", url));
         }
         file.write_all(&chunk).map_err(|e| format!("{}: {}", part.display(), e))?;
+        count_downloaded(chunk.len());
         at += chunk.len() as u64;
         on(at, Some(size));
     }

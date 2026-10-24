@@ -5,7 +5,7 @@
   animation: mact-in 220ms var(--m-ease-move) backwards; }
 @keyframes mact-in { from { opacity: 0; transform: translateY(4px); } }
 .mact-head { display: flex; align-items: center; gap: 8px; font: 800 13px/1 var(--m-font); }
-.mact-head .mact-tag { margin-left: auto; font: 700 10.5px/1 var(--m-font); color: var(--m-fg-subtle); }
+.mact-head .mact-tag { margin-inline-start: auto; font: 700 10.5px/1 var(--m-font); color: var(--m-fg-subtle); }
 .mact-rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .mact-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 8px; background-color: var(--m-inset);
   --px-n: 3px; clip-path: var(--px-4); animation: mact-in 200ms var(--m-ease-move) calc(var(--i, 0) * 40ms) backwards; }

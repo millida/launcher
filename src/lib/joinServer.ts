@@ -19,6 +19,7 @@ import { ensureVersionBuild, pvpBuildName } from './versionBuild'
 import { pickVersionForServer } from './mcVersion'
 import { ensureMcVersionList, useMcVersionList } from '../state/mcVersionList'
 import { isOwnServerAddr, serverNeedsMillidaAuth } from './ownServer'
+import { SKIP_JOIN, serverPackBuild } from './serverPack'
 import { t } from '../i18n'
 
 const addrKey = (ip: string) =>
@@ -201,14 +202,18 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
     ...(rated ? { addr: ip.slice(0, 64), name: name.slice(0, 64), slug: rated.slug.slice(0, 80) } : { rated: false }),
     ...launchAttribution('other'),
   })
+  const own = await serverPackBuild(ip, name)
+  if (own === SKIP_JOIN) return
   let wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
-  if (!wanted.length) wanted = await versionsFromPing(ip)
+  if (!wanted.length && !own) wanted = await versionsFromPing(ip)
   // Millida SMP — тир-лист: только своя чистая сборка «Millida PvP 26.2».
   // Владелец 12.10.2026: поиск пати зашёл туда его сборкой с Essential и
   // Meteor — «чистой» она считалась лишь потому, что на Fabric.
-  const prof = serverNeedsMillidaAuth(ip)
-    ? await millidaSmpBuild(wanted)
-    : await buildForServer({ ip, name, licensed, versions: wanted }, wanted)
+  const prof = own
+    ? own
+    : serverNeedsMillidaAuth(ip)
+      ? await millidaSmpBuild(wanted)
+      : await buildForServer({ ip, name, licensed, versions: wanted }, wanted)
   if (!prof) return Promise.reject(new Error('no-profile'))
   if (!(await licenseGate(!!licensed))) return
   addServer(prof, name, ip).catch(() => {})

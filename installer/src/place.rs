@@ -26,11 +26,13 @@ const SCHEME: &str = "x-scheme-handler/millida";
 const EXTRACT_ENV: [(&str, &str); 2] = [("APPIMAGE_EXTRACT_AND_RUN", "1"), ("NO_CLEANUP", "1")];
 
 #[cfg(target_os = "linux")]
-const FUSE2_PATHS: [&str; 6] = [
+const FUSE2_PATHS: [&str; 8] = [
     "/usr/lib/libfuse.so.2",
     "/usr/lib64/libfuse.so.2",
     "/usr/lib/x86_64-linux-gnu/libfuse.so.2",
     "/lib/x86_64-linux-gnu/libfuse.so.2",
+    "/usr/lib/aarch64-linux-gnu/libfuse.so.2",
+    "/lib/aarch64-linux-gnu/libfuse.so.2",
     "/lib64/libfuse.so.2",
     "/usr/local/lib/libfuse.so.2",
 ];

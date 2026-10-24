@@ -163,7 +163,7 @@
 /* Библиотеки — одна свёрнутая строка */
 .bpg-libs { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 .bpg-libs-head {
-  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 8px 12px; border: 0; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 8px 12px; border: 0; cursor: pointer; text-align: start;
   color: var(--m-fg); background: color-mix(in srgb, var(--m-surface) 55%, transparent); --px-n: 5px; clip-path: var(--px-5);
 }
 .bpg-libs-head:hover { background: var(--m-surface); }
@@ -223,10 +223,10 @@
 .bpg-sec-h span { font-size: 12px; font-weight: 800; color: var(--m-fg-subtle); }
 .bpg-empty.sm { padding: 28px 20px; }
 .bpg-empty-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
-.bpg-none.left { justify-content: space-between; padding: 14px 16px; text-align: left; font-size: 13.5px; background: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); }
+.bpg-none.left { justify-content: space-between; padding: 14px 16px; text-align: start; font-size: 13.5px; background: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); }
 .bpg-srv-list { display: flex; flex-direction: column; gap: 4px; }
 .bpg-srv { gap: 12px; padding: 10px 12px; background: var(--m-surface); border: 0 !important; --px-n: 5px; clip-path: var(--px-5); }
-.bpg-srv .w-join { margin-left: auto; }
+.bpg-srv .w-join { margin-inline-start: auto; }
 .bpg-srv-form { display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--m-surface); --px-n: 5px; clip-path: var(--px-5); }
 .bpg-srv-form .input { flex: 2 1 0; min-width: 0; }
 .bpg-srv-form .bpg-srv-name { flex: 1 1 0; }

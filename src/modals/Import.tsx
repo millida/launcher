@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
-import { importInstance, importPackFile, pickImportDir, scanImports } from '../ipc/commands'
+import { importInstance, importPackFile, importPackwiz, pickImportDir, scanImports } from '../ipc/commands'
+import { apiErrorText } from '../lib/apiError'
+import '../styles/pixel/build-extras.css'
+import { FtbBrowser } from '../components/build/FtbBrowser'
 import type { FoundInstance } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { closeModal, openModal, showToast, useUi } from '../state/ui'
@@ -31,6 +34,34 @@ export function ImportModal() {
   const [failed, setFailed] = useState(false)
   const [rows, setRows] = useState<Record<number, RowState>>({})
   const [fileBusy, setFileBusy] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [link, setLink] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [ftbOpen, setFtbOpen] = useState(false)
+
+  const fromLink = () => {
+    const url = link.trim()
+    if (!url || linkBusy) return
+    if (!hasTauri()) {
+      showToast(t('Доступно в приложении'), 'error')
+      return
+    }
+    setLinkBusy(true)
+    importPackwiz(url)
+      .then((r) => {
+        track('build_import', { source: 'packwiz' })
+        useProfiles.getState().setSelected(r.profile)
+        void useProfiles.getState().refresh()
+        imported({ name: r.profile })
+        if (r.skipped.length) showToast(t('Не скачались: {list}', { list: r.skipped.join(', ') }), 'error')
+        close()
+      })
+      .catch((e) => {
+        trackImportFailure('packwiz', e)
+        showToast(apiErrorText(e, t('Не удалось поставить пак по ссылке')), 'error')
+      })
+      .finally(() => setLinkBusy(false))
+  }
 
   const fromFile = () => {
     if (fileBusy) return
@@ -227,7 +258,47 @@ export function ImportModal() {
             <b>{t('По коду')}</b>
             <span>AB23-CD45</span>
           </button>
+          <button className={'imp-way' + (linkOpen ? ' on' : '')} onClick={() => setLinkOpen((v) => !v)}>
+            <Icon id="i-globe" />
+            <b>{t('По ссылке')}</b>
+            <span>packwiz</span>
+          </button>
+          <button className="imp-way" onClick={() => setFtbOpen(true)}>
+            <Icon id="i-box" />
+            <b>FTB</b>
+            <span>Feed The Beast</span>
+          </button>
         </div>
+        {ftbOpen ? (
+          <FtbBrowser
+            onClose={() => setFtbOpen(false)}
+            onInstalled={(p) => {
+              track('build_import', { source: 'ftb', mc: p.version, loader: p.loader || 'vanilla' })
+              useProfiles.getState().setSelected(p.name)
+              void useProfiles.getState().refresh()
+              imported(p)
+              setFtbOpen(false)
+              close()
+            }}
+          />
+        ) : null}
+        {linkOpen ? (
+          <div className="bx-link-row">
+            <div className="input sm" style={{ flex: 1 }}>
+              <input
+                autoFocus
+                value={link}
+                spellCheck={false}
+                placeholder="https://…/pack.toml"
+                onChange={(e) => setLink(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fromLink()}
+              />
+            </div>
+            <button className="btn sm primary" disabled={!link.trim() || linkBusy} onClick={fromLink}>
+              {linkBusy ? t('Ставим…') : t('Поставить')}
+            </button>
+          </div>
+        ) : null}
         <div style={{ display: 'flex', marginTop: '14px', justifyContent: 'flex-end' }}>
           <button className="btn md secondary" id="impClose" data-sound="close" onClick={close}>
             {t('Закрыть')}

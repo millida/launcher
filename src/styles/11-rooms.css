@@ -51,7 +51,7 @@
 
 .room-pick-search{margin-bottom:2px}
 .room-pick{display:flex;flex-direction:column;gap:2px;max-height:210px;overflow:auto}
-.room-pick-row{display:flex;align-items:center;gap:9px;padding:6px;border:0;border-radius:var(--m-r-md);background:none;color:inherit;cursor:pointer;text-align:left}
+.room-pick-row{display:flex;align-items:center;gap:9px;padding:6px;border:0;border-radius:var(--m-r-md);background:none;color:inherit;cursor:pointer;text-align:start}
 .room-pick-row:hover{background:var(--m-inset)}
 .room-pick-row.on{background:var(--m-accent-soft);color:var(--m-accent)}
 .room-pick-row.off{opacity:.5;cursor:default}

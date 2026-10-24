@@ -15,6 +15,7 @@ const LOADER_NAMES: Record<string, string> = {
   quilt: 'Quilt',
   forge: 'Forge',
   neoforge: 'NeoForge',
+  legacyfabric: 'Legacy Fabric',
 }
 
 export const loaderId = (p?: Profile | null): string =>

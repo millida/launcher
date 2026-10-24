@@ -147,7 +147,7 @@
 .nb-vers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .nb-retry {
   display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 14px;
-  background: var(--m-danger-soft); color: var(--m-fg); font-size: 13.5px; font-weight: 600; text-align: left;
+  background: var(--m-danger-soft); color: var(--m-fg); font-size: 13.5px; font-weight: 600; text-align: start;
 }
 .nb-retry > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nb-retry svg.icon { width: 16px; height: 16px; flex: none; }
@@ -173,7 +173,7 @@
 .imp-ways { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px; }
 .imp-way {
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center;
-  padding: 12px 14px; text-align: left; background: var(--m-surface-2); color: var(--m-fg);
+  padding: 12px 14px; text-align: start; background: var(--m-surface-2); color: var(--m-fg);
   box-shadow: var(--px-btn, inset 0 0 0 1px var(--m-border)); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
   transition: background-color var(--m-t-fast), transform var(--m-t-fast);
 }
@@ -212,7 +212,7 @@
 .bx-opts-cap {
   display: flex; align-items: center; gap: 6px; width: 100%;
   margin: 22px 0 4px; font-size: 11px; font-weight: 750; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--m-fg-subtle); text-align: left;
+  text-transform: uppercase; color: var(--m-fg-subtle); text-align: start;
 }
 #bsTabOpts > .bx-opts-cap:first-child { margin-top: 0; }
 .bx-opts-toggle { padding: 8px 0; cursor: pointer; }

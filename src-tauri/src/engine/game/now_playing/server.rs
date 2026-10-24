@@ -1,6 +1,6 @@
 // Local WebSocket server for the Millida mod: accepts only connections from this same computer and only with the launch key in the Authorization header. Sends the player state and takes the commands pause, next, seek.
 use super::protocol::{self, FrameError};
-use super::{Hub, Reading};
+use super::{Hub, PerfSink, Reading};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -24,7 +24,13 @@ enum Incoming {
     Close(u16),
 }
 
-pub(super) async fn serve(listener: std::net::TcpListener, key: String, hub: Arc<Hub>, notices: broadcast::Sender<Arc<str>>) {
+pub(super) async fn serve(
+    listener: std::net::TcpListener,
+    key: String,
+    hub: Arc<Hub>,
+    notices: broadcast::Sender<Arc<str>>,
+    perf: Option<PerfSink>,
+) {
     let Ok(listener) = TcpListener::from_std(listener) else { return };
     let key = Arc::new(key);
     let (generation, _) = watch::channel(0u64);
@@ -35,7 +41,7 @@ pub(super) async fn serve(listener: std::net::TcpListener, key: String, hub: Arc
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, peer)) if peer.ip().is_loopback() => {
-                    sessions.spawn(session(stream, key.clone(), hub.clone(), generation.clone(), notices.subscribe()));
+                    sessions.spawn(session(stream, key.clone(), hub.clone(), generation.clone(), notices.subscribe(), perf.clone()));
                 }
                 Ok(_) => {}
                 Err(_) => tokio::time::sleep(Duration::from_millis(200)).await,
@@ -63,6 +69,7 @@ async fn session(
     hub: Arc<Hub>,
     generation: Arc<watch::Sender<u64>>,
     mut notices: broadcast::Receiver<Arc<str>>,
+    perf: Option<PerfSink>,
 ) {
     let Ok(Some(head)) = tokio::time::timeout(HANDSHAKE_TIMEOUT, read_head(&mut stream)).await else { return };
     let accept = match protocol::check_upgrade(&head, &key) {
@@ -124,6 +131,8 @@ async fn session(
                 Some(Incoming::Text(text)) => {
                     if let Some(command) = protocol::parse_command(&text) {
                         hub.command(command);
+                    } else if let (Some(sink), Some(sample)) = (&perf, protocol::parse_perf(&text)) {
+                        sink(sample);
                     }
                     false
                 }
@@ -218,7 +227,7 @@ fn close_code(error: &FrameError) -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::super::protocol::{Command, Cover, NowPlaying};
+    use super::super::protocol::{Command, Cover, NowPlaying, PerfSample};
     use super::super::{Control, Hub};
     use super::*;
     use std::sync::Mutex;
@@ -233,6 +242,16 @@ mod tests {
     async fn start_with_notices(
         reading: Reading,
     ) -> (u16, Arc<Mutex<Vec<Command>>>, watch::Sender<Reading>, broadcast::Sender<Arc<str>>) {
+        let (port, commands, publish, notices, _) = start_full(reading).await;
+        (port, commands, publish, notices)
+    }
+
+    type Started = (u16, Arc<Mutex<Vec<Command>>>, watch::Sender<Reading>, broadcast::Sender<Arc<str>>, Arc<Mutex<Vec<PerfSample>>>);
+
+    async fn start_full(reading: Reading) -> Started {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let got = samples.clone();
+        let perf_sink: PerfSink = Arc::new(move |s| got.lock().unwrap().push(s));
         let commands = Arc::new(Mutex::new(Vec::new()));
         let seen = commands.clone();
         let (publish, state) = watch::channel(reading);
@@ -248,8 +267,8 @@ mod tests {
         listener.set_nonblocking(true).unwrap();
         let port = listener.local_addr().unwrap().port();
         let (notices, _) = broadcast::channel(8);
-        tokio::spawn(serve(listener, KEY.to_string(), hub, notices.clone()));
-        (port, commands, publish, notices)
+        tokio::spawn(serve(listener, KEY.to_string(), hub, notices.clone(), Some(perf_sink)));
+        (port, commands, publish, notices, samples)
     }
 
     async fn connect(port: u16, auth: &str) -> (TcpStream, String) {
@@ -356,6 +375,22 @@ mod tests {
         let text = protocol::notice_message("clip", "Клип сохранён", "30 с", true);
         notices.send(text.into()).unwrap();
         assert!(next_text(&mut stream).await.contains("\"type\":\"notice\""), "a saved clip must show on the island right away, not after the pulse");
+    }
+
+    #[tokio::test]
+    async fn frame_reports_reach_the_lag_helper_and_never_the_player() {
+        let (port, commands, _, _, samples) = start_full(None).await;
+        let (mut stream, _) = connect(port, &format!("Authorization: Bearer {}\r\n", KEY)).await;
+        next_text(&mut stream).await;
+        stream.write_all(&masked_text(r#"{"type":"perf","fps":18,"world":true,"heapMb":1,"maxMb":2,"gcPct":3}"#)).await.unwrap();
+        for _ in 0..50 {
+            if !samples.lock().unwrap().is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(samples.lock().unwrap().first().map(|s| s.fps), Some(18), "the mod's frame report must reach the lag helper");
+        assert!(commands.lock().unwrap().is_empty(), "a frame report is not a media command");
     }
 
     #[tokio::test]

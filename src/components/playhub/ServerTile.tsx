@@ -6,6 +6,8 @@ import { fmtN } from '../../lib/format'
 import { useT } from '../../i18n'
 import { openServerDetail } from '../../state/serverDetail'
 import type { SnapshotServer } from '../../lib/snapshot'
+import { joinAddr } from '../../lib/ownServer'
+import { useWakeOnJoin } from '../../lib/wakeInfo'
 
 const verKey = (v: string) => v.split('.').map((x) => Number(x) || 0).reduce((acc, n) => acc * 1000 + n, 0)
 
@@ -77,6 +79,7 @@ export function ServerTile({
   const span = versionSpan(s.versions)
   const lic = s.lic === 'CRACKED' ? t('Вход по нику') : s.lic === 'LICENSE' ? t('Лицензия') : ''
   const line = [s.cat, lic, s.desc || s.motd].filter(Boolean).join(' · ')
+  const wakes = useWakeOnJoin(s.ip ? joinAddr(s) : null, !s.isOnline)
   return (
     <article
       className={'ph-card ph-st' + (on ? ' on' : '') + (s.isOnline ? '' : ' off')}
@@ -108,13 +111,13 @@ export function ServerTile({
           <button
             type="button"
             className="btn sm primary"
-            data-track="play"
+            data-track={wakes ? 'play_wake' : 'play'}
             onClick={(e) => {
               e.stopPropagation()
               onPlay(s)
             }}
           >
-            <Icon id="i-play" /> {t('Играть')}
+            <Icon id="i-play" /> {wakes ? t('Включить и зайти') : t('Играть')}
           </button>
         </span>
       </span>

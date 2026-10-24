@@ -106,7 +106,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 0;
-  text-align: left;
+  text-align: start;
   background: none;
   color: inherit;
 }
@@ -280,7 +280,7 @@
   align-items: center;
   gap: 10px;
   padding: 6px 6px 6px 8px;
-  text-align: left;
+  text-align: start;
   color: inherit;
   background: var(--m-surface);
   --px-n: 5px; clip-path: var(--px-5);
@@ -363,7 +363,7 @@
    самой кнопке: кнопка вложенной кнопки не допускает, поэтому крестик стоит
    рядом, поверх её угла. */
 .lobby-row { position: relative; }
-.play-cancel {
+.play-cancel, .play-recent {
   position: absolute; z-index: 2; top: 14px; right: 14px;
   display: grid; place-items: center; width: 28px; height: 28px;
   color: var(--m-fg-muted); background: var(--m-surface);
@@ -371,11 +371,11 @@
   --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
   transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
 }
-.play-cancel svg { width: 14px; height: 14px; }
+.play-cancel svg, .play-recent svg { width: 14px; height: 14px; }
 @media (hover: hover) and (pointer: fine) {
-  .play-cancel:hover { color: var(--m-fg); background-color: var(--m-surface-2); }
+  .play-cancel:hover, .play-recent:hover { color: var(--m-fg); background-color: var(--m-surface-2); }
 }
-.play-cancel:active { transform: translateY(1px); }
+.play-cancel:active, .play-recent:active { transform: translateY(1px); }
 
 /* Левый край столбиком, как в Brawl Stars: сундук → Магазин → Свой сервер
    (плитки — HubTile, свой стиль в hubtile.css). */
@@ -571,7 +571,7 @@
    плашка режима рядом гаснет, чтобы было видно, во что играем. */
 :root .lobby-row .lobby-promo {
   position: relative; display: block; padding: 0; overflow: hidden;
-  text-align: left; color: #fff; cursor: pointer; background: #4fa8e8;
+  text-align: start; color: #fff; cursor: pointer; background: #4fa8e8;
   --px-ol: rgba(0, 0, 0, 0.45); --px-ol-w: 3px;
   transition: transform 120ms var(--m-ease-smooth);
 }
@@ -611,7 +611,7 @@
 .lobby-rec {
   position: absolute; z-index: 5; right: 20px; top: 50%; transform: translateY(-58%);
   display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 8px 12px;
-  width: 320px; padding: 10px 10px 12px; text-align: left; color: #fff; cursor: pointer;
+  width: 320px; padding: 10px 10px 12px; text-align: start; color: #fff; cursor: pointer;
   background: rgba(10, 30, 16, 0.78);
   --px-n: 10px; clip-path: var(--px-10);
   --px-ol: rgba(0, 0, 0, 0.5); --px-ol-w: 3px;
@@ -815,3 +815,24 @@
 .lobby-chat.is-reward .lch-reward small { max-width: 170px; font: 800 12px/1.1 var(--m-font); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); white-space: nowrap; }
 .lobby-chat.is-reward .lan-go { background: #ff5a74; color: #1a0508; }
 @media (hover: hover) and (pointer: fine) { .lobby-chat.is-reward:hover .lan-go { background: #ff7a90; } }
+
+.run-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.run-tab {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; max-width: 220px; padding: 0 4px 0 10px;
+  background: var(--m-surface-2); color: var(--m-fg); font-size: 12px; font-weight: 700;
+  --px-n: 5px; clip-path: var(--px-5);
+}
+.run-tab-dot { width: 6px; height: 6px; flex-shrink: 0; background: var(--m-success); }
+.run-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-tab-stop { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; color: var(--m-fg-subtle); transition: transform var(--m-t-fast), color var(--m-t-fast); }
+.run-tab-stop svg { width: 12px; height: 12px; }
+.run-tab-stop:active { transform: scale(.96); }
+@media (hover: hover) and (pointer: fine) { .run-tab-stop:hover { color: var(--m-danger); } }
+
+.lobby-daylight, .lobby-season { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; pointer-events: none; }
+.lobby-daylight { mix-blend-mode: soft-light; transition: background-color 2s var(--m-ease-smooth); }
+.lobby-daylight.dawn { background-color: rgba(255, 170, 120, .28); }
+.lobby-daylight.day { background-color: transparent; }
+.lobby-daylight.dusk { background-color: rgba(255, 120, 60, .32); }
+.lobby-daylight.night { background-color: rgba(20, 30, 90, .45); }
+.lobby-season { image-rendering: pixelated; }

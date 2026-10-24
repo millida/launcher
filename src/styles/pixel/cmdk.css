@@ -1,0 +1,14 @@
+.cmdk-bg { align-items: flex-start; padding-top: 14vh; }
+.cmdk { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.cmdk-input { width: 100%; height: 40px; font-size: 14px; }
+.cmdk-list { display: flex; flex-direction: column; gap: 2px; max-height: 50vh; overflow-y: auto; }
+.cmdk-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 36px; padding: 0 10px; text-align: start; color: var(--m-fg);
+  --px-n: 5px; clip-path: var(--px-5);
+  transition: background-color var(--m-t-fast);
+}
+.cmdk-row.on { background: var(--m-surface-2); }
+.cmdk-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.cmdk-kind { flex-shrink: 0; font-size: 11px; color: var(--m-fg-subtle); }
+.cmdk-empty { padding: 14px 10px; font-size: 13px; color: var(--m-fg-subtle); }

@@ -42,6 +42,8 @@ export type TelemetryEventType =
   | 'update_applied'
   | 'error'
   | 'perf'
+  | 'lag_detected'
+  | 'lag_fixed'
 
 interface QueuedEvent {
   type: TelemetryEventType

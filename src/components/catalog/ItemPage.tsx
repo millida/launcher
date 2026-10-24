@@ -24,6 +24,7 @@ import { MediaStrip } from './MediaStrip'
 import { similarFor } from './similar'
 import { RuDesc, stripAds } from './RuDesc'
 import { SkinPage } from './SkinPage'
+import { PackContents } from './PackContents'
 import { inTime } from '../../lib/deadline'
 import { closeItem, openItem, useItem } from './itemStore'
 import type { OpenItem } from './itemStore'
@@ -31,7 +32,9 @@ import {
   SIDE_LABEL,
   displayName,
   fmtNum,
+  isJavaCard,
   loadItem,
+  loadListing,
   loaderIconSrc,
   loaderLabel,
   loaderTone,
@@ -301,19 +304,35 @@ function LoaderChip({ l }: { l: string }) {
   )
 }
 
-export type Tab = 'desc' | 'gallery' | 'versions'
+export type Tab = 'desc' | 'contents' | 'gallery' | 'versions'
 
-export function Tabs({ tab, onTab, gallery, versions, versionsLabel }: { tab: Tab; onTab: (t: Tab) => void; gallery: number; versions: number; versionsLabel?: string }) {
+export function Tabs({
+  tab,
+  onTab,
+  gallery,
+  versions,
+  versionsLabel,
+  contents,
+}: {
+  tab: Tab
+  onTab: (t: Tab) => void
+  gallery: number
+  versions: number
+  versionsLabel?: string
+  /** A modpack whose list of mods can be read before it is installed. */
+  contents?: boolean
+}) {
   const t = useT()
   const list: [Tab, string, number | null][] = [
     ['desc', t('Описание'), null],
+    ['contents', t('Состав'), null],
     ['gallery', t('Галерея'), gallery],
     ['versions', versionsLabel ?? t('Версии'), versions],
   ]
   return (
     <div className="segs mr-subtypes ci-tabs" role="tablist">
       {list
-        .filter(([k, , n]) => k === 'desc' || (n || 0) > 0)
+        .filter(([k, , n]) => k === 'desc' || (k === 'contents' ? !!contents : (n || 0) > 0))
         .map(([k, label, n]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={'seg' + (tab === k ? ' on' : '')} data-track={'item_tab_' + k} onClick={() => onTab(k)}>
             {label}
@@ -560,6 +579,9 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
     }
   }, [card.slug])
   const similar = like && like.length >= 3 ? like : data ? data.similar : []
+  const withMod = useModpacksWith(sec.kind === 'mod' ? card.mrHit?.pid || card.slug : null)
+  const packProject = sec.kind === 'modpack' && mrId ? mrId : null
+  const packCatalog = sec.kind === 'modpack' && !packProject && sourceOf(card) === 'millida' ? card.slug : null
   const name = displayName(card.title)
   // Та же цифра, что на плитке ленты: наши скачивания или, если их мало, первоисточника.
   const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
@@ -619,7 +641,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
       />
       <div className="ci-grid">
         <main className="ci-main">
-          <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={files.length} />
+          <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={files.length} contents={!!packProject || !!packCatalog} />
           {tab === 'desc' && media.strip.length ? <MediaStrip urls={media.strip} onAll={() => setTab('gallery')} /> : null}
           {tab === 'desc' ? (
             <article className="card ci-box ci-desc pj-body">
@@ -643,6 +665,8 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
                 </button>
               ) : null}
             </article>
+          ) : tab === 'contents' && (packProject || packCatalog) ? (
+            <PackContents project={packProject || undefined} catalog={packCatalog || undefined} />
           ) : tab === 'gallery' ? (
             <Gallery urls={shots} />
           ) : (
@@ -700,6 +724,16 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           ) : null}
         </aside>
       </div>
+      {withMod.length ? (
+        <section className="ci-similar" aria-label={t('Сборки с этим модом')}>
+          <h2 className="ci-sim-h">{t('Сборки с этим модом')}</h2>
+          <div className="mr-galgrid">
+            {withMod.map((c, i) => (
+              <SiteGalleryCard key={c.slug} card={c} sec={sectionBySlug('modpacks')} pos={i} list="with_mod" />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {similar.length ? (
         <section className="ci-similar" aria-label={t('Похожие')}>
           <h2 className="ci-sim-h">{t('Похожие')}</h2>
@@ -736,3 +770,22 @@ export function ItemPage({ it }: { it: OpenItem }) {
 
 /** Открыта ли страница материала — лента под ней прячется, но не размонтируется. */
 export const useItemOpen = () => useItem((s) => s.cur)
+
+const WITH_MOD_SHOWN = 8
+
+/** Modpacks that ship this mod; empty when the server does not filter by mod (no withMod echo) or nothing matched. */
+function useModpacksWith(ref: string | null): SiteCard[] {
+  const [list, setList] = useState<SiteCard[]>([])
+  useEffect(() => {
+    setList([])
+    if (!ref) return
+    let alive = true
+    loadListing({ section: 'modpacks', withMod: ref, sort: 'popular', page: 1, perPage: WITH_MOD_SHOWN })
+      .then((r) => alive && setList(r.withMod === ref ? (r.items || []).filter(isJavaCard).slice(0, WITH_MOD_SHOWN) : []))
+      .catch(() => alive && setList([]))
+    return () => {
+      alive = false
+    }
+  }, [ref])
+  return list
+}

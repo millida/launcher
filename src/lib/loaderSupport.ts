@@ -13,9 +13,9 @@ import { t } from '../i18n'
  * Неактивный загрузчик показывается с короткой причиной, а не прячется.
  */
 
-export type LoaderId = 'vanilla' | 'fabric' | 'quilt' | 'forge' | 'neoforge'
+export type LoaderId = 'vanilla' | 'fabric' | 'quilt' | 'forge' | 'neoforge' | 'legacyfabric'
 
-export const LOADER_IDS: LoaderId[] = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge']
+export const LOADER_IDS: LoaderId[] = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge', 'legacyfabric']
 
 interface Ver {
   /** Числа релиза, к которому относится версия (1.21-pre1 → 1.21). */
@@ -55,6 +55,11 @@ export function loaderBlock(loader: LoaderId, id: string, kind: string): string 
   if (loader === 'vanilla' || !id) return null
   const v = parse(id, kind)
   if (v.old) return t('Не для бет')
+  if (loader === 'legacyfabric') {
+    // Legacy Fabric covers the releases Fabric never reached: 1.3 to 1.13.2.
+    if (!v.release || !v.nums) return t('Только релизы')
+    return atLeast(v.nums, [1, 14]) ? t('До 1.14') : atLeast(v.nums, [1, 3]) ? null : t('С 1.3')
+  }
   if (loader === 'fabric' || loader === 'quilt') {
     // Fabric и Quilt — с 1.14 и её снапшотов (18w43b).
     if (v.week) return v.week[0] > 18 || (v.week[0] === 18 && v.week[1] >= 43) ? null : t('С 1.14')

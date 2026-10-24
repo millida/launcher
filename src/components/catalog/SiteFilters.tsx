@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { MrIcon, TagGlyph } from './SiteRow'
-import { capFirst, categoryIconSrc, categoryLabel, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
+import { SITE_SECTIONS, capFirst, categoryIconSrc, categoryLabel, fmtNum, loaderIconSrc, loaderLabel, loaderTone } from './site'
+import { useCatalogHide } from './catalogHide'
 import type { SiteFacets, SiteSection } from './site'
 import type { SiteAccess, SiteSort } from './siteStore'
 import type { PriceFilter, SideFilter } from './sections'
@@ -368,6 +369,7 @@ export function SiteFilters({
   onReset: () => void
 }) {
   const t = useT()
+  const hide = useCatalogHide()
   if (!facets) return <FiltersSkeleton />
   const filled = new Set(facets.versions.filter((v) => v.count >= 12 || v.value === version).map((v) => v.value))
   const versions: FilterOpt[] = facets.versions.map((v) => ({
@@ -461,6 +463,15 @@ export function SiteFilters({
     .slice()
     .sort((x, y) => (y.count ?? 0) - (x.count ?? 0))
     .slice(0, 4)
+  const hideOpts: FilterOpt[] = SITE_SECTIONS.includes(sec)
+    ? [{ key: 'installed', label: t('Установленное'), active: hide.installed, onPick: () => hide.setInstalled(!hide.installed) }]
+    : []
+  const excludeOpts: FilterOpt[] = (facets.categories || []).map((c) => ({
+    key: c.value,
+    label: categoryLabel(c.value),
+    active: hide.excluded.includes(c.value),
+    onPick: () => hide.toggleExcluded(c.value),
+  }))
   const anyActive = !!(version || loader || category || use || price || side || (access && access !== 'all'))
   const tight = uses.length > 0
   return (
@@ -484,6 +495,8 @@ export function SiteFilters({
       <KeySection title={t('Сторона')} name="side" opts={sides} plain />
       <KeySection title={t('Для чего')} name="use" opts={uses} split={USES_VISIBLE} plain />
       <KeySection title={t('Категории')} name="category" opts={cats} split={tight ? CATS_VISIBLE_TIGHT : CATS_VISIBLE} plain moreLabel={t('Все категории')} />
+      <KeySection title={t('Скрыть')} name="hide" opts={hideOpts} plain />
+      <KeySection title={t('Без категорий')} name="exclude" opts={[...excludeOpts.filter((o) => o.active), ...excludeOpts.filter((o) => !o.active)]} split={Math.max(2, hide.excluded.length)} plain moreLabel={t('Все категории')} />
       {access || !priceOpts.length ? null : <KeySection title={t('Цена')} name="price" opts={priceOpts} plain />}
     </div>
   )

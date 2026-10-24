@@ -40,7 +40,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .fr-sort .seg {
   height: 30px;
@@ -85,7 +85,7 @@
   padding-top: 0;
 }
 .fr-cap-act {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* --- Строка: вся кликабельна, фокус с клавиатуры видно --- */
@@ -301,3 +301,5 @@
 }
 .fr-hours svg { color: #2a1702; }
 .fr-row.off .fr-hours { color: #2a1702; background: color-mix(in srgb, var(--m-rarity-legendary, #ffc23a) 55%, var(--m-surface)); }
+
+.fr-invisible.on { color: var(--m-fg-subtle); }

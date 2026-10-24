@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { InvisibleToggle } from '../components/friends/InvisibleToggle'
 import { useT } from '../i18n'
 import { Head } from '../components/Head'
 import { PROFILE_URL, api, openExt } from '../lib/api'
@@ -404,6 +405,7 @@ export function Friends({ on }: { on: boolean }) {
                   </button>
                 </div>
               ) : null}
+              <InvisibleToggle />
               {/* Переписки и группы — свой экран, как в Telegram (владелец 24.09.2026). */}
               <button className="btn sm secondary fr-to-chat" data-track="nav_messages" onClick={openMessages}>
                 <Icon id="i-msg" />

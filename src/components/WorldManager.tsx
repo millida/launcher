@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type * as React from 'react'
 import { Icon } from './Icon'
+import { WorldPacks } from './build/WorldPacks'
 import { agoText, fmtSize } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
 import { uiConfirm } from '../state/confirm'
@@ -62,9 +63,11 @@ interface Props {
   hideImport?: boolean
   /** Сколько миров — для заголовка раздела на странице. */
   onCount?: (n: number) => void
+  /** Каталог дата-паков для этой сборки; нет — блока дата-паков в мире нет. */
+  onDatapackCatalog?: () => void
 }
 
-export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport, onCount }: Props) {
+export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport, onCount, onDatapackCatalog }: Props) {
   const t = useT()
   const [worlds, setWorlds] = useState<WorldInfo[]>([])
   const [backups, setBackups] = useState<string[]>([])
@@ -241,6 +244,7 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                       <Icon id="i-trash" /> {t('Удалить')}
                     </button>
                   </div>
+                  {onDatapackCatalog && !w.unreadable ? <WorldPacks profile={profile} world={w.folder} onCatalog={onDatapackCatalog} /> : null}
                   {mine.length ? (
                     <div className="wm-backups">
                       <span className="cap">{t('Бэкапы')}</span>

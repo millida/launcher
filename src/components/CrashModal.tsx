@@ -15,6 +15,8 @@ import { crashAskBody, crashDisableOffers } from '../lib/crashAi'
 import { milliCrash } from '../lib/milli'
 import { useHasMillida } from '../state/auth'
 import { Milli } from './milli/Milli'
+import { crashWhy } from '../lib/crashWhy'
+import { exactCrashFix } from '../lib/liveLog'
 import { useT } from '../i18n'
 
 const SUPPORT_ACT = 'support'
@@ -35,19 +37,16 @@ export function CrashModal() {
   }, [info, close])
 
   if (!info) return null
+  const why = crashWhy(info)
   // Одна главная кнопка: если ядро нашло точную причину (выключить мод,
   // сменить Java), главное действие — её исправление; общая «Починить сборку»
   // тогда вторая. Раньше точный фикс был мелкой серой кнопкой, а зелёной —
   // общая починка, которая эту причину не лечит (аудит 22.09.2026).
   const fixes = (info.actions ?? []).filter((a) => a.kind !== 'repair' && a.kind !== 'fix-plan')
   const planSteps = (info.actions ?? []).find((a) => a.kind === 'fix-plan')?.steps ?? []
-  const hasMainFix = fixes.some((a) => a.kind !== 'share-log' && a.kind !== 'open-folder')
-  const mainFixKey = hasMainFix
-    ? (() => {
-        const a = fixes.find((x) => x.kind !== 'share-log' && x.kind !== 'open-folder')!
-        return a.kind + (a.arg ?? '')
-      })()
-    : ''
+  const mainFix = exactCrashFix(info.actions)
+  const hasMainFix = !!mainFix
+  const mainFixKey = mainFix ? mainFix.kind + (mainFix.arg ?? '') : ''
   return (
     <div
       className="modal-bg open vis"
@@ -67,6 +66,7 @@ export function CrashModal() {
           </div>
         </div>
         <p className="crash-reason">{info.reason}</p>
+        {why ? <p className="crash-plan">{why}</p> : null}
         {planSteps.length ? (
           <div className="crash-plan">
             <span>{t('Починка сделает:')}</span>
@@ -129,8 +129,16 @@ export function CrashModal() {
                         .catch(failed)
                       return
                     }
+                    const main = key === mainFixKey
                     applyCrashFix(info.profile, a.kind, a.arg ?? '')
-                      .then(done)
+                      .then((msg) => {
+                        done(msg)
+                        // The main fix is one action for one button: applied, the game starts again by itself.
+                        if (!main) return
+                        markFixApplied(info.profile, 'crash:' + a.kind)
+                        close()
+                        void import('../lib/autoHeal').then((h) => h.relaunchAfterFix(info.profile))
+                      })
                       .catch(failed)
                   }}
                 >
@@ -227,6 +235,16 @@ export function CrashModal() {
           <div className="crash-acts-min">
             <button className="btn md ghost" onClick={() => hasTauri() && openProfileFolder(info.profile)}>
               <Icon id="i-folder" /> {t('Папка')}
+            </button>
+            <button
+              className="btn md ghost"
+              data-track="crash_live_log"
+              onClick={() => {
+                close()
+                void import('./LiveLog').then((m) => m.openLiveLog())
+              }}
+            >
+              <Icon id="i-list" /> {t('Лог')}
             </button>
             <button className="btn md ghost" onClick={close}>
               {t('Закрыть')}

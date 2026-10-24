@@ -18,7 +18,8 @@ import { useFriends, openChatFromLink, loadFriends } from '../state/friends'
 import { callFriend } from '../state/call'
 import { rememberServerName } from '../state/playStats'
 import { quickJoin } from './joinServer'
-import { realLaunch } from './launch'
+import { joinWithAuth, realLaunch, showLaunchError } from './launch'
+import { shortcutTrusted } from '../ipc/commands'
 import { restoreLauncher } from './window'
 import { rememberInviteCode } from './referrals'
 import { pickFriendsTab } from '../components/friends/friendsView'
@@ -26,6 +27,8 @@ import { parseInstallLink } from './millidaCatalog'
 import { installFromCatalog } from './catalogInstall'
 import { openGameFromLink } from './gameInvite'
 import { t } from '../i18n'
+import { normalizePartyCode, partyCodeOk, prettyPartyCode } from './party'
+import { joinPartyByCode } from '../state/party'
 
 function handle(raw: string) {
   let url: URL
@@ -86,6 +89,10 @@ function handle(raw: string) {
     }).then((ok) => {
       if (ok) realLaunch(profile)
     })
+    return
+  }
+  if (action === 'launch') {
+    void launchFromShortcut(q.get('profile') || '', q.get('quickplay'), q.get('key') || '')
     return
   }
   if (action === 'build') {
@@ -164,6 +171,19 @@ function handle(raw: string) {
     setScreen('friends')
     return
   }
+  if (action === 'party') {
+    const code = normalizePartyCode(rest || q.get('code') || '')
+    if (!partyCodeOk(code)) return
+    // Any web page can fire a millida:// link, and a party shares voice, so joining asks first.
+    void uiConfirm(t('Вступить в пати {code}?', { code: prettyPartyCode(code) }), {
+      title: 'Millida',
+      confirmLabel: t('Вступить'),
+      danger: false,
+    }).then((ok) => {
+      if (ok) void joinPartyByCode(code).catch(() => {})
+    })
+    return
+  }
   if (action === 'invite') {
     rememberInviteCode(rest || q.get('code') || '')
     setScreen('friends')
@@ -212,6 +232,31 @@ export function initDeepLinks() {
     .then((urls) => (urls || []).forEach(handle))
     .catch(() => {})
   void onOpenUrl((urls) => urls.forEach(handle)).catch(() => {})
+}
+
+/// millida://launch?profile=…&quickplay=world:<folder>|server:<addr>&key=… —
+/// a desktop shortcut. Its key proves the shortcut was made on this computer;
+/// a link without it asks first, like every other link that starts the game.
+async function launchFromShortcut(profile: string, quickplay: string | null, key: string): Promise<void> {
+  if (!useProfiles.getState().profiles.some((p) => p.name === profile)) {
+    showToast(t('Сборки «{name}» нет в лаунчере', { name: profile }), 'error')
+    setScreen('builds')
+    return
+  }
+  const world = quickplay && quickplay.startsWith('world:') ? quickplay.slice(6) : null
+  const server = quickplay && quickplay.startsWith('server:') ? quickplay.slice(7) : null
+  const trusted = !!key && (await shortcutTrusted(key, profile, quickplay).catch(() => false))
+  if (!trusted) {
+    const what = world ? t('мир «{name}»', { name: world }) : server ? t('сервер {addr}', { addr: server }) : null
+    const ok = await uiConfirm(what ? t('Запустить сборку «{name}» и зайти в {target}?', { name: profile, target: what }) : t('Запустить сборку «{name}»?', { name: profile }), {
+      title: 'Millida',
+      confirmLabel: t('Запустить'),
+      danger: false,
+    })
+    if (!ok) return
+  }
+  if (world || server) joinWithAuth(profile, world, server, server).catch((e) => showLaunchError(e))
+  else realLaunch(profile)
 }
 
 function installPackFromLink(slug: string, title: string): void {

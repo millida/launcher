@@ -32,3 +32,7 @@
 .tour-card p{font-size:13px;line-height:1.55;color:var(--m-fg-muted)}
 .tour-actions{display:flex;gap:8px;align-items:center;margin-top:16px}
 .tour-spacer{flex:1}
+
+.onb-q { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.onb-q-title { font-size: 13px; font-weight: 600; color: var(--m-fg); }
+.onb-q-opts { flex-wrap: wrap; }
