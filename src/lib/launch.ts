@@ -26,6 +26,7 @@ import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
 import { afterPackUpdate } from './packUpdate'
 import { followFriendBuild } from './friendBuild'
+import { adoptLegacyRam, pendingLegacyRamMb } from './ramPref'
 import { rememberPlay } from './recentPlay'
 import { requiresMillidaAuth, serverNeedsMillidaAuth } from './ownServer'
 import { useServers } from '../state/servers'
@@ -34,7 +35,7 @@ import { NATIVE_NEEDS_MILLIDA, isNativeGame } from './nativeGame'
 import { stopInstall } from '../state/installs'
 import { holdLaunchForHdSkin } from './skinLock'
 import { claimJoin } from './joinClaim'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 import { CORE_LAUNCH_CANCELLED, coreErrorText, mentionsCancel } from './coreErrors'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
@@ -201,9 +202,11 @@ export function beatAfterReconnect() {
   heartbeat('lobby')
 }
 
+/** An explicit request wins over the build's own memory in the core; only a slider value older versions kept here is still one, until it moves. */
 export function ramMbFor(profile: string): number {
-  const gb = parseInt(localStorage.getItem('m-ram-' + profile) || '0', 10)
-  return gb > 0 ? gb * 1024 : 0
+  const legacy = pendingLegacyRamMb(profile)
+  if (legacy) void adoptLegacyRam(profile)
+  return legacy
 }
 
 /// Online servers verify the session either with Mojang (Microsoft licence) or with our
@@ -284,7 +287,7 @@ export function showLaunchError(e: unknown) {
     void explainAntivirusBlock(msg)
     return
   }
-  showToast(/лиценз/i.test(msg) ? msg : t('Ошибка запуска: {error}', { error: msg }), 'error')
+  showToast(/лиценз/i.test(msg) ? msg : t('Ошибка запуска: {error}', { error: tx(msg) }), 'error')
 }
 
 let launching = false
@@ -303,7 +306,7 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   const step = await packStepForLaunch(profile)
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   if (step.kind === 'launch-unchecked') {
-    showToast(t('Не удалось проверить обновление сборки: {reason}. Запускаем установленную версию', { reason: step.reason }))
+    showToast(t('Не удалось проверить обновление сборки: {reason}. Запускаем установленную версию', { reason: tx(step.reason) }))
     return
   }
   if (step.kind !== 'update') return

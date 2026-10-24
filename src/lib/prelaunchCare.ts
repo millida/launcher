@@ -8,7 +8,7 @@ import { ramCheck, seedVideoOptions, type RamCheck } from '../ipc/commands'
 import { uiChoice } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { t } from '../i18n'
-import { setLaunchRamMb } from './ramPref'
+import { setBuildRamMb } from './ramPref'
 
 const BIG_PACK_MODS = 20
 const MIN_GAP_MB = 1024
@@ -59,7 +59,7 @@ export async function prelaunchCare(profile: string): Promise<void> {
     danger: false,
   })
   if (answer === 'yes') {
-    if (!setLaunchRamMb(profile, advice.toGb * 1024)) showToast(t('Не удалось сохранить память для сборки'), 'error')
+    if (!(await setBuildRamMb(profile, advice.toGb * 1024))) showToast(t('Не удалось сохранить память для сборки'), 'error')
     return
   }
   if (answer !== 'no') return

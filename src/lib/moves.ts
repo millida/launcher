@@ -1,6 +1,6 @@
 import type { MoveCandidate, MoveOutcome } from '../ipc/commands'
 import { LOADER_NAME, plural } from './format'
-import { formatFixed, t } from '../i18n'
+import { formatFixed, t, tx } from '../i18n'
 
 const GB = 1024 * 1024 * 1024
 const MB = 1024 * 1024
@@ -62,5 +62,5 @@ export function batchSummary(results: RowResult[]): { text: string; kind: 'ok' |
 /** Ядро отвечает строкой ошибки; из Error берём сообщение, остальное — как есть. */
 export function errorText(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err ?? '')
-  return text.trim() || t('Перенос прервался. Сборка не тронута — повтори')
+  return text.trim() ? tx(text.trim()) : t('Перенос прервался. Сборка не тронута — повтори')
 }

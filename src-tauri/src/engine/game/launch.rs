@@ -466,9 +466,9 @@ const FAULT_NAMES_SHOWN: usize = 3;
 
 fn fault_list(faults: &[ModFault]) -> String {
     let names: Vec<&str> = faults.iter().take(FAULT_NAMES_SHOWN).map(|f| f.name.as_str()).collect();
-    let mut list = names.join(", ");
+    let list = names.join(", ");
     if faults.len() > names.len() {
-        list.push_str(&format!(" и ещё {}", faults.len() - names.len()));
+        return format!("{} и ещё {}", list, faults.len() - names.len());
     }
     list
 }
@@ -514,7 +514,7 @@ fn missing_deps_reason(text: &str) -> Option<String> {
     }
     let mut list = items.iter().take(FAULT_NAMES_SHOWN).cloned().collect::<Vec<_>>().join(", ");
     if items.len() > FAULT_NAMES_SHOWN {
-        list.push_str(&format!(" и ещё {}", items.len() - FAULT_NAMES_SHOWN));
+        list = format!("{} и ещё {}", list, items.len() - FAULT_NAMES_SHOWN);
     }
     Some(format!("Модам не хватает зависимостей: {}. Установи то, что они требуют, или убери их.", list))
 }
@@ -686,11 +686,16 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
     } else if loader_reported_missing_dependency(&low) {
         ("Не хватает зависимости одного из модов.", "missing_deps")
     } else if let Some(file) = wrong_game.first() {
-        let more = if wrong_game.len() > 1 { format!(" и ещё {}", wrong_game.len() - 1) } else { String::new() };
-        return verdict(
-            format!("Мод собран под другую версию игры: {}{}. Поставь его версию под игру сборки или убери из папки mods.", file, more),
-            "wrong_mc",
-        );
+        let reason = if wrong_game.len() > 1 {
+            format!(
+                "Мод собран под другую версию игры: {} и ещё {}. Поставь его версию под игру сборки или убери из папки mods.",
+                file,
+                wrong_game.len() - 1
+            )
+        } else {
+            format!("Мод собран под другую версию игры: {}. Поставь его версию под игру сборки или убери из папки mods.", file)
+        };
+        return verdict(reason, "wrong_mc");
     } else if let Some(file) = wrong_loader_file(text) {
         return verdict(format!("В папке mods лежит мод для другого загрузчика: {}. Поставь версию под загрузчик сборки или убери его.", file), "wrong_loader");
     } else if low.contains("duplicate mod")
@@ -1999,7 +2004,9 @@ pub(crate) async fn install_and_launch_into(
                 .ok();
             let _ = app2.emit(
                 "game-crash",
-                diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause).with_log_file(log_file).with_mod_jar(&own_mod_jar),
+                diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause).with_log_file(log_file)
+                    .with_mod_jar(&own_mod_jar)
+                    .with_exit(status.as_ref().map(super::earlyexit::exit_of).unwrap_or_default()),
             );
             if !review_ok {
                 let checked = pname.clone();
@@ -2425,7 +2432,11 @@ mod tests {
         let forge_early = "[main/INFO]: Trying GL version 4.6\n[main/INFO]: If this message is the only thing at the bottom of your log before a crash, you probably have a driver issue.";
         let mod_throw = "[Render thread/INFO]: Backend library: LWJGL version 3.4.1\n[Render thread/ERROR]: java.lang.IllegalStateException: boom";
         let in_menu = "[Render thread/INFO]: Backend library: LWJGL version 3.4.1\n[Sound Library Loader/INFO]: Sound engine started";
-        let cases: [(&str, &str, bool, &str); 7] = [
+        let lithium_then_throw = "[Lithium] Mod 'supplementaries' attempted to override option 'mixins' with an invalid value, ignoring[15:36:35.807] [main/INFO] [LithiumConfig/]: Option 'mixin.experimental.entity.block_caching.suffocation' requires 'mixin.util.block_tracking=true' but found 'false'.\n\
+                                  ---- Minecraft Crash Report ----\nDescription: Initializing game\n\n\
+                                  java.lang.IllegalStateException: Failed to bake models\n\tat net.foo.Bar.baz(Bar.java:1)\n\n\
+                                  Backend library: LWJGL version 3.3.3+5";
+        let cases: [(&str, &str, bool, &str); 8] = [
             ("unknown", fabric_amd, true, "Gobses 25.09: Vega 3 + Radeon 535, лог обрывается на окне, 26.2 Fabric"),
             ("unknown", forge_early, true, "тот же ПК, 26.1 Forge: окно раннего экрана Forge"),
             ("unknown", mod_throw, false, "исключение Java — вылет мода, а не видеокарты"),
@@ -2433,6 +2444,12 @@ mod tests {
             ("unknown", "[main/INFO]: Loading 51 mods", false, "до окна игра не дошла вовсе"),
             ("amd_driver", "EXCEPTION_ACCESS_VIOLATION", true, "падение внутри драйвера до меню"),
             ("missing_deps", fabric_amd, false, "понятный вердикт по модам не подменяется"),
+            (
+                "unknown",
+                lithium_then_throw,
+                false,
+                "All of Aeronautics 24.10: строка Lithium о настройках не отказ загрузчика, причина — исключение отчёта, видеокарту не трогаем",
+            ),
         ];
         for (kind, log, want, why) in cases {
             let cause = super::super::crashcause::crash_cause(log);

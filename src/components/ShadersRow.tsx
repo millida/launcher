@@ -3,7 +3,7 @@ import { setShaders, shadersState } from '../ipc/commands'
 import type { ShadersState } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 /// «Шейдеры» in a build's settings: Sodium, Iris and a light pack in one switch,
 /// offered as the replacement for OptiFine.
@@ -37,7 +37,7 @@ export function ShadersRow({ profile, onChange }: { profile: string; onChange: (
         onChange()
         showToast(next ? t('Шейдеры включены — они уже выбраны в игре') : t('Шейдеры выключены, их моды сняты'), 'ok', next ? 'achievement' : undefined)
       })
-      .catch((e) => showToast(t('Не удалось переключить шейдеры: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось переключить шейдеры: {error}', { error: tx(e) }), 'error'))
       .finally(() => setBusy(false))
   }
 

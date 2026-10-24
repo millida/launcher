@@ -1,7 +1,7 @@
 import { Icon } from './Icon'
 import { tauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 import { ServiceStatus } from './ServiceStatus'
 
 const win = () => {
@@ -45,7 +45,7 @@ export function Titlebar() {
             className="tb-btn"
             id="winMin"
             aria-label={t('Свернуть')}
-            onClick={() => windowAction((error) => t('Не удалось свернуть окно: {error}', { error }), (w) => w.minimize())}
+            onClick={() => windowAction((error) => t('Не удалось свернуть окно: {error}', { error: tx(error) }), (w) => w.minimize())}
           >
             <Icon id="i-minus" />
           </button>
@@ -53,7 +53,7 @@ export function Titlebar() {
             className="tb-btn"
             id="winMax"
             aria-label={t('Развернуть')}
-            onClick={() => windowAction((error) => t('Не удалось развернуть окно: {error}', { error }), (w) => w.toggleMaximize())}
+            onClick={() => windowAction((error) => t('Не удалось развернуть окно: {error}', { error: tx(error) }), (w) => w.toggleMaximize())}
           >
             <Icon id="i-max" />
           </button>
@@ -61,7 +61,7 @@ export function Titlebar() {
             className="tb-btn close"
             id="winClose"
             aria-label={t('Закрыть')}
-            onClick={() => windowAction((error) => t('Не удалось закрыть окно: {error}', { error }), (w) => w.close(), true)}
+            onClick={() => windowAction((error) => t('Не удалось закрыть окно: {error}', { error: tx(error) }), (w) => w.close(), true)}
           >
             <Icon id="i-x" />
           </button>

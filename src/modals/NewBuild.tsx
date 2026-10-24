@@ -29,7 +29,7 @@ import { PxIcon } from '../components/PxIcon'
 import { aiPresetFor } from '../lib/aiBuilder'
 import { openMilli } from '../state/milli'
 import { openHubBuild } from '../components/playhub/hubTab'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 /**
  * «Новая сборка» (правки владельца 23.09.2026, 19:40): иконка сборки как в
@@ -209,7 +209,7 @@ export function NewBuildModal() {
       .catch((e) => {
         setBusy(false)
         trackFailure('build_create', nm.length >= 2 ? String(e).split(nm).join('<build>') : e, { step: 'create', mc: ver, loader })
-        showToast(t('Не удалось создать сборку: {error}', { error: String(e) }), 'error')
+        showToast(t('Не удалось создать сборку: {error}', { error: tx(e) }), 'error')
       })
   }
 

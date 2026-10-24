@@ -3,7 +3,7 @@ import { modpackVersions } from '../ipc/commands'
 import type { ModpackVersion } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { openModal, showToast } from './ui'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 interface ModpackState {
   profile: string
@@ -52,7 +52,7 @@ export const useModpackVersions = create<ModpackState>((set, get) => ({
       set({ profile: '', slug, title, mode: 'install', curId: '', list: list || [], labels: {} })
       openModal('mpOverlay')
     } catch (e) {
-      showToast(t('Не удалось получить версии: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось получить версии: {error}', { error: tx(e) }), 'error')
     }
   },
 }))

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { runningGames, stopGame } from '../ipc/commands'
 import { showToast } from './ui'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 interface GameState {
   list: string[]
@@ -49,7 +49,7 @@ export function stopRunningGame(profile?: string | null) {
     .then(() => showToast(t('Останавливаем игру…')))
     .catch((e) => {
       useGame.getState().setStopping(false)
-      showToast(t('Не удалось остановить игру: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось остановить игру: {error}', { error: tx(e) }), 'error')
       syncRunningGame()
     })
 }

@@ -7,7 +7,7 @@ import { showToast } from '../state/ui'
 import { api } from './api'
 import { inTime } from './deadline'
 import { joinInfo, wakesOnJoin } from './wakeInfo'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 /// GET /hosting/client/pack?address= — the client pack a hosting server publishes.
 interface ServerPackAnswer {
@@ -167,7 +167,7 @@ export async function serverPackBuild(addr: string, server: string): Promise<str
       void useProfiles.getState().refresh()
       return p.name
     } catch (e) {
-      showToast(t('Не удалось поставить сборку сервера: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось поставить сборку сервера: {error}', { error: tx(e) }), 'error')
       return SKIP_JOIN
     }
   }
@@ -191,7 +191,7 @@ export async function serverPackBuild(addr: string, server: string): Promise<str
     bind(sp.serverId, name, revision)
     return name
   } catch (e) {
-    showToast(t('Не удалось обновить сборку сервера: {error}', { error: String(e) }), 'error')
+    showToast(t('Не удалось обновить сборку сервера: {error}', { error: tx(e) }), 'error')
     return SKIP_JOIN
   }
 }

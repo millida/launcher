@@ -237,6 +237,12 @@ pub async fn tune_profile(profile: String) -> Result<engine::Tuning, String> {
 #[tauri::command]
 pub fn set_auto_tune(profile: String, on: bool) { engine::set_auto_tune(&profile, on); }
 
+/// Memory of a build in megabytes, 0 for auto: the value the launch takes.
+#[tauri::command]
+pub fn set_profile_ram(profile: String, mb: u32) -> Result<(), String> {
+    engine::set_profile_ram(&profile, mb)
+}
+
 /// The webview names a game and passes the code from a link as is; the core
 /// alone knows which games take invites and in what format.
 #[tauri::command]

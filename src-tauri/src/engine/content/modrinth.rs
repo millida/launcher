@@ -313,7 +313,11 @@ pub(crate) fn pick_update(
 
 fn no_file_text(versions: &[Value], game_version: &str) -> String {
     let have = known_game_versions(versions);
-    format!("нет файла под {}{}", game_version, if have.is_empty() { String::new() } else { format!(" (есть: {})", have) })
+    if have.is_empty() {
+        format!("нет файла под {}", game_version)
+    } else {
+        format!("нет файла под {} (есть: {})", game_version, have)
+    }
 }
 
 /// Same as `best_version`, with the bridged loaders as a second choice.
@@ -366,9 +370,71 @@ pub(crate) fn modrinth_file_url_ok(raw: &str) -> bool {
     url::Url::parse(raw).is_ok_and(|u| u.scheme() == "https" && u.host_str().is_some_and(|h| h.eq_ignore_ascii_case("cdn.modrinth.com")) && u.port().is_none())
 }
 
+/// How many older files of a project are tried when the newest one asks for a
+/// newer loader than the build is pinned to.
+const LOADER_STEP_BACK: usize = 4;
+
 async fn install_project_version_cancellable(
     profile: &str, kind: &str, project: &str, version: &Value, cancel: Option<&Halt>,
 ) -> Result<String, String> {
+    let pin = if kind == "mod" { loader_pin(profile) } else { None };
+    let mut candidate = version.clone();
+    let mut older: Option<Vec<Value>> = None;
+    let mut demanded: Option<String> = None;
+    for _ in 0..=LOADER_STEP_BACK {
+        let placed = place_version(profile, kind, &candidate, cancel).await?;
+        let Some(range) = pin.as_ref().and_then(|p| file_loader_shortfall(&placed.dest, &placed.name, p)) else {
+            record_version(profile, kind, project, &candidate, &placed.name).await;
+            return Ok(placed.name);
+        };
+        if placed.fresh {
+            // Removes only the jar this call has just downloaded into the build: it would stop the loader on the next start.
+            let _ = std::fs::remove_file(&placed.dest);
+        }
+        demanded.get_or_insert(range);
+        if older.is_none() {
+            older = Some(older_fitting(profile, project, &candidate).await);
+        }
+        match older.as_mut().filter(|o| !o.is_empty()).map(|o| o.remove(0)) {
+            Some(v) => candidate = v,
+            None => break,
+        }
+    }
+    match (pin, demanded) {
+        (Some(pin), Some(range)) => Err(loader_too_old_text(&fetch_project_meta(project).await.1, &pin, &range)),
+        _ => Err("Файл не найден".into()),
+    }
+}
+
+/// Files of the project older than `current` that fit the build, newest first.
+async fn older_fitting(profile: &str, project: &str, current: &Value) -> Vec<Value> {
+    let ctx = ctx_of(profile, "mod");
+    let since = current["date_published"].as_str().unwrap_or("");
+    let versions = project_versions(project).await.unwrap_or_default();
+    older_fitting_in(&versions, since, &ctx.game_version, &ctx.loaders, &ctx.bridge)
+}
+
+fn older_fitting_in(versions: &[Value], since: &str, game_version: &str, loaders: &[String], bridge: &[String]) -> Vec<Value> {
+    let mut out: Vec<Value> = versions
+        .iter()
+        .filter(|v| v["version_type"].as_str() != Some("alpha"))
+        .filter(|v| v["date_published"].as_str().is_some_and(|d| !since.is_empty() && d < since))
+        .filter(|v| fits_build(v, game_version, loaders, bridge))
+        .cloned()
+        .collect();
+    out.sort_by(|a, b| b["date_published"].as_str().cmp(&a["date_published"].as_str()));
+    out.truncate(LOADER_STEP_BACK);
+    out
+}
+
+struct Placed {
+    name: String,
+    dest: std::path::PathBuf,
+    /// The build did not have this file before the call.
+    fresh: bool,
+}
+
+async fn place_version(profile: &str, kind: &str, version: &Value, cancel: Option<&Halt>) -> Result<Placed, String> {
     let file = version["files"].as_array()
         .and_then(|fs| fs.iter().find(|f| f["primary"] == true).or_else(|| fs.first()))
         .ok_or("Файл не найден")?;
@@ -378,6 +444,7 @@ async fn install_project_version_cancellable(
         return Err(format!("{}: Modrinth дал ссылку не на cdn.modrinth.com — установка остановлена", fname));
     }
     let dest = safe_child(&profile_dir(profile).join(content_dir(kind)), &fname)?;
+    let fresh = !dest.exists();
     // versions carry sha512/sha1, so never download without verifying
     let sha512 = file["hashes"]["sha512"].as_str().unwrap_or("");
     let sha1 = file["hashes"]["sha1"].as_str().unwrap_or("");
@@ -393,10 +460,17 @@ async fn install_project_version_cancellable(
         download_checked_cancellable(file["url"].as_str().unwrap_or(""), &dest, Some(sum), file["size"].as_u64(), cancel).await?;
         if !sha1.is_empty() { adopt_to_store(&dest, sha1); }
     }
+    Ok(Placed { name: fname, dest, fresh })
+}
+
+async fn record_version(profile: &str, kind: &str, project: &str, version: &Value, fname: &str) {
+    let Some(file) = version["files"].as_array().and_then(|fs| fs.iter().find(|f| f["primary"] == true).or_else(|| fs.first())) else {
+        return;
+    };
     let (pid, title, icon, summary) = fetch_project_meta(project).await;
     manifest_upsert(profile, ContentEntry {
         kind: kind.to_string(),
-        file_name: fname.clone(),
+        file_name: fname.to_string(),
         project_id: pid,
         version_id: version["id"].as_str().unwrap_or("").to_string(),
         version_number: version["version_number"].as_str().unwrap_or("").to_string(),
@@ -409,7 +483,6 @@ async fn install_project_version_cancellable(
         sha512: file["hashes"]["sha512"].as_str().unwrap_or("").to_string(),
         file_size: file["size"].as_u64().unwrap_or(0),
     });
-    Ok(fname)
 }
 
 /// Installs required dependencies transitively through the shared resolver, so
@@ -547,6 +620,28 @@ async fn install_version_job(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// published files -> what is tried after the newest asked for a newer loader.
+    #[test]
+    fn older_files_are_tried_newest_first_and_only_ones_that_fit() {
+        let v = |id: &str, date: &str, kind: &str, loaders: &[&str]| json!({ "id": id, "date_published": date, "version_type": kind, "game_versions": ["1.21.1"], "loaders": loaders });
+        let versions = vec![
+            v("487", "2026-10-05", "release", &["neoforge"]),
+            v("486", "2026-10-02", "release", &["neoforge"]),
+            v("485-fabric", "2026-09-20", "release", &["fabric"]),
+            v("485a", "2026-09-15", "alpha", &["neoforge"]),
+            v("484", "2026-09-10", "release", &["neoforge"]),
+            v("483", "2026-09-01", "beta", &["neoforge"]),
+            v("482", "2026-08-20", "release", &["neoforge"]),
+            v("481", "2026-08-10", "release", &["neoforge"]),
+        ];
+        let ids = |since: &str| -> Vec<String> {
+            older_fitting_in(&versions, since, "1.21.1", &["neoforge".to_string()], &[]).iter().map(|x| x["id"].as_str().unwrap_or("").to_string()).collect()
+        };
+        assert_eq!(ids("2026-10-05"), vec!["486", "484", "483", "482"], "newest first, no alpha, no other loader, at most four downloads");
+        assert_eq!(ids("2026-08-20"), vec!["481"], "only files older than the one that did not fit");
+        assert!(ids("").is_empty(), "a version without a date has no «older» to step back to");
+    }
 
     #[test]
     fn modrinth_files_come_only_from_their_cdn() {

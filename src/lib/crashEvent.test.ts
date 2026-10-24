@@ -76,3 +76,18 @@ test('game_crash несёт jar нашего мода, чтобы рубильн
   expect(d.modJar).toBe('millida-mod-fabric-1.20.1-0.2.18.jar')
   expect(gameCrashData({ profile: 'p', reason: 'r', tail: '' }, null, null).modJar).toBeUndefined()
 })
+
+const exitCases: Array<[string | undefined, string | undefined, string]> = [
+  ['0xC0000005', '0xC0000005', 'a log that stops mid-loading: the code tells a driver fault from a kill'],
+  ['1', '1', 'an exception escaped main'],
+  ['sig9', 'sig9', 'killed on macOS or Linux'],
+  ['', undefined, 'no code: no empty key in the event'],
+  [undefined, undefined, 'an older core sends no exit at all'],
+]
+
+for (const [exit, expected, why] of exitCases) {
+  test('game_crash.exit: ' + why, () => {
+    const d = gameCrashData({ profile: 'p', reason: 'r', tail: '', exit }, null, null)
+    expect(d.exit as string | undefined).toBe(expected)
+  })
+}

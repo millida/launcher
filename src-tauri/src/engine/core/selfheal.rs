@@ -17,7 +17,8 @@ use super::selfupdate::{fallback_latest, fallback_stage, is_newer, run_installer
 const BOOT_GRACE: Duration = Duration::from_secs(25);
 const MAX_ATTEMPTS: u32 = 3;
 const DOWNLOAD_PAGE: &str = "https://millida.net/launcher";
-const DOWNLOAD_BUTTON: &str = "Скачать";
+const DOWNLOAD_BUTTON: &str = concat!("Скачать", " / Download");
+const CLOSE_BUTTON: &str = concat!("Закрыть", " / Close");
 
 static FRONTEND_UP: AtomicBool = AtomicBool::new(false);
 
@@ -124,15 +125,16 @@ async fn heal(app: &AppHandle) -> Result<bool, String> {
 /// is exactly what is broken.
 // If healing did not work, we show the normal window that offers to open the launcher download page on millida.net.
 async fn offer_manual_download(reason: &str) {
+    // The translations arrive from the webview, which is the part that failed, so the dialog speaks both languages.
     let text = format!(
         "Лаунчер не смог открыться и не сумел обновиться сам ({}).\n\nСкачай свежую версию с сайта и поставь поверх — сборки, миры и аккаунты останутся на месте.",
         reason
-    );
+    ) + "\n\nThe launcher could not open and could not update itself.\n\nDownload the latest version from the website and install it over the current one: your builds, worlds and accounts stay in place.";
     let answer = rfd::AsyncMessageDialog::new()
         .set_title("Millida Launcher")
         .set_description(&text)
         .set_level(rfd::MessageLevel::Error)
-        .set_buttons(rfd::MessageButtons::OkCancelCustom(DOWNLOAD_BUTTON.into(), "Закрыть".into()))
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(DOWNLOAD_BUTTON.into(), CLOSE_BUTTON.into()))
         .show()
         .await;
     let go = match &answer {

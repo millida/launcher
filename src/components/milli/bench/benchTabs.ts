@@ -186,7 +186,7 @@ export function ramAdvice(ramMb: number, totalMb: number): string {
   return totalMb > 0 ? t('Советуем {n} ГБ из {total}', { n: tip, total: Math.round(totalMb / MB) }) : t('Советуем {n} ГБ', { n: tip })
 }
 
-/** ГБ для ползунка лаунчера (`m-ram-<профиль>`, целые ГБ), не выше потолка машины. */
+/** ГБ памяти сборки (целые ГБ), не выше потолка машины. */
 export function ramGbFor(ramMb: number, totalMb: number): number {
   return Math.max(2, Math.min(ramCapGb(totalMb), Math.round(ramMb / MB)))
 }

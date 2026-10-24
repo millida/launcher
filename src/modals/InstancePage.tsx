@@ -20,6 +20,7 @@ import { PackUpdateRow } from '../components/PackUpdateRow'
 import { ShadersRow } from '../components/ShadersRow'
 import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
 import { TunePanel } from '../components/TunePanel'
+import { buildRamGb, setBuildRamMb } from '../lib/ramPref'
 import { IconEditor } from '../components/IconEditor'
 import { ShortcutRow } from '../components/ShortcutRow'
 import { CommonShareRows } from '../components/CommonShareRows'
@@ -128,14 +129,12 @@ import { stopRunningGame, useGame } from '../state/game'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
 import { hasMillidaAccount, mirrorAsset } from '../lib/api'
-import { t, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 import { LaunchHooksBlock } from '../components/build/LaunchHooksBlock'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
   name && name.length >= 2 ? String(e).split(name).join('<build>') : String(e)
-
-const ramKey = (p: string) => 'm-ram-' + p
 
 const AUTO_FIX_ROUNDS = 2
 
@@ -310,7 +309,7 @@ export function InstancePage() {
   useEffect(() => {
     if (!profile || ram <= ramMax) return
     setRam(ramMax)
-    localStorage.setItem(ramKey(profile), String(ramMax))
+    void setBuildRamMb(profile, ramMax * 1024)
   }, [profile, ram, ramMax])
   const [boost, setBoost] = useState<FpsBoostState | null>(null)
   const [boostBusy, setBoostBusy] = useState(false)
@@ -544,7 +543,7 @@ export function InstancePage() {
         })
         .catch((e) => {
           setAuditBusy(false)
-          if (!auto) showToast(t('Не удалось проверить: {error}', { error: String(e) }), 'error')
+          if (!auto) showToast(t('Не удалось проверить: {error}', { error: tx(e) }), 'error')
         })
     },
     [profile, loadMods],
@@ -659,7 +658,10 @@ export function InstancePage() {
     if (wantShare) useInstance.getState().set({ share: false })
     setKind('mod')
     setPlaytime('')
-    setRam(parseInt(localStorage.getItem(ramKey(profile)) || '0', 10) || 0)
+    setRam(0)
+    void buildRamGb(profile)
+      .then(setRam)
+      .catch(() => {})
     setJavaList([])
     setDetectLabel(t('Найти'))
     setShotCount('—')
@@ -683,7 +685,7 @@ export function InstancePage() {
     }
     if (hasTauri()) {
       ensureMcVersionList().catch((e) =>
-        showToast(t('Список версий Minecraft не загрузился: {error}. Проверь интернет и открой сборку заново', { error: String(e) }), 'error'),
+        showToast(t('Список версий Minecraft не загрузился: {error}. Проверь интернет и открой сборку заново', { error: tx(e) }), 'error'),
       )
       getPlayStats()
         .then((s) => {
@@ -774,7 +776,7 @@ export function InstancePage() {
         )
       }
     } catch (e) {
-      showToast(t('Не удалось переключить буст FPS: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось переключить буст FPS: {error}', { error: tx(e) }), 'error')
     } finally {
       setBoostBusy(false)
     }
@@ -790,7 +792,7 @@ export function InstancePage() {
       loadMods()
       if (next.enabled) showToast(want ? t('Рендер сменён на VulkanMod') : t('Рендер снова Sodium'))
     } catch (e) {
-      showToast(t('Не удалось сменить рендер: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось сменить рендер: {error}', { error: tx(e) }), 'error')
     } finally {
       setBoostBusy(false)
     }
@@ -809,7 +811,7 @@ export function InstancePage() {
           : t('Мод скинов убран — лаунчер больше не будет добавлять его в эту сборку'),
       )
     } catch (e) {
-      showToast(t('Не удалось переключить мод скинов: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось переключить мод скинов: {error}', { error: tx(e) }), 'error')
     } finally {
       setSkinModBusy(false)
     }
@@ -822,7 +824,7 @@ export function InstancePage() {
       setSkinModState(await liftMillidaModQuarantine(profile))
       showToast(t('Косметика Millida вернётся в сборку при следующем запуске'))
     } catch (e) {
-      showToast(t('Не удалось вернуть косметику Millida: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось вернуть косметику Millida: {error}', { error: tx(e) }), 'error')
     } finally {
       setSkinModBusy(false)
     }
@@ -857,7 +859,7 @@ export function InstancePage() {
         void useProfiles.getState().refresh()
         showToast(t('Сборка переименована в «{name}»', { name: nn }))
       })
-      .catch((e) => showToast(t('Не удалось переименовать: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось переименовать: {error}', { error: tx(e) }), 'error'))
       .finally(() => setRenameBusy(false))
   }
 
@@ -897,7 +899,7 @@ export function InstancePage() {
           showToast(t('Готово: {loader} · {version}. Доустановим при запуске.', { loader: label, version: ver }))
         }
       })
-      .catch((e) => showToast(t('Не удалось сменить: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось сменить: {error}', { error: tx(e) }), 'error'))
       .finally(() => setCoreBusy(false))
   }
 
@@ -933,7 +935,7 @@ export function InstancePage() {
         showToast(t('Minecraft обновлён до {version}. Доустановим при запуске.', { version: target }))
       }
     } catch (e) {
-      showToast(t('Не удалось обновить Minecraft: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось обновить Minecraft: {error}', { error: tx(e) }), 'error')
     } finally {
       setCoreBusy(false)
     }
@@ -951,7 +953,7 @@ export function InstancePage() {
         void useProfiles.getState().refresh()
         showToast(t('{loader} обновлён до {version}. Доустановим при запуске.', { loader: label, version: target }))
       })
-      .catch((e) => showToast(t('Не удалось обновить загрузчик: {error}', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Не удалось обновить загрузчик: {error}', { error: tx(e) }), 'error'))
       .finally(() => setCoreBusy(false))
   }
 
@@ -1088,7 +1090,7 @@ export function InstancePage() {
       })
       .catch((e) => {
         setScanLabel(t('Сканировать'))
-        showToast(t('Не удалось просканировать: {error}', { error: String(e) }), 'error')
+        showToast(t('Не удалось просканировать: {error}', { error: tx(e) }), 'error')
       })
   }
 
@@ -1586,7 +1588,7 @@ export function InstancePage() {
                       .then((paths) => {
                         if (paths && paths.length) void addFiles(paths)
                       })
-                      .catch((e) => showToast(t('Не удалось открыть выбор файлов: {error}', { error: String(e) }), 'error'))
+                      .catch((e) => showToast(t('Не удалось открыть выбор файлов: {error}', { error: tx(e) }), 'error'))
                   }}
                 >
                   <Icon id="i-upload" /> {dropBusy ? t('Добавляем…') : t('Из файла')}
@@ -1686,7 +1688,7 @@ export function InstancePage() {
                         <span className="bpg-problem-t">
                           <b>{it.title}</b>
                           <span className={'bpg-tag' + (it.kind === 'missing' ? '' : ' bad')}>{auditLabel()[it.kind]}</span>
-                          <small>{it.detail}</small>
+                          <small>{tx(it.detail)}</small>
                         </span>
                         {issueInstall(it) ? (
                           <button
@@ -2494,7 +2496,7 @@ export function InstancePage() {
                             if (Array.isArray(list)) useProfiles.setState({ profiles: list })
                             else void useProfiles.getState().refresh()
                           })
-                          .catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: String(e) }), 'error'))
+                          .catch((e) => showToast(t('Иконка не сохранилась: {error}', { error: tx(e) }), 'error'))
                       }}
                     >
                       <span aria-hidden="true">🎲</span> {t('Случайная')}
@@ -2578,8 +2580,9 @@ export function InstancePage() {
                   onChange={(v) => {
                     setRam(v)
                     if (!profile) return
-                    if (v > 0) localStorage.setItem(ramKey(profile), String(v))
-                    else localStorage.removeItem(ramKey(profile))
+                    void setBuildRamMb(profile, v * 1024).then((ok) => {
+                      if (!ok) showToast(t('Не удалось сохранить память для сборки'), 'error')
+                    })
                   }}
                 />
               </div>
@@ -2615,7 +2618,7 @@ export function InstancePage() {
                       })
                       .catch((e) => {
                         setGpu(prev)
-                        showToast(t('Не удалось сохранить выбор карты: {error}', { error: String(e) }), 'error')
+                        showToast(t('Не удалось сохранить выбор карты: {error}', { error: tx(e) }), 'error')
                       })
                   }}
                 />
@@ -2773,7 +2776,7 @@ export function InstancePage() {
                         void useProfiles.getState().refresh()
                         showToast(t('Сборка продублирована'))
                       })
-                      .catch((e) => showToast(t('Не удалось продублировать: {error}', { error: String(e) }), 'error'))
+                      .catch((e) => showToast(t('Не удалось продублировать: {error}', { error: tx(e) }), 'error'))
                   }}
                 >
                   <Icon id="i-copy" /> {t('Дублировать')}
@@ -3067,7 +3070,7 @@ export function InstancePage() {
                 void useProfiles.getState().refresh()
                 showToast(t('Иконка обновлена'))
               })
-              .catch((e) => showToast(t('Не удалось сохранить иконку: {error}', { error: String(e) }), 'error'))
+              .catch((e) => showToast(t('Не удалось сохранить иконку: {error}', { error: tx(e) }), 'error'))
           }}
         />
       ) : null}

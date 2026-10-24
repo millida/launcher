@@ -17,7 +17,7 @@ import { useHasMillida } from '../state/auth'
 import { Milli } from './milli/Milli'
 import { crashWhy } from '../lib/crashWhy'
 import { exactCrashFix } from '../lib/liveLog'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
 
 const SUPPORT_ACT = 'support'
 
@@ -65,14 +65,14 @@ export function CrashModal() {
             </div>
           </div>
         </div>
-        <p className="crash-reason">{info.reason}</p>
+        <p className="crash-reason">{tx(info.reason)}</p>
         {why ? <p className="crash-plan">{why}</p> : null}
         {planSteps.length ? (
           <div className="crash-plan">
             <span>{t('Починка сделает:')}</span>
             <ul>
               {planSteps.map((s) => (
-                <li key={s}>{s}</li>
+                <li key={s}>{tx(s)}</li>
               ))}
             </ul>
           </div>
@@ -142,7 +142,7 @@ export function CrashModal() {
                       .catch(failed)
                   }}
                 >
-                  {acting === a.kind + (a.arg ?? '') ? t('Делаем…') : a.label}
+                  {acting === a.kind + (a.arg ?? '') ? t('Делаем…') : tx(a.label)}
                 </button>
               ))}
           </div>
@@ -225,7 +225,7 @@ export function CrashModal() {
                 )
                 .catch((e) => {
                   openUrl(SUPPORT_URL)
-                  showToast(t('Чат открыт, но данные о вылете собрать не вышло: {error}', { error: String(e) }), 'error')
+                  showToast(t('Чат открыт, но данные о вылете собрать не вышло: {error}', { error: tx(e) }), 'error')
                 })
                 .finally(() => setActing(''))
             }}
@@ -284,7 +284,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
       const answer = await milliCrash(crashAskBody(info, mods, profile))
       setState({ step: 'done', explain: answer.explain, steps: answer.steps, offers: crashDisableOffers(answer, mods) })
     } catch (e) {
-      showToast(t('Милли не смогла разобрать вылет: {error}', { error: String(e) }), 'error')
+      showToast(t('Милли не смогла разобрать вылет: {error}', { error: tx(e) }), 'error')
       setState({ step: 'idle' })
     }
   }

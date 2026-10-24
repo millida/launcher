@@ -42,7 +42,7 @@ import { nickInRooms, useRooms, type VoiceMember } from './rooms'
 import { usePartyStore } from './party'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 export type CallStatus = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active'
 
@@ -663,7 +663,7 @@ export async function joinPartyVoice(partyId: string, startMuted = false) {
   const reason = await joinRelayVoice(partyId, startMuted)
   if (reason === null) return
   trackFailure('call', new Error(reason), { step: 'party_relay' })
-  showToast(t('Голос через сервер Millida недоступен: {reason}. Включаю запасной режим', { reason }), 'error')
+  showToast(t('Голос через сервер Millida недоступен: {reason}. Включаю запасной режим', { reason: tx(reason) }), 'error')
   return joinVoice(partyId, t('Пати'), '/party')
 }
 
@@ -702,8 +702,8 @@ async function pushRelayAudio(processing?: MicProcessing) {
 }
 
 function relayErrorText(e: unknown): string {
-  if (typeof e === 'string' && e.trim()) return e.trim()
-  if (e instanceof Error && e.message) return e.message
+  if (typeof e === 'string' && e.trim()) return tx(e.trim())
+  if (e instanceof Error && e.message) return tx(e.message)
   return t('сервер не ответил')
 }
 

@@ -4,7 +4,7 @@ import { useProfiles } from '../state/profiles'
 import { setScreen, showToast } from '../state/ui'
 import { realLaunch } from './launch'
 import { runRepair } from './repair'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 async function buildExists(name: string): Promise<boolean> {
   const has = () => useProfiles.getState().profiles.some((p) => p.name === name)
@@ -21,7 +21,7 @@ export async function runCliAction(a: CliAction): Promise<void> {
       const freed = await clearCache()
       showToast(t('Освобождено {n} МБ', { n: Math.round(freed / 1024 / 1024) }))
     } catch (e) {
-      showToast(t('Не удалось очистить кэш: {error}', { error: String(e) }), 'error')
+      showToast(t('Не удалось очистить кэш: {error}', { error: tx(e) }), 'error')
     }
     return
   }

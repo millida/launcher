@@ -84,7 +84,24 @@ export function localizeCore(
     })
     return interpolate(lookup(locale, tpl.key, own, english), vars)
   }
-  return text
+  return localizeParts(locale, text, own, english, depth) ?? text
+}
+
+/// The core joins several reasons into one line ("a; b") and puts a stage, a file or
+/// an address in front of a reason ("Распаковка: …", "https://…: reason"). Such a line
+/// is no key, but each of its parts is. A split is taken only when every part comes out
+/// translated, so a sentence that merely contains a comma never turns into a mix.
+const SEPARATORS = ['; ', ', ', ': ']
+
+function localizeParts(locale: Locale, text: string, own: Table | null | undefined, english: Table | null | undefined, depth: number): string | null {
+  for (const sep of SEPARATORS) {
+    const at = text.indexOf(sep)
+    if (at < 0) continue
+    const parts = sep === ': ' ? [text.slice(0, at), text.slice(at + sep.length)] : text.split(sep)
+    const out = parts.map((part) => localizeCore(locale, part, own, english, depth + 1))
+    if (out.every((part) => !CYRILLIC.test(part))) return out.join(sep)
+  }
+  return null
 }
 
 export function translate(locale: Locale, key: string, vars: Vars | undefined, own: Table | null | undefined, english: Table | null | undefined): string {

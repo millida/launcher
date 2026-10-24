@@ -5,7 +5,7 @@ import type { PackContents as Contents } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { loaderLabel } from './site'
 import { sizeLabel } from './itemView'
-import { useT } from '../../i18n'
+import { tx, useT } from '../../i18n'
 
 const stem = (file: string) => file.replace(/\.(jar|zip)$/i, '')
 
@@ -28,7 +28,7 @@ export function PackContents({ project, catalog }: { project?: string; catalog?:
     }
     ;(catalog ? catalogPackContents(catalog) : modpackContents(project || ''))
       .then((c) => alive && setData(c))
-      .catch((e) => alive && setError(String(e)))
+      .catch((e) => alive && setError(tx(e)))
     return () => {
       alive = false
     }

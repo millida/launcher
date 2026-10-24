@@ -697,7 +697,7 @@ fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&Sha
         .arg(root)
         .current_dir(root)
         .output()
-        .map_err(|e| spawn_failure(&e, java).replacen("Запуск Java", "Инсталлер загрузчика: запуск Java", 1));
+        .map_err(|e| format!("Инсталлер загрузчика: {}", spawn_failure(&e, java)));
     if let Some((dir, ..)) = shadow {
         // Removes the temp folder with the replacement profile.
         let _ = std::fs::remove_dir_all(dir);

@@ -561,6 +561,7 @@ pub fn run() {
             commands::launch::seed_video_options,
             commands::launch::tune_profile,
             commands::launch::set_auto_tune,
+            commands::launch::set_profile_ram,
             commands::profiles::screenshot_gallery,
             commands::profiles::delete_screenshot,
             commands::profiles::save_screenshot_as,

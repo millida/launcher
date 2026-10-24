@@ -496,7 +496,7 @@ function Thinking() {
       <MilliAva mode="think" spin />
       <div className="ml-col">
         <div className={'ml-bubble ' + (live ? 'ml-think' : 'ml-typing-b')}>
-          <MilliSafe fallback={<span aria-live="polite">{step}</span>}>
+          <MilliSafe fallback={<span aria-live="polite">{t(step)}</span>}>
             {live ? (
               <MilliProgress stages={stages} title={editing ? t('Правлю сборку…') : t('Собираю сборку…')} onStop={cancelMilli} />
             ) : (

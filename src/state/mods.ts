@@ -9,7 +9,7 @@ import { cachedCatalog } from '../lib/catalogCache'
 import { mergeSources } from '../lib/modMerge'
 import { pickTargetName } from '../lib/installKeys'
 import { useProfiles } from './profiles'
-import { t } from '../i18n'
+import { t, tx } from '../i18n'
 
 export interface ModHit {
   title: string
@@ -553,7 +553,7 @@ export const useMods = create<ModsState>((set, get) => ({
         })
       } catch (e) {
         if (stale()) return
-        set({ hits: [], count: '', showMore: false, notice: t('Премиум-сборки недоступны: {error}', { error: String(e) }) })
+        set({ hits: [], count: '', showMore: false, notice: t('Премиум-сборки недоступны: {error}', { error: tx(e) }) })
       }
       return
     }

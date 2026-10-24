@@ -9,7 +9,7 @@ import { PVP_VERSIONS, fpsMods, loaderTitle } from '../../lib/versionBuild'
 import type { FpsMod } from '../../lib/versionBuild'
 import { modeIcon } from './modeIcon'
 import { PvpArena } from './PvpArena'
-import { t, useT } from '../../i18n'
+import { t, tx, useT } from '../../i18n'
 
 const FEATURES: { icon: string; title: string; line: string }[] = [
   { icon: 'i-grid', get title() { return t('HUD-модули') }, get line() { return t('FPS, CPS, пинг, броня, эффекты, комбо') } },
@@ -57,7 +57,7 @@ export function PvpPage({ busy, onPlay, arena = true }: { busy: boolean; onPlay:
     setSaving(true)
     setPvpHudDefault(next)
       .then(() => setHudOn(next))
-      .catch((e) => showToast(t('Настройка не сохранилась: {error}. Попробуй ещё раз.', { error: String(e) }), 'error'))
+      .catch((e) => showToast(t('Настройка не сохранилась: {error}. Попробуй ещё раз.', { error: tx(e) }), 'error'))
       .finally(() => setSaving(false))
   }
 

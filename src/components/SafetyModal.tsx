@@ -151,7 +151,7 @@ export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Pro
               ) : null}
               {report.blocked ? <span className="safety-pill danger">{t('{n} опасных', { n: report.blocked })}</span> : null}
             </div>
-            {report.note ? <p className="faint-note">{report.note}</p> : null}
+            {report.note ? <p className="faint-note">{tx(report.note)}</p> : null}
             {report.checked === 0 ? <p className="faint-note">{packs ? t('Паков и карт нет') : t('Модов нет')}</p> : null}
 
             <div className="safety-list">

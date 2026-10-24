@@ -39,12 +39,12 @@ pub(crate) fn is_locked_error(e: &std::io::Error) -> bool {
 /// «Этап: причина — путь». Причина первой: телеметрия хранит 120 символов, и
 /// длинный путь в начале съедал бы самое важное.
 pub(crate) fn io_fail(stage: &str, path: &Path, e: &std::io::Error) -> String {
-    let hint = if cfg!(target_os = "windows") && is_locked_error(e) {
-        " (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)"
+    let path = mask_home(&path.to_string_lossy());
+    if cfg!(target_os = "windows") && is_locked_error(e) {
+        format!("{}: {} — {} (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)", stage, e, path)
     } else {
-        ""
-    };
-    format!("{}: {} — {}{}", stage, e, mask_home(&path.to_string_lossy()), hint)
+        format!("{}: {} — {}", stage, e, path)
+    }
 }
 
 /// Паузы между попытками: антивирус отпускает свежераспакованные файлы за

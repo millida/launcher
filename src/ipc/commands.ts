@@ -2,8 +2,7 @@
 // Account tokens stay in the core. The UI gets only the result (millidaApi adds the token on the core side).
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
-import { t } from '../i18n'
-import { setLaunchRamMb } from '../lib/ramPref'
+import { t, tx } from '../i18n'
 
 export interface Profile {
   name: string
@@ -926,7 +925,7 @@ export const openProfileFolder = (name: string) => invoke<void>('open_profile_fo
 export const openScreenshots = (profile: string) => invoke<void>('open_screenshots', { profile })
 
 export const openUrl = (url: string) =>
-  invoke<void>('open_url', { url }).catch((e) => showToast(t('Не удалось открыть ссылку: {error}', { error: String(e) }), 'error'))
+  invoke<void>('open_url', { url }).catch((e) => showToast(t('Не удалось открыть ссылку: {error}', { error: tx(e) }), 'error'))
 
 export const cancelLaunch = () => invoke<void>('cancel_launch')
 
@@ -1399,6 +1398,8 @@ export interface Tuning {
 
 export const tuneProfile = (profile: string) => invoke<Tuning>('tune_profile', { profile })
 export const setAutoTune = (profile: string, on: boolean) => invoke<void>('set_auto_tune', { profile, on })
+/** Memory of the build in MB, 0 for auto: the one value the launch takes. */
+export const setProfileRam = (profile: string, mb: number) => invoke<void>('set_profile_ram', { profile, mb })
 
 // ---- World manager ----
 
@@ -1510,11 +1511,7 @@ export const quarantineMods = (profile: string, files: string[]) =>
 // ---- Crash diagnosis ----
 
 export const applyCrashFix = (profile: string, kind: string, arg: string) =>
-  invoke<string>('apply_crash_fix', { profile, kind, arg }).then((msg) => {
-    // The launch takes the build's memory slider over the core's ramMb: a memory fix must land on the slider too.
-    if (kind === 'set-ram') setLaunchRamMb(profile, Number(arg))
-    return msg
-  })
+  invoke<string>('apply_crash_fix', { profile, kind, arg })
 
 export interface LiveLogSnapshot {
   profile: string
