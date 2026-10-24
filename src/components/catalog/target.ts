@@ -8,7 +8,7 @@ import type { SiteStore } from './siteStore'
  * сервер» у сборок, карт и дата-паков. `server` — вкладка контента панели
  * хостинга: те же разделы и строки, главная кнопка — «На сервер» этого сервера.
  */
-export type CatalogTarget = { kind: 'build' } | { kind: 'server'; serverId: string; onInstalled?: () => void }
+export type CatalogTarget = { kind: 'build' } | { kind: 'server'; serverId: string; onInstalled?: (info?: { title: string; kind: string }) => void }
 
 export const CatalogCtx = createContext<{ store: SiteStore; target: CatalogTarget }>({ store: useSite, target: { kind: 'build' } })
 

@@ -33,7 +33,10 @@ import {
   showMilliHistory,
   useMilli,
 } from '../../state/milli'
-import { useUi } from '../../state/ui'
+import { showToast, useUi } from '../../state/ui'
+import { useLobby } from '../../state/lobbyMode'
+import { openProfileFolder } from '../../ipc/commands'
+import { NOTHING_TO_REPAIR, repairChangedFiles, runRepair } from '../../lib/repair'
 import { openAccountAdd } from '../../state/accountAdd'
 import { useHubTab } from '../playhub/hubTab'
 import { usePlus } from '../../state/plus'
@@ -876,21 +879,82 @@ function Fab() {
   )
 }
 
-/** Вне каталога угол — обычная поддержка: чат поддержки Millida в браузере. */
+/**
+ * Вне каталога угол — «Помощь» словом: починить сборку, открыть папку с логами или
+ * написать в поддержку (раньше — одна иконка-наушники, ведущая на вход сайта).
+ */
 function SupportFab() {
   const t = useT()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const picked = useLobby((s) => s.picked)
+  const build = picked && picked.kind === 'build' ? picked.name : ''
+  useEffect(() => {
+    if (!open) return
+    const down = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', down)
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('mousedown', down)
+      document.removeEventListener('keydown', key)
+    }
+  }, [open])
+  const run = (fn: () => void) => () => {
+    setOpen(false)
+    fn()
+  }
+  const needBuild = () => showToast(t('Выбери свою сборку в «Сегодня играем» — тогда починим её'), 'error')
   return (
-    <button
-      type="button"
-      className="msf"
-      data-sound="open"
-      data-track="support_fab"
-      aria-label={t('Поддержка')}
-      data-tip={t('Поддержка')}
-      onClick={() => openExt(SUPPORT_URL)}
-    >
-      <PxIcon name="headset" size={22} />
-    </button>
+    <div className="msf-wrap" ref={ref}>
+      {open ? (
+        <div className="ml-menu msf-menu" role="menu">
+          <button
+            type="button"
+            className="ml-menu-item"
+            role="menuitem"
+            data-track="help_repair"
+            onClick={run(() => {
+              if (!build) return needBuild()
+              void runRepair(build).then((r) => {
+                if (r && !repairChangedFiles(r)) showToast(NOTHING_TO_REPAIR, 'error')
+              })
+            })}
+          >
+            <PxIcon name="restart" size={16} />
+            {t('Починить')}
+          </button>
+          <button
+            type="button"
+            className="ml-menu-item"
+            role="menuitem"
+            data-track="help_logs"
+            onClick={run(() => (build ? void openProfileFolder(build) : needBuild()))}
+          >
+            <PxIcon name="folder" size={16} />
+            {t('Логи')}
+          </button>
+          <button type="button" className="ml-menu-item" role="menuitem" data-track="help_write" onClick={run(() => openExt(SUPPORT_URL))}>
+            <PxIcon name="msg" size={16} />
+            {t('Написать')}
+          </button>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="msf"
+        data-sound="open"
+        data-track="support_fab"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <PxIcon name="headset" size={20} />
+        {t('Помощь')}
+      </button>
+    </div>
   )
 }
 

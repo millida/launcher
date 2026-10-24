@@ -493,14 +493,21 @@ pub fn set_pvp_hud_default(on: bool) -> Result<(), String> {
 /// Раскладка, которую читает мод: `millida/local/{skins,capes}/<ник>.png`. Та же
 /// картинка, что игрок применил в гардеробе, — тогда скин на месте и без сети.
 fn place_local_skin(dir: &Path, nick: &str) {
-    let source = data_dir().join("localskin");
+    place_local_skin_from(&data_dir().join("localskin"), local_slim(), dir, nick);
+}
+
+/// The arm type travels with the picture as `models/<nick>.txt`. Without it the
+/// mod knew the skin but not its arms, stopped asking further sources once the
+/// cape was found too, and dressed an Alex skin in Steve sleeves.
+fn place_local_skin_from(source: &Path, slim: bool, dir: &Path, nick: &str) {
     let safe: String = nick.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
     if safe.is_empty() {
         return;
     }
+    let local = dir.join("millida").join("local");
     for (file, sub) in [("skin.png", "skins"), ("cape.png", "capes")] {
         let from = source.join(file);
-        let into = dir.join("millida").join("local").join(sub);
+        let into = local.join(sub);
         let target = into.join(format!("{}.png", safe));
         if !from.exists() {
             let _ = std::fs::remove_file(&target);
@@ -509,6 +516,15 @@ fn place_local_skin(dir: &Path, nick: &str) {
         if std::fs::create_dir_all(&into).is_ok() {
             let _ = std::fs::copy(&from, &target);
         }
+    }
+    let models = local.join("models");
+    let marker = models.join(format!("{}.txt", safe));
+    if !source.join("skin.png").exists() {
+        let _ = std::fs::remove_file(&marker);
+        return;
+    }
+    if std::fs::create_dir_all(&models).is_ok() {
+        let _ = std::fs::write(&marker, if slim { "slim" } else { "classic" });
     }
 }
 
@@ -1195,6 +1211,35 @@ mod tests {
             let mut part = dest.as_os_str().to_os_string();
             part.push(".part");
             assert!(!PathBuf::from(part).exists(), "{}: the part file must not outlive the call", why);
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Input -> verdict for the arm marker the mod's local source reads. A
+    /// licensed Alex player with a cape got Steve sleeves in game: the local
+    /// copy answered skin and cape, the mod stopped there, and no arm type came
+    /// with them.
+    #[test]
+    fn the_local_skin_carries_its_arm_type() {
+        let root = std::env::temp_dir().join(format!("millida-local-arms-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let source = root.join("localskin");
+        let build = root.join("build");
+        std::fs::create_dir_all(&source).unwrap();
+        let marker = build.join("millida").join("local").join("models").join("Alex_1.txt");
+        let cases: [(bool, bool, Option<&str>, &str); 3] = [
+            (true, true, Some("slim"), "an Alex skin is marked slim"),
+            (true, false, Some("classic"), "a Steve skin is marked classic, not left to the uuid guess"),
+            (false, true, None, "no local skin leaves no marker behind"),
+        ];
+        for (with_skin, slim, want, why) in cases {
+            if with_skin {
+                std::fs::write(source.join("skin.png"), b"png").unwrap();
+            } else {
+                let _ = std::fs::remove_file(source.join("skin.png"));
+            }
+            place_local_skin_from(&source, slim, &build, "Alex_1");
+            assert_eq!(std::fs::read_to_string(&marker).ok().as_deref(), want, "{}", why);
         }
         let _ = std::fs::remove_dir_all(&root);
     }

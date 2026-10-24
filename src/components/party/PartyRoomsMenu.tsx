@@ -53,7 +53,7 @@ function RoomRow({ r, busy, onJoin }: { r: PartyRoom; busy: boolean; onJoin: () 
         </i>
       </span>
       <button className="btn sm primary prm-join" data-track="party_room_join" data-kind={r.target.kind} disabled={busy} onClick={onJoin}>
-        {t('Войти')}
+        {t('Зайти')}
       </button>
     </div>
   )

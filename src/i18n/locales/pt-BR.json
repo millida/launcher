@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "a pasta do agente foi criada por outro usuário do Windows",
   "запасная папка есть только в Windows": "a pasta reserva existe apenas no Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Sua skin não será visível neste jogo: um modpack vanilla só a pega da conta. Entre com uma conta Millida ou com uma licença — ou jogue em um modpack com mods.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» precisa do carregador {1} {2}, o modpack tem {3}. Atualize o carregador nas configurações do modpack ou instale outra versão do mod"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» precisa do carregador {1} {2}, o modpack tem {3}. Atualize o carregador nas configurações do modpack ou instale outra versão do mod",
+  "Каталог сборок не ответил": "O catálogo de modpacks não respondeu",
+  "Поиск: Arcania, Create, Cobblemon…": "Buscar: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "O servidor foi criado, mas o modpack “{name}” não foi instalado: {error}. Instale-o pelo painel do servidor",
+  "Со сборкой «{name}»": "Com o modpack “{name}”",
+  "каталог не ответил": "o catálogo não respondeu",
+  "Память (RAM)": "Memória (RAM)",
+  "У каждой сборки своя": "Cada build tem a sua",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Sem conexão. Imagens e dados novos aparecem quando ela voltar",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Escolha sua build em “Hoje jogamos” e vamos consertá-la",
+  "Помощь": "Ajuda",
+  "Серверу от {n} ГБ": "Servidor a partir de {n} GB",
+  "Код выдаёт автор сборки после покупки": "O autor do modpack fornece o código após a compra"
 }

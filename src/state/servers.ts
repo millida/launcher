@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { SnapshotServer } from '../lib/snapshot'
 import { api } from '../lib/api'
+import { clipWords } from '../lib/format'
 import { serverVersions } from '../lib/mcVersion'
 import { ensureMcVersions } from './mcVersions'
 import { apiErrorText } from '../lib/apiError'
@@ -109,7 +110,7 @@ export const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   rank,
   name: sv.name,
   slug: sv.slug,
-  desc: (sv.shortDesc || sv.aiDescription || sv.description || '').replace(/\n/g, ' ').slice(0, 110),
+  desc: clipWords((sv.shortDesc || sv.aiDescription || sv.description || '').replace(/\n/g, ' '), 110),
   ip: sv.ip || '',
   online: sv.online ?? sv.avgOnline ?? 0,
   onlineApprox: sv.onlineApprox === true,

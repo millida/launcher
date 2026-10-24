@@ -186,6 +186,17 @@ export function clipText(text: string, max: number): string {
   return chars.slice(0, Math.max(1, max - 1)).join('').trimEnd() + '…'
 }
 
+/// Short description: cut at a word boundary with an ellipsis, never in the middle of a word.
+export function clipWords(text: string, max: number): string {
+  const value = String(text ?? '')
+  const chars = Array.from(value)
+  if (chars.length <= max) return value
+  const head = chars.slice(0, Math.max(1, max - 1)).join('')
+  const space = head.lastIndexOf(' ')
+  const cut = chars[max - 1] !== ' ' && space > head.length * 0.5 ? head.slice(0, space) : head
+  return cut.trimEnd().replace(/[,;:\-–—]+$/, '') + '…'
+}
+
 /// Catalogue values arrive lower-cased from the APIs ("fabric", "любая"); only
 /// the first letter is touched so "NeoForge" and "1.21.4" stay as they are.
 export const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s)

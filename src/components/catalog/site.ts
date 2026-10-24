@@ -147,6 +147,8 @@ export interface SiteCard {
   icon: string | null
   side: string | null
   launcherOnly?: boolean
+  /** Ключ партнёрской сборки хостинга, если карточка — она (только листинг с `hostable=1`). */
+  hostingPack?: string | null
   author: string | null
   /**
    * Только НАШИ скачивания (как на сайте с 21.09.2026). Ноль или пусто — строки

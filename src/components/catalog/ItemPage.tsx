@@ -411,7 +411,10 @@ function Picker({
   onPick,
   onInstall,
   locked,
+  pack,
 }: {
+  /** Сборка: файл — лишь список модов (.mrpack), а не вес на диске, поэтому размер не показываем. */
+  pack?: boolean
   files: VerFile[]
   loaderAxis: boolean
   pick: { version: string | null; loader: string | null }
@@ -458,7 +461,7 @@ function Picker({
       {file ? (
         <div className="ci-file">
           <span className="ci-file-name">{file.name}</span>
-          <span className="ci-file-size">{sizeLabel(file.size)}</span>
+          {pack ? null : <span className="ci-file-size">{sizeLabel(file.size)}</span>}
         </div>
       ) : (
         <div className="ci-file is-none">{t('Под этот выбор файла нет')}</div>
@@ -473,7 +476,7 @@ function Picker({
   )
 }
 
-function Versions({ files, onInstall, locked }: { files: VerFile[]; onInstall?: (f: VerFile) => void; locked: boolean }) {
+function Versions({ files, onInstall, locked, pack }: { files: VerFile[]; onInstall?: (f: VerFile) => void; locked: boolean; pack?: boolean }) {
   const t = useT()
   const [all, setAll] = useState(false)
   const shown = all ? files : files.slice(0, 15)
@@ -484,7 +487,7 @@ function Versions({ files, onInstall, locked }: { files: VerFile[]; onInstall?: 
           <b className="ci-ver-name">{f.name}</b>
           <span className="ci-ver-game">{spanOf(f.gameVersions) || '—'}</span>
           <span className="ci-ver-ld">{f.loaders.filter((l) => l !== 'minecraft').slice(0, 2).map(loaderLabel).join(', ')}</span>
-          <span className="ci-ver-size">{sizeLabel(f.size)}</span>
+          {pack ? null : <span className="ci-ver-size">{sizeLabel(f.size)}</span>}
           <span className="ci-ver-date">{relativeTime(f.date)}</span>
           {onInstall ? (
             <button className="btn sm secondary" data-track="install_version" disabled={locked} onClick={() => onInstall(f)}>
@@ -670,11 +673,11 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
           ) : tab === 'gallery' ? (
             <Gallery urls={shots} />
           ) : (
-            <Versions files={filesFor(files, pick.version, loaderAxis ? pick.loader : null).length ? filesFor(files, pick.version, loaderAxis ? pick.loader : null) : files} onInstall={installFile} locked={paid.locked} />
+            <Versions files={filesFor(files, pick.version, loaderAxis ? pick.loader : null).length ? filesFor(files, pick.version, loaderAxis ? pick.loader : null) : files} onInstall={installFile} locked={paid.locked} pack={sec.kind === 'modpack'} />
           )}
         </main>
         <aside className="ci-aside">
-          {files.length ? <Picker files={files} loaderAxis={loaderAxis} pick={pick} onPick={setPick} onInstall={installFile} locked={paid.locked} /> : null}
+          {files.length ? <Picker files={files} loaderAxis={loaderAxis} pick={pick} onPick={setPick} onInstall={installFile} locked={paid.locked} pack={sec.kind === 'modpack'} /> : null}
           <Compat
             versions={card.versions.length ? card.versions : [...new Set(files.flatMap((f) => f.gameVersions))]}
             loaders={card.loaders.length ? card.loaders : [...new Set(files.flatMap((f) => f.loaders))]}

@@ -313,6 +313,10 @@ export function Play({ on }: { on: boolean }) {
                 <span className="lobby-mode-lab">{partyGoes ? t('Пати идёт') : dayZero && !chosen ? t('Начни отсюда') : t('Сегодня играем')}</span>
                 <b>{partyGoes || modeTitle}</b>
                 {modeMeta && !partyOther ? <span className="meta">{modeMeta}</span> : null}
+                <span className="lobby-mode-change">
+                  {t('Сменить сборку')}
+                  <Icon id="i-chev-r" />
+                </span>
                 {packUpdate ? (
                   <span className="meta" id="lobbyPackUpdate">
                     <span className="hero-num">

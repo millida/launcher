@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { extractKeys } from './i18n-extract.mjs'
+import { extractCoreKeys, extractKeys } from './i18n-extract.mjs'
 
 const LOCALES_DIR = join(import.meta.dirname, '..', 'src', 'i18n', 'locales')
 
@@ -63,6 +63,12 @@ const TARGETS: Target[] = [
   },
   { code: 'uk', name: 'Ukrainian', register: 'friendly informal "ти" as games address players; impersonal forms on buttons and labels' },
   { code: 'sr', name: 'Serbian (Latin script)', register: 'friendly informal "ti"; Latin script only, never Cyrillic' },
+  {
+    code: 'sk',
+    name: 'Slovak',
+    register: 'friendly informal "ty" (lowercase) as games address players; impersonal forms on buttons and labels; never Czech words or spelling',
+    terms: ['rank: hodnosť', 'chest: truhlica', 'modpack: modpack', 'offline account: offline účet', 'Survival: Prežitie', 'Creative: Tvorivý', 'skin: skin', 'cape: plášť', 'launcher: launcher', 'balance: zostatok'],
+  },
 ]
 
 const PLACEHOLDER = /\{\w+\}/g
@@ -120,10 +126,12 @@ function systemFor(target: Target, sourceName: string): string {
   return lines.join('\n')
 }
 
-function problem(source: string, text: string, sourceIsRussian: boolean): string | null {
+const CYRILLIC_TARGETS = new Set(['uk'])
+
+function problem(source: string, text: string, cyrillicAllowed: boolean): string | null {
   if (!text.trim()) return 'empty'
   if (placeholders(source) !== placeholders(text)) return 'placeholders'
-  if (!sourceIsRussian && CYRILLIC.test(text) && !CYRILLIC.test(source)) return 'cyrillic'
+  if (!cyrillicAllowed && CYRILLIC.test(text) && !CYRILLIC.test(source)) return 'cyrillic'
   return null
 }
 
@@ -163,7 +171,7 @@ async function callModel(target: Target, sourceName: string, batch: Entry[], att
   return batch.map((entry, i) => {
     const text = rows.get(i)
     if (typeof text !== 'string') throw new Error('missing row')
-    const bad = problem(entry.source, text, sourceName === 'Russian')
+    const bad = problem(entry.source, text, CYRILLIC_TARGETS.has(target.code))
     if (bad) throw new Error(`${bad}: ${entry.source.slice(0, 60)}`)
     if (tooLong(entry.source, text)) {
       if (attempt < ATTEMPTS) throw new Error(`too long: ${entry.source}`)
@@ -212,7 +220,7 @@ async function run(): Promise<void> {
     process.exit(1)
   }
 
-  const keys = [...(extractKeys() as Map<string, string>).keys()]
+  const keys = [...new Set([...(extractKeys() as Map<string, string>).keys(), ...(extractCoreKeys() as Map<string, string>).keys()])]
   const codes = only ? only.split(',') : TARGETS.map((t) => t.code)
   const targets = TARGETS.filter((t) => codes.includes(t.code))
   if (targets.length !== codes.length) {
@@ -225,9 +233,10 @@ async function run(): Promise<void> {
     // A key without English waits for the English pass instead of being translated from Russian.
     const english = target.code === 'en' ? {} : readTable('en')
     const existing = readTable(target.code)
-    const missing: Entry[] = keys
+    // English also holds texts the scan cannot see, such as stage lists rendered through t(name).
+    const missing: Entry[] = [...new Set([...keys, ...Object.keys(english)])]
       .filter((k) => target.code === 'en' || english[k])
-      .filter((k) => !existing[k] || problem(english[k] || k, existing[k] as string, target.code === 'en') !== null)
+      .filter((k) => !existing[k] || problem(english[k] || k, existing[k] as string, CYRILLIC_TARGETS.has(target.code)) !== null)
       .map((key) => ({ key, source: english[key] || key }))
       .slice(0, limit)
     const sourceName = target.code === 'en' ? 'Russian' : 'English'

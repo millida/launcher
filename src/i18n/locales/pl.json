@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "folder agenta utworzył inny użytkownik Windows",
   "запасная папка есть только в Windows": "folder zapasowy istnieje tylko w Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Twój skin nie będzie widoczny w tej grze: waniliowy modpack pobiera go tylko z konta. Zaloguj się kontem Millida lub licencją — albo graj na modpacku z modami.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» wymaga loadera {1} {2}, a paczka ma {3}. Zaktualizuj loader w ustawieniach paczki albo zainstaluj inną wersję moda"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» wymaga loadera {1} {2}, a paczka ma {3}. Zaktualizuj loader w ustawieniach paczki albo zainstaluj inną wersję moda",
+  "Каталог сборок не ответил": "Katalog modpacków nie odpowiedział",
+  "Поиск: Arcania, Create, Cobblemon…": "Szukaj: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "Serwer został utworzony, ale modpack „{name}” się nie zainstalował: {error}. Zainstaluj go w panelu serwera",
+  "Со сборкой «{name}»": "Z modpackiem „{name}”",
+  "каталог не ответил": "katalog nie odpowiedział",
+  "Память (RAM)": "Pamięć (RAM)",
+  "У каждой сборки своя": "Osobno dla każdej paczki",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Brak sieci. Obrazki i świeże dane pojawią się po powrocie połączenia",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Wybierz swoją paczkę w „Dziś gramy” i ją naprawimy",
+  "Помощь": "Pomoc",
+  "Серверу от {n} ГБ": "Serwer od {n} GB",
+  "Код выдаёт автор сборки после покупки": "Kod wydaje autor zestawu po zakupie"
 }

@@ -26,7 +26,9 @@ import {
   setGameDir,
 } from '../ipc/commands'
 import { useMcVersionList } from '../state/mcVersionList'
-import { refreshProfiles } from '../state/profiles'
+import { refreshProfiles, useProfiles } from '../state/profiles'
+import { openBuildSettings } from '../state/instance'
+import { useLobby } from '../state/lobbyMode'
 import type { JavaInfo, JavaRuntime, OverlayState } from '../ipc/commands'
 import { CARD_TTL_CHOICES, CARD_TTL_MS } from '../lib/overlayCards'
 import { apiErrorText } from '../lib/apiError'
@@ -223,6 +225,8 @@ export function Settings({ on }: { on: boolean }) {
   const market = useMarket()
   const [sec, setSecState] = useState<SecId>(initialSec)
   const [query, setQuery] = useState('')
+  const memProfiles = useProfiles((s) => s.profiles)
+  const memPicked = useLobby((s) => s.picked)
   const wantTab = useUi((s) => s.settingsTab)
   const takeSettingsTab = useUi((s) => s.takeSettingsTab)
   const [accent, setAccent] = useState(initialAccent)
@@ -797,6 +801,20 @@ export function Settings({ on }: { on: boolean }) {
       </Group>
 
       <Group title={t('Во время игры')}>
+        {/* Память — у каждой сборки своя: из настроек ведём в параметры выбранной сборки. */}
+        <Row title={t('Память (RAM)')} hint={t('У каждой сборки своя')} keys="memory ram озу оперативная память выделить гигабайт java heap">
+          <button
+            className="btn sm secondary"
+            data-track="settings_memory"
+            disabled={!memProfiles.length}
+            onClick={() => {
+              const pick = memPicked && memPicked.kind === 'build' ? memProfiles.find((p) => p.name === memPicked.name) : null
+              openBuildSettings((pick ?? memProfiles[0]).name, 'opts')
+            }}
+          >
+            {t('Настроить')}
+          </button>
+        </Row>
         <Row title={t('Лаунчер при запуске игры')} keys="окно свернуть трей оставить">
           <Segs<LaunchWindowMode>
             value={winMode}

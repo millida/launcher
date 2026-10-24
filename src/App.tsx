@@ -348,6 +348,17 @@ function notifyPresence(before: Friend[], now: Friend[]) {
   announcePresence(cameOnline, 'online')
 }
 
+/** Пока грузится кусок экрана — серые строки, а не пустое окно под шапкой. */
+function ScreenSkeleton() {
+  return (
+    <div aria-hidden="true" style={{ display: 'grid', gap: 12, padding: '24px 28px' }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span key={i} className="skel skel-line" style={{ width: 280 + ((i * 61) % 240) + 'px', maxWidth: '100%', height: 18 }} />
+      ))}
+    </div>
+  )
+}
+
 export function App() {
   // Subscribes the shell to language changes; long-lived effects below read the global t, not a captured one.
   useT()
@@ -946,7 +957,7 @@ export function App() {
             ) : null}
             {/* Navigation runs in a transition, so the fallback only ever shows on
                 the very first render. */}
-            <Suspense fallback={null}>
+            <Suspense fallback={<ScreenSkeleton />}>
               {screen === 'play' && (
                 <Guard what="Лобби">
                   {classic ? <ClassicHome on /> : <Play on />}

@@ -2585,6 +2585,7 @@ export function InstancePage() {
                     })
                   }}
                 />
+                <span className="set-range">{t('{n} ГБ', { n: ramMax })}</span>
               </div>
               <TunePanel profile={profile!} manualGb={ram} />
               <div className="set-row">

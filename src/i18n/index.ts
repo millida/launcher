@@ -49,6 +49,7 @@ const LOADERS: Record<Exclude<Locale, 'ru'>, Loader> = {
   pl: () => import('./locales/pl.json'),
   uk: () => import('./locales/uk.json'),
   sr: () => import('./locales/sr.json'),
+  sk: () => import('./locales/sk.json'),
 }
 
 /// What lookups read: the built-in table with the site's fixes laid over it.

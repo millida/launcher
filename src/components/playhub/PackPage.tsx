@@ -530,6 +530,10 @@ export function PackPage({
         <b>{fmtNum(downloads)}</b> {plural(downloads, t('скачивание'), t('скачивания'), t('скачиваний'))}
       </>,
     )
+  // Память СЕРВЕРА под сборку (из каталога хостинга), а не требования к компьютеру игрока:
+  // в «Системных требованиях» стоит второе, и тариф по нему не выбрать (QA 24.10.2026).
+  if (hostTarget?.kind === 'partner' && hostTarget.pack.minRamMb > 0)
+    inline.push(<>{t('Серверу от {n} ГБ', { n: Math.ceil(hostTarget.pack.minRamMb / 1024) })}</>)
   if (updated) inline.push(<>{t('Обновлён {when}', { when: updated })}</>)
   // Квадратный значок сборки; обложка в квадрат не лезет — буквы баннера обрезались (владелец 12.10.2026).
   const icon = ownIcon || borrowed.icon || borrowed.cover || (mr ? null : blockIcon(slug || full.title))

@@ -127,6 +127,9 @@ pub fn started_by_os() -> bool {
 // Autostart with the system. It turns on only when the user flips the switch.
 pub fn autostart_state(app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
+    if cfg!(debug_assertions) {
+        return Ok(false);
+    }
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
@@ -134,6 +137,12 @@ pub fn autostart_state(app: tauri::AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub fn autostart_set(app: tauri::AppHandle, on: bool) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
+    // Dev and test builds never register a login item: every rebuilt target/debug binary is a new
+    // program to macOS, and each one used to pop «millida-launcher can run in the background» on
+    // the owner's Mac (24.10.2026).
+    if cfg!(debug_assertions) {
+        return Ok(false);
+    }
     let launch = app.autolaunch();
     let now = launch.is_enabled().unwrap_or(false);
     if on && !now {

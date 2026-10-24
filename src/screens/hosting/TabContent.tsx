@@ -119,7 +119,37 @@ export function TabContent({
     loadInstalls()
     onChanged()
   }
-  const target = useMemo<CatalogTarget>(() => ({ kind: 'server', serverId, onInstalled: () => changed.current() }), [serverId])
+  // Строка «ждёт перезапуска» появляется сразу, до ответа списка: после «встанет при запуске»
+  // в «Сейчас на сервере» ничего не менялось, и установка выглядела потерянной (QA 24.10.2026).
+  const [local, setLocal] = useState<HostingInstall[]>([])
+  const target = useMemo<CatalogTarget>(
+    () => ({
+      kind: 'server',
+      serverId,
+      onInstalled: (info) => {
+        if (info?.title)
+          setLocal((l) => [
+            ...l,
+            {
+              id: 'local-' + Date.now(),
+              kind: /plugin/.test(info.kind) ? 'PLUGIN' : /^mod(s|rinth)?$/.test(info.kind) ? 'MOD' : /map|world/.test(info.kind) ? 'MAP' : /data/.test(info.kind) ? 'DATAPACK' : 'MODPACK',
+              source: 'catalog',
+              projectId: '',
+              versionId: null,
+              name: info.title,
+              versionName: null,
+              iconUrl: null,
+              status: 'PENDING',
+              error: null,
+              createdAt: new Date().toISOString(),
+            },
+          ])
+        changed.current()
+      },
+    }),
+    [serverId],
+  )
+  const shown = installs === null ? null : [...installs, ...local.filter((x) => !installs.some((i) => i.name === x.name))]
 
   const removeInstall = async (item: HostingInstall) => {
     if (!(await uiConfirm(t('Убрать «{name}» с сервера?', { name: item.name }), { confirmLabel: t('Убрать') }))) return
@@ -186,11 +216,11 @@ export function TabContent({
         <div className="side-cap" style={{ padding: '0 2px 10px' }}>
           {t('Сейчас на сервере — {core} {version}', { core, version })}
         </div>
-        {installs === null ? (
+        {shown === null ? (
           <Loading />
-        ) : installs.length ? (
+        ) : shown.length ? (
           <div className="stack">
-            {installs.map((i) => {
+            {shown.map((i) => {
               const st = INSTALL_ST()[i.status] || ['—', 'off']
               return (
                 <div className="fr-row" key={i.id}>

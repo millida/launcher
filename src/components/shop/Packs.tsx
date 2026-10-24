@@ -341,7 +341,7 @@ export function Packs<P extends ShopPack>({
               <Ruby size={16} />
             </b>
             <small>
-              {starterWas > starter.kopecks ? <s>{rubyPackWas(starter.code, starter.kopecks, starterWas)}</s> : null} {rubyPackPrice(starter.code)}
+              {starterWas > starter.kopecks ? <s>{rubyPackWas(starter.code, starter.kopecks, starterWas)}</s> : null} {rubyPackPrice(starter.code, starter.kopecks)}
             </small>
           </button>
         </div>
@@ -361,7 +361,7 @@ export function Packs<P extends ShopPack>({
                     +{pack.rubies.toLocaleString(intlTag())}
                     <Ruby size={16} />
                   </b>
-                  <small>{rubyPackPrice(pack.code)}</small>
+                  <small>{rubyPackPrice(pack.code, pack.kopecks)}</small>
                 </button>
               </div>
             )

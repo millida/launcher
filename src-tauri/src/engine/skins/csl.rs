@@ -84,7 +84,7 @@ pub fn set_local_skin(skin: Option<String>, cape: Option<String>, slim: bool) ->
 
 fn have_local_skin() -> bool { local_skin_dir().join("skin.png").exists() }
 
-fn local_slim() -> bool {
+pub fn local_slim() -> bool {
     std::fs::read(local_skin_dir().join("meta.json")).ok()
         .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
         .map(|v| v["slim"].as_bool().unwrap_or(false))

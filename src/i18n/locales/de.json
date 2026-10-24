@@ -6157,5 +6157,17 @@
   "папку агента создал другой пользователь Windows": "der Agent-Ordner wurde von einem anderen Windows-Benutzer erstellt",
   "запасная папка есть только в Windows": "der Ersatzordner existiert nur unter Windows",
   "Скин в этой игре виден не будет: ванильная сборка берёт его только из аккаунта. Войди аккаунтом Millida или лицензией — либо играй на сборке с модами.": "Ihr Skin wird in diesem Spiel nicht sichtbar sein: Ein Vanilla-Modpack übernimmt ihn nur aus dem Konto. Melden Sie sich mit einem Millida-Konto oder einer Lizenz an — oder spielen Sie auf einem Modpack mit Mods.",
-  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» braucht den Loader {1} {2}, im Modpack ist {3}. Aktualisiere den Loader in den Modpack-Einstellungen oder installiere eine andere Version der Mod"
+  "«{0}» требует загрузчик {1} {2} — в сборке {3}. Обнови загрузчик в настройках сборки или поставь другую версию мода": "«{0}» braucht den Loader {1} {2}, im Modpack ist {3}. Aktualisiere den Loader in den Modpack-Einstellungen oder installiere eine andere Version der Mod",
+  "Каталог сборок не ответил": "Der Modpack-Katalog hat nicht geantwortet",
+  "Поиск: Arcania, Create, Cobblemon…": "Suche: Arcania, Create, Cobblemon…",
+  "Сервер создан, но сборка «{name}» не поставилась: {error}. Поставь её в панели сервера": "Der Server wurde erstellt, aber das Modpack „{name}“ wurde nicht installiert: {error}. Installiere es im Serverpanel",
+  "Со сборкой «{name}»": "Mit dem Modpack „{name}“",
+  "каталог не ответил": "der Katalog hat nicht geantwortet",
+  "Память (RAM)": "Arbeitsspeicher (RAM)",
+  "У каждой сборки своя": "Pro Build einstellbar",
+  "Нет сети — картинки и свежие данные появятся, когда она вернётся": "Keine Verbindung. Bilder und neue Daten erscheinen, sobald sie zurück ist",
+  "Выбери свою сборку в «Сегодня играем» — тогда починим её": "Wähle deinen Build unter „Heute spielen wir“, dann reparieren wir ihn",
+  "Помощь": "Hilfe",
+  "Серверу от {n} ГБ": "Server ab {n} GB",
+  "Код выдаёт автор сборки после покупки": "Den Code gibt dir der Autor des Modpacks nach dem Kauf"
 }

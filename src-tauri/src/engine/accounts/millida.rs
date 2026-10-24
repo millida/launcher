@@ -125,7 +125,7 @@ pub fn market_header(raw: Option<&str>) -> Result<Option<&'static str>, String> 
 
 /// The server prices by the interface language (Russian in rubles, any other in dollars),
 /// and texts follow it too, so every request carries it. Only the launcher's own codes pass.
-const LANGS: [&str; 20] = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt-BR", "id", "ur", "ru", "de", "ja", "vi", "te", "tr", "ko", "pl", "uk", "sr"];
+const LANGS: [&str; 21] = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt-BR", "id", "ur", "ru", "de", "ja", "vi", "te", "tr", "ko", "pl", "uk", "sr", "sk"];
 
 const LANG_HEADER: &str = "X-Lang";
 

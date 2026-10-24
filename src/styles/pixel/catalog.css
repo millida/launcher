@@ -137,3 +137,7 @@
 :root:root .srv-detail-fact { border-radius: 0; --px-n: 5px; clip-path: var(--px-5); }
 .srv-detail-fact.as-btn { cursor: pointer; }
 .srv-detail-fact.as-btn:hover b { color: var(--m-accent); }
+
+/* Нет сети: одна строка над лентой, а не молчаливые чёрные плитки. */
+.cat-offline { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 9px 12px; font: 700 13px/1.2 var(--m-font); color: var(--m-fg); background: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5); }
+.cat-offline svg { width: 16px; height: 16px; flex: none; color: var(--m-danger); }

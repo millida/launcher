@@ -2,7 +2,7 @@
 import { LAUNCHER_API } from './api'
 import type { ModHit } from '../state/mods'
 import type { DepNode, DepPlan, Profile } from '../ipc/commands'
-import { loaderId } from './format'
+import { clipWords, loaderId } from './format'
 import { cachedCatalog } from './catalogCache'
 import { cfProxyBackoff, proxyVerdict } from './proxyBackoff'
 import { t } from '../i18n'
@@ -496,7 +496,7 @@ export function cardToHit(c: CatalogCard, section: string): ModHit {
   return {
     title: cleanTitle(c.title),
     author: c.author || 'Millida',
-    desc: (c.summary || '').slice(0, 120),
+    desc: clipWords(c.summary || '', 120),
     dl: Math.max(c.downloads || 0, c.sourceDownloads || 0),
     icon: c.icon || c.cover || undefined,
     cats: (c.categories || []).slice(0, 2),

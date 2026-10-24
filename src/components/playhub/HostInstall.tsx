@@ -84,7 +84,7 @@ export function HostInstall({
   serverId?: string
   onClose: () => void
   /** Установка принята — панель обновляет список «Сейчас на сервере». */
-  onDone?: () => void
+  onDone?: (info: { title: string; kind: string }) => void
 }) {
   const t = useT()
   const signed = hasMillidaAccount()
@@ -198,7 +198,7 @@ export function HostInstall({
       }
       if (!alive.current) return
       track('hosting_action', { action: 'install', kind: target.kind, section: target.kind === 'catalog' ? target.section : '' })
-      onDone?.()
+      onDone?.({ title: target.title, kind: target.kind === 'catalog' ? target.section : target.kind })
       // Панель сервера: хватит тоста — список «Сейчас на сервере» уже обновился.
       if (serverId) {
         showToast(replaces ? t('«{name}» заменит мир — ставим', { name: target.title }) : t('«{name}» встанет при запуске сервера', { name: target.title }), 'ok')
@@ -299,7 +299,9 @@ export function HostInstall({
                 <b>{s.name}</b>
                 <span>{s.reason || s.sub}</span>
               </span>
-              <StatusBadge status={s.status} />
+              {/* В панели сервера статус уже на странице: второй, из другого запроса,
+                  показывал «Остановлен» при «Работает» (QA 24.10.2026). */}
+              {serverId ? null : <StatusBadge status={s.status} />}
             </button>
           ))}
           {list && !serverId ? (
@@ -314,13 +316,16 @@ export function HostInstall({
           ) : null}
         </div>
         {needCode ? (
-          <input
-            className="input hi-code"
-            value={code}
-            spellCheck={false}
-            placeholder={t('Код активации сборки')}
-            onChange={(e) => setCode(e.target.value)}
-          />
+          <>
+            <input
+              className="input hi-code"
+              value={code}
+              spellCheck={false}
+              placeholder={t('Код активации сборки')}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <span className="hi-hint">{t('Код выдаёт автор сборки после покупки')}</span>
+          </>
         ) : null}
         {replaces && server && server.ok ? <span className="hi-warn">{t('Мир сервера заменится, прежний уйдёт в копию')}</span> : null}
         {error ? <span className="hi-err">{error}</span> : null}
