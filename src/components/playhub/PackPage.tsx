@@ -26,6 +26,7 @@ import { ONEBLOCK_ART } from './modeIcon'
 import { ONEBLOCK_PACK } from '../../lib/ownServer'
 import { Hours } from './Hours'
 import { PackHealthLine } from './PackHealthLine'
+import { blockIcon, usePackArt } from './packArt'
 import { HostInstall } from './HostInstall'
 import { PackContents } from '../catalog/PackContents'
 import type { HostTarget } from './HostInstall'
@@ -426,6 +427,8 @@ export function PackPage({
   ).filter((s) => s && s !== full.coverUrl)
   const video = youtubeId(full.videoUrl || view?.video)
   const cover = view?.banner || mrHead || full.coverUrl || shots[0] || null
+  const ownIcon = view?.icon || view?.cover || full.coverUrl || mrHead || cover || null
+  const borrowed = usePackArt(view && !ownIcon && !mr ? slug : null, full.title, null)
 
   const mcVersion = full.mcVersion || view?.game || null
   const loader = full.loader || (view?.loader ? LOADER[view.loader] || view.loader : null)
@@ -529,7 +532,7 @@ export function PackPage({
     )
   if (updated) inline.push(<>{t('Обновлён {when}', { when: updated })}</>)
   // Квадратный значок сборки; обложка в квадрат не лезет — буквы баннера обрезались (владелец 12.10.2026).
-  const icon = view?.icon || view?.cover || full.coverUrl || mrHead || cover
+  const icon = ownIcon || borrowed.icon || borrowed.cover || (mr ? null : blockIcon(slug || full.title))
 
   return (
     <div className="ci" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>

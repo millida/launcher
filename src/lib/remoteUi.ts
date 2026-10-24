@@ -50,7 +50,7 @@ export interface RemoteUiBundle {
 export interface RemoteUiModule {
   UI_API: number
   screens: Record<string, unknown>
-  mount: (el: HTMLElement, bridge: RemoteUiBridge, opts: { screen: string; onReady?: () => void }) => { unmount: () => void }
+  mount: (el: HTMLElement, bridge: RemoteUiBridge, opts: { screen: string; onReady?: () => void; onFail?: (reason: string) => void }) => { unmount: () => void }
 }
 
 export function remoteUiEnabled(now = Date.now()): boolean {
@@ -193,10 +193,42 @@ async function cachedChunk(c: RemoteUiChunk): Promise<string | null> {
   return typeof t === 'string' && (await sha256Hex(t)) === c.sha256 ? t : null
 }
 
-async function fetchChunk(base: string, c: RemoteUiChunk): Promise<string> {
-  const t = await fetchText(base + '/' + c.file)
-  if ((await sha256Hex(t)) !== c.sha256) throw new Error('chunk hash mismatch ' + c.file)
-  return t
+/** The chunk is not on the site any more: the running version was replaced, retrying the same URL is pointless. */
+export class RemoteChunkGone extends Error {
+  constructor(public file: string, public status: number) {
+    super('chunk gone ' + file + ' ' + status)
+    this.name = 'RemoteChunkGone'
+  }
+}
+
+export const CHUNK_RETRY_MS = [500, 1500, 4000]
+const CHUNK_TIMEOUT_MS = 20_000
+
+const timeoutSignal = (ms: number): AbortSignal | undefined => (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : undefined)
+
+// A one-off timeout or a 5xx during a rollout is retried with backoff; a 404 means the version is gone and is not.
+// 'no-cache' revalidates: an earlier 404 kept by the webview's HTTP cache must not answer the retry.
+export async function fetchChunkText(url: string, file: string, sha256: string, wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)), get: (input: string, init: RequestInit) => Promise<Response> = (i, init) => fetch(i, init)): Promise<string> {
+  let last: unknown = null
+  for (let i = 0; i <= CHUNK_RETRY_MS.length; i++) {
+    if (i > 0) await wait(CHUNK_RETRY_MS[i - 1]!)
+    try {
+      const r = await get(url, { cache: 'no-cache', signal: timeoutSignal(CHUNK_TIMEOUT_MS) })
+      if (r.status === 404 || r.status === 410) throw new RemoteChunkGone(file, r.status)
+      if (!r.ok) throw new Error(url + ' ' + r.status)
+      const t = await r.text()
+      if ((await sha256Hex(t)) !== sha256) throw new Error('chunk hash mismatch ' + file)
+      return t
+    } catch (e) {
+      if (e instanceof RemoteChunkGone) throw e
+      last = e
+    }
+  }
+  throw last instanceof Error ? last : new Error(String(last))
+}
+
+function fetchChunk(base: string, c: RemoteUiChunk): Promise<string> {
+  return fetchChunkText(base + '/' + c.file, c.file, c.sha256)
 }
 
 // Disk first, then the network; a fresh download is written to disk for the next time.
@@ -268,6 +300,18 @@ async function collectChunks(keep: Array<RemoteUiManifest | undefined>): Promise
 }
 
 const loaded = new Map<string, Promise<RemoteUiModule>>()
+
+const staleListeners = new Set<(version: string) => void>()
+
+/** Fires when a lazy chunk of a running version is gone from the site: the screen should move to the live version. */
+export function onRemoteUiStale(cb: (version: string) => void): () => void {
+  staleListeners.add(cb)
+  return () => staleListeners.delete(cb)
+}
+
+function emitStale(version: string): void {
+  for (const cb of [...staleListeners]) cb(version)
+}
 
 function shareReact() {
   const g = globalThis as unknown as { __MILLIDA_UI_SHARED__?: Record<string, unknown> }
@@ -388,7 +432,10 @@ export function makeChunkLoader(b: RemoteUiBundle, base = REMOTE_UI_BASE) {
         return import(/* @vite-ignore */ url)
       })()
       mods.set(name, p)
-      p.catch(() => mods.delete(name))
+      p.catch((e) => {
+        mods.delete(name)
+        if (e instanceof RemoteChunkGone) emitStale(m.version)
+      })
     }
     return p
   }
@@ -438,6 +485,17 @@ export async function loadRemoteUi(): Promise<RemoteUiLoad | null> {
   if (!current) return null
   const module = await importBundle(current)
   return { module, version: current.manifest.version, source }
+}
+
+/**
+ * The running version lost a chunk or its screen gave up: fetch the live manifest and make the live bundle
+ * current. true = a different, verified version is ready to mount; false = nothing newer, use the built-in screen.
+ */
+export async function recoverRemoteUi(version: string): Promise<boolean> {
+  const current = await idbGet<RemoteUiBundle>('current')
+  if (current && current.manifest.version !== version && (await bundleOk(current))) return true
+  const b = await refreshRemoteUi(current && current.manifest.version === version ? current : null)
+  return !!b && b.manifest.version !== version
 }
 
 // A bundle that failed to start is never taken again; the previous one comes back.

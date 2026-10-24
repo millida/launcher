@@ -20,6 +20,7 @@ import type { FeaturedSpot } from './featured'
 import { useAnarchy } from '../../lib/anarchy'
 import { usePromo, type ForYouCard } from '../../state/promo'
 import type { HubPack } from './data'
+import { PackTileArt } from './packArt'
 import { trackImpression } from '../../lib/uiTrack'
 import { track } from '../../lib/telemetry'
 import { loadListing } from '../catalog/site'
@@ -116,6 +117,9 @@ const img = (src: string | null | undefined) =>
       }}
     />
   ) : null
+
+/** Our pack without a cover in its list entry: its own shot or icon, never an empty frame. */
+const packArt = (p: HubPack) => (p.origin === 'millida' && !p.coverUrl ? <PackTileArt slug={p.slug || p.id} title={p.title} cover={null} /> : img(p.coverUrl))
 
 interface CardProps {
   wide?: boolean
@@ -329,7 +333,7 @@ export function ForYou({
             tag="Arcania Labs"
             gold
             excl
-            art={img(p.coverUrl)}
+            art={packArt(p)}
             title={p.title}
             meta={priceLabel(p) || t('Премиум')}
             onClick={() => onPack(p)}
@@ -342,7 +346,7 @@ export function ForYou({
             pos={fyHead.length + i}
             tag={t('Сборка')}
             section="modpacks"
-            art={img(p.coverUrl)}
+            art={packArt(p)}
             title={p.title}
             meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
             onClick={() => onPack(p)}
@@ -408,7 +412,7 @@ export function ForYou({
           own={isOwnServerPack(p.slug)}
           excl={isExclusive(p.slug)}
           section="modpacks"
-          art={img(p.coverUrl)}
+          art={packArt(p)}
           title={p.title}
           meta={ownServerTagline(p.slug) || [p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
           onClick={() => onPack(p)}
@@ -458,7 +462,7 @@ export function ForYou({
             id={p.slug || p.id}
             tag={t('Сборка')}
             section="modpacks"
-            art={img(p.coverUrl)}
+            art={packArt(p)}
             title={p.title}
             meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
             onClick={() => onPack(p)}
