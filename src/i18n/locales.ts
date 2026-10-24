@@ -17,6 +17,8 @@ export type Locale =
   | 'tr'
   | 'ko'
   | 'pl'
+  | 'uk'
+  | 'sr'
 
 export type Market = 'RU' | 'INTL'
 
@@ -32,28 +34,33 @@ export interface LocaleInfo {
   native: string
   english: string
   intl: string
+  /// File in public/flags; English shows the US flag and Telugu the Indian one, as the site does.
+  flag: string
   rtl: boolean
 }
 
+/// Russian and English lead, the rest follow by number of speakers; pickers show this order as is.
 export const LOCALES: readonly LocaleInfo[] = [
-  { code: 'en', native: 'English', english: 'English', intl: 'en-US', rtl: false },
-  { code: 'zh', native: '简体中文', english: 'Chinese (Simplified)', intl: 'zh-CN', rtl: false },
-  { code: 'hi', native: 'हिन्दी', english: 'Hindi', intl: 'hi-IN', rtl: false },
-  { code: 'es', native: 'Español', english: 'Spanish', intl: 'es-ES', rtl: false },
-  { code: 'ar', native: 'العربية', english: 'Arabic', intl: 'ar', rtl: true },
-  { code: 'fr', native: 'Français', english: 'French', intl: 'fr-FR', rtl: false },
-  { code: 'bn', native: 'বাংলা', english: 'Bengali', intl: 'bn-BD', rtl: false },
-  { code: 'pt-BR', native: 'Português (Brasil)', english: 'Portuguese (Brazil)', intl: 'pt-BR', rtl: false },
-  { code: 'id', native: 'Bahasa Indonesia', english: 'Indonesian', intl: 'id-ID', rtl: false },
-  { code: 'ur', native: 'اردو', english: 'Urdu', intl: 'ur-PK', rtl: true },
-  { code: 'ru', native: 'Русский', english: 'Russian', intl: 'ru-RU', rtl: false },
-  { code: 'de', native: 'Deutsch', english: 'German', intl: 'de-DE', rtl: false },
-  { code: 'ja', native: '日本語', english: 'Japanese', intl: 'ja-JP', rtl: false },
-  { code: 'vi', native: 'Tiếng Việt', english: 'Vietnamese', intl: 'vi-VN', rtl: false },
-  { code: 'te', native: 'తెలుగు', english: 'Telugu', intl: 'te-IN', rtl: false },
-  { code: 'tr', native: 'Türkçe', english: 'Turkish', intl: 'tr-TR', rtl: false },
-  { code: 'ko', native: '한국어', english: 'Korean', intl: 'ko-KR', rtl: false },
-  { code: 'pl', native: 'Polski', english: 'Polish', intl: 'pl-PL', rtl: false },
+  { code: 'ru', native: 'Русский', english: 'Russian', intl: 'ru-RU', flag: 'ru', rtl: false },
+  { code: 'en', native: 'English', english: 'English', intl: 'en-US', flag: 'us', rtl: false },
+  { code: 'zh', native: '简体中文', english: 'Chinese (Simplified)', intl: 'zh-CN', flag: 'cn', rtl: false },
+  { code: 'hi', native: 'हिन्दी', english: 'Hindi', intl: 'hi-IN', flag: 'in', rtl: false },
+  { code: 'es', native: 'Español', english: 'Spanish', intl: 'es-ES', flag: 'es', rtl: false },
+  { code: 'ar', native: 'العربية', english: 'Arabic', intl: 'ar', flag: 'sa', rtl: true },
+  { code: 'fr', native: 'Français', english: 'French', intl: 'fr-FR', flag: 'fr', rtl: false },
+  { code: 'bn', native: 'বাংলা', english: 'Bengali', intl: 'bn-BD', flag: 'bd', rtl: false },
+  { code: 'pt-BR', native: 'Português (Brasil)', english: 'Portuguese (Brazil)', intl: 'pt-BR', flag: 'br', rtl: false },
+  { code: 'id', native: 'Bahasa Indonesia', english: 'Indonesian', intl: 'id-ID', flag: 'id', rtl: false },
+  { code: 'ur', native: 'اردو', english: 'Urdu', intl: 'ur-PK', flag: 'pk', rtl: true },
+  { code: 'de', native: 'Deutsch', english: 'German', intl: 'de-DE', flag: 'de', rtl: false },
+  { code: 'ja', native: '日本語', english: 'Japanese', intl: 'ja-JP', flag: 'jp', rtl: false },
+  { code: 'vi', native: 'Tiếng Việt', english: 'Vietnamese', intl: 'vi-VN', flag: 'vn', rtl: false },
+  { code: 'te', native: 'తెలుగు', english: 'Telugu', intl: 'te-IN', flag: 'in', rtl: false },
+  { code: 'tr', native: 'Türkçe', english: 'Turkish', intl: 'tr-TR', flag: 'tr', rtl: false },
+  { code: 'ko', native: '한국어', english: 'Korean', intl: 'ko-KR', flag: 'kr', rtl: false },
+  { code: 'pl', native: 'Polski', english: 'Polish', intl: 'pl-PL', flag: 'pl', rtl: false },
+  { code: 'uk', native: 'Українська', english: 'Ukrainian', intl: 'uk-UA', flag: 'ua', rtl: false },
+  { code: 'sr', native: 'Srpski', english: 'Serbian', intl: 'sr-Latn-RS', flag: 'rs', rtl: false },
 ]
 
 export const SOURCE_LOCALE: Locale = 'ru'
@@ -62,8 +69,8 @@ export const FALLBACK_LOCALE: Locale = 'en'
 const CODES = new Set<string>(LOCALES.map((l) => l.code))
 
 /// Players from these systems read Russian far better than English, and the
-/// launcher has no Ukrainian, Belarusian or Kazakh table of its own.
-const RUSSIAN_READERS = new Set(['ru', 'uk', 'be', 'kk'])
+/// launcher has no Belarusian or Kazakh table of its own.
+const RUSSIAN_READERS = new Set(['ru', 'be', 'kk'])
 
 export const isLocale = (v: unknown): v is Locale => typeof v === 'string' && CODES.has(v)
 
@@ -72,7 +79,7 @@ export const isLocale = (v: unknown): v is Locale => typeof v === 'string' && CO
 /// The translated tables wait for review behind this single switch.
 export const EXTRA_LOCALES_PUBLIC = true
 
-export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl', 'zh', 'hi', 'ar', 'fr', 'bn', 'id', 'ur', 'ja', 'vi', 'te', 'ko']
+export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl', 'zh', 'hi', 'ar', 'fr', 'bn', 'id', 'ur', 'ja', 'vi', 'te', 'ko', 'uk', 'sr']
 
 const AVAILABLE = new Set<Locale>(['ru', 'en', ...(EXTRA_LOCALES_PUBLIC ? EXTRA_LOCALES : [])])
 
@@ -80,7 +87,7 @@ export const isAvailableLocale = (v: unknown): v is Locale => isLocale(v) && AVA
 
 export const AVAILABLE_LOCALES: readonly LocaleInfo[] = LOCALES.filter((l) => AVAILABLE.has(l.code))
 
-export const localeInfo = (code: Locale): LocaleInfo => LOCALES.find((l) => l.code === code) ?? LOCALES[0]!
+export const localeInfo = (code: Locale): LocaleInfo => LOCALES.find((l) => l.code === code) ?? LOCALES.find((l) => l.code === FALLBACK_LOCALE)!
 
 export function localeFromSystem(tags: readonly string[]): Locale {
   for (const raw of tags) {

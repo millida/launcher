@@ -342,21 +342,18 @@ svg.msg-tick.read{color:var(--m-tick-read,#4C9FFE);opacity:1}
 .lang-pick[aria-expanded='true'] .lang-pick-chev{transform:rotate(180deg);color:var(--m-accent)}
 .lang-pick-name{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:650;color:var(--m-fg)}
 .lang-pick-field .lang-pick-name{flex:1;text-align:start}
-.mk-menu.lang-pop{position:fixed;top:auto;left:auto;z-index:400;width:264px;max-width:calc(100vw - 16px);max-height:none;overflow:visible;display:flex;flex-direction:column;padding:8px 6px 9px}
-.lang-pop-cap{padding:4px 10px 8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-fg-subtle)}
-.lang-pop-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:min(440px,calc(100vh - 120px));overflow-y:auto;overscroll-behavior:contain}
-.lang-pop-opt{display:flex;align-items:center;gap:12px;min-height:46px;padding:6px 10px 6px 12px;border-radius:8px;cursor:pointer;outline:none;transition:background-color var(--m-t-fast) ease}
-.lang-pop-opt:hover{background:color-mix(in srgb,var(--m-fg) 7%,transparent)}
-.lang-pop-opt:focus-visible{background:color-mix(in srgb,var(--m-fg) 7%,transparent);box-shadow:inset 0 0 0 2px var(--m-accent)}
-.lang-pop-opt:active{background:color-mix(in srgb,var(--m-fg) 11%,transparent)}
-.lang-pop-opt[aria-selected='true']{background:color-mix(in srgb,var(--m-accent) 14%,transparent)}
-.lang-pop-names{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
-.lang-pop-native{font-size:14px;font-weight:650;line-height:1.25;color:var(--m-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lang-pop-english{font-size:11.5px;font-weight:500;line-height:1.3;color:var(--m-fg-subtle);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lang-pop-opt[aria-selected='true'] .lang-pop-native{color:var(--m-accent)}
-.lang-pop .lang-pop-check{width:15px;height:15px;flex:none;color:var(--m-accent);opacity:0}
-.lang-pop-opt[aria-selected='true'] .lang-pop-check{opacity:1}
-:root:not([data-theme-pack]) .lang-pop-opt{border-radius:0;clip-path:var(--px-5)}
+.mk-menu.lang-pop{position:fixed;top:auto;left:auto;z-index:400;width:492px;max-width:calc(100vw - 16px);max-height:none;overflow:visible;display:flex;flex-direction:column;padding:8px}
+.lang-pop-cap{padding:2px 4px 8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-fg-subtle)}
+.lang-pop-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.lang-pop-tile{display:flex;align-items:center;gap:9px;min-width:0;height:40px;padding-inline:10px;border-radius:8px;cursor:pointer;outline:none;background:color-mix(in srgb,var(--m-fg) 4%,transparent);transition:background-color var(--m-t-fast) ease,transform var(--m-t-fast) ease}
+@media (hover:hover) and (pointer:fine){.lang-pop-tile:hover{background:color-mix(in srgb,var(--m-fg) 9%,transparent)}}
+.lang-pop-tile:focus-visible{box-shadow:inset 0 0 0 2px var(--m-accent)}
+.lang-pop-tile:active{transform:scale(.985)}
+.lang-pop-tile[aria-selected='true']{background:var(--m-accent-soft)}
+.lang-pop-flag{flex:none;width:22px;height:22px;display:block}
+.lang-pop-native{flex:1;min-width:0;font-size:13px;font-weight:650;line-height:1.25;color:var(--m-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang-pop-tile[aria-selected='true'] .lang-pop-native{color:var(--m-accent)}
+:root:not([data-theme-pack]) .lang-pop-tile{border-radius:0;clip-path:var(--px-5)}
 .msg-menu{position:fixed;z-index:400;width:210px;display:flex;flex-direction:column;gap:1px;padding:6px;border-radius:13px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg)}
 .msg-menu-react{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;padding-bottom:5px;margin-bottom:4px;border-bottom:1px solid var(--m-border)}
 .msg-menu-emoji{display:grid;place-items:center;height:26px;border:0;background:none;border-radius:7px;font-size:15px;cursor:pointer;transition:background var(--m-t-fast)}

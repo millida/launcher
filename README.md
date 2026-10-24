@@ -122,7 +122,7 @@ Windows: "Settings" → "Apps". macOS: move it to the Trash. Flatpak: `flatpak u
 
 ## For developers
 
-Rust core (Tauri 2) and a React interface. License: [GPL-3.0-only](LICENSE).
+Rust core (Tauri 2) and a React interface. License: [GPL-3.0-only](LICENSE). Flag icons in the language picker: [Twemoji](https://github.com/jdecked/twemoji), CC-BY 4.0.
 
 [How to build it yourself](BUILDING.md) · [Architecture](ARCHITECTURE.md) · [How to send a fix](CONTRIBUTING.md) · [Vulnerabilities](SECURITY.md) · [Name and logo](TRADEMARK.md)
 

@@ -34,7 +34,11 @@ describe('interpolate', () => {
 describe('system language', () => {
   const cases: Array<{ tags: string[]; want: string; why: string }> = [
     { tags: ['ru-RU'], want: 'ru', why: 'Russian system' },
-    { tags: ['uk-UA'], want: 'ru', why: 'Ukrainian readers get Russian, there is no Ukrainian table' },
+    { tags: ['uk-UA'], want: 'uk', why: 'Ukrainian has its own table and must not fall into the Russian readers' },
+    { tags: ['sr-RS'], want: 'sr', why: 'Serbian has its own table' },
+    { tags: ['sr-Latn-RS'], want: 'sr', why: 'a Latin-script Serbian system gets the Serbian table' },
+    { tags: ['sr-Cyrl-RS'], want: 'sr', why: 'a Cyrillic-script Serbian system reads the Latin table better than English' },
+    { tags: ['hr-HR'], want: 'en', why: 'Croatian is not mapped to Serbian, that is a separate language decision' },
     { tags: ['be-BY'], want: 'ru', why: 'Belarusian readers get Russian' },
     { tags: ['kk-KZ'], want: 'ru', why: 'Kazakh readers get Russian' },
     { tags: ['pt-PT'], want: 'pt-BR', why: 'the only Portuguese table is Brazilian' },
@@ -50,16 +54,16 @@ describe('system language', () => {
     })
 })
 
-test('the launcher knows exactly the 18 agreed languages, right-to-left only for Arabic and Urdu', () => {
-  expect(LOCALES.map((l) => l.code), 'the language list is a product decision; change it on purpose, not by accident').toEqual([
-    'en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl',
+test('the launcher knows exactly the 20 agreed languages in picker order, right-to-left only for Arabic and Urdu', () => {
+  expect(LOCALES.map((l) => l.code), 'the language list and its order in the picker are a product decision; change them on purpose, not by accident').toEqual([
+    'ru', 'en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl', 'uk', 'sr',
   ])
   expect(LOCALES.filter((l) => l.rtl).map((l) => l.code), 'only these scripts are written right to left').toEqual(['ar', 'ur'])
 })
 
 test('translated languages stay out of the pickers until the switch is turned on', () => {
   const want: Locale[] = EXTRA_LOCALES_PUBLIC
-    ? ['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl']
+    ? ['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl', 'uk', 'sr']
     : ['en', 'ru']
   expect(AVAILABLE_LOCALES.map((l) => l.code).sort(), 'offering a language is the owner decision behind EXTRA_LOCALES_PUBLIC').toEqual(want.sort())
 })
