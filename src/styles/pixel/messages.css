@@ -83,7 +83,7 @@
   border: 0;
   background: none;
   color: var(--m-fg);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   clip-path: var(--px-5);
   transition: background-color var(--m-t-fast);

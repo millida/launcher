@@ -56,7 +56,7 @@
 .mcf-fps-px { flex: none; image-rendering: pixelated; animation: mcf-flicker 1.2s var(--m-ease-smooth) infinite; }
 .mcf-fps-n { font: 800 28px/1 var(--m-font-brand, var(--m-font)); letter-spacing: -0.02em; color: var(--tone); font-variant-numeric: tabular-nums; transition: color var(--m-t-base); }
 .mcf-fps-u { align-self: flex-end; padding-bottom: 3px; font: 800 13px/1 var(--m-font); color: var(--m-fg-muted); }
-.mcf-fps-tag { margin-left: auto; font: 700 11px/1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; }
+.mcf-fps-tag { margin-inline-start: auto; font: 700 11px/1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; }
 
 /* ── Тонкая настройка ───────────────────────────────────────────────── */
 .mcf-fine { display: flex; flex-direction: column; min-width: 0; }
@@ -64,7 +64,7 @@
 .mcf-fine-btn {
   flex: 1 1 auto; display: inline-flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 10px 0 8px;
   border: 0; cursor: pointer; background-color: var(--m-surface); color: var(--m-fg);
-  font: 750 13px/1 var(--m-font); text-align: left; --px-n: 3px; clip-path: var(--px-4);
+  font: 750 13px/1 var(--m-font); text-align: start; --px-n: 3px; clip-path: var(--px-4);
   transition: background-color var(--m-t-fast);
 }
 .mcf-fine-btn:hover { background-color: var(--m-surface-2); }

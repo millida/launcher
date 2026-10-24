@@ -147,7 +147,7 @@
   padding: 0 0 10px;
   background: var(--m-surface);
   border-radius: var(--m-r-card);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   color: var(--m-fg);
   border: 0;
@@ -204,7 +204,7 @@
 }
 .pm-card-foot b.pm-dl svg { width: 13px; height: 13px; color: var(--m-fg-faint); }
 .pm-card-foot b {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 13px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
@@ -284,7 +284,7 @@
   --px-n: 10px; clip-path: var(--px-10);
   box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
 }
-.pm-plan-price { margin-left: auto; font-weight: 750; font-variant-numeric: tabular-nums; }
+.pm-plan-price { margin-inline-start: auto; font-weight: 750; font-variant-numeric: tabular-nums; }
 .pm-plan { font-size: 12px; color: var(--m-fg-subtle); }
 
 .pm-patches { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -309,7 +309,7 @@
 }
 .pm-buy-left { display: flex; flex-direction: column; gap: 4px; }
 .pm-buy-left > b { font-size: 15px; font-weight: 750; }
-.pm-buy-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.pm-buy-right { margin-inline-start: auto; display: flex; align-items: center; gap: 12px; }
 
 /* ---------- Заметки: срок, отмена, право ---------- */
 .pm-note {

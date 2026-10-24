@@ -128,6 +128,45 @@ pub fn notice_message(kind: &str, title: &str, detail: &str, positive: bool) -> 
     .to_string()
 }
 
+/// One five-second window of frames and memory from the mod (`PerfReport`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerfSample {
+    pub fps: u32,
+    pub world: bool,
+    pub throttled: bool,
+    pub heap_mb: u32,
+    pub max_mb: u32,
+    /// Share of the window spent collecting garbage, -1 when the JVM did not say.
+    pub gc_pct: i32,
+}
+
+const MAX_PERF_FPS: f64 = 1000.0;
+const MAX_PERF_MB: f64 = 1_048_576.0;
+
+fn bounded(value: Option<&Value>, max: f64) -> Option<f64> {
+    value?.as_f64().filter(|v| v.is_finite() && *v >= 0.0).map(|v| v.min(max))
+}
+
+pub fn parse_perf(text: &str) -> Option<PerfSample> {
+    if text.len() > MAX_MESSAGE {
+        return None;
+    }
+    let value: Value = serde_json::from_str(text).ok()?;
+    if value.get("type")?.as_str()? != "perf" {
+        return None;
+    }
+    let gc = value.get("gcPct").and_then(Value::as_f64).filter(|v| v.is_finite()).unwrap_or(-1.0);
+    Some(PerfSample {
+        fps: bounded(value.get("fps"), MAX_PERF_FPS)? as u32,
+        world: value.get("world")?.as_bool()?,
+        throttled: value.get("throttled").and_then(Value::as_bool).unwrap_or(false),
+        heap_mb: bounded(value.get("heapMb"), MAX_PERF_MB).unwrap_or(0.0) as u32,
+        max_mb: bounded(value.get("maxMb"), MAX_PERF_MB).unwrap_or(0.0) as u32,
+        gc_pct: if gc < 0.0 { -1 } else { gc.min(100.0) as i32 },
+    })
+}
+
 pub fn parse_command(text: &str) -> Option<Command> {
     if text.len() > MAX_MESSAGE {
         return None;
@@ -311,6 +350,31 @@ pub fn unmask(mask: [u8; 4], payload: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mod line -> what the lag helper gets. Pinned because a malformed line
+    /// from any local process with the key must never read as a lagging game.
+    #[test]
+    fn perf_lines_are_read_strictly() {
+        let ok = parse_perf(r#"{"type":"perf","fps":24,"world":true,"throttled":false,"heapMb":3900,"maxMb":4096,"gcPct":12}"#);
+        assert_eq!(
+            ok,
+            Some(PerfSample { fps: 24, world: true, throttled: false, heap_mb: 3900, max_mb: 4096, gc_pct: 12 }),
+            "a normal window must reach the helper whole"
+        );
+        let cases: [(&str, bool, &str); 5] = [
+            (r#"{"type":"perf","world":true}"#, false, "no fps: nothing to judge"),
+            (r#"{"type":"perf","fps":-5,"world":true}"#, false, "negative fps is garbage, not a lag"),
+            (r#"{"type":"perf","fps":30}"#, false, "without world the helper cannot tell a menu from the game"),
+            (r#"{"type":"command","command":"play"}"#, false, "a media command is not a frame report"),
+            (r#"{"type":"perf","fps":99999,"world":true,"gcPct":500}"#, true, "huge values are clamped, not trusted"),
+        ];
+        for (line, want, why) in cases {
+            assert_eq!(parse_perf(line).is_some(), want, "{why}");
+        }
+        let clamped = parse_perf(r#"{"type":"perf","fps":99999,"world":true,"gcPct":500}"#).unwrap();
+        assert_eq!((clamped.fps, clamped.gc_pct), (1000, 100), "clamping keeps fps and gc share in range");
+        assert_eq!(parse_perf(r#"{"type":"perf","fps":10,"world":true}"#).unwrap().gc_pct, -1, "no gc share means unknown, not zero");
+    }
     use std::time::Duration;
 
     const KEY: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";

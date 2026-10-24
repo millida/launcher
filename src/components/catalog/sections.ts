@@ -172,6 +172,8 @@ export interface ListingFilters {
   use?: string | null
   price?: PriceFilter | null
   side?: SideFilter | null
+  /** Only modpacks that ship this mod (catalogue slug or Modrinth id). */
+  withMod?: string | null
 }
 
 /** Строка запроса листинга — те же имена и правила, что у `catalogApi.listing` сайта. */
@@ -191,6 +193,7 @@ export function listingQuery(section: SectionSlug, f: ListingFilters): string {
   if (f.price) sp.set('price', f.price)
   if (f.use) sp.set('use', f.use)
   if (f.side) sp.set('side', f.side)
+  if (f.withMod) sp.set('withMod', f.withMod)
   // Как на сайте: «Рекомендуемые» — без параметра, «Популярные» и «Новые» — параметром.
   // «По релевантности» у сервера — это популярное среди найденного (сервер ищет по вхождению),
   // ближе всего к Modrinth; точные совпадения названия лаунчер поднимает сам (siteStore).

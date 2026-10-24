@@ -14,6 +14,7 @@ pub async fn install_mod(
     game_version: String,
     profile: String,
 ) -> Result<engine::ContentInstall, String> {
+    engine::refuse_author_locked(&profile, "mod")?;
     engine::install_mod(app, project, game_version, profile).await
 }
 
@@ -28,6 +29,7 @@ pub async fn install_content(
     kind: String,
     allow_mismatch: Option<bool>,
 ) -> Result<engine::ContentInstall, String> {
+    engine::refuse_author_locked(&profile, &kind)?;
     engine::install_content(app, project, game_version, profile, kind, allow_mismatch.unwrap_or(false)).await
 }
 
@@ -51,6 +53,7 @@ pub async fn install_dep_items(
     kind: String,
     items: Vec<engine::PlanItem>,
 ) -> Result<engine::DepReport, String> {
+    engine::refuse_author_locked(&profile, &kind)?;
     engine::install_dep_items(app, profile, kind, items).await
 }
 
@@ -110,6 +113,7 @@ pub async fn cf_search(
 
 #[tauri::command]
 pub async fn cf_install(app: tauri::AppHandle, mod_id: u32, game_version: String, profile: String, kind: String, file_id: Option<u64>, allow_mismatch: Option<bool>) -> Result<engine::ContentInstall, String> {
+    engine::refuse_author_locked(&profile, &kind)?;
     engine::cf_install(app, engine::CfInstallReq {
         mod_id,
         game_version,
@@ -148,6 +152,7 @@ pub async fn install_catalog_file(
     title: String,
     sha1: Option<String>,
 ) -> Result<engine::ContentInstall, String> {
+    engine::refuse_author_locked(&profile, &kind)?;
     engine::install_catalog_file(app, profile, kind, slug, file_id, title, sha1).await
 }
 
@@ -187,6 +192,7 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<engine::
 
 #[tauri::command]
 pub async fn update_content(profile: String, kind: String, name: String) -> Result<String, String> {
+    engine::snapshot_before_mod_update(&profile, &kind).await?;
     engine::update_content(profile, kind, name).await
 }
 
@@ -197,16 +203,19 @@ pub async fn content_versions(profile: String, kind: String, name: String) -> Re
 
 #[tauri::command]
 pub async fn set_content_version(profile: String, kind: String, name: String, version_id: String) -> Result<String, String> {
+    engine::snapshot_before_mod_update(&profile, &kind).await?;
     engine::set_content_version(profile, kind, name, version_id).await
 }
 
 #[tauri::command]
 pub async fn update_all(profile: String, kind: String) -> Result<u32, String> {
+    engine::snapshot_before_mod_update(&profile, &kind).await?;
     engine::update_all(profile, kind).await
 }
 
 #[tauri::command]
 pub async fn add_local_file(profile: String, kind: String, path: String) -> Result<String, String> {
+    engine::refuse_author_locked(&profile, &kind)?;
     engine::add_local_file(profile, kind, path).await
 }
 
@@ -217,6 +226,7 @@ pub async fn pick_content_files(kind: String) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub async fn install_version(app: tauri::AppHandle, project: String, version_id: String, profile: String, kind: String, allow_mismatch: Option<bool>) -> Result<engine::ContentInstall, String> {
+    engine::refuse_author_locked(&profile, &kind)?;
     engine::install_version(app, project, version_id, profile, kind, allow_mismatch.unwrap_or(false)).await
 }
 
@@ -337,6 +347,9 @@ pub async fn quarantine_mods(profile: String, files: Vec<String>) -> Result<u32,
 /// ядро берёт у нашего API само — из вебвью приходят только slug и id файла.
 #[tauri::command]
 pub async fn catalog_install(app: tauri::AppHandle, req: engine::CatalogInstallReq) -> Result<engine::CatalogInstall, String> {
+    if !req.profile.is_empty() {
+        engine::refuse_author_locked(&req.profile, &req.kind)?;
+    }
     engine::content_catalog_install(app, req).await
 }
 
@@ -344,6 +357,7 @@ pub async fn catalog_install(app: tauri::AppHandle, req: engine::CatalogInstallR
 /// (/catalog/items/:slug/resolve). План ядро запрашивает само.
 #[tauri::command]
 pub async fn catalog_install_plan(app: tauri::AppHandle, req: engine::CatalogPlanReq) -> Result<engine::CatalogPlanDone, String> {
+    engine::refuse_author_locked(&req.profile, &req.kind)?;
     engine::catalog_install_plan(app, req).await
 }
 /// Косметика Millida: подбор варианта под сборку и установка одной кнопкой.
@@ -393,3 +407,88 @@ pub fn set_pvp_hud_default(on: bool) -> Result<(), String> {
     engine::set_pvp_hud_default(on)
 }
 
+
+#[tauri::command(async)]
+pub fn set_content_locked(profile: String, kind: String, name: String, on: bool) -> Result<bool, String> {
+    engine::set_content_locked(&profile, &kind, &name, on)
+}
+
+#[tauri::command(async)]
+pub fn set_content_tags(profile: String, kind: String, name: String, tags: Vec<String>) -> Result<Vec<String>, String> {
+    engine::set_content_tags(&profile, &kind, &name, tags)
+}
+
+#[tauri::command(async)]
+pub fn content_tags(profile: String, kind: String) -> Vec<String> {
+    engine::content_tags(&profile, &kind)
+}
+
+/// Export in the format another launcher reads. The webview names the format
+/// from a fixed set; the file name is cleaned the same way as for .mrpack.
+#[tauri::command]
+pub async fn export_pack(profile: String, format: String, ram_mb: Option<u32>, lock_content: Option<bool>) -> Result<String, String> {
+    let ext = match format.as_str() {
+        "mrpack" => "mrpack",
+        "curseforge" => "curseforge.zip",
+        "multimc" => "multimc.zip",
+        _ => return Err("Неизвестный формат выгрузки".into()),
+    };
+    let base = engine::export_file_stem(&profile, &profile);
+    let out = engine::data_dir().join("exports").join(format!("{}.{}", base, ext));
+    let dst = out.to_string_lossy().to_string();
+    let loader_build = engine::export_loader_build(&profile).await;
+    let author = engine::author_meta_of(&profile, ram_mb.unwrap_or(0), lock_content.unwrap_or(false));
+    let res = super::blocking(move || match format.as_str() {
+        "mrpack" => engine::export_mrpack_with(profile.clone(), dst, profile, String::new(), String::new(), loader_build, Some(author)),
+        "curseforge" => engine::export_curseforge(profile.clone(), dst, profile, String::new(), loader_build, author),
+        _ => engine::export_multimc(profile.clone(), dst, profile, loader_build, author),
+    })
+    .await??;
+    if let Some(p) = out.parent() {
+        engine::open_path(&p.to_string_lossy());
+    }
+    Ok(res)
+}
+
+#[tauri::command(async)]
+pub fn world_datapacks(profile: String, world: String) -> Result<Vec<engine::WorldPack>, String> {
+    engine::world_datapacks(&profile, &world)
+}
+
+#[tauri::command(async)]
+pub fn set_world_datapack(profile: String, world: String, name: String, enable: bool) -> Result<(), String> {
+    engine::set_world_datapack(&profile, &world, &name, enable)
+}
+
+#[tauri::command(async)]
+pub fn delete_world_datapack(profile: String, world: String, name: String) -> Result<(), String> {
+    engine::delete_world_datapack(&profile, &world, &name)
+}
+
+#[tauri::command(async)]
+pub fn add_datapack_to_world(profile: String, world: String, name: String) -> Result<(), String> {
+    engine::add_datapack_to_world(&profile, &world, &name)
+}
+
+/// Resource packs, shader packs, data packs and worlds read for programs hidden inside.
+#[tauri::command]
+pub async fn scan_pack_safety(profile: String) -> Result<engine::SafetyReport, String> {
+    engine::scan_pack_safety(profile).await
+}
+
+/// Takes back keys the same report produced; the core re-checks each name.
+#[tauri::command]
+pub async fn quarantine_packs(profile: String, files: Vec<String>) -> Result<u32, String> {
+    super::blocking(move || engine::quarantine_packs(&profile, files)).await?
+}
+
+#[tauri::command]
+pub async fn ftb_search(term: String) -> Result<Vec<engine::FtbPack>, String> {
+    engine::ftb_search(term).await
+}
+
+/// Only the pack id crosses the bridge; the core reads its files from the FTB API.
+#[tauri::command]
+pub async fn ftb_install(app: tauri::AppHandle, id: u64) -> Result<engine::Profile, String> {
+    engine::ftb_install(app, id).await
+}

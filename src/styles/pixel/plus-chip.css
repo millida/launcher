@@ -18,4 +18,4 @@
 .pc-add { flex: none; fill: #f5bd2c; filter: drop-shadow(0 0 3px rgba(255, 190, 40, .9)); animation: pc-glow 2.2s var(--m-ease-smooth) infinite; }
 @keyframes pc-glow { 50% { filter: drop-shadow(0 0 1px rgba(255, 190, 40, .4)); } }
 @media (prefers-reduced-motion: reduce) { .pc-add { animation: none; } }
-.pk-head .pc { margin-left: auto; margin-right: 8px; }
+.pk-head .pc { margin-inline-start: auto; margin-right: 8px; }

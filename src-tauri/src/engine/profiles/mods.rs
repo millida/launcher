@@ -21,9 +21,17 @@ pub struct ModFile {
     /// Когда файл появился в сборке (секунды Unix, время изменения файла): сортировка
     /// «Сначала новые» и метка «Новый» на странице сборки.
     #[serde(skip_serializing_if = "Option::is_none")] pub added: Option<u64>,
+    /// The player pinned this version: «Обновить всё» and auto-updates pass it by.
+    #[serde(skip_serializing_if = "std::ops::Not::not")] pub locked: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")] pub tags: Vec<String>,
+    /// "pack" when the pack shipped the file, "manual" when the player added it.
+    #[serde(skip_serializing_if = "Option::is_none")] pub origin: Option<String>,
+    /// What waits for the running game to close: "on", "off" or "delete".
+    #[serde(skip_serializing_if = "Option::is_none")] pub pending: Option<String>,
 }
 
 pub fn list_content(profile: &str, kind: &str) -> Vec<ModFile> {
+    apply_pending_content(profile);
     let dir = profile_dir(profile).join(content_dir(kind));
     let manifest = load_content_manifest(profile);
     let local = local_meta_map(profile, kind);
@@ -65,10 +73,15 @@ pub fn list_content(profile: &str, kind: &str) -> Vec<ModFile> {
                     .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs()),
+                locked: false,
+                tags: vec![],
+                origin: None,
+                pending: None,
             });
         }
     }
     out.sort_by_key(|a| a.title.clone().unwrap_or_else(|| a.name.clone()).to_lowercase());
+    annotate_content(profile, kind, &mut out);
     out
 }
 pub fn list_mods(profile: &str) -> Vec<ModFile> { list_content(profile, "mod") }
@@ -92,7 +105,10 @@ fn file_busy(e: std::io::Error) -> String {
 pub fn toggle_content(profile: &str, kind: &str, name: &str, enable: bool) -> Result<(), String> {
     // name arrives over IPC: reject anything but a plain file name
     let file = safe_file_name(name)?;
-    assert_not_running(profile, "переключи мод ещё раз")?;
+    // A running JVM holds its jars open, so the switch waits for the game to close.
+    if running_games().iter().any(|p| p == profile) {
+        return queue_toggle(profile, kind, &file, enable);
+    }
     let dir = profile_dir(profile).join(content_dir(kind));
     let on = safe_child(&dir, &file)?;
     let off = safe_child(&dir, &format!("{}.disabled", file))?;
@@ -107,7 +123,9 @@ pub fn toggle_mod(profile: &str, name: &str, enable: bool) -> Result<(), String>
 
 pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), String> {
     let file = safe_file_name(name)?;
-    assert_not_running(profile, "удали файл ещё раз")?;
+    if running_games().iter().any(|p| p == profile) {
+        return queue_delete(profile, kind, &file);
+    }
     let dir = profile_dir(profile).join(content_dir(kind));
     for cand in [safe_child(&dir, &file)?, safe_child(&dir, &format!("{}.disabled", file))?] {
         if cand.exists() {
@@ -148,6 +166,7 @@ fn forget_profile_side_data(name: &str) {
     forget_pack_launch(name);
     set_profile_group(name, "");
     forget_playtime(name);
+    forget_build_shortcuts(name);
 }
 
 pub fn open_profile_folder(name: &str) {

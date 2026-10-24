@@ -156,7 +156,7 @@
   font: 600 13px/1 var(--m-font);
   color: var(--m-fg);
   background: none;
-  text-align: left;
+  text-align: start;
   transition: background-color var(--m-t-fast);
 }
 .party-pop button svg { width: 14px; height: 14px; color: var(--m-fg-subtle); }
@@ -250,7 +250,7 @@
   gap: 12px;
   width: 100%;
   padding: 12px;
-  text-align: left;
+  text-align: start;
   color: var(--m-fg);
   background: var(--m-surface);
   --px-n: 4px; clip-path: var(--px-4);

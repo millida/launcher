@@ -311,14 +311,14 @@
 .card.mr-group { padding: 4px 8px 8px; background-color: var(--m-surface); }
 .mr-group-head {
   display: flex; align-items: center; justify-content: space-between; width: 100%; height: 44px; padding: 0 8px;
-  font: 700 15px/1 var(--m-font); color: var(--m-fg); background: none; border: 0; cursor: pointer; text-align: left;
+  font: 700 15px/1 var(--m-font); color: var(--m-fg); background: none; border: 0; cursor: pointer; text-align: start;
 }
 .mr-group-head svg { width: 14px; height: 14px; color: var(--m-fg-subtle); transition: transform var(--m-t-fast) ease; }
 .mr-group.is-open .mr-group-head svg { transform: rotate(180deg); }
 .mr-opts { display: flex; flex-direction: column; }
 .mr-opt {
   display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 8px;
-  font: 600 14px/1 var(--m-font); color: var(--m-fg-muted); text-align: left; background: transparent; border: 0; cursor: pointer;
+  font: 600 14px/1 var(--m-font); color: var(--m-fg-muted); text-align: start; background: transparent; border: 0; cursor: pointer;
   --px-n: 5px; clip-path: var(--px-5);
   transition: background-color var(--m-t-fast) ease, color var(--m-t-fast) ease;
 }
@@ -449,7 +449,7 @@
 .mr-ru-head h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: 800 18px/1.2 var(--m-font); color: var(--m-fg); }
 .mr-ru-head h2 .mr-ru-badge { height: 18px; font-size: 11px; }
 .mr-ru-sub { min-width: 0; overflow: hidden; font-size: 13.5px; color: var(--m-fg-subtle); white-space: nowrap; text-overflow: ellipsis; }
-.mr-ru-nav { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex: none; align-self: center; }
+.mr-ru-nav { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto; flex: none; align-self: center; }
 .mr-ru-link { display: inline-flex; align-items: center; gap: 4px; padding: 6px 8px; font: 700 13.5px/1 var(--m-font); color: var(--m-fg-muted); }
 .mr-ru-link:hover { color: var(--m-fg); }
 .mr-ru-link svg.icon { width: 13px; height: 13px; }
@@ -470,7 +470,7 @@
   display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; padding: 10px 12px;
   font-size: 14px; color: var(--m-fg-muted); background: color-mix(in srgb, var(--m-rarity-rare) 8%, var(--m-surface)); --px-n: 5px; clip-path: var(--px-5);
 }
-.mr-ru-only .mr-ru-link { margin-left: auto; color: var(--m-fg); }
+.mr-ru-only .mr-ru-link { margin-inline-start: auto; color: var(--m-fg); }
 
 /* Колонка фильтров: «Язык → На русском» — подсвеченной строкой. */
 .mr-key[data-track='filter_lang']:not(.on) { background-color: color-mix(in srgb, var(--m-rarity-rare) 12%, transparent); }
@@ -518,7 +518,7 @@
 @media (max-width: 639px) {
   .card.mr-row { grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 12px; }
   .mr-icon { width: 64px; height: 64px; }
-  .mr-side { grid-column: 1 / -1; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-width: 0; text-align: left; }
+  .mr-side { grid-column: 1 / -1; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-width: 0; text-align: start; }
   .mr-actions { margin: 0 0 0 auto; }
 }
 
@@ -574,7 +574,7 @@
 }
 .card.mr-cat-tile {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 16px;
-  color: var(--m-fg); text-align: left; background-color: var(--m-surface); border: 0; overflow: hidden; cursor: pointer;
+  color: var(--m-fg); text-align: start; background-color: var(--m-surface); border: 0; overflow: hidden; cursor: pointer;
   transition: background-color var(--m-t-fast) ease;
 }
 .card.mr-cat-tile:hover { background-color: var(--m-surface-2); }
@@ -716,7 +716,7 @@
 .mr-fbox .mr-keys { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
 .mr-fbox .mr-keys > .seg.mr-key { width: 100%; height: 32px; justify-content: flex-start; background-color: transparent; }
 .mr-fbox .mr-keys > .seg.mr-key:hover { background-color: var(--m-surface-2); }
-.mr-fbox .mr-keys > .seg.mr-key .mr-key-n { margin-left: auto; }
+.mr-fbox .mr-keys > .seg.mr-key .mr-key-n { margin-inline-start: auto; }
 :root:root .mr-fbox .mr-keys > .seg.mr-key.on { background-color: var(--m-accent); }
 .mr-fbox .mr-keys > .seg.mr-key.mr-more { color: var(--m-accent); }
 .mr-fbox .mr-keys > .seg.mr-key.mr-more .mr-key-n { margin-left: 2px; }
@@ -888,8 +888,8 @@
 
 /* Разделы — по центру над лентой */
 .segs.mr-groups, .segs.mr-subtypes { justify-content: center; }
-.segs.mr-types.mr-groups { display: flex; width: fit-content; margin-left: auto; margin-right: auto; }
-.segs.mr-subtypes { width: fit-content; margin-left: auto; margin-right: auto; }
+.segs.mr-types.mr-groups { display: flex; width: fit-content; margin-inline-start: auto; margin-right: auto; }
+.segs.mr-subtypes { width: fit-content; margin-inline-start: auto; margin-right: auto; }
 /* Автор и скачивания в одну строку: автор ужимается, цифра всегда видна */
 .card.mr-gal .mr-gal-names { min-width: 0; }
 .card.mr-gal .mr-gal-author { flex-wrap: nowrap; overflow: hidden; }
@@ -910,7 +910,7 @@
 .cfor-text small { font-size: 12px; font-weight: 600; color: var(--m-fg-subtle); }
 .btn.cfor-change { width: 100%; justify-content: center; gap: 6px; }
 .btn.cfor-change .icon { width: 11px; height: 11px; }
-.cfor-fit { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; color: var(--m-fg); }
+.cfor-fit { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: start; color: var(--m-fg); }
 .cfor-fit .tgl { flex: none; pointer-events: none; }
 .cfor-fit-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .cfor-fit-t b { font-size: 13px; font-weight: 700; }
@@ -921,10 +921,10 @@
 }
 .cfor-pop-h { padding: 4px 6px 6px; font: 600 11.5px/14px var(--m-font); color: var(--m-fg-subtle); }
 .cfor-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
-.cfor-item { display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; cursor: pointer; text-align: left; color: var(--m-fg); background: transparent; --px-n: 4px; clip-path: var(--px-4); }
+.cfor-item { display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; cursor: pointer; text-align: start; color: var(--m-fg); background: transparent; --px-n: 4px; clip-path: var(--px-4); }
 .cfor-item:hover { background: rgba(255, 255, 255, 0.05); }
 .cfor-item.on { background: rgba(255, 255, 255, 0.07); }
-.cfor-item > .icon { width: 13px; height: 13px; margin-left: auto; flex: none; color: var(--m-accent); }
+.cfor-item > .icon { width: 13px; height: 13px; margin-inline-start: auto; flex: none; color: var(--m-accent); }
 .cfor-item-t { display: flex; flex-direction: column; min-width: 0; }
 .cfor-item-t b { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cfor-item-t small { font-size: 11.5px; color: var(--m-fg-subtle); }

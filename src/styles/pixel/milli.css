@@ -253,7 +253,7 @@
 }
 @keyframes ml-menu-in { 0% { opacity: 0; transform: scale(0.9) translateY(-6px); } }
 .ml-menu-item {
-  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; text-align: left;
+  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; text-align: start;
   font: 700 13.5px/1 var(--m-font); color: var(--m-fg); cursor: pointer;
   --px-n: 5px; clip-path: var(--px-5);
   transition: transform 80ms var(--m-ease-smooth);
@@ -369,7 +369,7 @@
 .ml-chips.ml-exs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 392px; margin-top: 12px; }
 .ml-ex {
   --tone: var(--m-accent);
-  display: flex; align-items: center; gap: 10px; min-width: 0; height: 54px; padding: 0 10px 4px 8px; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; min-width: 0; height: 54px; padding: 0 10px 4px 8px; text-align: start; cursor: pointer;
   font: 750 13.5px/1.2 var(--m-font); color: var(--m-fg);
   background-color: var(--m-surface-2);
   --px-n: 5px; clip-path: var(--px-5);
@@ -442,7 +442,7 @@
 .ml-hist > li:nth-child(4) { animation-delay: 150ms; } .ml-hist > li:nth-child(5) { animation-delay: 200ms; }
 .ml-hist > li:nth-child(n + 6) { animation-delay: 250ms; }
 .ml-hist-row {
-  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px 11px 8px; text-align: left; cursor: pointer;
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px 11px 8px; text-align: start; cursor: pointer;
   background-color: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5);
   --px-ft: rgba(255, 255, 255, 0.05); --px-ft-w: 2px; --px-fb: rgba(0, 0, 0, 0.32); --px-fb-w: 3px;
   transition: transform 80ms var(--m-ease-smooth), background-color var(--m-t-fast);
@@ -705,7 +705,7 @@
 .mlx .mci { flex: none; display: block; image-rendering: pixelated; }
 .mlx-t {
   flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding: 0; border: 0; background: none; font: 800 12.5px/1.2 var(--m-font); color: var(--m-fg); text-align: left;
+  padding: 0; border: 0; background: none; font: 800 12.5px/1.2 var(--m-font); color: var(--m-fg); text-align: start;
 }
 button.mlx-t { cursor: pointer; }
 button.mlx-t::after { content: '▾'; margin-left: 5px; font-size: 10px; color: var(--m-fg-faint); }
@@ -716,7 +716,7 @@ button.mlx-t:hover { color: var(--m-accent); }
 .mlx-add { color: var(--m-success); }
 .mlx-rm { color: var(--m-danger); }
 .mlx-ch { color: var(--m-warning); }
-.mlx-acts { flex: none; display: inline-flex; align-items: center; gap: 0; margin-left: auto; }
+.mlx-acts { flex: none; display: inline-flex; align-items: center; gap: 0; margin-inline-start: auto; }
 .mlx-btn {
   flex: none; height: 24px; padding: 0 7px 1px; border: 0; background: none; cursor: pointer;
   font: 750 12px/1 var(--m-font); color: var(--m-accent);
@@ -751,7 +751,7 @@ button.mlx-t:hover { color: var(--m-accent); }
 .mlp-step { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 16px; font: 650 12.5px/1.2 var(--m-font); color: var(--m-fg-muted); }
 .mlp-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mlp-n {
-  flex: none; margin-left: auto; font: 600 11.5px/1 var(--m-font); color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap;
+  flex: none; margin-inline-start: auto; font: 600 11.5px/1 var(--m-font); color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .mlp-n b { font-weight: 800; color: var(--m-fg); }
 .mlp-step.is-now { color: var(--m-fg); font-weight: 750; }
@@ -851,7 +851,7 @@ button.mlx-t:hover { color: var(--m-accent); }
 .mset-line-px { flex: none; display: block; width: 14px; height: 14px; image-rendering: pixelated; }
 .mset-line-k { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mset-line-v {
-  flex: 0 0 auto; max-width: 58%; margin-left: auto; padding: 3px 8px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 12px/1 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums;
+  flex: 0 0 auto; max-width: 58%; margin-inline-start: auto; padding: 3px 8px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 12px/1 var(--m-font); color: var(--m-fg); font-variant-numeric: tabular-nums;
   background-color: var(--m-inset); --px-n: 3px; clip-path: var(--px-4);
 }
 .mset-foot { display: flex; justify-content: flex-end; margin: -2px -4px -4px 0; }

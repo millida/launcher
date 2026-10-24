@@ -507,7 +507,9 @@ fn walk_imports() -> Vec<FoundInstance> {
         .map(|(s, p)| (s.to_string(), p)).chain(extra_dots).collect();
     let insts: Vec<(String, PathBuf)> = launcher_roots().into_iter()
         .map(|(s, p)| (s.to_string(), p)).chain(extra_insts).collect();
-    walk_roots(dots, insts)
+    let mut out = walk_roots(dots, insts);
+    out.extend(super::client_imports::client_mod_instances());
+    out
 }
 
 /// Builds in a folder the player pointed at when the automatic search found
@@ -912,6 +914,9 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
     if !["vanilla", "fabric", "quilt", "forge", "neoforge"].contains(&loader.as_str()) {
         return Err("Неизвестный загрузчик сборки".into());
     }
+    if super::client_imports::is_client_mods_dir(&src) {
+        return import_client_mods(&src, &name, version);
+    }
     let game = match instance_game_dir(&src) {
         Some(g) => g,
         None if has_game_dir_entry(&src) => {
@@ -947,6 +952,76 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
         apply_instance_cfg(&src, &prof.name);
     }
     Ok(prof)
+}
+
+fn import_client_mods(src: &Path, name: &str, version: String) -> Result<Profile, String> {
+    let mut all = load_profiles();
+    let nm = unique_profile_name(name);
+    let dst = profile_dir(&nm);
+    std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
+    match super::client_imports::copy_client_mods(src, &dst) {
+        Ok(0) => {
+            let _ = std::fs::remove_dir_all(&dst);
+            return Err("В папке модов нет ни одного .jar".into());
+        }
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&dst);
+            return Err(e);
+        }
+        Ok(_) => {}
+    }
+    let prof = Profile { name: nm, version, fabric: true, loader: Some("fabric".into()), loader_version: None, icon: None };
+    all.insert(0, prof.clone());
+    if let Err(e) = save_profiles(&all) {
+        let _ = std::fs::remove_dir_all(&dst);
+        return Err(e);
+    }
+    Ok(prof)
+}
+
+fn offline_nick_ok(nick: &str) -> bool {
+    (3..=16).contains(&nick.len()) && nick.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// TLauncher keeps its accounts next to the game: the selected one first, any
+/// other account after it. Only an offline-shaped name is taken, never a token.
+pub(crate) fn nick_from_tl_profiles(raw: &str) -> Option<String> {
+    let doc: Value = serde_json::from_str(raw).ok()?;
+    let accounts = doc["accounts"].as_object()?;
+    let name_of = |a: &Value| -> Option<String> {
+        ["displayName", "username"]
+            .iter()
+            .filter_map(|k| a[*k].as_str())
+            .map(str::trim)
+            .find(|n| offline_nick_ok(n))
+            .map(String::from)
+    };
+    let selected = doc["selectedAccountUUID"].as_str().and_then(|id| accounts.get(id)).and_then(name_of);
+    selected.or_else(|| accounts.values().find_map(name_of))
+}
+
+pub(crate) fn nick_from_tl_properties(raw: &str) -> Option<String> {
+    raw.lines()
+        .filter_map(|l| l.split_once('='))
+        .find(|(k, _)| k.trim() == "login.account")
+        .map(|(_, v)| v.trim().to_string())
+        .filter(|n| offline_nick_ok(n))
+}
+
+/// The nick the player had in TLauncher, so moving over keeps their name on
+/// servers and the worlds that belong to it.
+pub fn tlauncher_nick() -> Option<String> {
+    let roots = dot_minecraft_roots();
+    let from_profiles = roots.iter().find_map(|(_, dir)| {
+        let raw = std::fs::read_to_string(dir.join("TlauncherProfiles.json")).ok()?;
+        nick_from_tl_profiles(&raw)
+    });
+    from_profiles.or_else(|| {
+        let tl = roots.first()?.1.parent()?.join(".tlauncher");
+        ["tlauncher-2.0.properties", "legacy/Minecraft/tlauncher.properties"]
+            .iter()
+            .find_map(|f| std::fs::read_to_string(tl.join(f)).ok().and_then(|raw| nick_from_tl_properties(&raw)))
+    })
 }
 
 #[cfg(test)]
@@ -1357,5 +1432,25 @@ mod tests {
         let dir = tmp("mods-empty");
         std::fs::create_dir_all(dir.join("mods")).unwrap();
         assert_eq!(loader_from_mods_dir(&dir), None);
+    }
+
+    /// TLauncher files -> the nick a moving player keeps. A token or a broken
+    /// name must never become an account name.
+    #[test]
+    fn the_tlauncher_nick_comes_from_its_own_files() {
+        let table: [(&str, Option<&str>, &str); 5] = [
+            (r#"{"accounts":{"a":{"username":"Other"},"b":{"displayName":"Steve_2"}},"selectedAccountUUID":"b"}"#, Some("Steve_2"), "the selected account wins"),
+            (r#"{"accounts":{"a":{"username":"Alex"}},"selectedAccountUUID":"gone"}"#, Some("Alex"), "a stale selection falls back to any account"),
+            (r#"{"accounts":{"a":{"username":"bad nick!"}}}"#, None, "a name the game would refuse is not taken"),
+            (r#"{"clientToken":"x"}"#, None, "no accounts, no nick"),
+            ("not json", None, "a broken file is ignored"),
+        ];
+        for (raw, want, why) in table {
+            assert_eq!(nick_from_tl_profiles(raw).as_deref(), want, "{why}");
+        }
+        assert_eq!(nick_from_tl_properties("a=b
+login.account = Notch
+").as_deref(), Some("Notch"), "the properties file names the last login");
+        assert_eq!(nick_from_tl_properties("login.account=").as_deref(), None, "an empty login is not a nick");
     }
 }

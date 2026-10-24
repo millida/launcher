@@ -405,6 +405,7 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
             format!("Моды новой версии на месте, но её настройки не разложились: {}. Освободи место на диске и обнови сборку ещё раз", e)
         })?;
     }
+    let embedded = if updating { vec![] } else { embedded_jars(&ex, &["overrides", "client-overrides"]) };
     let _ = std::fs::remove_file(&tmp);
     let _ = std::fs::remove_dir_all(&ex);
     let (_, _, pack_icon, _) = fetch_project_meta(&slug).await;
@@ -424,6 +425,10 @@ async fn install_modpack_job(app: &AppHandle, job: &Job, slug: String, version_i
     patch.insert("modpackSlug".into(), Value::String(slug.clone()));
     patch.insert("modpackVersionId".into(), Value::String(vid));
     merge_settings(&pname, patch);
+    if !updating {
+        record_pack_origin(&pname);
+        note_embedded_jars(&pname, embedded);
+    }
     job.emit(app, 100.0, "Сборка установлена");
     Ok(prof)
 }

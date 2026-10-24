@@ -34,7 +34,7 @@
 /* Вкладки «Мои сборки / Каталог» и действия библиотеки над экраном. */
 :root.lay-classic .cl-hubbar { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
 :root.lay-classic .cl-hubbar .tb-tabs { display: flex; gap: 8px; }
-:root.lay-classic .cl-hubbar-act { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+:root.lay-classic .cl-hubbar-act { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
 
 /* Каталог: колонки по ширине самой сетки, а не окна — панель слева съедает 250px,
    и при трёх колонках кнопки карточки не влезали. */

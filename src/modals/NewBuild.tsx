@@ -3,7 +3,10 @@ import { Icon } from '../components/Icon'
 import { Select } from '../components/Select'
 import { BuildIcon, IconPicker } from '../components/playhub/BuildIcon'
 import { hasTauri } from '../ipc/tauri'
-import { createProfile, setFpsBoost } from '../ipc/commands'
+import { applyBuildTemplate, createProfile, deleteBuildTemplate, listBuildTemplates, setFpsBoost } from '../ipc/commands'
+import type { BuildTemplate } from '../ipc/commands'
+import { apiErrorText } from '../lib/apiError'
+import '../styles/pixel/build-extras.css'
 import { hardwareVideo } from '../lib/perfTier'
 import type { McVersion } from '../ipc/commands'
 import { track, trackFailure } from '../lib/telemetry'
@@ -40,13 +43,14 @@ const LOADERS: { id: LoaderId; label: string; logo: string; sub?: string }[] = [
   { id: 'quilt', label: 'Quilt', logo: '/loaders/quilt.svg' },
   { id: 'forge', label: 'Forge', logo: '/loaders/forge.svg' },
   { id: 'neoforge', label: 'NeoForge', logo: '/loaders/neoforge.png' },
+  { id: 'legacyfabric', label: 'Legacy Fabric', logo: '/loaders/fabric.png' },
 ]
 const DEFAULT_LOADER: LoaderId = 'fabric'
 /** Буст FPS ставит ядро (engine/game/fpsboost.rs) — моды есть под Fabric, Forge, NeoForge и Quilt. */
 const FPS_LOADERS: LoaderId[] = ['fabric', 'forge', 'neoforge', 'quilt']
 
 const asLoader = (v?: string | null): LoaderId =>
-  v === 'vanilla' || v === 'fabric' || v === 'quilt' || v === 'forge' || v === 'neoforge' ? v : DEFAULT_LOADER
+  v === 'vanilla' || v === 'fabric' || v === 'quilt' || v === 'forge' || v === 'neoforge' || v === 'legacyfabric' ? v : DEFAULT_LOADER
 
 export function NewBuildModal() {
   const t = useT()
@@ -65,6 +69,8 @@ export function NewBuildModal() {
   const [join, setJoin] = useState<JoinIntent | null>(null)
   const [query, setQuery] = useState('')
   const [vanillaAsk, setVanillaAsk] = useState(false)
+  const [templates, setTemplates] = useState<BuildTemplate[]>([])
+  const [tpl, setTpl] = useState<BuildTemplate | null>(null)
   const mcList = useMcVersionList((s) => s.list)
   const mcListError = useMcVersionList((s) => s.error)
   const showAll = useMcVersionList((s) => s.show)
@@ -125,13 +131,31 @@ export function NewBuildModal() {
     setQuery('')
     setVanillaAsk(false)
     setLoaderVer(AUTO_LOADER_VERSION)
+    setTpl(null)
+    setTemplates([])
+    if (hasTauri())
+      listBuildTemplates()
+        .then(setTemplates)
+        .catch(() => setTemplates([]))
     loadVersions(pre?.version)
   }, [modal.open])
+
+  const pickTemplate = (x: BuildTemplate | null) => {
+    setTpl(x)
+    if (!x) return
+    setVer(x.version)
+    setLoader(asLoader(x.loader))
+    setLoaderVer(x.loaderVersion || AUTO_LOADER_VERSION)
+    if (!nameTouched) {
+      setName(x.name)
+      setNameTouched(true)
+    }
+  }
 
   // Загрузчик стал недоступен на новой версии — берём Fabric, иначе Vanilla.
   useEffect(() => {
     if (!blocks[loader]) return
-    setLoader(blocks.fabric ? 'vanilla' : 'fabric')
+    setLoader(!blocks.fabric ? 'fabric' : !blocks.legacyfabric ? 'legacyfabric' : 'vanilla')
     setLoaderVer(AUTO_LOADER_VERSION)
   }, [blocks, loader])
 
@@ -143,7 +167,9 @@ export function NewBuildModal() {
     setLoader('fabric')
     setLoaderVer(AUTO_LOADER_VERSION)
   }, [modal.open, snapOff, loader, blocks.fabric])
+  // Legacy Fabric takes Fabric's place on the old releases Fabric does not reach.
   const loaders = LOADERS.filter((l) => l.id !== 'vanilla' || showAll || loader === 'vanilla')
+    .filter((l) => (l.id === 'legacyfabric' ? !!blocks.fabric : l.id !== 'fabric' || !blocks.fabric || !!blocks.legacyfabric))
 
   if (!modal.open) return null
   const close = () => closeModal('nbModal')
@@ -164,6 +190,14 @@ export function NewBuildModal() {
     createProfile(nm, ver, loader === 'fabric', loader, icon, loaderVer || null)
       .then(async (p) => {
         track('build_create', { mc: ver, loader, loaderVersion: loaderVer || 'auto', fps: withFps ? 1 : 0 })
+        if (tpl)
+          void applyBuildTemplate(tpl.id, p.name)
+            .then((r) =>
+              r.failed.length
+                ? showToast(t('Из шаблона не встало: {list}', { list: r.failed.join('; ') }), 'error')
+                : showToast(t('Шаблон применён: {n} файлов', { n: r.installed.length }), 'ok'),
+            )
+            .catch((e) => showToast(apiErrorText(e, t('Не удалось применить шаблон')), 'error'))
         if (withFps) await setFpsBoost(p.name, true, false, await hardwareVideo()).catch((e) => console.error('[new-build] fps', e))
         await useProfiles.getState().refresh()
         showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={icon} size={60} /> }], title: t('Сборка создана'), sub: p.name })
@@ -190,6 +224,32 @@ export function NewBuildModal() {
     >
       <div className="modal nb-modal nb2">
         <h3>{t('Новая сборка')}</h3>
+        {templates.length ? (
+          <div className="bx-tags" role="group" aria-label={t('Шаблон')}>
+            {templates.map((x) => (
+              <span key={x.id} className="bx-tpl">
+                <button type="button" className={'bx-tag' + (tpl?.id === x.id ? ' on' : '')} onClick={() => pickTemplate(tpl?.id === x.id ? null : x)}>
+                  {x.name} · {x.version}
+                </button>
+                <button
+                  type="button"
+                  className="bx-tag"
+                  aria-label={t('Удалить шаблон {name}', { name: x.name })}
+                  onClick={() =>
+                    void deleteBuildTemplate(x.id)
+                      .then(() => {
+                        setTemplates((l) => l.filter((y) => y.id !== x.id))
+                        if (tpl?.id === x.id) setTpl(null)
+                      })
+                      .catch((e) => showToast(apiErrorText(e, t('Не удалось удалить')), 'error'))
+                  }
+                >
+                  <Icon id="i-x" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
         {vanillaAsk ? (
           // Vanilla без Millida (владелец 24.09.2026, 19:42): предупреждаем сразу.
           <div className="nb2-ask" role="alertdialog" aria-label={t('Внимание')}>

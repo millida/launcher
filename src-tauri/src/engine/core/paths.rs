@@ -253,6 +253,15 @@ pub fn open_game_folder() {
     open_path(&p.to_string_lossy());
 }
 
+/// The target is fixed here so the webview cannot choose what the OS opens.
+/// Windows Security keeps both the quarantine and the exclusion list behind it.
+pub fn open_antivirus_settings() {
+    #[cfg(windows)]
+    {
+        let _ = tauri_plugin_opener::open_url("windowsdefender://threatsettings", None::<&str>);
+    }
+}
+
 pub(crate) fn dir_size(p: &std::path::Path) -> u64 {
     let mut total = 0;
     if let Ok(rd) = std::fs::read_dir(p) {

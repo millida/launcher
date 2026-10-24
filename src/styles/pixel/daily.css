@@ -70,7 +70,7 @@
   width: 320px; min-height: 92px; padding: 10px 14px 10px 10px;
   background: color-mix(in srgb, var(--m-surface) 94%, transparent);
   color: var(--m-fg); box-shadow: var(--px-plate); --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
-  border-radius: var(--m-r-card); font: inherit; text-align: left;
+  border-radius: var(--m-r-card); font: inherit; text-align: start;
 }
 .dc.compact { width: 260px; height: 72px; min-height: 0; padding: 8px 8px 8px 8px; gap: 7px; }
 :root:root .dc { border-radius: 0; --px-n: 10px; clip-path: var(--px-10); }
@@ -108,7 +108,7 @@
 .modal.dp { position: relative; padding: 20px; }
 .dp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .dp-head h3 { margin: 0; }
-.dp-x { margin-left: auto; }
+.dp-x { margin-inline-start: auto; }
 .dp-streak {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
   background: var(--m-surface-2); color: var(--m-fg); font-size: 12px; font-weight: 700;
@@ -611,7 +611,7 @@
    открывается когда угодно; шансы — полоской цвета редкости у «Открыть».
    Закрытая клетка PLUS открывает карточку с ценой, а не сразу оплату.
    ============================================================ */
-.dp-head .dp-all { margin-left: auto; }
+.dp-head .dp-all { margin-inline-start: auto; }
 .dp-head .dp-all + .dp-x { margin-left: 4px; }
 
 /* ---------- Мои сундуки: лента уровней, как в Brawl Stars ---------- */
@@ -635,7 +635,7 @@
 .mc-scroll img { -webkit-user-drag: none; }
 .mc-row { display: flex; gap: 10px; width: max-content; }
 .mc-view .dp2-arrow { grid-row: 1; }
-.mc-head .mc-all { margin-left: auto; }
+.mc-head .mc-all { margin-inline-start: auto; }
 /* Клетка ленты: один сундук по порядку получения (правка владельца 18:12). */
 .mc-cell {
   position: relative; overflow: hidden; flex: none; width: 128px;
@@ -683,7 +683,7 @@
 }
 .pc-tag > svg.icon { width: 16px; height: 16px; }
 :root:root .pc-tag { --px-n: 4px; clip-path: var(--px-4); }
-.pc-x { margin-left: auto; }
+.pc-x { margin-inline-start: auto; }
 .pc-price { display: flex; align-items: baseline; gap: 10px; }
 .pc-price b { font-size: 34px; font-weight: 900; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .pc-price small { font-size: 14px; font-weight: 700; color: var(--m-fg-muted); }

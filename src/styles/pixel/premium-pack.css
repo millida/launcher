@@ -631,7 +631,7 @@ div.ppx-frame { cursor: default; }
 .ppx-sm-chip.on { color: #2a1a00; background: #f5c451; }
 .ppx-sm-chip.on i, .ppx-sm-chip.on svg.icon { color: #2a1a00; }
 .ppx-sm-chip:focus-visible { outline: 2px solid var(--ppx-gold); outline-offset: 2px; }
-.ppx-sm-search { flex: 0 1 220px; min-width: 150px; height: 34px; margin-left: auto; }
+.ppx-sm-search { flex: 0 1 220px; min-width: 150px; height: 34px; margin-inline-start: auto; }
 .ppx-sm-head { flex: none; }
 .ppx-sm-search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; }
 .ppx-sm-scroll { min-height: 0; margin-right: -8px; padding: 2px 8px 4px 0; overflow-y: auto; }
@@ -642,7 +642,7 @@ div.ppx-frame { cursor: default; }
   display: flex;
   flex-direction: column;
   min-width: 0;
-  text-align: left;
+  text-align: start;
   background: var(--m-surface);
   --px-n: 5px; clip-path: var(--px-5);
   transition: transform var(--m-t-base) var(--m-ease-out), background-color var(--m-t-fast);
@@ -696,7 +696,7 @@ div.ppx-frame { cursor: default; }
 }
 .ppx-sm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: auto; padding-top: 6px; }
 .ppx-sm-meta span { padding: 3px 6px; font: 700 11px/1.2 var(--m-font); color: var(--m-fg-muted); background: var(--m-inset); clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px); }
-.ppx-sm-meta em { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font: 700 11.5px/1.2 var(--m-font); font-style: normal; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ppx-sm-meta em { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto; font: 700 11.5px/1.2 var(--m-font); font-style: normal; color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ppx-sm-meta em svg.icon { width: 12px; height: 12px; color: var(--m-fg-faint); }
 .ppx-sm-card.prem .ppx-sm-body b { color: var(--m-fg); }
 /* Что это за сборка: своя у студии («Эксклюзив») или перевод на русский. */
@@ -863,7 +863,7 @@ div.ppx-frame { cursor: default; }
 .ppx-excl-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .ppx-excl-tile {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 120px; padding: 12px; overflow: hidden;
-  text-align: left; color: var(--m-fg); border: 0; cursor: pointer; background: rgba(0, 0, 0, 0.32);
+  text-align: start; color: var(--m-fg); border: 0; cursor: pointer; background: rgba(0, 0, 0, 0.32);
   --px-n: 5px; clip-path: var(--px-5); transition: transform 120ms var(--m-ease-smooth), background-color 120ms;
 }
 .ppx-excl-tile:hover { transform: translateY(-2px); background: rgba(0, 0, 0, 0.45); }
@@ -881,7 +881,7 @@ div.ppx-frame { cursor: default; }
 .ppx-more-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 899px) { .ppx-more-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ppx-more-card {
-  position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden; text-align: left; color: var(--m-fg); border: 0; cursor: pointer;
+  position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden; text-align: start; color: var(--m-fg); border: 0; cursor: pointer;
   background: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); transition: transform 120ms var(--m-ease-smooth);
 }
 .ppx-more-card::after { content: ''; position: absolute; inset: 0; pointer-events: none; clip-path: var(--px-ring-10); background: color-mix(in srgb, var(--ppx-gold) 45%, #1a1b1c); }

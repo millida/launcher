@@ -21,8 +21,18 @@ fn num_key(v: &str) -> Vec<u64> {
         .collect()
 }
 
+/// Legacy Fabric is Fabric's loader on 1.3–1.13.2 with its own intermediary,
+/// published through a meta server in the same format as Fabric's.
+pub(crate) fn fabric_like_meta(loader: &str) -> &'static str {
+    match loader {
+        "quilt" => "https://meta.quiltmc.org/v3",
+        "legacyfabric" => "https://meta.legacyfabric.net/v2",
+        _ => "https://meta.fabricmc.net/v2",
+    }
+}
+
 async fn fabric_like(loader: &str, vid: &str, cache_dir: &std::path::Path) -> Result<Vec<LoaderBuild>, String> {
-    let meta_base = if loader == "quilt" { "https://meta.quiltmc.org/v3" } else { "https://meta.fabricmc.net/v2" };
+    let meta_base = fabric_like_meta(loader);
     let list = get_json_fresh(
         &format!("{}/versions/loader/{}", meta_base, vid),
         &cache_dir.join(format!("{}-{}-list.json", loader, vid)),
@@ -166,7 +176,7 @@ pub async fn list_loader_versions(loader: &str, mc_version: &str) -> Result<Vec<
     }
     let cache_dir = game_root_ready()?.join("loader-cache");
     match loader {
-        "fabric" | "quilt" => fabric_like(loader, mc_version, &cache_dir).await,
+        "fabric" | "quilt" | "legacyfabric" => fabric_like(loader, mc_version, &cache_dir).await,
         "forge" => forge(mc_version, &cache_dir).await,
         "neoforge" => neoforge(mc_version, &cache_dir).await,
         _ => Err(format!("Неизвестный загрузчик: {}", loader)),

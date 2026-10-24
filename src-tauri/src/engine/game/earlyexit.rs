@@ -148,18 +148,70 @@ pub(crate) fn spawn_blocked(e: &std::io::Error) -> bool {
     e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5) | Some(32) | Some(225))
 }
 
-/// «Запуск Java: причина — путь», и для запрета — что с этим делать.
-pub(crate) fn spawn_failure(e: &std::io::Error, java: &Path) -> String {
+/// Resident engines by process name. Third-party products come first: Defender
+/// keeps MsMpEng running in passive mode next to them, so it is named only alone.
+const ANTIVIRUS_PROCESSES: [(&str, &str); 19] = [
+    ("avp.exe", "Kaspersky"),
+    ("avpui.exe", "Kaspersky"),
+    ("ekrn.exe", "ESET"),
+    ("avastsvc.exe", "Avast"),
+    ("avgsvc.exe", "AVG"),
+    ("bdservicehost.exe", "Bitdefender"),
+    ("vsserv.exe", "Bitdefender"),
+    ("mcshield.exe", "McAfee"),
+    ("mfemms.exe", "McAfee"),
+    ("nortonsecurity.exe", "Norton"),
+    ("360tray.exe", "360 Total Security"),
+    ("dwservice.exe", "Dr.Web"),
+    ("spideragent.exe", "Dr.Web"),
+    ("avguard.exe", "Avira"),
+    ("sophoshealth.exe", "Sophos"),
+    ("mbamservice.exe", "Malwarebytes"),
+    ("psanhost.exe", "Panda"),
+    ("coreserviceshell.exe", "Trend Micro"),
+    ("msmpeng.exe", "Microsoft Defender"),
+];
+
+pub(crate) fn antivirus_from_processes<'a>(names: impl Iterator<Item = &'a str> + Clone) -> Option<&'static str> {
+    ANTIVIRUS_PROCESSES.iter().find_map(|(exe, product)| {
+        names.clone().any(|n| n.eq_ignore_ascii_case(exe)).then_some(*product)
+    })
+}
+
+/// Which antivirus is running, to name it in the advice. Only asked on a failed start.
+pub(crate) fn running_antivirus() -> Option<&'static str> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+    let names: Vec<String> = sys.processes().values().map(|p| p.name().to_string_lossy().into_owned()).collect();
+    antivirus_from_processes(names.iter().map(String::as_str))
+}
+
+/// Error 225 is Windows saying the file was flagged as a virus, not a plain denial.
+pub(crate) fn spawn_flagged_as_virus(e: &std::io::Error) -> bool {
+    e.raw_os_error() == Some(225)
+}
+
+pub(crate) fn antivirus_hint(e: &std::io::Error, av: Option<&str>) -> String {
     let denied = e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5) | Some(225));
     let busy = e.raw_os_error() == Some(32);
-    let hint = if denied {
-        ". Java не дал запустить антивирус — добавь папку лаунчера в его исключения и запусти ещё раз"
-    } else if busy {
-        ". Файл Java занят другой программой (чаще всего антивирусом) — подожди минуту и запусти ещё раз"
-    } else {
-        ""
-    };
-    format!("Запуск Java: {} — {}{}", e, mask_home(&java.to_string_lossy()), hint)
+    let missing = spawn_missing(e);
+    match (av, spawn_flagged_as_virus(e), denied, busy, missing) {
+        (Some(name), true, _, _, _) => format!(". Антивирус {} принял Java за угрозу и заблокировал. Верни файл из карантина и добавь папку лаунчера в исключения {}", name, name),
+        (None, true, _, _, _) => ". Антивирус принял Java за угрозу и заблокировал. Верни файл из карантина и добавь папку лаунчера в исключения антивируса".into(),
+        (Some(name), _, true, _, _) => format!(". Java не дал запустить антивирус {} — добавь папку лаунчера в его исключения и запусти ещё раз", name),
+        (None, _, true, _, _) => ". Java не дал запустить антивирус — добавь папку лаунчера в его исключения и запусти ещё раз".into(),
+        (_, _, _, true, _) => ". Файл Java занят другой программой (чаще всего антивирусом) — подожди минуту и запусти ещё раз".into(),
+        (Some(name), _, _, _, true) => format!(". Файл Java пропал сразу после установки — его удаляет антивирус {}. Верни файл из карантина и добавь папку лаунчера в исключения", name),
+        _ => String::new(),
+    }
+}
+
+/// «Запуск Java: причина — путь», и для запрета — что с этим делать.
+pub(crate) fn spawn_failure(e: &std::io::Error, java: &Path) -> String {
+    let needs_av = spawn_blocked(e) || spawn_missing(e);
+    let av = if needs_av { running_antivirus() } else { None };
+    format!("Запуск Java: {} — {}{}", e, mask_home(&java.to_string_lossy()), antivirus_hint(e, av))
 }
 
 #[cfg(test)]
@@ -218,5 +270,22 @@ mod tests {
         assert!(spawn_blocked(&e));
         assert!(!spawn_missing(&e), "запрет — не повод качать Java заново");
         assert!(spawn_missing(&std::io::Error::from(std::io::ErrorKind::NotFound)));
+    }
+
+    #[test]
+    fn the_running_antivirus_is_named_in_the_advice() {
+        let cases: [(&[&str], Option<&str>, &str); 4] = [
+            (&["explorer.exe", "MsMpEng.exe"], Some("Microsoft Defender"), "Defender alone is the one to blame"),
+            (&["MsMpEng.exe", "avp.exe"], Some("Kaspersky"), "a third-party engine wins over passive Defender"),
+            (&["EKRN.EXE"], Some("ESET"), "process names compare without case"),
+            (&["chrome.exe"], None, "no known engine, no guess"),
+        ];
+        for (procs, want, why) in cases {
+            assert_eq!(antivirus_from_processes(procs.iter().copied()), want, "{why}");
+        }
+        let flagged = std::io::Error::from_raw_os_error(225);
+        assert!(antivirus_hint(&flagged, Some("ESET")).contains("ESET принял Java за угрозу"), "error 225 must say the file was flagged, not just denied");
+        let gone = std::io::Error::from(std::io::ErrorKind::NotFound);
+        assert!(antivirus_hint(&gone, None).is_empty(), "a missing file with no antivirus running must not accuse one");
     }
 }

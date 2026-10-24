@@ -26,6 +26,8 @@ pub struct Screenshot {
     pub taken_at: u64,
     pub width: u32,
     pub height: u32,
+    pub caption: String,
+    pub album: String,
 }
 
 fn screenshots_dir(profile: &str) -> PathBuf {
@@ -71,17 +73,24 @@ fn describe(profile: &str, path: PathBuf) -> Option<Screenshot> {
         width,
         height,
         path: path.to_string_lossy().to_string(),
+        caption: String::new(),
+        album: String::new(),
     })
 }
 
 fn of_profile(profile: &str) -> Vec<Screenshot> {
     let mut out = vec![];
     let Ok(rd) = std::fs::read_dir(screenshots_dir(profile)) else { return out };
+    let notes = super::shot_notes::read_notes(&screenshots_dir(profile));
     for e in rd.flatten() {
         if !is_png(&e.file_name().to_string_lossy()) {
             continue;
         }
-        if let Some(shot) = describe(profile, e.path()) {
+        if let Some(mut shot) = describe(profile, e.path()) {
+            if let Some(note) = notes.get(&shot.name) {
+                shot.caption = note.caption.clone();
+                shot.album = note.album.clone();
+            }
             out.push(shot);
         }
     }

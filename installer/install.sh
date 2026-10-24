@@ -15,7 +15,8 @@ case "$os" in
 Linux)
 	case "$arch" in
 	x86_64 | amd64) name="millida-launcher-setup-linux-x86_64" ;;
-	*) fail "Millida Launcher is built only for x86_64, but this machine is $arch. Contact us: millida.net/support" ;;
+	aarch64 | arm64) name="millida-launcher-setup-linux-aarch64" ;;
+	*) fail "Millida Launcher is built for x86_64 and ARM64, but this machine is $arch. Contact us: millida.net/support" ;;
 	esac
 	;;
 Darwin)

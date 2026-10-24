@@ -8,6 +8,7 @@ import { HostPlanPicker } from '../HostPlanPicker'
 import type { HostServer } from '../../screens/Hosting'
 import type { LobbyMode } from '../../state/lobbyMode'
 import { HubSearch, MyServers } from './HubSearch'
+import { FriendServers } from './FriendServers'
 import { blockArt } from './data'
 import { trackFailure } from '../../lib/telemetry'
 import { t, useT } from '../../i18n'
@@ -176,6 +177,7 @@ export function ServersPane({ on, onPlay, part }: { on: boolean; onPlay: (m: Lob
           </div>
         </section>
       )}
+      <FriendServers on={on} onPlay={onPlay} />
       {picker ? (
         <HostPlanPicker
           mode="create"

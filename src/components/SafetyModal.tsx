@@ -4,7 +4,7 @@ import { fmtSize } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
-import { quarantineMods, scanModSafety, type ModVerdict, type SafetyReport } from '../ipc/commands'
+import { quarantineMods, quarantinePacks, scanModSafety, scanPackSafety, type ModVerdict, type SafetyReport } from '../ipc/commands'
 import { t, tx, useT } from '../i18n'
 
 const VERDICTS: Record<ModVerdict['verdict'], { label: string; tone: string; help: string }> = {
@@ -50,9 +50,23 @@ interface Props {
   profile: string
   onClose: () => void
   onChanged: () => void
+  /** packs: resource packs, shader packs, data packs and worlds instead of mods. */
+  scope?: 'mods' | 'packs'
 }
 
-export function SafetyModal({ profile, onClose, onChanged }: Props) {
+const CLEAN = {
+  get label() {
+    return t('Чисто')
+  },
+  tone: 'ok',
+  get help() {
+    return t('Внутри нет исполняемых файлов')
+  },
+}
+
+export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Props) {
+  const packs = scope === 'packs'
+  const scanFn = packs ? scanPackSafety : scanModSafety
   const t = useT()
   const [report, setReport] = useState<SafetyReport | null>(null)
   const [busy, setBusy] = useState(true)
@@ -62,7 +76,7 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
     if (!hasTauri()) return
     setBusy(true)
     setError('')
-    scanModSafety(profile)
+    scanFn(profile)
       .then(setReport)
       .catch((e) => {
         console.error('scanModSafety', e)
@@ -85,14 +99,14 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
 
   const disableRisky = () => {
     setBusy(true)
-    quarantineMods(
+    ;(packs ? quarantinePacks : quarantineMods)(
       profile,
       risky.map((i) => i.file),
     )
       .then((n) => {
         showToast(t('{n} файлов отключено', { n }), 'ok')
         onChanged()
-        return scanModSafety(profile).then(setReport)
+        return scanFn(profile).then(setReport)
       })
       .catch((e) => showToast('' + e, 'error'))
       .finally(() => setBusy(false))
@@ -106,7 +120,7 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
             <Icon id="i-shield" />
           </span>
           <div>
-            <h3>{t('Проверка модов')}</h3>
+            <h3>{packs ? t('Проверка паков и карт') : t('Проверка модов')}</h3>
             <div className="sub" style={{ marginTop: '2px' }}>
               {profile}
             </div>
@@ -130,19 +144,19 @@ export function SafetyModal({ profile, onClose, onChanged }: Props) {
         ) : report ? (
           <>
             <div className="safety-sum">
-              <span className="safety-pill ok">{t('{n} из каталога', { n: report.ok })}</span>
-              <span className="safety-pill">{t('{n} неизвестных', { n: report.unknown })}</span>
+              <span className="safety-pill ok">{packs ? t('{n} чистых', { n: report.ok }) : t('{n} из каталога', { n: report.ok })}</span>
+              {packs ? null : <span className="safety-pill">{t('{n} неизвестных', { n: report.unknown })}</span>}
               {report.suspicious ? (
                 <span className="safety-pill warn">{t('{n} подозрительных', { n: report.suspicious })}</span>
               ) : null}
               {report.blocked ? <span className="safety-pill danger">{t('{n} опасных', { n: report.blocked })}</span> : null}
             </div>
             {report.note ? <p className="faint-note">{report.note}</p> : null}
-            {report.checked === 0 ? <p className="faint-note">{t('Модов нет')}</p> : null}
+            {report.checked === 0 ? <p className="faint-note">{packs ? t('Паков и карт нет') : t('Модов нет')}</p> : null}
 
             <div className="safety-list">
               {report.items.map((item) => {
-                const v = VERDICTS[item.verdict]
+                const v = (item.verdict as string) === 'clean' ? CLEAN : VERDICTS[item.verdict]
                 return (
                   <div className={'safety-row ' + (v.tone || 'plain')} key={item.file}>
                     <span className="safety-mark">{v.label}</span>

@@ -5,13 +5,44 @@ import { hasTauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
-import { shareProfile, unshareProfile, type SharedPack } from '../ipc/commands'
+import { setPackVisibility, shareProfile, unshareProfile, type PackVisibility, type SharedPack } from '../ipc/commands'
+import '../styles/pixel/build-extras.css'
 import { apiErrorText } from '../lib/apiError'
 import { useT } from '../i18n'
 
 interface Props {
   profile: string
   onClose: () => void
+}
+
+const sharedKey = (profile: string) => 'm-shared-' + profile
+
+function wasShared(profile: string): boolean {
+  try {
+    return localStorage.getItem(sharedKey(profile)) === '1'
+  } catch {
+    return false
+  }
+}
+
+const visKey = (profile: string) => 'm-shared-vis-' + profile
+
+function readVis(profile: string): PackVisibility {
+  try {
+    const v = localStorage.getItem(visKey(profile))
+    return v === 'friends' || v === 'private' ? v : 'link'
+  } catch {
+    return 'link'
+  }
+}
+
+function markShared(profile: string, on: boolean) {
+  try {
+    if (on) localStorage.setItem(sharedKey(profile), '1')
+    else localStorage.removeItem(sharedKey(profile))
+  } catch (e) {
+    console.warn('[share] remember', e)
+  }
 }
 
 /// Publishing a build: the code and the link are the whole point, so they are
@@ -22,6 +53,25 @@ export function SharePackModal({ profile, onClose }: Props) {
   const [pack, setPack] = useState<SharedPack | null>(null)
   const [busy, setBusy] = useState(false)
   const [revoked, setRevoked] = useState(false)
+  const [shared, setShared] = useState(() => wasShared(profile))
+  const [vis, setVis] = useState<PackVisibility>(() => readVis(profile))
+  const [visBusy, setVisBusy] = useState(false)
+
+  const pickVis = (code: string, next: PackVisibility) => {
+    if (next === vis || visBusy) return
+    setVisBusy(true)
+    setPackVisibility(code, next)
+      .then((v) => {
+        setVis(v)
+        try {
+          localStorage.setItem(visKey(profile), v)
+        } catch {
+          /* the choice lives on the server; this only preselects it next time */
+        }
+      })
+      .catch((e) => showToast(apiErrorText(e, t('Не удалось сменить доступ')), 'error'))
+      .finally(() => setVisBusy(false))
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -35,10 +85,16 @@ export function SharePackModal({ profile, onClose }: Props) {
   const publish = () => {
     if (!hasTauri()) return
     setBusy(true)
+    const update = shared || !!pack
     shareProfile(profile, summary.trim() || undefined)
       .then((fresh) => {
         setRevoked(false)
         setPack(fresh)
+        setShared(true)
+        // A new code starts open to anyone; the author's earlier choice is put back on it.
+        if (vis !== 'link') void setPackVisibility(fresh.code, vis).catch(() => setVis('link'))
+        markShared(profile, true)
+        if (update) showToast(t('Друзья получат новую версию при следующем запуске'), 'ok')
       })
       .catch((e) => {
         console.error('shareProfile', e)
@@ -82,6 +138,19 @@ export function SharePackModal({ profile, onClose }: Props) {
                 <Icon id="i-copy" /> {t('Ссылка')}
               </button>
             </div>
+            <div className="bx-tags" role="radiogroup" aria-label={t('Кто может открыть')}>
+              {(
+                [
+                  ['link', t('Все с кодом')],
+                  ['friends', t('Только друзья')],
+                  ['private', t('Только я')],
+                ] as [PackVisibility, string][]
+              ).map(([id, label]) => (
+                <button key={id} type="button" role="radio" aria-checked={vis === id} className={'bx-tag' + (vis === id ? ' on' : '')} disabled={visBusy} onClick={() => pickVis(pack.code, id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {pack.skipped.length ? (
               <p className="faint-note" style={{ marginTop: '10px' }}>
                 {t('Не поедут ({n}): {list}', { n: pack.skipped.length, list: pack.skipped.slice(0, 4).join(', ') + (pack.skipped.length > 4 ? '…' : '') })}
@@ -99,6 +168,8 @@ export function SharePackModal({ profile, onClose }: Props) {
                   .then(() => {
                     setRevoked(true)
                     setPack(null)
+                    setShared(false)
+                    markShared(profile, false)
                     showToast(t('Код отозван — по нему сборка больше не ставится'), 'ok')
                   })
                   .catch((e) => showToast('' + e, 'error'))
@@ -135,9 +206,14 @@ export function SharePackModal({ profile, onClose }: Props) {
             </button>
           ) : (
             <button className="btn md primary" style={{ flex: 1 }} disabled={busy} onClick={publish}>
-              {busy ? t('Готовим…') : t('Получить код')}
+              {busy ? t('Готовим…') : shared ? t('Обновить у друзей') : t('Получить код')}
             </button>
           )}
+          {pack ? (
+            <button className="btn md secondary" data-track="share_update_friends" disabled={busy} onClick={publish}>
+              <Icon id="i-restart" /> {busy ? t('Готовим…') : t('Обновить у друзей')}
+            </button>
+          ) : null}
           <button className="btn md secondary" onClick={onClose}>
             {t('Закрыть')}
           </button>

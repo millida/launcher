@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { noteInstallKind } from '../../lib/recsSignals'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
-import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
+import { MODRINTH_API, api, mirrorAsset, openExt } from '../../lib/api'
+import { sitePath } from '../../lib/remoteUiRules'
 import { diskGet, diskSet } from '../../lib/diskCache'
 import { fmtN } from '../../lib/format'
 import { renderMarkdown } from '../../lib/markdown'
@@ -26,6 +27,7 @@ import { ONEBLOCK_PACK } from '../../lib/ownServer'
 import { Hours } from './Hours'
 import { PackHealthLine } from './PackHealthLine'
 import { HostInstall } from './HostInstall'
+import { PackContents } from '../catalog/PackContents'
 import type { HostTarget } from './HostInstall'
 import { hostingPackFor, loadHostingPacks } from './data'
 import type { HubPack } from './data'
@@ -556,6 +558,11 @@ export function PackPage({
                     <Icon id="i-server-cog" /> {t('На хостинг')}
                   </button>
                 ) : null}
+                {hostTarget && (hostTarget.kind === 'partner' || hostTarget.kind === 'modrinth') ? (
+                  <button className="btn sm secondary" data-track="host_with_pack" data-src="pack_page" onClick={() => openHostWithPack(hostTarget)}>
+                    <Icon id="i-plus" /> {t('Сервер с этой сборкой')}
+                  </button>
+                ) : null}
                 {server ? (
                   <button className="btn sm secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
                     <Icon id="i-server" /> {t('Сервер сборки')}
@@ -576,7 +583,7 @@ export function PackPage({
 
       <div className="ci-grid">
         <main className="ci-main">
-          <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={updates.length} />
+          <Tabs tab={tab} onTab={setTab} gallery={shots.length} versions={updates.length} contents={!!slug} />
           {tab === 'desc' && (shots.length || video) ? <MediaStrip urls={shots} video={video} onAll={() => setTab('gallery')} /> : null}
           {tab === 'desc' ? (
             <>
@@ -596,6 +603,8 @@ export function PackPage({
               ) : null}
               <Desc blocks={view?.description} markdown={project?.body} shots={shots} />
             </>
+          ) : tab === 'contents' && slug ? (
+            mr ? <PackContents project={slug} /> : <PackContents catalog={slug} />
           ) : tab === 'gallery' ? (
             <Gallery urls={shots} />
           ) : (
@@ -773,6 +782,19 @@ function WhatsNew({ u, more, onAll }: { u: Update; more: boolean; onAll: () => v
  * Улучшение №10: внизу не тупик — ещё сборки той же студии (или автора) карточками, как в
  * каталоге; своих мало — популярные наши. Клик — их страница здесь же.
  */
+/// The website's order wizard with the pack chosen: a partner pack by its key
+/// (the author's share rides on it), a Modrinth pack by its project.
+function openHostWithPack(target: HostTarget) {
+  const query =
+    target.kind === 'partner'
+      ? 'pack=' + encodeURIComponent(target.pack.key)
+      : target.kind === 'modrinth'
+        ? 'install=' + encodeURIComponent('modrinth:' + target.projectId)
+        : ''
+  const url = query ? sitePath('/hosting/new?' + query + '&utm_source=launcher&utm_medium=pack_page') : null
+  if (url) openExt(url)
+}
+
 function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: string; name: string } | null; author: string | null }) {
   const t = useT()
   const [list, setList] = useState<MillidaPack[] | null>(null)

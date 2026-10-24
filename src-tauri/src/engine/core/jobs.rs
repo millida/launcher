@@ -12,6 +12,41 @@ pub const CANCELLED: &str = "Установка отменена";
 
 const GATE_POLL: std::time::Duration = std::time::Duration::from_millis(200);
 
+/// Bytes every download wrote to disk, for the speed shown next to the installs. One counter for
+/// all transfers: parallel downloads share the same line, and the player wants the line's speed.
+static DOWNLOADED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+const RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(3);
+
+pub(crate) fn count_downloaded(bytes: usize) {
+    DOWNLOADED.fetch_add(bytes as u64, Ordering::Relaxed);
+}
+
+type RateSamples = std::collections::VecDeque<(std::time::Instant, u64)>;
+
+fn rate_samples() -> &'static Mutex<RateSamples> {
+    static SAMPLES: OnceLock<Mutex<RateSamples>> = OnceLock::new();
+    SAMPLES.get_or_init(|| Mutex::new(RateSamples::new()))
+}
+
+/// Bytes per second over the last few seconds.
+pub(crate) fn rate_over(samples: &mut RateSamples, now: std::time::Instant, total: u64) -> u64 {
+    samples.push_back((now, total));
+    while samples.len() > 2 && samples.front().is_some_and(|(t, _)| now.duration_since(*t) > RATE_WINDOW) {
+        samples.pop_front();
+    }
+    let Some(&(t0, b0)) = samples.front() else { return 0 };
+    let secs = now.duration_since(t0).as_secs_f64();
+    if secs < 0.25 {
+        return 0;
+    }
+    (total.saturating_sub(b0) as f64 / secs) as u64
+}
+
+pub fn download_rate() -> u64 {
+    let mut samples = rate_samples().lock().unwrap_or_else(|e| e.into_inner());
+    rate_over(&mut samples, std::time::Instant::now(), DOWNLOADED.load(Ordering::Relaxed))
+}
+
 /// Stop signals of one transfer. A pause keeps every byte already on disk: the
 /// download drops its connection and asks for the rest from the same byte once
 /// resumed, so an hour-long game download survives a pause of any length.
@@ -81,6 +116,7 @@ struct JobProgress {
     done: bool,
     error: String,
     pausable: bool,
+    bps: u64,
 }
 
 fn registry() -> &'static Mutex<HashMap<String, Entry>> {
@@ -172,6 +208,7 @@ impl Job {
                 done: false,
                 error: String::new(),
                 pausable,
+                bps: download_rate(),
             },
         );
     }
@@ -188,6 +225,7 @@ impl Job {
                 done: true,
                 error: res.as_ref().err().cloned().unwrap_or_default(),
                 pausable: false,
+                bps: download_rate(),
             },
         );
         res
@@ -335,5 +373,22 @@ mod tests {
         })();
         assert!(r.is_err());
         assert!(!active_jobs().iter().any(|j| j.key == "test:fail"));
+    }
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::{rate_over, RateSamples};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn speed_is_bytes_over_the_recent_window() {
+        let mut samples = RateSamples::new();
+        let t0 = Instant::now();
+        assert_eq!(rate_over(&mut samples, t0, 0), 0, "a single sample has no speed yet");
+        assert_eq!(rate_over(&mut samples, t0 + Duration::from_secs(1), 1_000_000), 1_000_000, "1 MB in a second");
+        assert_eq!(rate_over(&mut samples, t0 + Duration::from_secs(2), 1_000_000), 500_000, "a stall lowers the average");
+        let late = rate_over(&mut samples, t0 + Duration::from_secs(10), 1_000_000);
+        assert_eq!(late, 0, "old samples fall out of the window, so a finished download reads as zero");
     }
 }

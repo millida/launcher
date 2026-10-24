@@ -46,7 +46,102 @@ pub(crate) fn redact_log(content: &str, home: Option<&str>) -> String {
             out = out.replace(&v, "~");
         }
     }
-    hide_flag_value(&out, "--accessToken")
+    let out = hide_flag_value(&out, "--accessToken");
+    let out = mask_user_dirs(&out);
+    mask_ip_addresses(&out)
+}
+
+const USER_DIR_MARKERS: [&str; 4] = ["\\Users\\", "/Users/", "/home/", "\\Documents and Settings\\"];
+
+/// A log can mention another account's folder or a path the home check missed
+/// (a second drive, a junction); the segment after the marker is the OS username.
+fn mask_user_dirs(text: &str) -> String {
+    let mut out = text.to_string();
+    for marker in USER_DIR_MARKERS {
+        let mut rebuilt = String::with_capacity(out.len());
+        let mut rest = out.as_str();
+        while let Some(i) = rest.find(marker) {
+            let after = i + marker.len();
+            rebuilt.push_str(&rest[..after]);
+            let tail = &rest[after..];
+            let end = tail.find(['/', '\\', '\'', '"', ',', ')', ']', '\n', '\r', ' ', '\t', ':', ';']).unwrap_or(tail.len());
+            let name = &tail[..end];
+            let keep = name.is_empty() || name.eq_ignore_ascii_case("Public") || name.eq_ignore_ascii_case("Shared") || name == "<user>";
+            rebuilt.push_str(if keep { name } else { "<user>" });
+            rest = &tail[end..];
+        }
+        rebuilt.push_str(rest);
+        out = rebuilt;
+    }
+    out
+}
+
+fn ip_neighbour_blocks(c: Option<char>) -> bool {
+    c.is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'))
+}
+
+fn ipv4_at(chars: &[char], start: usize) -> Option<usize> {
+    let mut i = start;
+    for octet in 0..4 {
+        let from = i;
+        while i < chars.len() && chars[i].is_ascii_digit() && i - from < 3 { i += 1; }
+        if i == from { return None; }
+        if i < chars.len() && chars[i].is_ascii_digit() { return None; }
+        let value: u32 = chars[from..i].iter().collect::<String>().parse().ok()?;
+        if value > 255 { return None; }
+        if octet < 3 {
+            if chars.get(i) != Some(&'.') { return None; }
+            i += 1;
+        }
+    }
+    Some(i)
+}
+
+fn ipv6_at(chars: &[char], start: usize) -> Option<usize> {
+    let mut i = start;
+    while i < chars.len() && (chars[i].is_ascii_hexdigit() || chars[i] == ':') { i += 1; }
+    let token: String = chars[start..i].iter().collect();
+    let colons = token.matches(':').count();
+    let groups = token.split(':').filter(|g| !g.is_empty()).count();
+    let has_digit = token.chars().any(|c| c.is_ascii_digit());
+    let looks_v6 = has_digit && ((token.contains("::") && groups >= 2) || colons == 7);
+    let loopback = token == "::1" || token == "::";
+    (looks_v6 && !loopback && !token.contains(":::")).then_some(i)
+}
+
+/// Server and player addresses appear in connection lines; they identify the
+/// player and the server owner, so a public log keeps only loopback.
+pub(crate) fn mask_ip_addresses(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let before = if i == 0 { None } else { Some(chars[i - 1]) };
+        let starts_token = !ip_neighbour_blocks(before) && before != Some(':');
+        if starts_token && chars[i].is_ascii_digit() {
+            if let Some(end) = ipv4_at(&chars, i) {
+                if !ip_neighbour_blocks(chars.get(end).copied()) {
+                    let ip: String = chars[i..end].iter().collect();
+                    let local = ip.starts_with("127.") || ip == "0.0.0.0";
+                    out.push_str(if local { &ip } else { "<ip>" });
+                    i = end;
+                    continue;
+                }
+            }
+        }
+        if starts_token && (chars[i].is_ascii_hexdigit() || chars[i] == ':') {
+            if let Some(end) = ipv6_at(&chars, i) {
+                if !chars.get(end).is_some_and(|c| c.is_ascii_alphanumeric() || *c == '.') {
+                    out.push_str("<ip>");
+                    i = end;
+                    continue;
+                }
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
 }
 
 fn hide_flag_value(text: &str, flag: &str) -> String {
@@ -84,5 +179,23 @@ mod redact_tests {
         assert!(out.contains("--uuid, 1"), "{out}");
         let unix = redact_log("/Users/daniil/Library/x /Users/daniil", Some("/Users/daniil/"));
         assert_eq!(unix, "~/Library/x ~");
+    }
+
+    #[test]
+    fn addresses_and_foreign_user_folders_are_masked() {
+        let cases: [(&str, &str, &str); 9] = [
+            ("Connecting to 203.0.113.10, 25565", "Connecting to <ip>, 25565", "server address in the connect line"),
+            ("/93.184.216.34:51234 lost connection", "/<ip>:51234 lost connection", "player address with port"),
+            ("bound to 127.0.0.1:25565", "bound to 127.0.0.1:25565", "loopback helps debugging and identifies nobody"),
+            ("Loading sodium-0.5.8.1.jar", "Loading sodium-0.5.8.1.jar", "a four-part mod version is not an address"),
+            ("[12:34:56] [Render thread/INFO]", "[12:34:56] [Render thread/INFO]", "log timestamps must survive"),
+            ("peer [2001:db8:85a3::8a2e:370:7334]", "peer [<ip>]", "IPv6 peer"),
+            ("D:\\Users\\Petya\\mods\\x.jar", "D:\\Users\\<user>\\mods\\x.jar", "username on a second drive"),
+            ("/home/petya/.minecraft", "/home/<user>/.minecraft", "linux home of another account"),
+            ("C:\\Users\\Public\\Desktop", "C:\\Users\\Public\\Desktop", "the shared Public folder is not a person"),
+        ];
+        for (input, want, why) in cases {
+            assert_eq!(redact_log(input, None), want, "{why}");
+        }
     }
 }

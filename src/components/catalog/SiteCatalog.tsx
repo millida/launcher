@@ -4,6 +4,7 @@ import { Icon } from '../Icon'
 import { CatalogFor } from './CatalogTop'
 import { CatalogNotice } from './CatalogShell'
 import { FilterGroup, SiteFilters } from './SiteFilters'
+import { keepCard, useCatalogHide } from './catalogHide'
 import { librariesLast } from './similar'
 import { smartQuery, type SmartResult } from './smartQuery'
 import { HitRow, MapRow, RowSkeleton, SiteGalleryCard, SiteRow } from './SiteRow'
@@ -685,6 +686,13 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
     () => (sec.kind === 'mod' && (s.sort ?? 'recommended') === 'recommended' && !searching ? librariesLast(s.items) : s.items),
     [s.items, s.sort, sec.kind, searching],
   )
+  const hideInstalled = useCatalogHide((h) => h.installed)
+  const excluded = useCatalogHide((h) => h.excluded)
+  const installedIds = useMods((m) => m.installedIds)
+  const keep = (c: SiteCard) => keepCard(c, hideInstalled && store === useSite && SITE_SECTIONS.includes(sec) ? installedIds : null, excluded)
+  const shownItems = items.filter(keep)
+  const shownTail = tail.filter(keep)
+  const shownCf = cfRows.filter(keep)
   const filters = (
     <SiteFilters
       sec={sec}
@@ -816,7 +824,7 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
         <div className={feedClass}>
           <RowSkeleton gallery={gallery} actions={sec.kind !== 'plugin' && sec.kind !== 'serverpack'} />
         </div>
-      ) : !s.items.length && !tail.length && !cfRows.length ? (
+      ) : !shownItems.length && !shownTail.length && !shownCf.length ? (
         <CatalogNotice
           note={
             q || activeFilters(s)
@@ -829,37 +837,37 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
           {packsFeed && s.access === 'ru' ? (
             <RuShelf cards={s.items} total={s.ruTotal} only sec={sec} onOpenPack={onOpenPack} onToggle={() => s.patch({ access: 'all' })} />
           ) : null}
-          {items.length ? (
+          {shownItems.length ? (
             <div className={feedClass + (shelf ? ' has-shelf' : '') + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
-              {items.map((c, i) => (
+              {shownItems.map((c, i) => (
                 <Fragment key={c.slug}>
                   {shelf && i === SHELF_AT ? shelf : null}
                   {/* В «Все» строка ставится и открывается в своём настоящем разделе. */}
                   <Card card={c} sec={sec.slug === 'all' && c.section ? sectionBySlug(c.section) : sec} list={sec.slug} pos={i} onOpenPack={onOpenPack} />
                 </Fragment>
               ))}
-              {shelf && items.length <= SHELF_AT ? shelf : null}
+              {shelf && shownItems.length <= SHELF_AT ? shelf : null}
             </div>
           ) : null}
-          {tail.length ? (
+          {shownTail.length ? (
             <>
               <div className="mr-src-divider" role="separator">
                 <span>{t('Ещё с Modrinth')}</span>
               </div>
               <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
-                {tail.map((c, i) => (
+                {shownTail.map((c, i) => (
                   <Card key={'mr:' + c.slug} card={c} sec={sec} pos={s.items.length + i} onOpenPack={onOpenPack} />
                 ))}
               </div>
             </>
           ) : null}
-          {cfRows.length ? (
+          {shownCf.length ? (
             <>
               <div className="mr-src-divider" role="separator">
                 <span>{t('Ещё с CurseForge')}</span>
               </div>
               <div className={feedClass + (s.busy && s.page === 1 ? ' is-refreshing' : '')}>
-                {cfRows.map((c, i) => (
+                {shownCf.map((c, i) => (
                   <Card key={'cf:' + c.slug} card={c} sec={sec} pos={s.items.length + tail.length + i} onOpenPack={onOpenPack} />
                 ))}
               </div>

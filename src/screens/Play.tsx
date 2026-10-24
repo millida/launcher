@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { useMarketOffers, useT } from '../i18n'
+import { tx, useMarketOffers, useT } from '../i18n'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { Installs } from '../components/Installs'
+import { RunningGames } from '../components/lobby/RunningGames'
 import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { PartyBar } from '../components/lobby/PartyBar'
@@ -14,6 +15,7 @@ import { Recommend } from '../components/lobby/Recommend'
 import { AnarchyArt } from '../components/playhub/AnarchyTile'
 import { targetsAnarchy } from '../lib/ownServer'
 import { PixelField } from '../components/lobby/PixelField'
+import { LobbyAmbience } from '../components/lobby/LobbyAmbience'
 import { HubTile } from '../components/lobby/HubTile'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
 import { LOADER_NAME, fmtN, fmtPlaytime } from '../lib/format'
@@ -34,6 +36,7 @@ import { playHoursLabel, playTier } from '../lib/playTiers'
 import { isDayZero } from '../lib/retention'
 import { LobbyChips } from '../components/lobby/LobbyChips'
 import { PlayChest } from '../components/lobby/PlayChest'
+import { RecentPlayButton } from '../components/lobby/RecentPlayButton'
 import { DailyPassModal } from '../components/daily/DailyPassModal'
 import { useDailyModalHost } from '../components/daily/DailyChest'
 import { useDaily } from '../state/daily'
@@ -245,6 +248,7 @@ export function Play({ on }: { on: boolean }) {
         onMouseLeave={hero.onMouseLeave}
       >
         <PixelField on={on} />
+        <LobbyAmbience on={on} />
 
       </div>
       <LobbyCharacter on={on} />
@@ -274,6 +278,7 @@ export function Play({ on }: { on: boolean }) {
         {/* Downloads sit above the play card: in the window corner they covered
             the card on narrow screens. */}
         <Installs inLobby />
+        <RunningGames />
         {/* Над рядом — подпись и мелкие действия сборки; сам ряд — плашка
             режима и «Играть» одной высоты, как в Brawl Stars. */}
         <div className="lobby-side-top">
@@ -373,7 +378,7 @@ export function Play({ on }: { on: boolean }) {
                 <span id="playLbl">
                   {btn.kind === 'installing' ? (
                     <>
-                      <span className="play-stage">{btn.stage}</span>
+                      <span className="play-stage">{tx(btn.stage)}</span>
                       <span className="play-pct">
                         <span className="spin" aria-hidden="true"></span>
                         {btn.pct + '%'}
@@ -433,6 +438,7 @@ export function Play({ on }: { on: boolean }) {
             <PlayChest on={on} dayZero={dayZero} />
           )}
           </div>
+          {btn.kind === 'play' && !inParty ? <RecentPlayButton /> : null}
           {btn.kind === 'installing' ? (
             <button className="play-cancel" aria-label={t('Отменить запуск')} data-track="cancel_launch" onClick={cancelPrelaunch}>
               <Icon id="i-x" />

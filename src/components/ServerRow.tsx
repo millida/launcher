@@ -8,6 +8,7 @@ import { openServerDetail } from '../state/serverDetail'
 import { licenseRequired } from '../state/servers'
 import { Icon } from './Icon'
 import { joinAddr } from '../lib/ownServer'
+import { useWakeOnJoin } from '../lib/wakeInfo'
 import { blockFor, serverTint } from './catalog/itemView'
 import { blockArt } from './playhub/data'
 
@@ -90,6 +91,7 @@ function Logo({ sv }: { sv: SnapshotServer }) {
 export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: boolean; pos?: number }) {
   const t = useT()
   const on = sv.isOnline
+  const wakes = useWakeOnJoin(sv.ip ? joinAddr(sv) : null, !on)
   const [label, setLabel] = useState('Играть')
   const busy = useRef(false)
   const range = versionRange(sv.versions)
@@ -164,8 +166,8 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
           )}
         </span>
         {sv.ip ? (
-          <button className="btn sm primary srv-join" disabled={!on || busy.current} data-track="join" onClick={join}>
-            {t(label)}
+          <button className="btn sm primary srv-join" disabled={(!on && !wakes) || busy.current} data-track={wakes ? 'join_wake' : 'join'} onClick={join}>
+            {wakes && label === 'Играть' ? t('Включить и зайти') : t(label)}
           </button>
         ) : (
           <span className="pill">{t('Вход по заявке')}</span>

@@ -155,7 +155,7 @@
 
 /* ---------- Выбор вещей (окно старого набора PLUS) ---------- */
 .sh-pick {
-  position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px; text-align: left;
+  position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px; text-align: start;
   border: 0; font: inherit; color: var(--m-fg); cursor: pointer;
   background: color-mix(in srgb, var(--sh-tone) 7%, var(--m-surface-2));
   box-shadow: inset 0 4px 0 var(--sh-tone), var(--px-plate); --px-ol: transparent; --px-ft: var(--sh-tone); --px-ft-w: 4px; --px-fb: var(--px-plate-b); --px-fb-w: 3px; --px-fl: transparent; --px-fr: transparent;
@@ -408,7 +408,7 @@
 :root:root .sh-deal { --px-n: 10px; clip-path: var(--px-10); }
 .sh-deal-top { display: flex; align-items: center; gap: 8px; flex: none; }
 .sh-deal .sh-kicker { color: var(--m-rarity-legendary); }
-.sh-deal-left { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 12px; font-weight: 800; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-deal-left { display: inline-flex; align-items: center; gap: 5px; margin-inline-start: auto; font-size: 12px; font-weight: 800; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sh-deal-left > svg.icon { width: 13px; height: 13px; }
 .sh-deal > .sh-art.md { flex: 1 1 auto; height: auto; min-height: 80px; }
 .sh-deal > .sh-art.md img { width: auto; height: auto; max-width: 90%; max-height: 90%; }
@@ -595,7 +595,7 @@
 .sh-wp-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sh-wp-foot .sh-tag.on { color: var(--m-rarity-legendary); }
 .sh-wp-foot .sh-tag > svg.icon { color: var(--m-rarity-legendary); }
-.sh-wp-boost { margin-left: auto; gap: 6px; }
+.sh-wp-boost { margin-inline-start: auto; gap: 6px; }
 .sh-wp-boost > svg.icon { width: 14px; height: 14px; fill: currentColor; color: var(--m-rarity-legendary); }
 .sh-wp-boost .sh-pr { margin-left: 6px; }
 
@@ -715,7 +715,7 @@
 .sh-work-num > span { font-size: 14px; font-weight: 800; color: var(--m-fg-faint); }
 .sh-work-bal .sh-meter-bar { flex: none; width: 100%; height: 10px; }
 .sh-work-goal { font-size: 12px; font-weight: 750; color: var(--m-fg-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sh-work-src { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.sh-work-src { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-inline-start: auto; }
 .sh-src {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px;
   border: 0; font: inherit; font-size: 12px; font-weight: 850; color: var(--m-fg-muted); cursor: pointer;

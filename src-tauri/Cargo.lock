@@ -2740,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "millida-launcher"
-version = "2.0.263"
+version = "2.0.264"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2780,6 +2780,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tokio",
+ "toml 0.9.12+spec-1.1.0",
  "url",
  "webview2-com",
  "windows 0.61.3",

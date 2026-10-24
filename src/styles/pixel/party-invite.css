@@ -15,7 +15,7 @@
 .pim-head { display: flex; align-items: center; gap: 8px; }
 .pim-head b { font: 900 19px/1 var(--m-font); }
 .pim-size { font: 800 14px/1 var(--m-font); color: var(--m-fg-muted); }
-.pim-x { margin-left: auto; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--m-fg-muted); background-color: var(--m-surface-2); clip-path: var(--px-5); cursor: pointer; }
+.pim-x { margin-inline-start: auto; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--m-fg-muted); background-color: var(--m-surface-2); clip-path: var(--px-5); cursor: pointer; }
 .pim-x svg { width: 14px; height: 14px; }
 @media (hover: hover) and (pointer: fine) { .pim-x:hover { color: #fff; } }
 .pim-list { flex: 1; min-height: 80px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; scrollbar-width: thin; }
@@ -47,7 +47,7 @@
 
 /* ---------- Комнаты («Найти пати») ---------- */
 .pim.prm { width: 580px; }
-:root .prm-quick { margin-left: auto; height: 34px; padding: 0 14px 2px; gap: 6px; }
+:root .prm-quick { margin-inline-start: auto; height: 34px; padding: 0 14px 2px; gap: 6px; }
 .prm .pim-x { margin-left: 0; }
 .prm-list { min-height: 150px; }
 .prm-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px; background-color: rgba(255, 255, 255, 0.05); clip-path: var(--px-5); }
@@ -72,12 +72,12 @@
 .prm-tabs { display: flex; gap: 4px; }
 :root .prm-tabs .seg { height: 36px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; }
 .prm-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; font: 900 12px/1 var(--m-font); color: #06200e; background: var(--m-accent); clip-path: var(--px-4); }
-.prm .pim-x { margin-left: auto; }
+.prm .pim-x { margin-inline-start: auto; }
 .prm-own { display: flex; flex-direction: column; gap: 10px; }
 .prm-cap { display: flex; align-items: center; gap: 8px; font: 900 15px/1 var(--m-font); }
 .prm-cap i { display: grid; place-items: center; width: 22px; height: 22px; font: 900 13px/1 var(--m-font); font-style: normal; color: #06200e; background: var(--m-accent); clip-path: var(--px-4); }
 .prm-who { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.prm-opt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 10px; padding: 12px 14px; text-align: left; color: var(--m-fg-muted); cursor: pointer; background-color: rgba(255, 255, 255, 0.06); clip-path: var(--px-5); }
+.prm-opt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 10px; padding: 12px 14px; text-align: start; color: var(--m-fg-muted); cursor: pointer; background-color: rgba(255, 255, 255, 0.06); clip-path: var(--px-5); }
 .prm-opt svg { grid-row: 1 / 3; width: 22px; height: 22px; }
 .prm-opt b { font: 900 16px/1 var(--m-font); color: var(--m-fg); }
 .prm-opt span { font: 600 12px/1 var(--m-font); }
@@ -90,9 +90,9 @@
 .prm-win { display: grid; grid-template-columns: 220px minmax(0, 1fr); width: min(1000px, 100%); height: min(660px, 100%); color: var(--m-fg); background-color: var(--m-raised); --px-n: 10px; clip-path: var(--px-10); }
 .prm-side { display: flex; flex-direction: column; gap: 6px; padding: 18px 12px; background-color: var(--m-surface); }
 .prm-title { padding: 0 8px 10px; font: 900 24px/1 var(--m-font); }
-.prm-nav { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px 1px; font: 800 15px/1 var(--m-font); color: var(--m-fg-muted); text-align: left; cursor: pointer; background-color: transparent; clip-path: var(--px-5); transition: background-color var(--m-t-fast); }
+.prm-nav { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px 1px; font: 800 15px/1 var(--m-font); color: var(--m-fg-muted); text-align: start; cursor: pointer; background-color: transparent; clip-path: var(--px-5); transition: background-color var(--m-t-fast); }
 .prm-nav svg { width: 18px; height: 18px; flex: none; }
-.prm-nav .prm-n { margin-left: auto; }
+.prm-nav .prm-n { margin-inline-start: auto; }
 .prm-nav.on { color: #06200e; background-color: var(--m-accent); }
 .prm-nav.on .prm-n { background: #06200e; color: #fff; }
 @media (hover: hover) and (pointer: fine) { .prm-nav:not(.on):hover { color: #fff; background-color: rgba(255, 255, 255, 0.08); } }
@@ -107,7 +107,7 @@
 .prm-cn { font: 800 12px/1 var(--m-font); opacity: 0.6; }
 :root .prm-search { flex: 1; min-width: 180px; }
 .prm-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; gap: 8px; overflow-y: auto; scrollbar-width: thin; padding: 4px; margin: -4px; }
-.prm-tile { display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 6px 6px 9px; text-align: left; color: var(--m-fg); cursor: pointer; background-color: rgba(255, 255, 255, 0.05); clip-path: var(--px-5); transition: background-color var(--m-t-fast); }
+.prm-tile { display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 6px 6px 9px; text-align: start; color: var(--m-fg); cursor: pointer; background-color: rgba(255, 255, 255, 0.05); clip-path: var(--px-5); transition: background-color var(--m-t-fast); }
 .prm-tile-art { display: grid; place-items: center; height: 92px; overflow: hidden; background-color: #0b0d10; clip-path: var(--px-4); color: var(--m-fg-subtle); }
 .prm-tile-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .prm-tile-art svg { width: 30px; height: 30px; }

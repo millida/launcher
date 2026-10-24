@@ -835,6 +835,7 @@ pub(super) fn spawn_log_reader(
             std::thread::sleep(std::time::Duration::from_millis(LOG_FLUSH_MS));
             let lines = b.lock().map(|mut v| std::mem::take(&mut *v)).unwrap_or_default();
             if !lines.is_empty() {
+                super::livelog::publish_live_log(&a, &lines);
                 let _ = a.emit("game-log", lines);
             }
             if d.load(Ordering::Relaxed) {
@@ -849,6 +850,7 @@ pub(super) fn spawn_log_reader(
         let mut buf = std::io::BufReader::new(reader);
         let mut raw: Vec<u8> = Vec::new();
         let mut filter = Log4jFilter::default();
+        let mut kick = super::session_kick::KickWatch::default();
         loop {
             raw.clear();
             // read_until, not read_line: a single byte the console code page
@@ -869,6 +871,9 @@ pub(super) fn spawn_log_reader(
                         }
                     }
                     for l in &out {
+                        if let Some(addr) = kick.feed(l) {
+                            let _ = app_hop.emit("session-kicked", addr);
+                        }
                         track_server_hop(l, &server, &app_hop);
                     }
                     if let Ok(mut v) = batch.lock() {
@@ -924,7 +929,7 @@ pub fn profile_java(profile: &str) -> Option<PathBuf> {
 /// automatic major from the version metadata.
 pub(crate) async fn resolve_profile_java(app: &AppHandle, profile: &str) -> Result<Option<PathBuf>, String> {
     match profile_java_major(profile) {
-        Some(m) => Ok(Some(ensure_java(app, m).await?)),
+        Some(m) => Ok(Some(ensure_java_vendor(app, m, profile_java_vendor(profile)).await?)),
         None => Ok(profile_java(profile)),
     }
 }
@@ -1339,8 +1344,10 @@ pub(super) fn watch_session<T>(
             here = now_here;
         }
     };
+    share_common_after_exit(pname);
     let held = before_release(&status);
     forget_running(pid);
+    apply_pending_content(pname);
     let elapsed = start.elapsed().as_secs();
     if elapsed > written || new_session || server_session {
         record_playtime(pname, elapsed - written, here.as_deref(), new_session, server_session);
@@ -1425,6 +1432,7 @@ pub(crate) async fn install_and_launch_into(
     if let Some(native) = trusted_native_launch(&profile) {
         return launch_native(app, profile, nick, auth, &settings, native?).await;
     }
+    share_common_before_launch(&profile);
     let java_pick = resolve_profile_java(&app, &profile).await?;
     let game_dir = profile_dir(&profile);
     /*
@@ -1759,14 +1767,20 @@ pub(crate) async fn install_and_launch_into(
     // Only our mod has the island that reads it, and the key changes every launch.
     // With the music off the socket still carries the island's clip notices.
     let music = settings["gameMedia"].as_bool() != Some(false);
-    let media = if own_mod && (music || crate::engine::rewind::enabled()) {
-        super::now_playing::MediaLink::start_with(music)
+    // The socket also carries the mod's frame reports for the lag helper, so
+    // it is up for every game with our mod, not only for music and clips.
+    let (lag_watch, media) = if own_mod {
+        let (watch, sink) = LagWatch::new(&app, &profile);
+        (Some(watch), super::now_playing::MediaLink::start_watched(music, Some(sink)))
     } else {
-        None
+        (None, None)
     };
+    let hooks = super::linux_tools::with_linux_tools(&profile, super::launch_hooks::launch_hooks(&profile));
     let build = |exe: &Path| -> Command {
-        // Starts Java from the launcher folder (or the one the player picked) with the ready command line. Nothing else is started.
-        let mut cmd = Command::new(ansi_safe_path(exe));
+        // Starts Java from the launcher folder (or the one the player picked) with the ready command line,
+        // through the wrapper the player confirmed for this build, if any.
+        let mut cmd = super::launch_hooks::game_command(&hooks, &ansi_safe_path(exe));
+        super::launch_hooks::apply_env(&hooks, &mut cmd);
         // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
         quiet(&mut cmd);
         apply_gpu_pref(&mut cmd, exe, gpu);
@@ -1804,6 +1818,7 @@ pub(crate) async fn install_and_launch_into(
     };
     // Одна повторная попытка: занятый антивирусом java.exe — через паузу,
     // пропавший или неполный наш рантайм — после переустановки.
+    super::launch_hooks::run_pre_launch(&hooks, &game_dir, &profile).await?;
     let mut java = java;
     let mut retried = false;
     let (mut child, start, start_wall, server_now, readers) = loop {
@@ -1844,6 +1859,7 @@ pub(crate) async fn install_and_launch_into(
             let _ = child.kill();
             return Err("Запуск отменён".into());
         }
+        super::livelog::reset_live_log(&profile);
         let _ = app.emit("game-log-start", &profile);
         let log_file = Arc::new(Mutex::new(log_file));
         let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
@@ -1888,6 +1904,7 @@ pub(crate) async fn install_and_launch_into(
     let app2 = app.clone();
     let gdir = game_dir.clone();
     let crash_nick = nick.clone();
+    let post_exit = hooks.clone();
     let pid = child.id();
     if let Ok(mut v) = RUNNING.lock() {
         v.push((profile.clone(), pid));
@@ -1896,7 +1913,11 @@ pub(crate) async fn install_and_launch_into(
         tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), spec.slug.clone(), pid));
     }
     let rewind = crate::engine::rewind::game(&app, pid, &profile, media.as_ref().map(|m| m.notices()));
+    if let Some(watch) = &lag_watch {
+        watch.bind(pid, media.as_ref().map(|m| m.notices()));
+    }
     std::thread::spawn(move || {
+        let _lag_watch = lag_watch;
         let _media = media;
         let _rewind = rewind;
         let _agent = agent_held;
@@ -1908,6 +1929,7 @@ pub(crate) async fn install_and_launch_into(
                 Evidence::new()
             }
         });
+        super::launch_hooks::run_post_exit(&post_exit, &gdir, &pname);
         /*
          * Итог для проверочной версии. Успехом считается либо чистый выход,
          * либо живая сессия: игрок закрывает окно кнопкой, и код возврата в

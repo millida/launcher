@@ -227,7 +227,7 @@
   column-gap: 10px;
   width: 100%;
   padding: 11px 12px 12px;
-  text-align: left;
+  text-align: start;
   color: var(--m-fg);
   cursor: pointer;
   background-color: var(--m-surface-2);
@@ -407,7 +407,7 @@
 /* ---------- Подписка и право ---------- */
 .pab .pab-manage { padding: 0 2px; font-size: 12px; line-height: 1.3; gap: 7px; }
 .pab .pab-manage > span { flex: 1; min-width: 0; }
-.pab-manage .btn.sm { height: 28px; padding: 0 8px; margin-left: auto; flex: none; font-size: 12px; }
+.pab-manage .btn.sm { height: 28px; padding: 0 8px; margin-inline-start: auto; flex: none; font-size: 12px; }
 .pab-manage.warn { color: var(--m-warning); }
 .pab-manage.warn svg { color: var(--m-warning); }
 .pab-legal { font-size: 11px; line-height: 1.35; color: var(--m-fg-faint); }

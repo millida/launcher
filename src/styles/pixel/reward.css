@@ -650,7 +650,7 @@
 .rw-mid .btn {
   position: relative;
   z-index: 1;
-  margin-left: auto;
+  margin-inline-start: auto;
   flex: none;
 }
 .rw-mid > .rw-burst {

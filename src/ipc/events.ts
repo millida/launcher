@@ -138,10 +138,40 @@ export function listenGameServer(handler: (addr: string) => void): Promise<Unlis
   return T.event.listen<string>('game-server', (e) => handler(e.payload || '')).catch(() => null)
 }
 
+/** Пачка строк лога с номером первой: по номеру читатель продолжает снимок без пропусков и повторов. */
+export interface GameLogBatch {
+  seq: number
+  lines: string[]
+}
+
+export function listenGameLogSeq(handler: (b: GameLogBatch) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<GameLogBatch>('game-log-seq', (e) => handler(e.payload)).catch(() => null)
+}
+
 export function listenGameLogStart(handler: (profile: string) => void): Promise<UnlistenFn | null> {
   const T = tauri()
   if (!T) return Promise.resolve(null)
   return T.event.listen<string>('game-log-start', (e) => handler(e.payload)).catch(() => null)
+}
+
+/** Пять секунд игры глазами мода: кадры, память, окно впереди. */
+export interface GamePerf {
+  profile: string
+  focused: boolean
+  fps: number
+  world: boolean
+  throttled: boolean
+  heapMb: number
+  maxMb: number
+  gcPct: number
+}
+
+export function listenGamePerf(handler: (p: GamePerf) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<GamePerf>('game-perf', (e) => handler(e.payload)).catch(() => null)
 }
 
 export interface CrashAction {

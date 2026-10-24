@@ -1,7 +1,7 @@
 // The "Play" button: checks before launch, the core call, and what happens around the game. While the game runs, a presence pulse
 // (/friends/presence/heartbeat) is sent for friends, and the status goes to Discord. Launch statistics: telemetry.ts.
 import { hasTauri } from '../ipc/tauri'
-import { PACK_ACCESS_PREFIX, cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX, cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence, openAntivirusSettings, openGameFolder } from '../ipc/commands'
 import { usePackKey } from '../state/packKey'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
@@ -25,6 +25,8 @@ import { buildTag } from './telemetryPrivacy'
 import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
 import { afterPackUpdate } from './packUpdate'
+import { followFriendBuild } from './friendBuild'
+import { rememberPlay } from './recentPlay'
 import { requiresMillidaAuth, serverNeedsMillidaAuth } from './ownServer'
 import { useServers } from '../state/servers'
 import { publicServerLabel } from './liveServer'
@@ -33,7 +35,7 @@ import { stopInstall } from '../state/installs'
 import { holdLaunchForHdSkin } from './skinLock'
 import { claimJoin } from './joinClaim'
 import { t } from '../i18n'
-import { CORE_LAUNCH_CANCELLED, mentionsCancel } from './coreErrors'
+import { CORE_LAUNCH_CANCELLED, coreErrorText, mentionsCancel } from './coreErrors'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
@@ -105,10 +107,11 @@ export function discordPresence(status?: string, server?: string | null): Promis
   const pack = build ? useProfiles.getState().profiles.find((p) => p.name === build) : undefined
   // Discord only proxies https images; data: and local paths are silently ignored.
   const icon = pack && pack.icon && pack.icon.startsWith('https://') ? pack.icon : ''
-  const details = playing ? (build ? t('Играет · {where}', { where: build }) : t('В игре')) : t('В лаунчере')
+  // Discord shows this to people of every language, so it is English regardless of the UI language.
+  const details = playing ? (build ? `Playing · ${build}` : 'In game') : 'In launcher'
   const addr = (session && session.server) || ''
   const place = (session && (session.serverName || session.server)) || server || ''
-  const state = playing && place ? t('Сервер: {name}', { name: place }) : nick ? t('Ник: {nick}', { nick }) : 'Millida Launcher'
+  const state = playing && place ? `Server: ${place}` : nick ? `Nick: ${nick}` : 'Millida Launcher'
   // Версия сборки уезжает в ссылку: принимающий лаунчер иначе знает только
   // адрес и заходит тем, что у гостя выбрано сейчас.
   const joinUrl = playing && addr ? joinPageUrl(addr, (session && session.serverName) || null, pack && pack.version) : ''
@@ -257,10 +260,30 @@ async function profileNeedsMillidaAuth(profile: string | null): Promise<boolean>
   return !!st && (requiresMillidaAuth(st.catalogPackSlug) || requiresMillidaAuth(st.modpackSlug))
 }
 
+/// The core names the antivirus in Russian; the match runs on the raw text, before translation.
+const ANTIVIRUS_BLOCK = /антивирус/i
+
+async function explainAntivirusBlock(raw: string) {
+  const defender = /Microsoft Defender/.test(raw)
+  const choice = await uiChoice(coreErrorText(raw), {
+    title: t('Антивирус мешает запуску'),
+    confirmLabel: defender ? t('Открыть защиту Windows') : t('Открыть папку игры'),
+    cancelLabel: t('Закрыть'),
+    danger: false,
+  })
+  if (choice !== 'yes' || !hasTauri()) return
+  if (defender) await openAntivirusSettings().catch(() => openGameFolder())
+  else await openGameFolder()
+}
+
 export function showLaunchError(e: unknown) {
   const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')
   // A launch the user called off is not a failure and must not raise a red toast.
   if (/^Запуск отменён/.test(msg)) return
+  if (ANTIVIRUS_BLOCK.test(msg)) {
+    void explainAntivirusBlock(msg)
+    return
+  }
   showToast(/лиценз/i.test(msg) ? msg : t('Ошибка запуска: {error}', { error: msg }), 'error')
 }
 
@@ -297,6 +320,8 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   })
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: t('Готовимся…') })
+  await followFriendBuild(profile)
+  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   const next = afterPackUpdate(u, outcome)
   if (next.toast) showToast(next.toast, 'error')
   if (!next.launch) {
@@ -388,6 +413,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     .then((res) => {
       useGame.getState().addRunning(profile)
       applyLaunchWindowMode()
+      rememberPlay(profile, world, server, serverName)
       return res
     })
     .catch((e) => {
@@ -507,6 +533,7 @@ function doLaunch(name: string) {
   const prof = name || useProfiles.getState().selected
   const epoch = cancelEpoch
   const inv = (prof ? freshenPack(prof, epoch, false) : Promise.resolve())
+    .then(() => (prof ? import('./prelaunchCare').then((m) => m.prelaunchCare(prof)) : undefined))
     .then(() => resolveAuth(prof || null))
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)

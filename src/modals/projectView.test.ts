@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { agoLabel, compatOf, isForeign, licenseLabel, orderGallery, sideLabel, tidyBody } from './projectView'
+import { agoLabel, compatOf, isAbandoned, isForeign, licenseLabel, orderGallery, sideLabel, tidyBody } from './projectView'
 
 test('лицензия словами, а не SPDX-строкой', () => {
   expect(licenseLabel({ id: 'LicenseRef-All-Rights-Reserved', name: '' })).toEqual({ text: 'Все права защищены', open: false })
@@ -77,4 +77,15 @@ test('строка из одного <br> не плодит дыру', () => {
 test('описание на английском', () => {
   expect(isForeign('Lithium is a free and open-source Minecraft mod which works to optimize many areas of the game')).toBe(true)
   expect(isForeign('Мод добавляет новые биомы и пещеры в мир Minecraft, всё работает из коробки')).toBe(false)
+})
+
+test('плашка «давно не обновлялся» — только после двух лет без релиза', () => {
+  const now = Date.parse('2026-10-24T00:00:00Z')
+  const cases: [string | null, boolean, string][] = [
+    ['2024-10-01T00:00:00Z', true, 'больше двух лет — автор, скорее всего, ушёл'],
+    ['2025-01-01T00:00:00Z', false, 'год без релиза — обычная пауза, не пугаем'],
+    [null, false, 'нет даты — нечего утверждать'],
+    ['не дата', false, 'мусор вместо даты не делает проект заброшенным'],
+  ]
+  for (const [updated, want, why] of cases) expect(isAbandoned(updated, now), why).toBe(want)
 })

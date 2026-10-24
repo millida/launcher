@@ -72,7 +72,7 @@ export const isLocale = (v: unknown): v is Locale => typeof v === 'string' && CO
 /// The translated tables wait for review behind this single switch.
 export const EXTRA_LOCALES_PUBLIC = true
 
-export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl']
+export const EXTRA_LOCALES: readonly Locale[] = ['pt-BR', 'es', 'de', 'tr', 'pl', 'zh', 'hi', 'ar', 'fr', 'bn', 'id', 'ur', 'ja', 'vi', 'te', 'ko']
 
 const AVAILABLE = new Set<Locale>(['ru', 'en', ...(EXTRA_LOCALES_PUBLIC ? EXTRA_LOCALES : [])])
 

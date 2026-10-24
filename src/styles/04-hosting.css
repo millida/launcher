@@ -54,7 +54,7 @@
 .host-cfg-row{display:flex;align-items:center;gap:9px;font-size:13px;min-width:0}
 .host-cfg-row svg{width:15px;height:15px;color:var(--m-fg-faint);flex:none}
 .host-cfg-k{color:var(--m-fg-subtle)}
-.host-cfg-v{margin-left:auto;font-weight:600;color:var(--m-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.host-cfg-v{margin-inline-start:auto;font-weight:600;color:var(--m-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .host-manage-btn svg{width:16px;height:16px}
 .host-ico.free{background:var(--m-accent-soft);color:var(--m-accent)}
 .host-ico.free img{width:22px;height:22px}
@@ -71,7 +71,7 @@
 /* Title shrinks and wraps; the price drops below it when space runs out. */
 .plan-head{display:flex;align-items:baseline;justify-content:space-between;gap:4px 8px;flex-wrap:wrap}
 .plan-name{font-weight:700;font-size:14.5px;min-width:0;overflow-wrap:anywhere}
-.plan-price{font-weight:700;font-size:12.5px;color:var(--m-accent);white-space:nowrap;margin-left:auto}
+.plan-price{font-weight:700;font-size:12.5px;color:var(--m-accent);white-space:nowrap;margin-inline-start:auto}
 .plan-tag{font-size:12px;color:var(--m-fg-subtle);margin-top:4px;line-height:1.4}
 .plan-specs{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px}
 .plan-specs span{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--m-fg-muted)}
@@ -131,7 +131,7 @@
 .host-invite-wrap{position:relative}
 .host-invite-pop{position:absolute;top:calc(100% + 8px);left:0;z-index:60;width:260px;max-height:320px;overflow-y:auto;padding:8px;border-radius:14px;background:var(--m-surface-2);border:1px solid var(--m-border);box-shadow:var(--m-shadow-lg);animation:frMenuIn .14s ease}
 .host-invite-cap{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--m-fg-faint);padding:4px 8px 8px}
-.host-invite-friend{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px;border:0;background:none;border-radius:10px;cursor:pointer;transition:background var(--m-t-fast)}
+.host-invite-friend{display:flex;align-items:center;gap:10px;width:100%;text-align:start;padding:8px;border:0;background:none;border-radius:10px;cursor:pointer;transition:background var(--m-t-fast)}
 .host-invite-friend:hover{background:var(--m-surface)}
 .host-invite-friend img{width:30px;height:30px;border-radius:8px;image-rendering:pixelated}
 .host-invite-nick{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -174,7 +174,7 @@
 .host-crumb{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0}
 .host-crumb:hover{color:var(--m-accent)}
 .host-file-row{gap:10px}
-.host-file-name{flex:1;min-width:0;text-align:left;background:none;border:0;color:var(--m-fg);font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0}
+.host-file-name{flex:1;min-width:0;text-align:start;background:none;border:0;color:var(--m-fg);font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0}
 .host-file-name:hover{color:var(--m-accent)}
 .host-file-meta{font-size:12px;color:var(--m-fg-faint);white-space:nowrap}
 .host-file-edit{width:100%;height:52vh;resize:vertical;border-radius:12px;border:1px solid var(--m-border);background:var(--m-inset);color:var(--m-fg);padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.6}

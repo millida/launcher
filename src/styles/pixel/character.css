@@ -69,7 +69,7 @@
 .ch-set-head { display: flex; align-items: center; gap: 8px }
 .ch-set-head b { font-size: 14px }
 .ch-set-head small { font-size: 12px; color: var(--m-fg-faint) }
-.ch-set-head .btn { margin-left: auto }
+.ch-set-head .btn { margin-inline-start: auto }
 .ch-set-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin }
 .ch-set-item { flex: none; display: grid; justify-items: center; gap: 4px; width: 60px }
 .ch-set-art { width: 60px; height: 60px; display: grid; place-items: center; background: var(--m-inset); overflow: hidden }
@@ -112,9 +112,9 @@
 .ch-worn-head { display: flex; align-items: center; gap: 8px; min-height: 30px }
 .ch-worn-head b { font-size: 13px }
 .ch-worn-head small { font-size: 11px; color: var(--m-fg-faint); font-variant-numeric: tabular-nums }
-.ch-worn-head .btn { margin-left: auto }
+.ch-worn-head .btn { margin-inline-start: auto }
 .ch-worn-saved {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -237,9 +237,9 @@
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }
-.ch-tools { display: flex; align-items: center; gap: 8px; margin-left: auto }
+.ch-tools { display: flex; align-items: center; gap: 8px; margin-inline-start: auto }
 .ch-own { flex: none; gap: 4px }
-.ch-add { display: flex; gap: 6px; margin-left: auto }
+.ch-add { display: flex; gap: 6px; margin-inline-start: auto }
 .ch-search { width: 220px; max-width: 100% }
 .ch-bar > .ch-search { width: 100% }
 .ch-search-x { display: grid; place-items: center; width: 22px; height: 22px; color: var(--m-fg-faint) }
@@ -534,7 +534,7 @@
 :root:root .ch-tile-mark { color: var(--px-on-accent, #06200e) }
 
 /* «Снять» / «Снять всё» в строке раздела (правка 23.09.2026, 22:00). */
-.ch-off { display: inline-flex; gap: 6px; margin-left: auto; }
+.ch-off { display: inline-flex; gap: 6px; margin-inline-start: auto; }
 
 /* Сцена гардероба — цветной фон лобби вместо серой подложки (22:35). */
 #s-skins .ch-center { position: relative; }

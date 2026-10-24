@@ -46,6 +46,9 @@ const DURABLE = [
   'm-app-icon',
   'm-lang',
   'm-first-run',
+  'm-lag-off',
+  'm-lag-pending',
+  'm-live-log',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]

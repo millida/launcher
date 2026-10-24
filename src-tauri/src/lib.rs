@@ -15,6 +15,7 @@ mod display;
 mod webview_health;
 mod uiwatch;
 mod navguard;
+mod cli;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows, nothing else. The token
@@ -165,6 +166,7 @@ pub fn run() {
         engine::report_uninstall();
         return;
     }
+    cli::remember_startup_args();
     #[cfg(target_os = "linux")]
     {
         avoid_nvidia_explicit_sync();
@@ -172,7 +174,8 @@ pub fn run() {
         avoid_webkit_compositing_on_appimage_wayland();
     }
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            cli::forward_second_start(app, &argv);
             tray::show_main(app);
         }))
         .plugin(navguard::init())
@@ -305,6 +308,16 @@ pub fn run() {
             commands::system::set_game_dir,
             commands::system::pick_game_dir,
             commands::system::open_game_folder,
+            commands::system::open_antivirus_settings,
+            cli::take_cli_action,
+            commands::launch::launch_hooks,
+            commands::launch::set_launch_hooks,
+            commands::profiles::pick_backups_root,
+            commands::profiles::reset_backups_root,
+            commands::profiles::backups_root_dir,
+            commands::system::minecraft_news,
+            commands::profiles::set_screenshot_note,
+            commands::profiles::crop_screenshot,
             commands::system::pick_wallpaper,
             commands::system::pick_texture,
             commands::system::copy_picture,
@@ -343,6 +356,17 @@ pub fn run() {
             commands::profiles::duplicate_profile,
             commands::profiles::save_profile_settings,
             commands::profiles::set_profile_java_major,
+            commands::profiles::set_profile_java_vendor,
+            commands::profiles::linux_tools_state,
+            commands::profiles::set_linux_tools,
+            commands::profiles::list_build_templates,
+            commands::profiles::save_build_template,
+            commands::profiles::delete_build_template,
+            commands::profiles::apply_build_template,
+            commands::profiles::import_packwiz,
+            commands::profiles::packwiz_check,
+            commands::profiles::packwiz_update,
+            commands::profiles::set_pack_visibility,
             commands::profiles::load_profile_settings,
             commands::profiles::set_profile_gpu,
             commands::milli::milli_files_list,
@@ -361,8 +385,19 @@ pub fn run() {
             commands::profiles::set_skin_mod,
             commands::profiles::fps_boost_state,
             commands::profiles::set_fps_boost,
+            commands::profiles::shaders_state,
+            commands::profiles::set_shaders,
+            commands::profiles::shared_pack_sync,
+            commands::profiles::create_build_shortcut,
+            commands::profiles::shortcut_trusted,
+            commands::profiles::common_share_state,
+            commands::profiles::set_common_share,
+            commands::profiles::modpack_contents,
+            commands::profiles::catalog_pack_contents,
+            commands::profiles::install_server_pack_file,
             commands::profiles::scan_imports,
             commands::profiles::pick_import_dir,
+            commands::profiles::tlauncher_nick,
             commands::profiles::import_instance,
             commands::profiles::plan_moves,
             commands::profiles::move_instance,
@@ -394,9 +429,25 @@ pub fn run() {
             commands::content::content_versions,
             commands::content::set_content_version,
             commands::content::update_all,
+            commands::content::set_content_locked,
+            commands::content::set_content_tags,
+            commands::content::content_tags,
+            commands::profiles::dismiss_embedded_jars,
+            commands::profiles::list_build_files,
+            commands::profiles::reveal_build_file,
+            commands::profiles::delete_build_file,
             commands::content::add_local_file,
             commands::content::pick_content_files,
             commands::content::export_mrpack,
+            commands::content::export_pack,
+            commands::content::world_datapacks,
+            commands::content::set_world_datapack,
+            commands::content::delete_world_datapack,
+            commands::content::add_datapack_to_world,
+            commands::content::scan_pack_safety,
+            commands::content::quarantine_packs,
+            commands::content::ftb_search,
+            commands::content::ftb_install,
             commands::content::hosting_send_build,
             commands::content::install_version,
             commands::content::cf_search,
@@ -504,6 +555,10 @@ pub fn run() {
             commands::launch::delete_world_backup,
             commands::launch::open_world_folder,
             commands::launch::apply_crash_fix,
+            commands::launch::game_notice,
+            commands::launch::game_log_snapshot,
+            commands::launch::ram_check,
+            commands::launch::seed_video_options,
             commands::launch::tune_profile,
             commands::launch::set_auto_tune,
             commands::profiles::screenshot_gallery,

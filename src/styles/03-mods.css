@@ -40,7 +40,7 @@
         .mods-filterbar .facet-seg .seg{width:auto;min-width:82px}
         .mods-filterbar .facet-chips{flex-wrap:nowrap}
         .mods-fb-cats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;padding:0 2px}
-        .mods-lock-pill{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:4px 10px;border-radius:var(--m-r-pill);background:var(--m-accent-soft);color:var(--m-accent);font-size:12px;font-weight:600}
+        .mods-lock-pill{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;padding:4px 10px;border-radius:var(--m-r-pill);background:var(--m-accent-soft);color:var(--m-accent);font-size:12px;font-weight:600}
         .mods-lock-pill svg{width:13px;height:13px}
         .mods-lock-pill button{background:none;border:0;color:var(--m-accent);text-decoration:underline;cursor:pointer;font-size:12px;font-weight:600;padding:0}
         @media(max-width:820px){.mods-filterbar{gap:12px}.mods-filterbar .facet-chips{flex-wrap:wrap}}
@@ -175,3 +175,15 @@
 .act-row-btn{height:32px;font-size:12.5px}
 .act-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}
 .act-row .act-row-btn{flex:0 0 auto;padding:0 12px}
+.shot-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.shot-search{display:flex;align-items:center;gap:6px;flex:1;min-width:180px}
+.shot-search input{flex:1;min-width:0}
+.shot-albums{width:auto;flex-wrap:wrap}
+.shot-album{font-size:11px;color:var(--m-accent)}
+.shot-note{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.shot-note-acts{display:flex;justify-content:flex-end;gap:6px}
+.shot-crop{display:flex;flex-direction:column;gap:12px}
+.shot-crop-stage{position:relative;align-self:center;max-width:100%;cursor:crosshair;user-select:none;touch-action:none}
+.shot-crop-stage img{display:block;max-width:100%;max-height:65vh}
+.shot-crop-box{position:absolute;outline:2px solid var(--m-accent);background:rgba(var(--m-accent-rgb),.12);pointer-events:none}
+.shot-crop-actions{display:flex;justify-content:flex-end;gap:10px}

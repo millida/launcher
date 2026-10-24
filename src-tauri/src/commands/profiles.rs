@@ -84,8 +84,75 @@ pub async fn set_fps_boost(
     on: bool,
     keep_options: Option<bool>,
     video: Option<Vec<(String, String)>>,
+    vulkan: Option<bool>,
 ) -> Result<engine::FpsBoostState, String> {
-    engine::set_fps_boost(app, profile, on, keep_options.unwrap_or(false), video).await
+    engine::set_fps_boost(app, profile, on, keep_options.unwrap_or(false), video, vulkan).await
+}
+
+/// Brings a friend's build up to its author's last publication; `apply` off
+/// only reports whether one is waiting.
+#[tauri::command]
+pub async fn shared_pack_sync(
+    app: tauri::AppHandle,
+    profile: String,
+    apply: bool,
+    approved: Option<Vec<String>>,
+) -> Result<engine::SharedSync, String> {
+    engine::shared_pack_sync(app, profile, apply, approved.unwrap_or_default()).await
+}
+
+/// Desktop shortcut to the build, or straight into one of its worlds or servers.
+#[tauri::command]
+pub async fn create_build_shortcut(profile: String, world: Option<String>, server: Option<String>) -> Result<String, String> {
+    super::blocking(move || engine::create_build_shortcut(&profile, world, server)).await?
+}
+
+/// Whether a millida://launch link came from a shortcut made on this computer.
+#[tauri::command(async)]
+pub fn shortcut_trusted(key: String, profile: String, quickplay: Option<String>) -> bool {
+    engine::shortcut_trusted(&key, &profile, quickplay.as_deref())
+}
+
+#[tauri::command(async)]
+pub fn common_share_state(profile: String) -> engine::CommonShare { engine::common_share_state(&profile) }
+
+/// Which of options.txt, servers.dat, resource packs and shader packs this build shares with others.
+#[tauri::command]
+pub async fn set_common_share(profile: String, share: engine::CommonShare) -> Result<engine::CommonShare, String> {
+    super::blocking(move || engine::set_common_share(&profile, share)).await?
+}
+
+/// What a Modrinth modpack holds, for the «Состав» tab before install.
+#[tauri::command]
+pub async fn modpack_contents(slug: String, version_id: Option<String>) -> Result<engine::PackContents, String> {
+    engine::modpack_contents(slug, version_id).await
+}
+
+/// A hosting server's uploaded client pack, checked by the sha512 and size its manifest published.
+#[tauri::command]
+pub async fn install_server_pack_file(
+    app: tauri::AppHandle,
+    server_id: String,
+    sha512: String,
+    size: u64,
+    name: String,
+) -> Result<engine::Profile, String> {
+    engine::install_server_pack_file(app, server_id, sha512, size, name).await
+}
+
+/// What a Millida catalogue pack holds, from the archive index the catalogue serves.
+#[tauri::command]
+pub async fn catalog_pack_contents(slug: String) -> Result<engine::PackContents, String> {
+    engine::catalog_pack_contents(slug).await
+}
+
+#[tauri::command(async)]
+pub fn shaders_state(profile: String) -> engine::ShadersState { engine::shaders_state(&profile) }
+
+/// Sodium + Iris + a light shader pack in one click; off removes what it added.
+#[tauri::command]
+pub async fn set_shaders(app: tauri::AppHandle, profile: String, on: bool) -> Result<engine::ShadersState, String> {
+    engine::set_shaders(app, profile, on).await
 }
 
 #[tauri::command(async)]
@@ -106,6 +173,7 @@ pub async fn modpack_versions(slug: String) -> Result<serde_json::Value, String>
 
 #[tauri::command]
 pub async fn update_modpack(app: tauri::AppHandle, profile: String, version_id: String) -> Result<engine::Profile, String> {
+    engine::snapshot_before_mod_update(&profile, "modpack").await?;
     engine::update_modpack(app, profile, version_id).await
 }
 
@@ -206,7 +274,7 @@ pub fn rename_profile(name: String, new_name: String) -> Result<Vec<engine::Prof
 /// versions/ and parts of download URLs, so the webview cannot name them freely.
 fn check_version_and_loader(version: &str, loader: &str, loader_version: Option<&str>) -> Result<(), String> {
     engine::check_version_id(version)?;
-    if !["vanilla", "fabric", "quilt", "forge", "neoforge"].contains(&loader) {
+    if !["vanilla", "fabric", "quilt", "forge", "neoforge", "legacyfabric"].contains(&loader) {
         return Err(format!("Неизвестный загрузчик «{}»", loader.chars().take(32).collect::<String>()));
     }
     if let Some(lv) = loader_version.map(str::trim).filter(|v| !v.is_empty()) {
@@ -363,6 +431,7 @@ pub async fn install_pack_candidate(app: tauri::AppHandle, slug: String) -> Resu
 /// come from the build's own settings and from the catalogue.
 #[tauri::command]
 pub async fn update_catalog_pack(app: tauri::AppHandle, profile: String) -> Result<engine::Profile, String> {
+    engine::snapshot_before_mod_update(&profile, "modpack").await?;
     engine::update_catalog_pack(app, profile).await
 }
 
@@ -419,6 +488,12 @@ pub async fn pick_import_dir() -> Result<Option<Vec<engine::FoundInstance>>, Str
         return Ok(None);
     };
     super::blocking(move || engine::scan_import_dir(&dir)).await.map(Some)
+}
+
+/// Offline nick from TLauncher's own files, offered when the player moves over.
+#[tauri::command]
+pub async fn tlauncher_nick() -> Result<Option<String>, String> {
+    super::blocking(engine::tlauncher_nick).await
 }
 
 #[tauri::command(async)]
@@ -500,4 +575,116 @@ pub async fn cloud_pull(
 #[tauri::command]
 pub async fn cloud_forget() -> Result<(), String> {
     engine::cloud_forget().await
+}
+
+#[tauri::command(async)]
+pub fn list_build_files(profile: String, rel: String) -> Result<Vec<engine::BuildFile>, String> {
+    engine::list_build_files(&profile, &rel)
+}
+
+#[tauri::command(async)]
+pub fn reveal_build_file(profile: String, rel: String) -> Result<(), String> {
+    engine::reveal_build_file(&profile, &rel)
+}
+
+#[tauri::command(async)]
+pub fn delete_build_file(profile: String, rel: String) -> Result<(), String> {
+    engine::delete_build_file(&profile, &rel)
+}
+
+#[tauri::command(async)]
+pub fn dismiss_embedded_jars(profile: String) {
+    engine::dismiss_embedded_jars(&profile)
+}
+
+#[tauri::command]
+pub async fn pick_backups_root() -> Result<Option<String>, String> {
+    engine::pick_backups_root().await
+}
+
+#[tauri::command]
+pub fn reset_backups_root() -> Result<(), String> {
+    engine::reset_backups_root()
+}
+
+#[tauri::command]
+pub fn backups_root_dir() -> Option<String> {
+    engine::backups_root_dir()
+}
+
+/// The JRE vendor for a build's pinned Java. Only a name from the fixed set
+/// crosses the bridge; the runtime is fetched and checked by sha256 before the
+/// choice is saved, so a build never points at a runtime that is not there.
+#[tauri::command]
+pub async fn set_profile_java_vendor(app: tauri::AppHandle, profile: String, vendor: String) -> Result<String, String> {
+    let v = engine::JavaVendor::parse(&vendor).ok_or("Такую сборку Java лаунчер не ставит")?;
+    let major = engine::profile_java_major(&profile).ok_or("Сначала выбери версию Java для сборки")?;
+    let bin = engine::ensure_java_vendor(&app, major, v).await?;
+    let mut patch = serde_json::Map::new();
+    patch.insert("javaVendor".into(), serde_json::json!(v.id()));
+    engine::merge_settings(&profile, patch);
+    Ok(engine::java_version_of(&bin).unwrap_or_default())
+}
+
+#[tauri::command(async)]
+pub fn linux_tools_state(profile: String) -> engine::LinuxTools {
+    engine::linux_tools_state(&profile)
+}
+
+#[tauri::command(async)]
+pub fn set_linux_tools(profile: String, gamemode: bool, gamescope: bool) -> Result<engine::LinuxTools, String> {
+    engine::set_linux_tools(&profile, gamemode, gamescope)
+}
+
+#[tauri::command(async)]
+pub fn list_build_templates() -> Vec<engine::BuildTemplate> {
+    engine::list_build_templates()
+}
+
+#[tauri::command(async)]
+pub fn save_build_template(profile: String, name: String) -> Result<engine::BuildTemplate, String> {
+    engine::save_build_template(&profile, &name)
+}
+
+#[tauri::command(async)]
+pub fn delete_build_template(id: String) -> Result<(), String> {
+    engine::delete_build_template(&id)
+}
+
+#[tauri::command]
+pub async fn apply_build_template(app: tauri::AppHandle, id: String, profile: String) -> Result<engine::DepReport, String> {
+    engine::apply_build_template(app, id, profile).await
+}
+
+/// A packwiz pack by its pack.toml link. Only the link crosses the bridge; the
+/// core checks it and every file by the hashes the pack itself publishes.
+#[tauri::command]
+pub async fn import_packwiz(app: tauri::AppHandle, url: String) -> Result<engine::PackwizResult, String> {
+    engine::import_packwiz(app, url).await
+}
+
+#[tauri::command]
+pub async fn packwiz_check(profile: String) -> Result<engine::PackwizCheck, String> {
+    engine::packwiz_check(profile).await
+}
+
+#[tauri::command]
+pub async fn packwiz_update(app: tauri::AppHandle, profile: String) -> Result<engine::PackwizResult, String> {
+    engine::packwiz_update(app, profile).await
+}
+
+#[tauri::command(async)]
+pub fn set_screenshot_note(profile: String, name: String, caption: String, album: String) -> Result<engine::ShotNote, String> {
+    engine::set_screenshot_note(&profile, &name, &caption, &album)
+}
+
+#[tauri::command]
+pub async fn crop_screenshot(profile: String, name: String, rect: engine::CropRect) -> Result<String, String> {
+    engine::crop_screenshot(profile, name, rect).await
+}
+
+/// The author's choice of who may open a shared code; the server checks ownership.
+#[tauri::command]
+pub async fn set_pack_visibility(code: String, visibility: String) -> Result<String, String> {
+    engine::set_pack_visibility(code, visibility).await
 }

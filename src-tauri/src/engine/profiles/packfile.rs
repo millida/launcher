@@ -4,6 +4,48 @@ use serde_json::Value;
 use std::path::Path;
 use tauri::AppHandle;
 
+const EMBEDDED_LIST_CAP: usize = 200;
+/// Set on an imported build whose archive carried its own jars; the build page asks to check them.
+pub const EMBEDDED_JARS_KEY: &str = "embeddedJars";
+
+/// Jars an archive ships as plain files in its overrides instead of naming them
+/// in the index: no catalogue vouches for them, so the player is asked to look.
+pub(crate) fn embedded_jars(root: &Path, overrides: &[&str]) -> Vec<String> {
+    let mut out = vec![];
+    for ov in overrides {
+        let Ok(dir) = safe_join(root, &format!("{}/mods", ov)) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            let low = name.to_ascii_lowercase();
+            if e.path().is_file() && (low.ends_with(".jar") || low.ends_with(".jar.disabled")) && !out.contains(&name) {
+                out.push(name);
+            }
+            if out.len() >= EMBEDDED_LIST_CAP {
+                return out;
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+pub(crate) fn note_embedded_jars(profile: &str, jars: Vec<String>) {
+    if jars.is_empty() {
+        return;
+    }
+    let mut patch = serde_json::Map::new();
+    patch.insert(EMBEDDED_JARS_KEY.into(), serde_json::json!(jars));
+    merge_settings(profile, patch);
+}
+
+/// The player looked at the list: the build page stops asking.
+pub fn dismiss_embedded_jars(profile: &str) {
+    let mut patch = serde_json::Map::new();
+    patch.insert(EMBEDDED_JARS_KEY.into(), Value::Null);
+    merge_settings(profile, patch);
+}
+
 fn unique_name(base: &str) -> String {
     unique_profile_name(base)
 }
@@ -85,7 +127,11 @@ async fn from_mrpack(progress: Progress<'_>, ex: &Path, name_hint: &str) -> Resu
         let src = ex.join(ov);
         if src.exists() { let _ = copy_overrides(&src, &pdir); }
     }
-    commit(Profile { name: pname, version: mc, fabric, loader: Some(lid.into()), loader_version, icon: None })
+    record_pack_origin_at(&pdir);
+    let prof = commit(Profile { name: pname, version: mc, fabric, loader: Some(lid.into()), loader_version, icon: None })?;
+    apply_author_meta(&prof.name, read_author_meta(ex));
+    note_embedded_jars(&prof.name, embedded_jars(ex, &["overrides", "client-overrides"]));
+    Ok(prof)
 }
 
 /// CurseForge manifest: mods resolved by projectID/fileID through the CF API.
@@ -120,8 +166,17 @@ async fn from_cf_manifest(progress: Progress<'_>, ex: &Path, name_hint: &str) ->
         let ov = safe_join(ex, name)?;
         if ov.exists() { copy_overrides(&ov, &pdir).map_err(|e| e.to_string())?; }
     }
+    record_pack_origin_at(&pdir);
     let fabric = matches!(lid.as_str(), "fabric" | "quilt");
-    commit(Profile { name: pname, version: mc, fabric, loader: Some(lid), loader_version, icon: None })
+    let prof = commit(Profile { name: pname, version: mc, fabric, loader: Some(lid), loader_version, icon: None })?;
+    let mut meta = read_author_meta(ex);
+    if meta.ram_mb == 0 {
+        meta.ram_mb = man["minecraft"]["recommendedRam"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32;
+    }
+    apply_author_meta(&prof.name, meta);
+    let ov_name = man["overrides"].as_str().filter(|s| !s.is_empty()).unwrap_or("overrides");
+    note_embedded_jars(&prof.name, embedded_jars(ex, &[ov_name, "client-overrides"]));
+    Ok(prof)
 }
 
 /// Что известно о сборке заранее, без её файлов: карточка каталога Millida

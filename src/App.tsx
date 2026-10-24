@@ -35,10 +35,13 @@ import {
 } from './screens/registry'
 const InstancePage = lazy(() => import('./modals/InstancePage').then((m) => ({ default: m.InstancePage })))
 const ChestOpenHost = lazy(() => import('./components/daily/ChestOpen').then((m) => ({ default: m.ChestOpenHost })))
+// Kept out of the startup bundle: most sessions never open them, and each is mounted
+// on its first opening and stays mounted so the closing transition still plays.
+const ProjectModal = lazy(() => import('./modals/Project').then((m) => ({ default: m.ProjectModal })))
+const NewBuildModal = lazy(() => import('./modals/NewBuild').then((m) => ({ default: m.NewBuildModal })))
+const OnboardingModal = lazy(() => import('./modals/Onboarding').then((m) => ({ default: m.OnboardingModal })))
 import { ImportModal } from './modals/Import'
 import { MoveBuildsModal } from './modals/MoveBuilds'
-import { ProjectModal } from './modals/Project'
-import { NewBuildModal } from './modals/NewBuild'
 import { AccountAddModal } from './modals/AccountAdd'
 import { gameStepPending, hasGameAccount, useFirstRun } from './state/firstRun'
 import { BuyModal } from './components/catalog/PaidActs'
@@ -70,8 +73,8 @@ import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
 import { markPreview, parseMark } from './lib/waypointShare'
 import { effectiveNick, getAccount, getMillidaAccount, isGameAccountKind, isMillidaKind, useAccounts } from './state/accounts'
-import { markMillidaEver, millidaEver } from './state/onboarding'
-import { OnboardingModal } from './modals/Onboarding'
+import { markMillidaEver, millidaEver, useOnboarding } from './state/onboarding'
+import { useEverTrue } from './lib/everTrue'
 import { Tour } from './components/Tour'
 import { initAccent } from './lib/accent'
 import { initDensity } from './lib/density'
@@ -226,6 +229,11 @@ import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
 import { initUiTracking } from './lib/uiTrack'
 import { initDeepLinks } from './lib/deeplink'
+import { initCli } from './lib/cli'
+import { initSessionKick } from './lib/sessionKick'
+import { CommandPalette } from './components/CommandPalette'
+import { McNewsModal } from './components/McNews'
+import { initA11y } from './lib/a11y'
 import { initGameInvites } from './lib/gameInvite'
 import { initOverlayLink } from './lib/overlayLink'
 import { initStreakReminder } from './lib/streakReminder'
@@ -244,6 +252,9 @@ import { syncRunningGame, useGame } from './state/game'
 import { watchPromo } from './state/promo'
 import { watchPromoServers } from './lib/promoServers'
 import { CrashModal } from './components/CrashModal'
+import { LagCard } from './components/LagCard'
+import { LiveLog, startLiveLog } from './components/LiveLog'
+import { startLagHelp } from './lib/lagHelp'
 import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
 import { initTelemetry, track, trackAppExit } from './lib/telemetry'
@@ -348,6 +359,9 @@ export function App() {
   const screen = useUi((s) => s.screen)
   const setScreen = useUi((s) => s.setScreen)
   const instanceMounted = useUi((s) => s.modals.bsModal.open || s.modals.bsModal.vis)
+  const projectMounted = useEverTrue(useUi((s) => s.modals.pjModal.open || s.modals.pjModal.vis))
+  const newBuildMounted = useEverTrue(useUi((s) => s.modals.nbModal.open || s.modals.nbModal.vis))
+  const onboardingMounted = useEverTrue(useOnboarding((s) => s.open))
 
   useEffect(() => {
     // Until this lands, the native watchdog treats the window as blank and
@@ -371,6 +385,9 @@ export function App() {
     void initDesktopToasts()
     void initAutostart()
     initDeepLinks()
+    initCli()
+    initSessionKick()
+    initA11y()
     initGameInvites()
     initOverlayLink()
     initInstalls()
@@ -602,6 +619,8 @@ export function App() {
     // минуту, а до сих пор интерфейс спрашивал только при выходе, и под
     // запущенной сборкой время не появлялось вовсе.
     watchPlaytimeWhileRunning(() => useGame.getState().list.length > 0)
+    startLagHelp()
+    startLiveLog()
     const stopJoinClaims = watchJoinClaims()
     void listenGameExit((profile) => {
       // Отыграл спокойно 3+ минуты — план вылета, случившегося до этого запуска, больше не нужен,
@@ -1015,8 +1034,16 @@ export function App() {
         <MilliDock />
         <ImportModal />
         <MoveBuildsModal />
-        <ProjectModal />
-        <NewBuildModal />
+        {projectMounted && (
+          <Suspense fallback={null}>
+            <ProjectModal />
+          </Suspense>
+        )}
+        {newBuildMounted && (
+          <Suspense fallback={null}>
+            <NewBuildModal />
+          </Suspense>
+        )}
         <AccountAddModal />
         <BuyModal />
         <ScreenshotsOverlay />
@@ -1028,15 +1055,23 @@ export function App() {
         <PackCodeHost />
         <PartyHost />
         <CrashModal />
+        <LagCard />
+        <LiveLog />
         <ServerDetail />
         <ChatNotify />
         <CallPanel />
         <RoomModals />
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
+        <McNewsModal />
+        <CommandPalette />
         <ConfirmModal />
         <ImageLightbox />
-        <OnboardingModal />
+        {onboardingMounted && (
+          <Suspense fallback={null}>
+            <OnboardingModal />
+          </Suspense>
+        )}
         <Tour />
         <Installs />
         <PackDrop />

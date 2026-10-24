@@ -58,7 +58,9 @@ test('the launcher knows exactly the 18 agreed languages, right-to-left only for
 })
 
 test('translated languages stay out of the pickers until the switch is turned on', () => {
-  const want: Locale[] = EXTRA_LOCALES_PUBLIC ? ['en', 'pt-BR', 'ru', 'de', 'tr', 'es', 'pl'] : ['en', 'ru']
+  const want: Locale[] = EXTRA_LOCALES_PUBLIC
+    ? ['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt-BR', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'te', 'tr', 'ko', 'pl']
+    : ['en', 'ru']
   expect(AVAILABLE_LOCALES.map((l) => l.code).sort(), 'offering a language is the owner decision behind EXTRA_LOCALES_PUBLIC').toEqual(want.sort())
 })
 

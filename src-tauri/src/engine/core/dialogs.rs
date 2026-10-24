@@ -39,3 +39,12 @@ pub async fn pick_folder(d: AsyncFileDialog) -> Option<PathBuf> {
 pub async fn save_file(d: AsyncFileDialog) -> Option<PathBuf> {
     d.save_file().await.map(|f| f.path().to_path_buf())
 }
+
+/// A question owned by the launcher window, for the same reason as `dialog`.
+pub fn message_dialog() -> rfd::AsyncMessageDialog {
+    let d = rfd::AsyncMessageDialog::new();
+    match PARENT.get() {
+        Some(w) => d.set_parent(w),
+        None => d,
+    }
+}

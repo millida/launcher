@@ -364,7 +364,7 @@ pub fn restore_backup(profile: &str, file: &str) -> Result<WorldInfo, String> {
     if !name.ends_with(".zip") {
         return Err("Это не файл бэкапа".into());
     }
-    let path = safe_child(&profile_dir(profile).join("backups"), &name)?;
+    let path = safe_child(&crate::engine::backups_dir(profile), &name)?;
     if !path.is_file() {
         return Err("Бэкап не найден".into());
     }
@@ -376,7 +376,7 @@ pub fn delete_backup(profile: &str, file: &str) -> Result<(), String> {
     if !name.ends_with(".zip") {
         return Err("Это не файл бэкапа".into());
     }
-    let path = safe_child(&profile_dir(profile).join("backups"), &name)?;
+    let path = safe_child(&crate::engine::backups_dir(profile), &name)?;
     // The player clicked "Delete" on a backup: deletes one zip from the backups folder of this modpack.
     std::fs::remove_file(&path).map_err(|e| format!("Не удалось удалить бэкап: {}", e))
 }

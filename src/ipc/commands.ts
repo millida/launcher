@@ -3,6 +3,7 @@
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
 import { t } from '../i18n'
+import { setLaunchRamMb } from '../lib/ramPref'
 
 export interface Profile {
   name: string
@@ -40,6 +41,10 @@ export interface ModFile {
   scanned: boolean
   /** Когда файл появился в сборке, секунды Unix (новое ядро). */
   added?: number
+  locked?: boolean
+  tags?: string[]
+  origin?: 'pack' | 'manual'
+  pending?: 'on' | 'off' | 'delete'
 }
 
 export interface ScanResult {
@@ -55,6 +60,9 @@ export interface UpdateInfo {
   file_name: string
   new_version_id: string
   new_version_number: string
+  old_version_number?: string
+  title?: string
+  changelog?: string
 }
 
 export interface WorldEntry {
@@ -130,6 +138,14 @@ export interface ProfileSettings {
   /** Non-empty when a review candidate is installed instead of the published version. */
   catalogPackReviewFile?: string
   modpackSlug?: string
+  /** Memory the build's author asked for, before it was capped by this machine. */
+  authorRamMb?: number
+  authorJavaMajor?: number
+  /** The author asked that no mods are added to this build. */
+  authorLocked?: boolean | null
+  javaVendor?: JavaVendorId
+  /** Jars the imported archive carried as plain files; cleared once the player looked. */
+  embeddedJars?: string[] | null
 }
 
 export type GpuPref = 'auto' | 'discrete' | 'integrated'
@@ -747,6 +763,13 @@ export const listWorldInstalls = (profile: string) => invoke<string[]>('list_wor
 
 export const listWorlds = (profile: string) => invoke<WorldEntry[]>('list_worlds', { profile })
 
+/** Desktop shortcut to the build or one of its worlds/servers; returns the file path. */
+export const createBuildShortcut = (profile: string, world: string | null = null, server: string | null = null) =>
+  invoke<string>('create_build_shortcut', { profile, world, server })
+/** A millida://launch link carries a key only shortcuts made here hold. */
+export const shortcutTrusted = (key: string, profile: string, quickplay: string | null) =>
+  invoke<boolean>('shortcut_trusted', { key, profile, quickplay })
+
 export const loadProfileSettings = (profile: string) =>
   invoke<ProfileSettings>('load_profile_settings', { profile })
 
@@ -760,13 +783,66 @@ export interface FpsBoostState {
   stale: boolean
   /** False for a catalogue pack that starts by its own description: the author tuned it. */
   applicable?: boolean
+  /** The player picked VulkanMod over Sodium for the renderer. */
+  vulkan?: boolean
+  /** VulkanMod exists for this loader, game version and system. */
+  vulkanAvailable?: boolean
+  /** Shaders are on: Iris needs Sodium, so VulkanMod cannot be picked. */
+  vulkanBlocked?: boolean
 }
 
 export const fpsBoostState = (profile: string) => invoke<FpsBoostState>('fps_boost_state', { profile })
 
 /** video — options.txt под железо (lib/perfTier.ts); без него ядро ставит общий набор. */
-export const setFpsBoost = (profile: string, on: boolean, keepOptions = false, video?: [string, string][]) =>
-  invoke<FpsBoostState>('set_fps_boost', { profile, on, keepOptions, video: video ?? null })
+export const setFpsBoost = (profile: string, on: boolean, keepOptions = false, video?: [string, string][], vulkan?: boolean) =>
+  invoke<FpsBoostState>('set_fps_boost', { profile, on, keepOptions, video: video ?? null, vulkan: vulkan ?? null })
+
+export interface ShadersState {
+  enabled: boolean
+  /** The loader takes shader mods at all (Fabric, Quilt, Forge, NeoForge). */
+  supported: boolean
+  /** False for a catalogue pack whose author tuned its graphics. */
+  applicable: boolean
+  /** OptiFine is in the build: Iris and Sodium crash next to it. */
+  optifine: boolean
+  pack: string
+}
+
+export const shadersState = (profile: string) => invoke<ShadersState>('shaders_state', { profile })
+
+export interface PackContents {
+  game: string
+  loader: string
+  loaderVersion: string
+  mods: { name: string; size: number }[]
+  resourcepacks: { name: string; size: number }[]
+  shaderpacks: { name: string; size: number }[]
+  /** Files the archive carries itself: configs, worlds, own jars. */
+  bundled: number
+  totalBytes: number
+}
+
+/** What a Modrinth modpack holds, read before it is installed. */
+export const modpackContents = (slug: string, versionId: string | null = null) =>
+  invoke<PackContents>('modpack_contents', { slug, versionId })
+/** What a Millida catalogue pack holds, from its archive's table of contents (needs a Millida sign-in). */
+export const catalogPackContents = (slug: string) => invoke<PackContents>('catalog_pack_contents', { slug })
+
+/** The .mrpack a hosting server's owner uploaded: the core downloads it from the API and keeps it only if sha512 and size match. */
+export const installServerPackFile = (serverId: string, sha512: string, size: number, name: string) =>
+  invoke<Profile>('install_server_pack_file', { serverId, sha512, size, name })
+
+/** What a build shares with the other builds that share the same thing. */
+export interface CommonShare {
+  options: boolean
+  servers: boolean
+  resourcepacks: boolean
+  shaderpacks: boolean
+}
+
+export const commonShareState = (profile: string) => invoke<CommonShare>('common_share_state', { profile })
+export const setCommonShare = (profile: string, share: CommonShare) => invoke<CommonShare>('set_common_share', { profile, share })
+export const setShaders = (profile: string, on: boolean) => invoke<ShadersState>('set_shaders', { profile, on })
 
 export type ApiMarket = 'RU' | 'EN'
 
@@ -880,6 +956,38 @@ export interface PickedTextureFile {
 export const pickTexture = () => invoke<PickedTextureFile | null>('pick_texture')
 
 export const openGameFolder = () => invoke<void>('open_game_folder')
+export const openAntivirusSettings = () => invoke<void>('open_antivirus_settings')
+
+export interface CliAction {
+  action: 'launch' | 'repair' | 'clean'
+  build: string | null
+}
+export const takeCliAction = () => invoke<CliAction | null>('take_cli_action')
+
+export interface LaunchHooks {
+  wrapper: string
+  preLaunch: string
+  postExit: string
+  env: Record<string, string>
+}
+export const launchHooks = (profile: string) => invoke<LaunchHooks>('launch_hooks', { profile })
+/// Resolves false when the player declined the native confirmation.
+export const setLaunchHooks = (profile: string, hooks: LaunchHooks) => invoke<boolean>('set_launch_hooks', { profile, hooks })
+
+export const backupsRootDir = () => invoke<string | null>('backups_root_dir')
+/// Null when the player closed the folder picker.
+export const pickBackupsRoot = () => invoke<string | null>('pick_backups_root')
+export const resetBackupsRoot = () => invoke<void>('reset_backups_root')
+
+export interface McNews {
+  id: string
+  title: string
+  text: string
+  date: string
+  image: string | null
+  link: string | null
+}
+export const minecraftNews = () => invoke<McNews[]>('minecraft_news')
 
 export interface MusicTrackFile {
   path: string
@@ -975,6 +1083,8 @@ export const setProfileJavaMajor = (profile: string, major: number | null) =>
   invoke<string>('set_profile_java_major', { profile, major })
 
 export const scanImports = () => invoke<FoundInstance[]>('scan_imports')
+/** Offline nick from TLauncher's files; null when TLauncher left none. */
+export const tlauncherNick = () => invoke<string | null>('tlauncher_nick')
 export const planMoves = () => invoke<MoveCandidate[]>('plan_moves')
 export const moveInstance = (path: string) => invoke<MoveOutcome>('move_instance', { path })
 /** «Выбрать папку» в импорте: выбор папки и сборки в ней. null — диалог закрыли. */
@@ -1345,6 +1455,8 @@ export interface Screenshot {
   takenAt: number
   width: number
   height: number
+  caption: string
+  album: string
 }
 
 // An empty build name means screenshots of every build.
@@ -1355,6 +1467,16 @@ export const saveScreenshotAs = (profile: string, name: string) =>
   invoke<string | null>('save_screenshot_as', { profile, name })
 export const shareScreenshot = (profile: string, name: string) =>
   invoke<string>('share_screenshot', { profile, name })
+export const setScreenshotNote = (profile: string, name: string, caption: string, album: string) =>
+  invoke<{ caption: string; album: string }>('set_screenshot_note', { profile, name, caption, album })
+export interface CropRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+/// Resolves to the new file's name; the original is kept.
+export const cropScreenshot = (profile: string, name: string, rect: CropRect) => invoke<string>('crop_screenshot', { profile, name, rect })
 
 // ---- Mod safety check ----
 
@@ -1388,7 +1510,40 @@ export const quarantineMods = (profile: string, files: string[]) =>
 // ---- Crash diagnosis ----
 
 export const applyCrashFix = (profile: string, kind: string, arg: string) =>
-  invoke<string>('apply_crash_fix', { profile, kind, arg })
+  invoke<string>('apply_crash_fix', { profile, kind, arg }).then((msg) => {
+    // The launch takes the build's memory slider over the core's ramMb: a memory fix must land on the slider too.
+    if (kind === 'set-ram') setLaunchRamMb(profile, Number(arg))
+    return msg
+  })
+
+export interface LiveLogSnapshot {
+  profile: string
+  seq: number
+  lines: string[]
+}
+
+/** Всё, что игра написала с запуска: лог, открытый позже, видит и начало. */
+export const gameLogSnapshot = () => invoke<LiveLogSnapshot>('game_log_snapshot')
+
+/** Совет помощника лагов на острове запущенной игры; false — мод не подключён, в игре его не увидят. */
+export const gameNotice = (profile: string, title: string, detail: string) => invoke<boolean>('game_notice', { profile, title, detail })
+
+export interface RamCheck {
+  heapMb: number
+  needMb: number
+  fitMb: number
+  totalMb: number
+  availableMb: number
+  mods: number
+  manual: boolean
+  packOwned: boolean
+}
+
+export const ramCheck = (profile: string, requested: number) => invoke<RamCheck>('ram_check', { profile, requested })
+
+/** Графика под ПК перед первым запуском сборки; options.txt, который уже есть, не трогается. */
+export const seedVideoOptions = (profile: string, video?: [string, string][]) =>
+  invoke<boolean>('seed_video_options', { profile, video: video ?? null })
 
 // ---- Sharing a build ----
 
@@ -1436,6 +1591,31 @@ export const unshareProfile = (code: string) => invoke<void>('unshare_profile', 
 export const packPreview = (code: string) => invoke<PackPreview>('pack_preview', { code })
 export const installSharedPack = (code: string, approvedJars: string[] = []) =>
   invoke<Profile>('install_shared_pack', { code, approvedJars })
+
+/** What the author's new version does to a friend's build; shown before anything changes. */
+export interface SharedChanges {
+  added: string[]
+  removed: string[]
+  game: [string, string] | null
+  loader: [string, string] | null
+  /** Mod settings the author changed and the update writes. */
+  configs: string[]
+  /** The player's own or edited files the update leaves alone. */
+  kept: string[]
+  /** The author's new own jars: shown before they land. */
+  newJars: { name: string; sha512: string }[]
+}
+
+export interface SharedSync {
+  /** none: not a friend's build; current; stale: a new version waits; updated; gone: code revoked. */
+  status: 'none' | 'current' | 'stale' | 'updated' | 'gone'
+  code: string
+  changes: SharedChanges
+}
+
+/** A friend's build follows its author: `apply` (only from the player's button) installs the difference, otherwise it only checks. `approved` — sha512 of new jars the player saw. */
+export const sharedPackSync = (profile: string, apply: boolean, approved: string[] = []) =>
+  invoke<SharedSync>('shared_pack_sync', { profile, apply, approved })
 
 // ---- Cloud sync ----
 
@@ -1538,3 +1718,104 @@ export const rewindClips = () => invoke<ClipFile[]>('rewind_clips')
 export const rewindDeleteClip = (name: string) => invoke<void>('rewind_delete_clip', { name })
 export const rewindOpenFolder = () => invoke<void>('rewind_open_folder')
 export const rewindRevealClip = (name: string) => invoke<void>('rewind_reveal_clip', { name })
+
+export const setContentLocked = (profile: string, kind: string, name: string, on: boolean) =>
+  invoke<boolean>('set_content_locked', { profile, kind, name, on })
+
+export const setContentTags = (profile: string, kind: string, name: string, tags: string[]) =>
+  invoke<string[]>('set_content_tags', { profile, kind, name, tags })
+
+export const contentTags = (profile: string, kind: string) => invoke<string[]>('content_tags', { profile, kind })
+
+export interface BuildFile {
+  name: string
+  dir: boolean
+  size: number
+  modified: number
+  service: boolean
+}
+
+export const listBuildFiles = (profile: string, rel: string) => invoke<BuildFile[]>('list_build_files', { profile, rel })
+export const revealBuildFile = (profile: string, rel: string) => invoke<void>('reveal_build_file', { profile, rel })
+export const deleteBuildFile = (profile: string, rel: string) => invoke<void>('delete_build_file', { profile, rel })
+
+export type ExportFormat = 'mrpack' | 'curseforge' | 'multimc'
+export const exportPack = (profile: string, format: ExportFormat, ramMb: number, lockContent: boolean) =>
+  invoke<string>('export_pack', { profile, format, ramMb, lockContent })
+export const dismissEmbeddedJars = (profile: string) => invoke<void>('dismiss_embedded_jars', { profile })
+
+export interface WorldPack {
+  name: string
+  enabled: boolean
+  size: number
+  folder: boolean
+}
+export const worldDatapacks = (profile: string, world: string) => invoke<WorldPack[]>('world_datapacks', { profile, world })
+export const setWorldDatapack = (profile: string, world: string, name: string, enable: boolean) =>
+  invoke<void>('set_world_datapack', { profile, world, name, enable })
+export const deleteWorldDatapack = (profile: string, world: string, name: string) => invoke<void>('delete_world_datapack', { profile, world, name })
+export const addDatapackToWorld = (profile: string, world: string, name: string) => invoke<void>('add_datapack_to_world', { profile, world, name })
+
+export type JavaVendorId = 'temurin' | 'zulu' | 'semeru'
+/** Resolves with the installed Java version line once the runtime is in place. */
+export const setProfileJavaVendor = (profile: string, vendor: JavaVendorId) => invoke<string>('set_profile_java_vendor', { profile, vendor })
+
+export interface LinuxTools {
+  supported: boolean
+  gamemodeInstalled: boolean
+  gamescopeInstalled: boolean
+  gamemode: boolean
+  gamescope: boolean
+}
+export const linuxToolsState = (profile: string) => invoke<LinuxTools>('linux_tools_state', { profile })
+export const setLinuxTools = (profile: string, gamemode: boolean, gamescope: boolean) =>
+  invoke<LinuxTools>('set_linux_tools', { profile, gamemode, gamescope })
+
+export const scanPackSafety = (profile: string) => invoke<SafetyReport>('scan_pack_safety', { profile })
+export const quarantinePacks = (profile: string, files: string[]) => invoke<number>('quarantine_packs', { profile, files })
+
+export interface BuildTemplate {
+  id: string
+  name: string
+  version: string
+  loader: string
+  loaderVersion?: string | null
+  items: { kind: string; source: string; projectId: string; versionId: string }[]
+  created: number
+}
+export const listBuildTemplates = () => invoke<BuildTemplate[]>('list_build_templates')
+export const saveBuildTemplate = (profile: string, name: string) => invoke<BuildTemplate>('save_build_template', { profile, name })
+export const deleteBuildTemplate = (id: string) => invoke<void>('delete_build_template', { id })
+export const applyBuildTemplate = (id: string, profile: string) => invoke<DepReport>('apply_build_template', { id, profile })
+
+export interface PackwizResult {
+  profile: string
+  added: number
+  removed: number
+  skipped: string[]
+}
+export interface PackwizCheck {
+  linked: boolean
+  url: string
+  version: string
+  newer: boolean
+}
+export const importPackwiz = (url: string) => invoke<PackwizResult>('import_packwiz', { url })
+export const packwizCheck = (profile: string) => invoke<PackwizCheck>('packwiz_check', { profile })
+export const packwizUpdate = (profile: string) => invoke<PackwizResult>('packwiz_update', { profile })
+
+export interface FtbPack {
+  id: number
+  name: string
+  synopsis: string
+  icon: string
+  installs: number
+  version: string
+  mc: string
+  loader: string
+}
+export const ftbSearch = (term: string) => invoke<FtbPack[]>('ftb_search', { term })
+export const ftbInstall = (id: number) => invoke<Profile>('ftb_install', { id })
+
+export type PackVisibility = 'link' | 'friends' | 'private'
+export const setPackVisibility = (code: string, visibility: PackVisibility) => invoke<PackVisibility>('set_pack_visibility', { code, visibility })

@@ -11,7 +11,12 @@ export function Toast() {
   const toastAction = useUi((s) => s.toastAction)
   const hideToast = useUi((s) => s.hideToast)
   return (
-    <div className={'toast ' + toastKind + (toastShow ? ' show' : '') + (toastAction ? ' has-act' : '')} id="toast">
+    <div
+      className={'toast ' + toastKind + (toastShow ? ' show' : '') + (toastAction ? ' has-act' : '')}
+      id="toast"
+      role={toastKind === 'error' ? 'alert' : 'status'}
+      aria-live={toastKind === 'error' ? 'assertive' : 'polite'}
+    >
       <Icon id={toastKind === 'error' ? 'i-alert' : 'i-check'} />
       <span id="toastMsg">{tx(toastMsg)}</span>
       {toastAction ? (

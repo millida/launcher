@@ -149,7 +149,7 @@
   font-size: 11.5px;
   font-weight: 700;
   color: #fff;
-  text-align: left;
+  text-align: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -202,7 +202,7 @@
 .s2-mus-item.on .s2-mus-play { color: var(--m-accent); }
 .s2-mus-play {
   display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 6px 8px;
-  background: none; border: 0; color: var(--m-fg); font: 700 13px/1.2 var(--m-font); text-align: left; cursor: pointer;
+  background: none; border: 0; color: var(--m-fg); font: 700 13px/1.2 var(--m-font); text-align: start; cursor: pointer;
 }
 .s2-mus-play span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .s2-mus-x {

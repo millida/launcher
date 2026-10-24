@@ -77,6 +77,7 @@ pub(crate) fn modrinth_loaders(loader_id: &str, kind: &str) -> Vec<String> {
         "quilt" => vec!["quilt".into(), "fabric".into()], // Quilt also loads Fabric mods
         "forge" => vec!["forge".into()],
         "neoforge" => vec!["neoforge".into()],
+        "legacyfabric" => vec!["legacy-fabric".into()],
         _ => vec![],
     }
 }

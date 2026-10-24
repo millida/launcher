@@ -447,7 +447,7 @@
 @container shop (max-width: 900px) { .pk.is-plus { grid-column: 1 / -1; } }
 .pk-best.is-plus { left: auto; right: 14px; background: var(--m-rarity-legendary); color: #1d1402; }
 .pk-plus-body {
-  display: flex; align-items: center; gap: 18px; flex: 1; min-height: 150px; padding: 14px 18px; border: 0; cursor: pointer; font: inherit; color: inherit; text-align: left;
+  display: flex; align-items: center; gap: 18px; flex: 1; min-height: 150px; padding: 14px 18px; border: 0; cursor: pointer; font: inherit; color: inherit; text-align: start;
   background: color-mix(in srgb, var(--m-rarity-legendary) 14%, var(--m-inset)); --px-n: 5px; clip-path: var(--px-5);
 }
 .pk-plus-body:hover { filter: brightness(1.1); }
@@ -653,7 +653,7 @@
 .bn-bar { display: block; height: 8px; background: var(--m-inset); overflow: hidden; }
 .bn-bar > i { display: block; height: 100%; background: var(--m-rarity-legendary); transform-origin: left; }
 .bn-side { display: grid; grid-template-rows: 1fr 1fr; gap: 14px; }
-.bn-tile { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 0; cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.bn-tile { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 0; cursor: pointer; font: inherit; color: inherit; text-align: start; }
 .bn-tile:disabled { cursor: default; }
 .bn-tile.is-ready { background: color-mix(in srgb, var(--m-accent) 26%, var(--m-surface-2)); }
 .bn-tile-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
@@ -697,5 +697,5 @@
 .sv-try-items { list-style: none; margin: 0; padding: 54px 14px 14px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
 .sv-try-items li { display: flex; align-items: center; gap: 10px; font: 700 13px/1.2 var(--m-font); }
 .sv-try-items li.own { opacity: .6; }
-.sv-try-items li > svg { width: 14px; height: 14px; color: var(--m-accent); margin-left: auto; }
+.sv-try-items li > svg { width: 14px; height: 14px; color: var(--m-accent); margin-inline-start: auto; }
 @media (max-width: 760px) { .sv-try { grid-template-columns: 1fr; } .sv-try-items { display: none; } }

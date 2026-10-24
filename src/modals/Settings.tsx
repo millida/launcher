@@ -34,6 +34,10 @@ import { Icon } from '../components/Icon'
 import { Block, Group, Query, Row, Segs, Toggle } from '../components/SetKit'
 import { CloudSync } from '../components/CloudSync'
 import { SharedStore } from '../components/SharedStore'
+import { BackupsFolderRow } from '../components/BackupsFolderRow'
+import { AmbienceRows } from '../components/lobby/AmbienceRows'
+import { openMcNews } from '../components/McNews'
+import { A11yRows } from '../components/A11yRows'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
@@ -528,6 +532,8 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
       </Block>
 
+      <A11yRows />
+
       <Block keys="анимация движение персонаж танцует фон переход между вкладками скорость плавность оптимизация качество слабый пк производительность лаги fps">
         <Group title={t('Анимация')}>
           <Row title={t('Оптимизация')} keys="оптимизация качество слабый пк производительность лаги fps плавность">
@@ -547,6 +553,7 @@ export function Settings({ on }: { on: boolean }) {
           <Row title={t('Живой фон')} keys="фон анимация сцена лобби волна искры">
             <Toggle label={t('Живой фон')} on={bgAnim} onChange={() => useViewPrefs.getState().setBgAnim(!bgAnim)} />
           </Row>
+          <AmbienceRows />
           <Row title={t('Переход между вкладками')} keys="переход вкладки скорость длительность плавность анимация">
             <Segs<number>
               value={tabMs}
@@ -883,6 +890,7 @@ export function Settings({ on }: { on: boolean }) {
             {clearing ? t('Чистим…') : t('Очистить')}
           </button>
         </Row>
+        <BackupsFolderRow />
         <Block keys="общее хранилище моды дубли место">
           <SharedStore />
         </Block>
@@ -1156,6 +1164,11 @@ export function Settings({ on }: { on: boolean }) {
             className="btn md secondary"
             onClick={() => void openUrl('https://github.com/millida/launcher/releases' + (ver ? '/tag/v' + ver : '')).catch(() => {})}
           >
+            {t('Открыть')}
+          </button>
+        </Row>
+        <Row title={t('Новости Minecraft')} keys="новости minecraft mojang обновления игры снапшоты">
+          <button className="btn md secondary" onClick={openMcNews}>
             {t('Открыть')}
           </button>
         </Row>

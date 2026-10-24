@@ -523,7 +523,7 @@
   height: 32px;
   padding: 0 10px;
   font: 650 12.5px/1 var(--m-font);
-  text-align: left;
+  text-align: start;
   color: var(--m-fg-muted);
   background-color: color-mix(in srgb, var(--m-fg) 4%, transparent);
   --px-n: 4px;
@@ -889,3 +889,4 @@
 #pjModal .pjx-dg-more { align-self: center; font: 700 11.5px/1 var(--m-font); color: var(--m-fg-faint); }
 #pjModal .pjx-deps-none { display: flex; align-items: center; gap: 7px; font: 650 12.5px/1.3 var(--m-font); color: var(--m-fg-subtle); }
 #pjModal .pjx-deps-none .px-icon { color: var(--m-accent); }
+#pjModal .pjx-stat.stale { padding: 0 6px; color: var(--m-danger); background: var(--m-danger-soft); }

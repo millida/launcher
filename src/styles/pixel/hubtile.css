@@ -19,7 +19,7 @@
   /* Головы над кромкой занимают место сверху — плитка держит его сама,
      чтобы в столбике не залезать на соседа выше. */
   margin: var(--ht-over, 0px) 0 0;
-  border: 0; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer;
+  border: 0; background: none; color: #fff; font: inherit; text-align: start; cursor: pointer;
   filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.45));
   transition: transform 90ms var(--m-ease-smooth), filter 90ms var(--m-ease-smooth);
 }

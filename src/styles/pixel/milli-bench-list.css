@@ -58,7 +58,7 @@
 .mbl-gbtn {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px;
   background: none; border: 0; padding: 0; color: var(--m-fg-subtle); font: 800 10.5px/1 var(--m-font);
-  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; text-align: left;
+  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; text-align: start;
 }
 .mbl-gbtn:hover { color: var(--m-fg); }
 .mbl-gbtn .px-icon { width: 8px; height: 8px; flex: none; color: var(--m-fg-faint); }

@@ -81,14 +81,14 @@
 .ml-low b { color: var(--mp-gold); }
 .ml-low:hover { color: var(--m-fg); }
 .ml-gate {
-  display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 10px 12px; cursor: pointer; width: 100%; text-align: left; border: 0;
+  display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 10px 12px; cursor: pointer; width: 100%; text-align: start; border: 0;
   color: var(--m-fg); background: linear-gradient(90deg, hsl(42 60% 18%), var(--m-raised) 70%);
   --px-n: 5px; clip-path: var(--px-5); box-shadow: inset 3px 0 0 var(--mp-gold);
 }
 .ml-gate .mci { flex: none; }
 .ml-gate span { display: flex; flex-direction: column; gap: 2px; font: 800 13px/1.2 var(--m-font); }
 .ml-gate small { font: 600 12px/1.2 var(--m-font); color: var(--m-fg-muted); }
-.ml-gate em { margin-left: auto; flex: none; font-style: normal; padding: 6px 9px; font: 900 12px/1 var(--m-font); color: var(--mp-ink); background: var(--mp-gold); --px-n: 4px; clip-path: var(--px-4); }
+.ml-gate em { margin-inline-start: auto; flex: none; font-style: normal; padding: 6px 9px; font: 900 12px/1 var(--m-font); color: var(--mp-ink); background: var(--mp-gold); --px-n: 4px; clip-path: var(--px-4); }
 
 /* ── Карточка PLUS в чате: детали экрана PLUS (lp-*) и магазина (sh-perk-card), без своего стиля ── */
 .mps.lp {

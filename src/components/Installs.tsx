@@ -1,14 +1,18 @@
+import { useEffect } from 'react'
 import { Icon } from './Icon'
 import { PauseInstall } from './PauseInstall'
 import { runningMsg, stopInstall, useInstalls } from '../state/installs'
 import { useUi } from '../state/ui'
 import { tx, useT } from '../i18n'
+import { initDownloadSpeed, speedText, useDownloadSpeed } from '../lib/downloadSpeed'
 
 export function Installs({ inLobby = false }: { inLobby?: boolean }) {
   const t = useT()
   const tasks = useInstalls((s) => s.tasks)
   const lobbyShown = useUi((s) => s.screen === 'play')
   const list = Object.values(tasks)
+  const speed = useDownloadSpeed((s) => speedText(s.bps, s.at))
+  useEffect(() => initDownloadSpeed(), [])
   if (!list.length || lobbyShown !== inLobby) return null
   return (
     <div className={inLobby ? 'inst-dock in-lobby' : 'inst-dock'}>
@@ -19,6 +23,7 @@ export function Installs({ inLobby = false }: { inLobby?: boolean }) {
             <div className="inst-name">{task.title || t('Установка')}</div>
             <div className="inst-msg">
               {task.state === 'error' ? tx(task.msg) : task.state === 'done' ? t('Готово') : runningMsg(task, tx(task.msg) || t('Готовим…'))}
+              {task.state === 'run' && !task.paused && speed ? <span className="inst-speed"> · {speed}</span> : null}
             </div>
             {task.state === 'run' ? (
               <div className="inst-bar">

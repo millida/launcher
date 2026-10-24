@@ -41,7 +41,7 @@ import { mirrorAsset, openExt } from '../lib/api'
 import { modpackVersionFor } from '../lib/modpackVersion'
 import { fmtNum, loaderIconSrc, loaderLabel } from '../components/catalog/site'
 import { sizeLabel, spanOf } from '../components/catalog/itemView'
-import { agoLabel, compatOf, compatText, isForeign, kindLabel, licenseLabel, sideLabel, tidyBody } from './projectView'
+import { agoLabel, compatOf, compatText, isAbandoned, isForeign, kindLabel, licenseLabel, sideLabel, tidyBody } from './projectView'
 import type { BuildTarget, Compat } from './projectView'
 import { cachedTranslation, depProjects, saveLang, savedLang, translateProject, trErrorText } from './projectTranslate'
 import type { DepProject, TrView } from './projectTranslate'
@@ -607,6 +607,7 @@ export function ProjectModal() {
           {t('обновлён {when}', { when: agoLabel(pj.updated) })}
         </span>
       ) : null}
+      {pj.updated && isAbandoned(pj.updated) ? <span className="pjx-stat stale">{t('давно не обновлялся')}</span> : null}
     </>
   )
 

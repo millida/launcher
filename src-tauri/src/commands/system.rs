@@ -44,6 +44,9 @@ pub async fn pick_game_dir() -> Result<Option<String>, String> {
 pub fn open_game_folder() { engine::open_game_folder(); }
 
 #[tauri::command]
+pub fn open_antivirus_settings() { engine::open_antivirus_settings(); }
+
+#[tauri::command]
 pub async fn pick_wallpaper() -> Result<Option<engine::CustomWallpaper>, String> {
     engine::pick_wallpaper().await
 }
@@ -316,4 +319,9 @@ pub async fn dedupe_run() -> Result<engine::DedupReport, String> {
 #[tauri::command]
 pub async fn dedupe_gc() -> Result<u64, String> {
     super::blocking(engine::store_gc).await
+}
+
+#[tauri::command]
+pub async fn minecraft_news() -> Result<Vec<engine::McNews>, String> {
+    engine::minecraft_news().await
 }

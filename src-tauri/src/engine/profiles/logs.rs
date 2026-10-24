@@ -36,8 +36,12 @@ pub fn duplicate_profile(name: &str) -> Result<Vec<Profile>, String> {
             return Err(format!("Не удалось скопировать файлы сборки: {}", e));
         }
     }
-    all.insert(0, Profile { name: newname, version: src.version, fabric: src.fabric, loader: src.loader.clone(), loader_version: src.loader_version.clone(), icon: src.icon });
+    all.insert(0, Profile { name: newname.clone(), version: src.version, fabric: src.fabric, loader: src.loader.clone(), loader_version: src.loader_version.clone(), icon: src.icon });
     save_profiles(&all)?;
+    // The author's «no extra mods» binds the build they published, not the player's own copy.
+    let mut patch = serde_json::Map::new();
+    patch.insert(AUTHOR_LOCK_KEY.into(), serde_json::Value::Null);
+    merge_settings(&newname, patch);
     Ok(all)
 }
 

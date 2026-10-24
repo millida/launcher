@@ -54,7 +54,7 @@
   clip-path: var(--px-5);
   cursor: pointer;
 }
-.co-head > .co-x { margin-left: auto; }
+.co-head > .co-x { margin-inline-start: auto; }
 .co-x:hover { background: rgba(255, 255, 255, 0.24); }
 .co-x svg { width: 18px; height: 18px; }
 

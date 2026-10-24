@@ -41,7 +41,7 @@ const fn clashing(slug: &'static [&'static str]) -> Slot {
     Slot { install: slug, counts: slug, optifine_clash: true }
 }
 
-const RENDERERS: &[&str] = &["sodium", "embeddium", "rubidium"];
+pub(super) const RENDERERS: &[&str] = &["sodium", "embeddium", "rubidium"];
 
 const FABRIC_SET: &[Slot] = &[
     Slot { install: &["sodium"], counts: RENDERERS, optifine_clash: true },
@@ -85,6 +85,30 @@ const NEOFORGE_SET: &[Slot] = &[
     one(&["fast-ip-ping"]),
 ];
 
+/// VulkanMod in place of Sodium: a Vulkan renderer for Fabric. It replaces the
+/// whole OpenGL path, so the mods that patch that path (ImmediatelyFast,
+/// MoreCulling) and Iris are left out. Sodium stays as the second choice of the
+/// renderer slot, so a version VulkanMod has no stable file for still gets one.
+pub(super) const VULKAN_MOD: &str = "vulkanmod";
+
+const FABRIC_VULKAN_SET: &[Slot] = &[
+    Slot { install: &["vulkanmod", "sodium"], counts: &["vulkanmod", "sodium", "embeddium", "rubidium"], optifine_clash: true },
+    one(&["lithium"]),
+    one(&["ferrite-core"]),
+    one(&["entityculling"]),
+    one(&["modernfix"]),
+    one(&["dynamic-fps"]),
+    one(&["fast-ip-ping"]),
+];
+
+/// VulkanMod ships for Fabric from 1.18 on. It has no macOS build of its own,
+/// and the shaderc and VMA natives it bundles exist for x86_64 Linux only.
+const VULKAN_MOD_SYSTEM: bool = !cfg!(target_os = "macos") && !cfg!(all(target_os = "linux", target_arch = "aarch64"));
+
+pub fn vulkan_fits(loader: &str, game_version: &str) -> bool {
+    matches!(loader, "fabric" | "quilt") && VULKAN_MOD_SYSTEM && release_line(game_version) >= (1, 18)
+}
+
 /// Forge before 1.16 has none of the set: Embeddium, FerriteCore and the rest
 /// start at 1.16.5, so asking Modrinth for 1.7.10 only produced a list of
 /// skipped mods under a switch that promises Sodium.
@@ -100,6 +124,15 @@ fn forge_set_exists(game_version: &str) -> bool {
 /// Моды-ускорители по загрузчику. Slug'и Modrinth; ставится то, у чего есть
 /// сборка под версию профиля, остальное пропускается — режим не должен
 /// разваливаться из-за одного мода, отставшего от новой версии игры.
+/// The set with the player's renderer choice: VulkanMod where it fits, the usual one otherwise.
+pub fn boost_mods_for(loader: &str, game_version: &str, vulkan: bool) -> &'static [Slot] {
+    if vulkan && vulkan_fits(loader, game_version) {
+        FABRIC_VULKAN_SET
+    } else {
+        boost_mods(loader, game_version)
+    }
+}
+
 pub fn boost_mods(loader: &str, game_version: &str) -> &'static [Slot] {
     match loader {
         "fabric" | "quilt" => FABRIC_SET,
@@ -132,19 +165,19 @@ fn squash(s: &str) -> String {
 
 /// Jars dropped in by hand never reach the manifest, and a second copy of the
 /// same mod id stops Fabric and Forge before the window opens.
-fn jar_present(jars: &[String], slug: &str) -> bool {
+pub(super) fn jar_present(jars: &[String], slug: &str) -> bool {
     let want = squash(slug);
     jars.iter().any(|j| squash(j).starts_with(&want))
 }
 
-fn optifine_among(jars: &[String]) -> bool {
+pub(super) fn optifine_among(jars: &[String]) -> bool {
     jars.iter().any(|j| {
         let n = j.to_ascii_lowercase();
         n.contains("optifine") || n.contains("optifabric")
     })
 }
 
-fn enabled_jars(profile: &str) -> Vec<String> {
+pub(super) fn enabled_jars(profile: &str) -> Vec<String> {
     std::fs::read_dir(profile_dir(profile).join(content_dir("mod")))
         .map(|rd| {
             rd.flatten()
@@ -157,7 +190,7 @@ fn enabled_jars(profile: &str) -> Vec<String> {
 
 /// Release first, beta if nothing else exists; alpha never. A boost that
 /// crashes the game costs more frames than it saves.
-fn stable_pick(versions: &[Value], game_version: &str, loaders: &[String]) -> Option<Value> {
+pub(super) fn stable_pick(versions: &[Value], game_version: &str, loaders: &[String]) -> Option<Value> {
     ["release", "beta"].iter().find_map(|kind| {
         versions
             .iter()
@@ -214,22 +247,28 @@ pub struct FpsBoostState {
     pub stale: bool,
     /// False for a build the mode must not touch (see `fps_boost_applicable`).
     pub applicable: bool,
+    /// The player asked for VulkanMod instead of Sodium.
+    pub vulkan: bool,
+    /// VulkanMod exists for this loader, version and system.
+    pub vulkan_available: bool,
+    /// Shaders are on: Iris needs Sodium, so VulkanMod waits until they are off.
+    pub vulkan_blocked: bool,
 }
 
-fn settings_of(profile: &str) -> Value {
+pub(super) fn settings_of(profile: &str) -> Value {
     std::fs::read(profile_dir(profile).join("millida-settings.json"))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null)
 }
 
-fn str_list(v: &Value) -> Vec<String> {
+pub(super) fn str_list(v: &Value) -> Vec<String> {
     v.as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
         .unwrap_or_default()
 }
 
-fn profile_loader(profile: &str) -> String {
+pub(super) fn profile_loader(profile: &str) -> String {
     load_profiles()
         .into_iter()
         .find(|p| p.name == profile)
@@ -237,7 +276,7 @@ fn profile_loader(profile: &str) -> String {
         .unwrap_or_else(|| "vanilla".into())
 }
 
-fn profile_version(profile: &str) -> String {
+pub(super) fn profile_version(profile: &str) -> String {
     load_profiles()
         .into_iter()
         .find(|p| p.name == profile)
@@ -256,6 +295,9 @@ pub fn fps_boost_state(profile: &str) -> FpsBoostState {
         video: s["fpsBoostVideo"].is_object(),
         vanilla: boost_mods(&loader, &profile_version(profile)).is_empty(),
         applicable: fps_boost_applicable(profile),
+        vulkan: s["fpsBoostVulkan"].as_bool().unwrap_or(false),
+        vulkan_available: vulkan_fits(&loader, &profile_version(profile)),
+        vulkan_blocked: s["shaders"].as_bool().unwrap_or(false),
         stale: needs_top_up(
             s["fpsBoost"].as_bool().unwrap_or(false),
             s["fpsBoostSet"].as_u64().unwrap_or(1),
@@ -276,12 +318,12 @@ fn options_path(profile: &str) -> std::path::PathBuf {
 /// and the mode wrote back its fifteen keys alone: the pack lost its resource
 /// packs, language and key bindings. Such a file is read byte for byte instead
 /// and written back in the same bytes.
-struct Options {
-    rows: Vec<(String, String)>,
-    bytewise: bool,
+pub(super) struct Options {
+    pub(super) rows: Vec<(String, String)>,
+    pub(super) bytewise: bool,
 }
 
-fn decode_options(bytes: &[u8]) -> Options {
+pub(super) fn decode_options(bytes: &[u8]) -> Options {
     let (text, bytewise) = match std::str::from_utf8(bytes) {
         Ok(s) => (s.to_string(), false),
         Err(_) => (bytes.iter().map(|b| char::from(*b)).collect(), true),
@@ -293,7 +335,7 @@ fn decode_options(bytes: &[u8]) -> Options {
     Options { rows, bytewise }
 }
 
-fn encode_options(opts: &Options) -> Vec<u8> {
+pub(super) fn encode_options(opts: &Options) -> Vec<u8> {
     let body: String = opts.rows.iter().map(|(k, v)| format!("{}:{}\n", k, v)).collect();
     if opts.bytewise {
         body.chars().map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?')).collect()
@@ -397,7 +439,7 @@ fn restore_video(profile: &str, previous: &Value) -> Result<(), String> {
     write_options(profile, &opts)
 }
 
-fn patch(profile: &str, entries: Vec<(&str, Value)>) {
+pub(super) fn patch(profile: &str, entries: Vec<(&str, Value)>) {
     let mut m = serde_json::Map::new();
     for (k, v) in entries {
         m.insert(k.to_string(), v);
@@ -405,12 +447,25 @@ fn patch(profile: &str, entries: Vec<(&str, Value)>) {
     merge_settings(profile, m);
 }
 
-pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_options: bool, video: Option<Vec<(String, String)>>) -> Result<FpsBoostState, String> {
+pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_options: bool, video: Option<Vec<(String, String)>>, vulkan: Option<bool>) -> Result<FpsBoostState, String> {
     if !load_profiles().iter().any(|p| p.name == profile) {
         return Err("Сборка не найдена".into());
     }
     if on && !fps_boost_applicable(&profile) {
         return Err("Буст FPS этой сборке не нужен: графику, Java и настройки для неё подобрал автор".into());
+    }
+    if let Some(want) = vulkan {
+        let before = settings_of(&profile);
+        if want && before["shaders"].as_bool().unwrap_or(false) {
+            return Err("VulkanMod не работает с шейдерами: сначала выключи «Шейдеры»".into());
+        }
+        let changed = before["fpsBoostVulkan"].as_bool().unwrap_or(false) != want;
+        patch(&profile, vec![("fpsBoostVulkan", Value::Bool(want))]);
+        // The renderer is the first slot of the set: switching it means the
+        // mode takes its own mods out and installs the other set in their place.
+        if changed && on && before["fpsBoost"].as_bool().unwrap_or(false) {
+            disable(&profile)?;
+        }
     }
     if on {
         enable(&app, &profile, keep_options, video_table(video)).await
@@ -419,8 +474,51 @@ pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_optio
     }
 }
 
+/// `(major, minor)` of a game version; year-numbered releases (26.x) read as
+/// newer than any 1.x.
+fn release_line(version: &str) -> (u32, u32) {
+    let mut nums = version.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).filter_map(|p| p.parse::<u32>().ok());
+    match (nums.next(), nums.next()) {
+        (Some(1), Some(minor)) => (1, minor),
+        (Some(major), _) if major > 1 => (major, 0),
+        _ => (1, u32::MAX),
+    }
+}
+
+/// Keys a version does not know are dropped from a fresh file: simulation
+/// distance came in 1.18 and the three-way graphics mode in 1.16.
+fn rows_for_version(rows: Vec<(String, String)>, version: &str) -> Vec<(String, String)> {
+    let line = release_line(version);
+    rows.into_iter()
+        .filter(|(k, _)| match k.as_str() {
+            "simulationDistance" => line >= (1, 18),
+            "graphicsMode" => line >= (1, 16),
+            _ => true,
+        })
+        .collect()
+}
+
+/// Graphics picked for this PC, written before a build's first start. Only a
+/// build the game has never started gets it: an existing options.txt holds the
+/// player's own choices and is never touched here. True when the file was
+/// written.
+pub fn seed_video_options(profile: &str, video: Option<Vec<(String, String)>>) -> Result<bool, String> {
+    if !load_profiles().iter().any(|p| p.name == profile) {
+        return Err("Сборка не найдена".into());
+    }
+    if !fps_boost_applicable(profile) || options_path(profile).exists() {
+        return Ok(false);
+    }
+    let table = rows_for_version(video_table(video), &profile_version(profile));
+    let mut opts = Options { rows: vec![], bytewise: false };
+    apply_tuning(&mut opts.rows, &table);
+    write_options(profile, &opts)?;
+    patch(profile, vec![("videoSeededAt", Value::from(now_unix()))]);
+    Ok(true)
+}
+
 /// What the build already has for a slot, by manifest id or by a hand-dropped jar.
-fn slot_filled(slot: &Slot, known: &[String], canon: &std::collections::HashMap<&str, String>, jars: &[String]) -> bool {
+pub(super) fn slot_filled(slot: &Slot, known: &[String], canon: &std::collections::HashMap<&str, String>, jars: &[String]) -> bool {
     slot.counts.iter().any(|slug| {
         let id = canon.get(slug).map(String::as_str).unwrap_or(slug);
         already_installed(known, slug, id) || jar_present(jars, slug)
@@ -439,7 +537,10 @@ fn settle_order(installed: &[String]) -> Vec<String> {
 async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: Vec<(String, String)>) -> Result<FpsBoostState, String> {
     let loader = profile_loader(profile);
     let version = profile_version(profile);
-    let wanted = boost_mods(&loader, &version);
+    let before_choice = settings_of(profile);
+    let vulkan = before_choice["fpsBoostVulkan"].as_bool().unwrap_or(false)
+        && !before_choice["shaders"].as_bool().unwrap_or(false);
+    let wanted = boost_mods_for(&loader, &version, vulkan);
     let loaders = modrinth_loaders(&loader, "mod");
     let bridge = bridge_loaders(profile, &loader, "mod");
     let known: Vec<String> = load_content_manifest(profile)
@@ -552,8 +653,14 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
 
 fn disable(profile: &str) -> Result<FpsBoostState, String> {
     let s = settings_of(profile);
+    // Iris and Oculus do not start without the renderer: with shaders on it
+    // stays, even when this mode was the one that brought it.
+    let shaders_on = s["shaders"].as_bool().unwrap_or(false);
     for file in str_list(&s["fpsBoostMods"]) {
-        let _ = delete_content(profile, "mod", &file);
+        let keeps_shaders = shaders_on && RENDERERS.iter().any(|r| jar_present(std::slice::from_ref(&file), r));
+        if !keeps_shaders {
+            let _ = delete_content(profile, "mod", &file);
+        }
     }
     restore_video(profile, &s["fpsBoostVideo"])?;
     patch(
@@ -590,6 +697,29 @@ mod tests {
 
     /// Флаги режима проходят тот же фильтр, что и пользовательские: иначе часть
     /// профиля молча отсеялась бы на запуске.
+    /// (game version, key) -> does a fresh options.txt carry it. An unknown
+    /// key is harmless to the game, but the seeded file is what the player
+    /// sees in the folder and should hold only settings their version has.
+    #[test]
+    fn seeded_options_fit_the_game_version() {
+        let row = |k: &str| (k.to_string(), "1".to_string());
+        let rows = vec![row("renderDistance"), row("simulationDistance"), row("graphicsMode"), row("fancyGraphics")];
+        let cases: [(&str, &str, bool, &str); 8] = [
+            ("1.21.1", "simulationDistance", true, "modern versions have simulation distance"),
+            ("1.17.1", "simulationDistance", false, "simulation distance arrived in 1.18"),
+            ("1.16.5", "graphicsMode", true, "three-way graphics arrived in 1.16"),
+            ("1.12.2", "graphicsMode", false, "1.12 has only fancyGraphics"),
+            ("1.12.2", "fancyGraphics", true, "the old graphics switch stays for old versions"),
+            ("1.7.10", "renderDistance", true, "every version has render distance"),
+            ("26.2", "simulationDistance", true, "year-numbered versions are newer than any 1.x"),
+            ("", "simulationDistance", true, "an unknown version keeps the whole set"),
+        ];
+        for (version, key, want, why) in cases {
+            let kept = rows_for_version(rows.clone(), version).iter().any(|(k, _)| k == key);
+            assert_eq!(kept, want, "{version} {key}: {why}");
+        }
+    }
+
     #[test]
     fn boost_flags_survive_the_jvm_filter() {
         for f in boost_flags() {
@@ -657,6 +787,30 @@ mod tests {
     }
 
     /// (loader, game version) -> does the mode install mods at all.
+    /// (loader, version, asked) -> is VulkanMod the renderer slot's first choice.
+    #[test]
+    fn vulkan_replaces_sodium_only_where_it_exists() {
+        let cases: [(&str, &str, bool, bool, &str); 6] = [
+            ("fabric", "1.21.1", true, VULKAN_MOD_SYSTEM, "Fabric 1.21 with the box ticked"),
+            ("fabric", "1.21.1", false, false, "the box ships unticked: Sodium stays the renderer"),
+            ("quilt", "1.20.1", true, VULKAN_MOD_SYSTEM, "Quilt loads Fabric mods"),
+            ("fabric", "1.16.5", true, false, "VulkanMod starts at 1.18"),
+            ("forge", "1.20.1", true, false, "there is no VulkanMod for Forge"),
+            ("neoforge", "1.21.1", true, false, "nor for NeoForge"),
+        ];
+        for (loader, version, asked, want, why) in cases {
+            let first = boost_mods_for(loader, version, asked).first().and_then(|s| s.install.first().copied());
+            assert_eq!(first == Some(VULKAN_MOD), want, "{loader} {version}: {why}");
+        }
+        let set = boost_mods_for("fabric", "1.21.1", true);
+        for clash in ["immediatelyfast", "moreculling"] {
+            assert!(
+                !VULKAN_MOD_SYSTEM || set.iter().all(|s| !s.install.contains(&clash)),
+                "{clash} patches the OpenGL path VulkanMod replaces: it must not come with it",
+            );
+        }
+    }
+
     #[test]
     fn legacy_forge_gets_no_mod_set() {
         let cases: [(&str, &str, bool, &str); 6] = [
