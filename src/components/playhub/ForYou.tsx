@@ -327,7 +327,7 @@ export function ForYou({
   const head = [arcania, ...pinned, ...rest0.slice(rot), ...rest0.slice(0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL + pinned.length)
   const labs: ReactNode[] = head.length
     ? head.map((p, i) =>
-        p === arcania && isArcania2(p.slug, arc2) ? (
+        p === arcania && isArcania2(p.slug || p.id, arc2) ? (
           <ArcaniaCard key={'excl:' + p.id} meta={priceLabel(p) || t('Премиум')} pos={fyHead.length + i} onClick={() => onPack(p)} />
         ) : p.premium ? (
           <Card

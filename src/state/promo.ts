@@ -1,6 +1,6 @@
 // "For you" tiles on the home screen: the server and promo list is loaded from api.millida.net/v2/launcher/promo and cached in localStorage.
 import { create } from 'zustand'
-import { LAUNCHER_API, langHeaders } from '../lib/api'
+import { api } from '../lib/api'
 
 export const ANARCHY_ID = 'MCRU_ANARCHY'
 export const FOR_YOU_CARDS = ['hosting', ANARCHY_ID, 'ONEBLOCK'] as const
@@ -133,9 +133,8 @@ async function refresh(): Promise<void> {
   const mine = ++seq
   lastAt = Date.now()
   try {
-    const r = await fetch(LAUNCHER_API + '/launcher/promo', { headers: langHeaders() })
-    if (!r.ok) throw new Error('HTTP ' + r.status)
-    const body = (await r.json()) as { promo?: unknown }
+    // Through the core, not a webview fetch: the shield caches this answer without CORS headers, so a webview fetch failed and kept the stale lever.
+    const body = await api<{ promo?: unknown }>('/launcher/promo')
     if (mine !== seq) return
     const promo = readPromo(body.promo)
     usePromo.setState({ promo })

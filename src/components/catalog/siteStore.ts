@@ -13,6 +13,7 @@ import { inTime } from '../../lib/deadline'
 import { hasTauri } from '../../ipc/tauri'
 import { getMarket, marketOffers } from '../../i18n'
 import { marketPacks, sellsPaidPacks } from '../../lib/paidPacks'
+import { arcania2Live, arcaniaLead, isArcaniaLegacy, withoutArcaniaLegacy } from '../../lib/arcaniaRelease'
 
 /*
  * Состояние каталога сайта в лаунчере: раздел и фильтры — как адрес страницы
@@ -252,23 +253,23 @@ function createSiteStore(linked: boolean): SiteStore {
         : null
       // Платные сборки: сразу — что знаем (память, диск), свежий список — в фоне.
       const premiumNet = packs ? inTime(loadPremiumPacks(), LISTING_DEADLINE_MS).catch(() => null) : Promise.resolve([] as MillidaPack[])
-      let premium: MillidaPack[] = packs ? marketPacks((await staleCatalog<MillidaPack[]>(PREMIUM_KEY)) ?? []) : []
+      let premiumAll: MillidaPack[] = packs ? marketPacks((await staleCatalog<MillidaPack[]>(PREMIUM_KEY)) ?? []) : []
       // Все наши сборки — ради переводов на русский: полка, метки и подмена оригиналов.
       const ownNet = packs ? inTime(loadOwnPacks(), LISTING_DEADLINE_MS).catch(() => null) : Promise.resolve(null)
-      let own: MillidaPack[] = packs ? marketPacks((await staleCatalog<MillidaPack[]>(OWN_PACKS_KEY)) ?? []) : []
+      let ownAll: MillidaPack[] = packs ? marketPacks((await staleCatalog<MillidaPack[]>(OWN_PACKS_KEY)) ?? []) : []
       if (!current()) return
       void ownNet.then((l) => {
         if (!l) return
-        const changed = l.length !== own.length || l.some((p, i) => p.slug !== own[i]?.slug)
-        own = l
+        const changed = l.length !== ownAll.length || l.some((p, i) => p.slug !== ownAll[i]?.slug)
+        ownAll = l
         if (changed && current() && lastShown) show(lastShown, lastStale)
       })
       let premiumFresh = !packs
       void premiumNet.then((l) => {
         if (!l) return
         premiumFresh = true
-        const changed = l.length !== premium.length || l.some((p, i) => p.slug !== premium[i]?.slug)
-        premium = l
+        const changed = l.length !== premiumAll.length || l.some((p, i) => p.slug !== premiumAll[i]?.slug)
+        premiumAll = l
         // Ответ с платными пришёл позже выдачи — помечаем «Премиум» и ставим Arcania первой.
         if (changed && current() && lastShown) show(lastShown, lastStale)
       })
@@ -288,13 +289,16 @@ function createSiteStore(linked: boolean): SiteStore {
       const show = (listing: SiteListing, stale: boolean) => {
         lastShown = listing
         lastStale = stale
+        const live = arcania2Live()
+        const premium = withoutArcaniaLegacy(premiumAll, live)
+        const own = withoutArcaniaLegacy(ownAll, live)
         const paid = new Map(premium.map((p) => [p.slug, p]))
         const mine = new Map(own.map((p) => [p.slug, p]))
         const ruMarket = marketOffers(getMarket(), 'ru-content')
         const ru = packs && ruMarket ? own.filter(isRuPack) : []
         // Подмена оригинала переводом — только для переводов студии, не для русских авторов.
         const translationOf = translationIndex(ru.filter(isTranslation))
-        let got = listing.items.filter(isJavaCard).map((c) => {
+        let got = listing.items.filter((c) => isJavaCard(c) && !isArcaniaLegacy(c.slug, live)).map((c) => {
           const pack = paid.get(c.slug)
           const ours = mine.get(c.slug)
           const marked: SiteCard = pack ? { ...c, premium: true, partner: pack.partner ?? null } : c
@@ -306,7 +310,7 @@ function createSiteStore(linked: boolean): SiteStore {
         })
         got = got.filter((c, i) => got.findIndex((x) => x.slug === c.slug) === i && (ruMarket || !c.ru))
         if (packs && st.access === 'premium' && sellsPaidPacks()) {
-          const only = premiumOnly(premium, st, q)
+          const only = premiumOnly(premium, st, q, arcaniaLead(live))
           set({ items: only, total: only.length, page: 1, pages: 1, ...MR_EMPTY, busy: stale, stale, ruShelf: [], ruTotal: ru.length })
           return
         }
@@ -321,7 +325,7 @@ function createSiteStore(linked: boolean): SiteStore {
         // поднимаем наверх страницы (как Modrinth: «jei» → сначала JEI, а не всё с «jei» внутри).
         if (st.sort === 'relevance' && q.length >= 2) got = byRelevance(got, q)
         if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
-        else if (!more && packs && st.sort === 'recommended') got = pinArcania(got, premium, st, q)
+        else if (!more && packs && st.sort === 'recommended') got = pinArcania(got, premium, st, q, arcaniaLead(live))
         // «Рекомендуемые», первая страница: полка переводов сверху и ещё несколько — в ленте.
         let ruShelf: SiteCard[] = []
         if (!more && packs && st.sort === 'recommended' && st.access === 'all' && !searching) {
@@ -382,8 +386,8 @@ function createSiteStore(linked: boolean): SiteStore {
       }
       // Платные ещё в пути (первый запуск, диска нет) — ждём их недолго: иначе Arcania
       // встанет первой уже после того, как игрок увидел ленту.
-      if (!premiumFresh && !premium.length) await Promise.race([premiumNet, new Promise((r) => setTimeout(r, 1500))])
-      if (packs && !own.length) await Promise.race([ownNet, new Promise((r) => setTimeout(r, 1500))])
+      if (!premiumFresh && !premiumAll.length) await Promise.race([premiumNet, new Promise((r) => setTimeout(r, 1500))])
+      if (packs && !ownAll.length) await Promise.race([ownNet, new Promise((r) => setTimeout(r, 1500))])
       if (!current()) return
       show(listing, false)
       set({ slow: false })
@@ -404,8 +408,6 @@ function createSiteStore(linked: boolean): SiteStore {
 export const useSite = createSiteStore(true)
 /** Каталог сервера — вкладка контента панели хостинга. */
 export const useServerSite = createSiteStore(false)
-
-const ARCANIA = 'arcania'
 
 /** Насколько название совпадает с запросом: целиком, с начала, с начала слова, где-то внутри. */
 function matchRank(title: string, q: string): number {
@@ -445,11 +447,11 @@ function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader'
  * вперемешку с бесплатными (владелец, 26.09.2026). Нет её на первой странице —
  * встаёт строкой из каталога сборок, если подходит под фильтры.
  */
-function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string): SiteCard[] {
-  const hit = page.find((c) => c.slug === ARCANIA)
-  const pack = premium.find((p) => p.slug === ARCANIA)
+function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string, lead: string): SiteCard[] {
+  const hit = page.find((c) => c.slug === lead)
+  const pack = premium.find((p) => p.slug === lead)
   const top = hit || (pack && matchesFilters(pack, st, q) ? premiumCard(pack) : null)
-  return top ? [top, ...page.filter((c) => c.slug !== ARCANIA)] : page
+  return top ? [top, ...page.filter((c) => c.slug !== lead)] : page
 }
 
 /** Сколько переводов на полке над лентой и сколько ещё вплетено в первую страницу. */
@@ -486,9 +488,9 @@ function weaveRu(page: SiteCard[], ru: SiteCard[]): SiteCard[] {
 }
 
 /** Фильтр «Премиум»: только платные сборки, Arcania первой. */
-function premiumOnly(premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string): SiteCard[] {
+function premiumOnly(premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string, lead: string): SiteCard[] {
   const cards = premium.filter((p) => matchesFilters(p, st, q)).map(premiumCard)
-  return [...cards.filter((c) => c.slug === ARCANIA), ...cards.filter((c) => c.slug !== ARCANIA)]
+  return [...cards.filter((c) => c.slug === lead), ...cards.filter((c) => c.slug !== lead)]
 }
 
 /** Сколько фильтров выбрано — число на кнопке «Фильтры» в узком окне. */
