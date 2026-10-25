@@ -6337,5 +6337,7 @@
   "Скальная застава": "Cliff Outpost",
   "Шахтёрский комплекс": "Mining Complex",
   "Багровый галеон": "Crimson Galleon",
-  "Морская башня": "Sea Tower"
+  "Морская башня": "Sea Tower",
+  "Ссылка на сборку не распознана": "The modpack link was not recognized",
+  "Сборки «{name}» нет в каталоге Millida": "The modpack “{name}” is not in the Millida catalog"
 }

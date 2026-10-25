@@ -6341,5 +6341,7 @@
   "Скальная застава": "Pos Tebing",
   "Шахтёрский комплекс": "Kompleks Tambang",
   "Багровый галеон": "Galiung Merah",
-  "Морская башня": "Menara Laut"
+  "Морская башня": "Menara Laut",
+  "Ссылка на сборку не распознана": "Tautan modpack tidak dikenali",
+  "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” tidak ada di katalog Millida"
 }

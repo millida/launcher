@@ -6338,5 +6338,7 @@
   "Скальная застава": "Avant-poste rocheux",
   "Шахтёрский комплекс": "Complexe minier",
   "Багровый галеон": "Galion pourpre",
-  "Морская башня": "Tour marine"
+  "Морская башня": "Tour marine",
+  "Ссылка на сборку не распознана": "Le lien du modpack n’a pas été reconnu",
+  "Сборки «{name}» нет в каталоге Millida": "Le modpack « {name} » n’est pas dans le catalogue Millida"
 }

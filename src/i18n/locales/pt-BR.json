@@ -6337,5 +6337,7 @@
   "Скальная застава": "Posto do rochedo",
   "Шахтёрский комплекс": "Complexo de mineração",
   "Багровый галеон": "Galeão carmesim",
-  "Морская башня": "Torre marinha"
+  "Морская башня": "Torre marinha",
+  "Ссылка на сборку не распознана": "O link do modpack não foi reconhecido",
+  "Сборки «{name}» нет в каталоге Millida": "O modpack “{name}” não está no catálogo da Millida"
 }

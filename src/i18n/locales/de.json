@@ -6337,5 +6337,7 @@
   "Скальная застава": "Felsposten",
   "Шахтёрский комплекс": "Bergbaukomplex",
   "Багровый галеон": "Karmesinrote Galeone",
-  "Морская башня": "Meeresturm"
+  "Морская башня": "Meeresturm",
+  "Ссылка на сборку не распознана": "Der Modpack-Link wurde nicht erkannt",
+  "Сборки «{name}» нет в каталоге Millida": "Das Modpack „{name}“ ist nicht im Millida-Katalog"
 }
