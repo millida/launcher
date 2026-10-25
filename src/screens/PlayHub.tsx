@@ -63,6 +63,7 @@ import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
 import { hasTauri } from '../ipc/tauri'
 import { t, useMarketOffers, useT } from '../i18n'
 import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
+import { enterArcania } from '../components/arcania/transition'
 
 /**
  * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
@@ -721,8 +722,13 @@ export function PlayHub({ on }: { on?: boolean }) {
   if (pvpOpen) return wrap(<PvpPage busy={pvpBusy} onPlay={(v) => void playPvp(v)} />)
 
   const openPack = (p: HubPack) => {
-    rememberHub()
-    setPageId(p.id)
+    const open = () => {
+      rememberHub()
+      setPageId(p.id)
+    }
+    // Arcania открывается переходом как на arcania.fun: экран затягивается пикселями от карточки.
+    if (isArcania(p)) enterArcania(open)
+    else open()
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
     track('mode_open', { mode: cat, source })

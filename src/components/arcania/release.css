@@ -1,0 +1,261 @@
+/* Что нового в 2.0 (Release): барабан слева, кадр справа. */
+
+.arc-rel {
+  --row: 52px;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  align-items: center;
+  gap: 36px;
+}
+
+.arc-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.5);
+}
+
+.arc-rel-drum {
+  position: relative;
+  height: calc(var(--row) * var(--vis));
+  margin-top: 14px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+}
+
+.arc-rel-drum ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arc-rel-drum ol.is-animated {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.arc-rel[data-snap] .arc-rel-drum * { transition: none !important; }
+
+.arc-rel-drum li {
+  display: flex;
+  align-items: center;
+  height: var(--row);
+}
+
+.arc-rel-drum button {
+  all: unset;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  transition: opacity 300ms ease;
+}
+
+.arc-rel-drum button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.arc-rel-texts {
+  display: grid;
+  margin-top: 14px;
+}
+
+.arc-rel-texts p {
+  grid-area: 1 / 1;
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: rgb(237 239 238 / 0.7);
+  opacity: 0;
+  translate: 0 8px;
+  transition: opacity 300ms ease, translate 300ms ease;
+}
+
+.arc-rel-texts p[data-on] {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.arc-rel-bar {
+  display: block;
+  width: 160px;
+  height: 2px;
+  margin-top: 18px;
+  background: rgb(255 255 255 / 0.08);
+}
+
+.arc-rel-bar span {
+  display: block;
+  height: 100%;
+  background: rgb(255 255 255 / 0.6);
+  transform-origin: left;
+  animation: arc-progress linear forwards;
+}
+
+@keyframes arc-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Кадр 16:10 не выше окна — на низком окне он сужается, а не уходит за край. */
+.arc-rel-stage {
+  position: relative;
+  width: min(100%, calc((var(--avail, 100vh) - 150px) * 1.6));
+  justify-self: center;
+}
+
+/* Свечение — тот же кадр, размытый, позади рамки: цвет новинки выливается на фон. */
+.arc-rel-glow {
+  position: absolute;
+  inset: 8% 6% -4%;
+  opacity: 0.6;
+  filter: blur(48px) saturate(1.5);
+  pointer-events: none;
+}
+
+.arc-rel-glow img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.arc-rel-glow img[data-on] { opacity: 1; }
+
+.arc-rel-frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 18px;
+  background: #151615;
+}
+
+.arc-rel-shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  scale: 1.06;
+  transition: opacity 900ms cubic-bezier(0.22, 1, 0.36, 1), scale 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.arc-rel-shot.is-on {
+  opacity: 1;
+  scale: 1;
+}
+
+.arc-rel-count {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  font-family: var(--m-mono, monospace);
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.6);
+}
+
+/* Мозаика боссов 4×3: плитки влетают по очереди, последняя — «+N». */
+.arc-mosaic {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  background: #0e100e;
+}
+
+.arc-mosaic-tile {
+  position: relative;
+  overflow: hidden;
+}
+
+.arc-mosaic-tile > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arc-mosaic.is-on .arc-mosaic-tile > img {
+  animation: arc-tile 4.2s ease-out both;
+}
+
+@keyframes arc-tile {
+  from { opacity: 0; scale: 1.45; }
+  25% { opacity: 1; }
+  to { opacity: 1; scale: 1; }
+}
+
+.arc-mosaic-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #0e100e;
+}
+
+.arc-mosaic-blur {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  scale: 1.1;
+  filter: blur(6px) brightness(0.3) saturate(1.5);
+}
+
+.arc-mosaic-blur img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arc-mosaic-more b {
+  position: relative;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(22px, 3vw, 40px);
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(180deg, #fff3c4, #ffb23a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px rgb(255 178 58 / 0.45));
+}
+
+.arc-mosaic-more small {
+  position: relative;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.75);
+}
+
+/* Классы: шесть героев в ряд, каждый на свече своего цвета. */
+.arc-lineup {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+  padding: 0 4% 3%;
+  background: radial-gradient(70% 70% at 50% 100%, rgb(123 211 90 / 0.18), transparent 70%), #121312;
+}
+
+.arc-lineup img {
+  height: 70%;
+  width: auto;
+  margin: 0 -3%;
+  filter: drop-shadow(0 10px 22px color-mix(in srgb, var(--c) 45%, transparent));
+}
+
+@media (max-width: 900px) {
+  .arc-rel { grid-template-columns: 1fr; gap: 20px; }
+}

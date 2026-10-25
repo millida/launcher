@@ -1,0 +1,191 @@
+/* Боссы (Bosses): лента кадров, имя в цвете босса с искрами, полоски под лентой. */
+
+.arc-boss {
+  container-type: inline-size;
+  overflow: hidden;
+}
+
+/* Ширина кадра — от ширины секции (cqw), а не от дорожки: дорожка сдвинута на половину. */
+.arc-boss-track {
+  --gap: 18px;
+  /* Кадр 16:9 не выше окна: вместе с подписью и полосками помещается в экран. */
+  --w: min(70cqw, 900px, calc((var(--avail, 100vh) - 190px) * 16 / 9));
+}
+
+.arc-boss-head {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.arc-boss-head h2 {
+  margin: 0;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(22px, 2.6vw, 32px);
+  font-weight: 800;
+  color: #fff;
+}
+
+.arc-boss-track {
+  margin-top: 22px;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.arc-boss-belt {
+  display: flex;
+  margin-left: 50%;
+}
+
+.arc-boss-belt.is-animated {
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.arc-boss[data-snap] .arc-boss-belt * { transition: none !important; }
+
+.arc-boss-slide {
+  all: unset;
+  position: relative;
+  flex: none;
+  width: var(--w);
+  aspect-ratio: 16 / 9;
+  margin-right: var(--gap);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 18px;
+  background: #151615;
+  cursor: pointer;
+  opacity: 0.35;
+  scale: 0.92;
+  transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), scale 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.arc-boss-slide:hover { opacity: 0.5; }
+
+.arc-boss-slide.is-on {
+  cursor: default;
+  opacity: 1;
+  scale: 1;
+}
+
+.arc-boss-slide > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arc-boss-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.25) 30%, transparent 55%);
+}
+
+.arc-boss-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(14px, 5%, 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* «Новый в 2.0» — пиксельная плашка цвета босса над именем. */
+.arc-boss-badge {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0b0d0b;
+  background: color-mix(in oklab, var(--c) 70%, #fff);
+  box-shadow: 0 0 18px color-mix(in oklab, var(--c) 60%, transparent);
+  clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+  animation: arc-boss-rise 600ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.arc-boss-name {
+  position: relative;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(22px, 3vw, 38px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: color-mix(in oklab, var(--c) 35%, #fff);
+  text-shadow:
+    0 0 18px color-mix(in oklab, var(--c) 80%, transparent),
+    0 0 42px color-mix(in oklab, var(--c) 45%, transparent),
+    0 2px 0 rgb(0 0 0 / 0.5);
+  animation: arc-boss-rise 700ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes arc-boss-rise {
+  from { opacity: 0; translate: 0 14px; filter: blur(6px); }
+}
+
+/* Искры — квадратные, как пиксели: летят вверх от имени и гаснут. */
+.arc-boss-spark {
+  position: absolute;
+  left: calc(50% - 9rem + var(--x) * 0.18rem);
+  bottom: 0.4em;
+  width: 4px;
+  height: 4px;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c);
+  opacity: 0;
+  animation: arc-boss-fly var(--t) linear var(--d) infinite;
+}
+
+@keyframes arc-boss-fly {
+  0% { opacity: 0; translate: 0 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; translate: var(--dx) -90px; }
+}
+
+.arc-boss-dots {
+  display: flex;
+  gap: 8px;
+  max-width: 420px;
+  margin: 18px auto 0;
+}
+
+.arc-boss-dots button {
+  all: unset;
+  flex: 1;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.arc-boss-dots button > span {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.08);
+  transition: background-color 200ms ease;
+}
+
+.arc-boss-dots button:hover > span { background: rgb(255 255 255 / 0.16); }
+
+.arc-boss-dots i {
+  display: block;
+  height: 100%;
+}
+
+.arc-boss-dots i.is-run {
+  transform-origin: left;
+  animation: arc-progress linear forwards;
+}
+
+.arc-boss-more {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: rgb(237 239 238 / 0.5);
+}

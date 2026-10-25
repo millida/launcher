@@ -28,6 +28,8 @@ import { pickFriendsTab } from '../friends/friendsView'
 import { t, useMarket, useMarketOffers, useT, type Market } from '../../i18n'
 import '../../styles/pixel/playhub.css'
 import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
+import { ArcaniaCover, ArcaniaFx, ArcaniaName, isArcania } from '../arcania/ArcaniaCard'
+import { enterArcania } from '../arcania/transition'
 
 type PackFace = PrisonFace
 
@@ -411,13 +413,20 @@ function SmpPromo({ hover, dots }: { hover: Hover; dots: ReactNode }) {
 /** Сборка из каталога (Аркания) во весь баннер: открывает её страницу в «Во что играем». */
 function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; hover: Hover; dots: ReactNode }) {
   const t = useT()
+  // Arcania — в своей коже (зелёная рамка с искрами, «Arcania 2.0») и с переходом
+  // пикселями, как на её страницу из каталога.
+  const arc = isArcania(slug)
   const open = () => {
-    useLobby.setState({ hubTarget: { pack: slug } })
-    setScreen('playhub')
+    const go = () => {
+      useLobby.setState({ hubTarget: { pack: slug } })
+      setScreen('playhub')
+    }
+    if (arc) enterArcania(go)
+    else go()
   }
   return (
     <button
-      className="lobby-rec lobby-an lobby-pr lobby-pack"
+      className={'lobby-rec lobby-an lobby-pr lobby-pack' + (arc ? ' arc2-skin lobby-arc' : '')}
       data-sound="open"
       data-track="recommend"
       data-section="recommend"
@@ -429,14 +438,19 @@ function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; 
       onClick={open}
       {...hover}
     >
-      {pack.coverUrl ? <img className="lpr-art" src={pack.coverUrl} alt="" draggable={false} /> : null}
-      <span className="pr-co">{pack.title}</span>
+      {arc ? (
+        <ArcaniaCover className="lpr-art" />
+      ) : pack.coverUrl ? (
+        <img className="lpr-art" src={pack.coverUrl} alt="" draggable={false} />
+      ) : null}
+      <span className="pr-co">{arc ? <ArcaniaName /> : pack.title}</span>
       <span className="lan-foot">
         <span className="lan-go">
           <Icon id="i-arrow-r" /> {t('Открыть')}
         </span>
       </span>
       {dots}
+      {arc ? <ArcaniaFx /> : null}
     </button>
   )
 }

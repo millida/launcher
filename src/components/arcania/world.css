@@ -1,0 +1,397 @@
+/* Мир, построенный вручную (World): кадр постройки, карта со значками, ленты миниатюр. */
+
+.arc-world {
+  container-type: inline-size;
+  display: grid;
+  gap: 14px;
+  overflow-x: clip;
+}
+
+.arc-world-head {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  text-align: center;
+}
+
+.arc-world-head h2 {
+  margin: 0;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(22px, 2.6vw, 32px);
+  font-weight: 800;
+  color: #fff;
+}
+
+.arc-world-head p {
+  margin: 0;
+  max-width: 64ch;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: rgb(237 239 238 / 0.6);
+}
+
+/* ── Цифры и легенда ── */
+
+.arc-world-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 28px;
+}
+
+.arc-world-total {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.arc-world-total > b {
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(40px, 5vw, 58px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  color: #fff;
+}
+
+.arc-world-total strong {
+  display: block;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.arc-world-total small {
+  display: block;
+  font-size: 13px;
+  color: rgb(237 239 238 / 0.5);
+}
+
+.arc-world-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  color: rgb(237 239 238 / 0.55);
+}
+
+.arc-world-legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.arc-world-legend .arc-world-tile {
+  width: 20px;
+  height: 20px;
+}
+
+.arc-world-legend b {
+  font-family: var(--m-font-brand, sans-serif);
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Значок места — сам спрайт, у рисунка своя обводка; тень ставит его на карту. */
+.arc-world-tile {
+  display: block;
+  filter: drop-shadow(0 1.5px 1px rgb(0 0 0 / 0.65));
+}
+
+.arc-world-tile svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Кадр и карта рядом: высоту ряда задаёт квадратная карта ── */
+
+/* Цифры, кадр с картой и ленты помещаются в одно окно: сторона карты (а с ней высота ряда)
+   — высота окна за вычетом шапки, цифр и лент. */
+.arc-world-duo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(38%, clamp(150px, calc(var(--avail, 100vh) - 400px), 420px));
+  gap: 12px;
+}
+
+.arc-world-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #151615;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 40px 100px -40px rgb(0 0 0 / 0.9);
+}
+
+.arc-world-shot {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+.arc-world-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arc-world-shot[data-on='true'] { opacity: 1; }
+.arc-world-shot[data-on='true'] img { animation: arc-world-push 6s ease-out both; }
+
+@keyframes arc-world-push {
+  from { scale: 1.04; }
+  to { scale: 1; }
+}
+
+.arc-world-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to top, rgb(8 10 8 / 0.92) 0%, rgb(8 10 8 / 0.35) 32%, transparent 55%),
+    linear-gradient(to bottom, rgb(8 10 8 / 0.45), transparent 22%);
+}
+
+.arc-world-caption {
+  position: absolute;
+  left: clamp(16px, 3cqw, 32px);
+  right: 16px;
+  bottom: clamp(16px, 3cqw, 28px);
+}
+
+.arc-world-kind,
+.arc-world-name {
+  margin: 0;
+  animation: arc-world-up 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.arc-world-kind {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.7);
+}
+
+.arc-world-kind[data-boss='true'] { color: #ff7a7a; }
+
+.arc-world-name {
+  margin-top: 6px;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(26px, 4.4cqw, 48px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-shadow: 0 2px 20px rgb(0 0 0 / 0.6);
+  animation-delay: 80ms;
+}
+
+@keyframes arc-world-up {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+    filter: blur(5px);
+  }
+}
+
+.arc-world-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: rgb(255 255 255 / 0.85);
+  transform-origin: left;
+  animation: arc-world-fill linear both;
+}
+
+@keyframes arc-world-fill {
+  from { scale: 0 1; }
+}
+
+.arc-world-map {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #0b1f30;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+}
+
+.arc-world-map > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arc-world-map::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgb(8 10 8 / 0.75), transparent 35%);
+}
+
+.arc-world-dot {
+  all: unset;
+  position: absolute;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  box-sizing: border-box;
+  translate: -50% -50%;
+  cursor: pointer;
+  transition: scale 250ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms;
+}
+
+.arc-world-dot:hover { scale: 1.5; z-index: 2; }
+.arc-world-dot[data-on='true'] { opacity: 0; }
+.arc-world-dot[data-on='true']:focus-visible { opacity: 1; }
+
+/* Маркер текущего места — тот же спрайт крупно, пятно света цвета типа и волны. */
+.arc-world-marker {
+  --k: #6fd0ff;
+  position: absolute;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+.arc-world-marker[data-kind='boss'] { --k: #ff5a5a; }
+.arc-world-marker[data-kind='dungeon'] { --k: #b98cff; }
+.arc-world-marker[data-kind='village'] { --k: #7bd35a; }
+.arc-world-marker[data-kind='loot'] { --k: #ffc34a; }
+.arc-world-marker[data-kind='story'] { --k: #fff1b0; }
+
+.arc-world-marker::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--k) 60%, transparent), transparent);
+}
+
+.arc-world-marker .arc-world-tile {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 3px 4px rgb(0 0 0 / 0.7));
+  animation: arc-world-pop 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes arc-world-pop {
+  from { scale: 0.5; opacity: 0; }
+}
+
+.arc-world-wave {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--k);
+  opacity: 0;
+  animation: arc-world-wave 2s ease-out infinite;
+}
+
+.arc-world-wave + .arc-world-wave { animation-delay: 1s; }
+
+@keyframes arc-world-wave {
+  from { opacity: 0.9; scale: 1; }
+  to { opacity: 0; scale: 2.4; }
+}
+
+/* ── Ленты миниатюр ── */
+
+.arc-world-strip {
+  display: grid;
+  gap: 8px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+
+.arc-world-lane { overflow: hidden; }
+
+.arc-world-track {
+  --gap: 8px;
+  display: flex;
+  width: max-content;
+  gap: var(--gap);
+  animation: arc-world-lane calc(var(--n) * 3.2s) linear infinite;
+}
+
+.arc-world-lane[data-dir='1'] .arc-world-track { animation-direction: reverse; }
+.arc-world-lane:hover .arc-world-track { animation-play-state: paused; }
+
+/* Секции не видно — всё движение стоит, лаунчер не тратит на неё кадры. */
+.arc-world[data-idle] .arc-world-track,
+.arc-world[data-idle] .arc-world-wave {
+  animation-play-state: paused;
+}
+
+@keyframes arc-world-lane {
+  to { translate: calc(-50% - var(--gap) / 2) 0; }
+}
+
+.arc-world-thumb {
+  all: unset;
+  position: relative;
+  flex: none;
+  width: 88px;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #151615;
+  cursor: pointer;
+  opacity: 0.55;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: opacity 300ms ease, outline-color 300ms ease;
+}
+
+.arc-world-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arc-world-thumb:hover { opacity: 0.9; }
+.arc-world-thumb[data-on='true'] { opacity: 1; outline-color: #fff; }
+
+/* Узкое окно: карта маленьким окошком в углу кадра, без точек — только маркер. */
+@container (max-width: 760px) {
+  .arc-world-duo { grid-template-columns: 1fr; position: relative; }
+  .arc-world-stage { aspect-ratio: 16 / 10; max-height: calc(var(--avail, 100vh) - 340px); min-height: 150px; }
+  .arc-world-map {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    z-index: 2;
+    width: 26%;
+    border: 2px solid rgb(255 255 255 / 0.85);
+  }
+  .arc-world-dot { display: none; }
+  .arc-world-marker { width: 18px; height: 18px; }
+  .arc-world-thumb { width: 76px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc-world-shot[data-on='true'] img,
+  .arc-world-kind,
+  .arc-world-name,
+  .arc-world-wave,
+  .arc-world-marker .arc-world-tile,
+  .arc-world-track,
+  .arc-world-progress {
+    animation: none;
+  }
+}

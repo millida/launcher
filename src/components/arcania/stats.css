@@ -1,0 +1,138 @@
+/* Сборка в числах (Stats): абзац с классами, три числа, метка перевода. */
+
+.arc-stats {
+  display: grid;
+  justify-items: center;
+  gap: 44px;
+  text-align: center;
+}
+
+.arc-stats-lead {
+  margin: 0;
+  max-width: 34ch;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(20px, 2.6vw, 34px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: rgb(237 239 238 / 0.45);
+}
+
+/* Имя класса — его цветом, со своим светом; от слова вверх летят квадратные искры. */
+.arc-word {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  color: var(--c);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.arc-word-spark {
+  position: absolute;
+  bottom: 0.25em;
+  left: var(--x);
+  width: 3px;
+  height: 3px;
+  background: var(--c);
+  box-shadow: 0 0 6px var(--c);
+  opacity: 0;
+  pointer-events: none;
+  animation: arc-word-rise var(--t) linear var(--d) infinite;
+}
+
+@keyframes arc-word-rise {
+  15% { opacity: 0.9; }
+  100% {
+    opacity: 0;
+    translate: var(--dx) -1.8em;
+    rotate: 90deg;
+  }
+}
+
+.arc-stats-nums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0;
+}
+
+.arc-stats-nums > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 12px;
+}
+
+.arc-stats-nums dt {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.5);
+}
+
+.arc-stats-nums dd {
+  display: flex;
+  margin: 0;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(36px, 6vw, 76px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.arc-stats-plus { color: rgb(237 239 238 / 0.45); }
+
+/* Барабан цифры: колонка в одну строку, лента внутри едет вверх. */
+.arc-rn { display: inline-flex; }
+.arc-rn-col {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+.arc-rn-col > span {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+.arc-rn-col > span > span {
+  height: 1em;
+  line-height: 1;
+}
+
+.arc-stats-ru {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.arc-stats-ru p {
+  margin: 0;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(14px, 1.6vw, 20px);
+  font-weight: 800;
+  color: rgb(237 239 238 / 0.66);
+}
+
+.arc-stats-ru b { color: #fff; }
+
+/* Флаг — три пиксельные полосы со срезанными углами, как кнопки лаунчера. */
+.arc-flag {
+  display: inline-flex;
+  flex-direction: column;
+  width: 44px;
+  height: 29px;
+  clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+}
+.arc-flag i { flex: 1; }
+.arc-flag i:nth-child(1) { background: #f2f2ee; }
+.arc-flag i:nth-child(2) { background: #2f50c8; }
+.arc-flag i:nth-child(3) { background: #c8382f; }
+
+@media (prefers-reduced-motion: reduce) {
+  .arc-word-spark { display: none; }
+}

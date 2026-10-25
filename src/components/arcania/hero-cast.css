@@ -1,0 +1,313 @@
+/* Ряд героев (HeroCast). Одна симметричная кривая на наведение: уход курсора —
+   та же анимация назад. Свет за рядом идёт за картой быстрой кривой, вместе с ней. */
+
+@property --tint {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --glow-x {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+
+.arc-cast {
+  --ease: cubic-bezier(0.65, 0, 0.35, 1);
+  --ms: 520ms;
+  position: relative;
+  transition:
+    --tint 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    --glow-x 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.arc-cast-glow {
+  position: absolute;
+  inset: 6% 2%;
+  pointer-events: none;
+  background: radial-gradient(48% 62% at var(--glow-x) 62%, color-mix(in srgb, var(--tint) 32%, transparent), transparent 72%);
+  filter: blur(36px);
+}
+
+.arc-cast-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+  height: clamp(300px, 48vh, 440px);
+}
+
+.arc-card {
+  container-type: size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 18px;
+  background: #1a1b1c;
+  color: #fff;
+  font: inherit;
+  transition:
+    border-color var(--ms) var(--ease),
+    box-shadow var(--ms) var(--ease),
+    translate var(--ms) var(--ease);
+}
+
+.arc-card > * { pointer-events: none; }
+
+.arc-card[data-lit] {
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent),
+    0 20px 70px -20px color-mix(in srgb, var(--c) 60%, transparent);
+  translate: 0 -6px;
+}
+
+.arc-tint {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(80% 45% at 50% 100%, color-mix(in srgb, var(--c) 55%, transparent), transparent 72%),
+    linear-gradient(180deg, transparent, color-mix(in srgb, color-mix(in srgb, var(--c) 50%, #111) 45%, transparent));
+  transition: opacity var(--ms) var(--ease);
+}
+
+.arc-beam {
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  width: 70%;
+  height: 90%;
+  translate: -50% 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 26%, transparent), transparent 70%);
+  filter: blur(18px);
+  opacity: 0;
+  transition: opacity var(--ms) var(--ease);
+  animation: arc-beam 3s ease-in-out infinite;
+}
+
+@keyframes arc-beam { 50% { scale: 0.85 1; } }
+
+.arc-card[data-lit] :is(.arc-tint, .arc-beam) { opacity: 1; }
+
+/* Буква: в покое — контур, у горящей карты снизу поднимается заливка. */
+.arc-letter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-bottom: 36%;
+  font-family: 'ArcaniaCast', var(--m-font-brand, sans-serif);
+  font-weight: 800;
+  font-size: min(52cqh, 150cqw);
+  line-height: 1;
+}
+
+.arc-letter > span { grid-area: 1 / 1; }
+
+.arc-letter::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 36%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--c, #fff) 40%, transparent), transparent);
+  opacity: 0;
+  transition: opacity var(--ms) var(--ease);
+}
+
+.arc-card[data-lit] .arc-letter::before { opacity: 1; }
+
+.arc-letter-line {
+  color: transparent;
+  -webkit-text-stroke: 2px rgb(255 255 255 / 0.3);
+  transition: -webkit-text-stroke-color var(--ms) var(--ease);
+}
+
+.arc-card[data-lit] .arc-letter-line {
+  -webkit-text-stroke-color: color-mix(in srgb, var(--c) 90%, #fff);
+}
+
+.arc-letter-fill {
+  background: linear-gradient(180deg, #fff 0%, color-mix(in srgb, var(--c, #fff) 45%, #fff) 45%, color-mix(in srgb, var(--c, #fff) 90%, transparent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-mask-image: linear-gradient(to top, #000 45%, transparent 55%);
+  mask-image: linear-gradient(to top, #000 45%, transparent 55%);
+  -webkit-mask-size: 100% 220%;
+  mask-size: 100% 220%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 0 0%;
+  mask-position: 0 0%;
+  transition: -webkit-mask-position 700ms var(--ease), mask-position 700ms var(--ease);
+}
+
+.arc-card[data-lit] .arc-letter-fill,
+.arc-play:hover .arc-letter-fill {
+  -webkit-mask-position: 0 100%;
+  mask-position: 0 100%;
+}
+
+/* Герой — рендер класса: в покое серый, у горящей карты в цвете и чуть крупнее.
+   Слой во всю ширину карты, а центрируется сама картинка — сдвигом на половину
+   СВОЕЙ ширины. Так центр верен в WebKit лаунчера: раньше центровался слой шириной
+   с картинку (вправо до первого наведения), а флекс уводил широкие рендеры влево. */
+.arc-hero {
+  position: absolute;
+  bottom: 4%;
+  left: 0;
+  right: 0;
+  /* Явно без сдвига: в открытом окне лаунчера оставался стиль старой версии страницы
+     (сдвиг слоя на -50%), и герои уезжали влево на полкарты. */
+  translate: none;
+  height: var(--h);
+  transform-origin: bottom center;
+  filter: grayscale(1) brightness(0.55);
+  transition: filter var(--ms) var(--ease), scale var(--ms) var(--ease);
+}
+
+.arc-hero img {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  translate: -50% 0;
+}
+
+.arc-card[data-lit] .arc-hero {
+  filter: grayscale(0) brightness(1);
+  scale: 1.07;
+}
+
+.arc-sparks {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--ms) var(--ease);
+}
+
+.arc-card[data-lit] .arc-sparks { opacity: 1; }
+
+.arc-sparks i {
+  position: absolute;
+  bottom: 10%;
+  left: var(--x);
+  width: var(--s);
+  height: var(--s);
+  background: color-mix(in srgb, var(--c) 70%, #fff);
+  box-shadow: 0 0 10px var(--c);
+  opacity: 0;
+  animation: arc-rise var(--t) linear var(--d) infinite;
+}
+
+@keyframes arc-rise {
+  10% { opacity: 1; }
+  100% { opacity: 0; translate: var(--dx) -260px; rotate: 120deg; }
+}
+
+/* «Стань …» поднимается снизу у горящей карты, на тёмной подложке. */
+.arc-label {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 2.4rem 0 7cqh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(11px, 4cqh, 17px);
+  font-weight: 800;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--c) 80%, transparent);
+  opacity: 0;
+  translate: 0 12px;
+  transition: opacity var(--ms) var(--ease), translate var(--ms) var(--ease);
+}
+
+.arc-label small {
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgb(255 255 255 / 0.75);
+  text-shadow: none;
+}
+
+.arc-label::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -1rem;
+  z-index: -1;
+  background: linear-gradient(to bottom, transparent, rgb(17 18 17 / 0.82) 55%, rgb(17 18 17 / 0.94));
+}
+
+.arc-card[data-lit] .arc-label {
+  opacity: 1;
+  translate: 0 0;
+}
+
+/* Центральная карта: «Начать играть», зажигает весь ряд. */
+.arc-play {
+  --c: #fff;
+  cursor: pointer;
+  border-color: transparent;
+  background:
+    radial-gradient(120% 62% at 50% -6%, rgb(255 255 255 / 0.3), rgb(255 255 255 / 0.08) 34%, transparent 62%),
+    radial-gradient(90% 46% at 50% 76%, rgb(255 255 255 / 0.16), transparent 68%),
+    linear-gradient(180deg, #8fe06e, #7bd35a 54%, color-mix(in srgb, #7bd35a 55%, #111));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+  outline: none;
+}
+
+.arc-play:hover,
+.arc-play:focus-visible {
+  translate: 0 -6px;
+  box-shadow: 0 0 110px rgb(123 211 90 / 0.55);
+}
+
+.arc-play .arc-letter-line { -webkit-text-stroke-color: rgb(255 255 255 / 0.6); }
+
+.arc-play-body {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 9cqh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.arc-play-circle {
+  display: grid;
+  place-items: center;
+  width: clamp(40px, 12cqh, 58px);
+  height: clamp(40px, 12cqh, 58px);
+  border-radius: 50%;
+  background: #fff;
+  color: #7bd35a;
+  filter: drop-shadow(0 0 26px rgb(255 255 255 / 0.4));
+  transition: scale 250ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.arc-play:hover .arc-play-circle { scale: 1.1; }
+.arc-play-circle svg { width: 46%; height: 46%; margin-left: 8%; }
+
+.arc-play-body b {
+  font-family: var(--m-font-brand, sans-serif);
+  font-size: clamp(11px, 4cqh, 16px);
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .arc-cast-row { gap: 8px; }
+}
