@@ -294,6 +294,22 @@ const SLUG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
 const VERSION = /^[0-9a-z][0-9a-z.+_-]{0,31}$/i
 const LOADER = /^[a-z][a-z0-9_-]{0,23}$/
 
+// Pack pages are addressed by the catalog slug the site prints: lowercase only, so one pack has one link.
+const PACK_SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/
+
+/// millida://open/<slug>: the slug of a catalog pack whose page to show, or null for anything else.
+export function parseOpenLink(rest: string): string | null {
+  const parts = rest.split('/').filter(Boolean)
+  if (parts.length !== 1) return null
+  let slug: string
+  try {
+    slug = decodeURIComponent(parts[0])
+  } catch {
+    return null
+  }
+  return PACK_SLUG.test(slug) ? slug : null
+}
+
 /// Разбор millida://install/<раздел>/<slug>?version=…&loader=… и старого
 /// millida://modpack/<slug>. Ссылку может открыть любая страница, поэтому всё,
 /// что не похоже на наш адрес, отбрасывается целиком, а не «чинится».

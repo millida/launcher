@@ -26,6 +26,7 @@ import { useLobby } from '../state/lobbyMode'
 import type { LobbyMode } from '../state/lobbyMode'
 import { playMode } from '../lib/lobbyPlay'
 import { usePackUpdateHint } from '../lib/packUpdateHint'
+import { usePremiumBuild } from '../lib/premiumBuild'
 import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, pickWallpaper } from '../ipc/commands'
 import { setScreen, showToast, useUi } from '../state/ui'
@@ -165,6 +166,8 @@ export function Play({ on }: { on: boolean }) {
   useFirstHourChest(on, playStats.total_seconds)
   const sel = mode && mode.kind === 'build' ? profiles.find((p) => p.name === mode.name) || null : null
   const packUpdate = usePackUpdateHint(mode, profiles, on)
+  const premiumBuild = usePremiumBuild(sel ? sel.name : null, on)
+  const cardKind = mode ? (premiumBuild ? 'premium' : mode.kind) : null
   const btn = playButtonState({ modeKind: mode ? mode.kind : null, selected: sel ? sel.name : null, running, prelaunch })
   const selHours = sel ? hoursOf(sel.name) : null
   const liveServer = mode && mode.kind === 'server' ? lobbyServers.find((s) => s.slug === mode.slug) || null : null
@@ -182,7 +185,9 @@ export function Play({ on }: { on: boolean }) {
             : undefined
 
   const modeArt =
-    mode?.kind === 'build' ? (
+    mode?.kind === 'build' && premiumBuild ? (
+      premiumBuild.cover ? <img src={premiumBuild.cover} alt="" /> : null
+    ) : mode?.kind === 'build' ? (
       // Иконка сборки крупно по центру — как на карточке «Моих сборок»
       // (владелец 24.09.2026: мелкий сундук в углу).
       <span className="lobby-mode-cover lobby-mode-bi">
@@ -225,7 +230,7 @@ export function Play({ on }: { on: boolean }) {
       </span>
     ) : null
   const modeTag =
-    mode?.kind === 'premium' ? (
+    mode?.kind === 'premium' || premiumBuild ? (
       <>
         <Icon id="i-crown" />
         {t('Премиум')}
@@ -301,7 +306,7 @@ export function Play({ on }: { on: boolean }) {
           >
             {/* Панель на всю ширину (правка владельца 22:44): крупная обложка
                 меняется раз в пару секунд — «загляни, может найдёшь интереснее». */}
-            <span className={'lobby-mode-card' + (mode ? ' kind-' + mode.kind : ' empty')}>
+            <span className={'lobby-mode-card' + (cardKind ? ' kind-' + cardKind : ' empty')}>
               <span className="lobby-mode-art">
                 {mode && !partyOther ? modeArt : null}
                 <span className={'lobby-mode-reelbox' + (mode && !partyOther ? ' under' : '')}>

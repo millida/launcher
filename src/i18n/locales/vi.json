@@ -6340,5 +6340,7 @@
   "Скальная застава": "Tiền Đồn Vách Đá",
   "Шахтёрский комплекс": "Khu Mỏ",
   "Багровый галеон": "Thuyền Galleon Đỏ Thẫm",
-  "Морская башня": "Tháp Biển"
+  "Морская башня": "Tháp Biển",
+  "Ссылка на сборку не распознана": "Không nhận diện được liên kết modpack",
+  "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” không có trong danh mục Millida"
 }

@@ -6337,5 +6337,7 @@
   "Скальная застава": "Puesto del risco",
   "Шахтёрский комплекс": "Complejo minero",
   "Багровый галеон": "Galeón carmesí",
-  "Морская башня": "Torre marina"
+  "Морская башня": "Torre marina",
+  "Ссылка на сборку не распознана": "No se reconoció el enlace del modpack",
+  "Сборки «{name}» нет в каталоге Millida": "El modpack «{name}» no está en el catálogo de Millida"
 }

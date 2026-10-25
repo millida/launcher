@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { useT } from '../../i18n'
-import { ARCANIA_VERSION, ART } from './content'
+import { ARCANIA_POSTER, ARCANIA_VERSION, ART } from './content'
 import './arcania.css'
 
 export function ArcaniaName() {
@@ -11,7 +11,6 @@ export function ArcaniaName() {
   )
 }
 
-export const ARCANIA_POSTER = ART + 'cover-poster.webp'
 const COVER_VIDEO = ART + 'cover.mp4'
 
 // Held at module level: a detached video nobody references is collected and its download stops.

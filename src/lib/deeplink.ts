@@ -4,6 +4,7 @@ import { setScreen, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { useServerDetail } from '../state/serverDetail'
 import { useServers } from '../state/servers'
+import { useLobby } from '../state/lobbyMode'
 import { useMods } from '../state/mods'
 import { openProject } from '../state/project'
 import { setNewBuildPreset } from '../state/newBuild'
@@ -23,7 +24,10 @@ import { shortcutTrusted } from '../ipc/commands'
 import { restoreLauncher } from './window'
 import { rememberInviteCode } from './referrals'
 import { pickFriendsTab } from '../components/friends/friendsView'
-import { parseInstallLink } from './millidaCatalog'
+import { parseInstallLink, parseOpenLink } from './millidaCatalog'
+import { loadCatalogPacks } from '../components/playhub/data'
+import { arcania2Live, arcaniaLead, isArcania2, isArcaniaLegacy } from './arcaniaRelease'
+import { enterArcania } from '../components/arcania/transition'
 import { installFromCatalog } from './catalogInstall'
 import { openGameFromLink } from './gameInvite'
 import { t } from '../i18n'
@@ -156,6 +160,15 @@ function handle(raw: string) {
     })
     return
   }
+  if (action === 'open') {
+    const slug = parseOpenLink(rest)
+    if (!slug) {
+      showToast(t('Ссылка на сборку не распознана'), 'error')
+      return
+    }
+    void openPackFromLink(slug)
+    return
+  }
   // millida.net/play/<slug> hands off here; the core alone decides whether the invite is valid.
   if (action === 'game') {
     const slug = rest.split('/')[0] || q.get('slug') || ''
@@ -279,4 +292,24 @@ function installPackFromLink(slug: string, title: string): void {
       showToast(t('Сборка «{name}» готова к запуску', { name: p.name }), 'ok', 'achievement')
     },
   })
+}
+
+/// millida://open/<slug> from millida.net: the pack's page in PlayHub. It only shows a page, so it needs no
+/// confirmation, but the slug must be a pack the catalog actually lists, or PlayHub would wait for it forever.
+async function openPackFromLink(requested: string): Promise<void> {
+  const live = arcania2Live()
+  const slug = isArcaniaLegacy(requested, live) ? arcaniaLead(live) : requested
+  const packs = await loadCatalogPacks()
+  const premium = useLobby.getState().premium
+  const known = packs.some((p) => p.slug === slug) || premium.some((p) => (p.slug || p.id) === slug)
+  if (!known) {
+    showToast(packs.length ? t('Сборки «{name}» нет в каталоге Millida', { name: slug }) : t('Каталог не ответил — повтори'), 'error')
+    return
+  }
+  const open = () => {
+    useLobby.setState({ hubTarget: { pack: slug } })
+    setScreen('playhub')
+  }
+  if (isArcania2(slug, live)) enterArcania(open)
+  else open()
 }

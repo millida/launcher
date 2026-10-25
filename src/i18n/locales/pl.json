@@ -6337,5 +6337,7 @@
   "Скальная застава": "Skalna strażnica",
   "Шахтёрский комплекс": "Kompleks górniczy",
   "Багровый галеон": "Szkarłatny galeon",
-  "Морская башня": "Morska wieża"
+  "Морская башня": "Morska wieża",
+  "Ссылка на сборку не распознана": "Nie rozpoznano linku do paczki",
+  "Сборки «{name}» нет в каталоге Millida": "Paczki „{name}” nie ma w katalogu Millida"
 }

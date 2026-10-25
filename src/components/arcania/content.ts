@@ -3,6 +3,7 @@ import { plural } from '../../lib/format'
 
 // Page texts are Russian i18n keys: every place that shows them passes them through t().
 export const ART = '/packs/arcania/'
+export const ARCANIA_POSTER = ART + 'cover-poster.webp'
 
 export const ARCANIA_VERSION = '2.0'
 

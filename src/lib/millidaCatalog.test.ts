@@ -8,6 +8,28 @@ Object.defineProperty(globalThis, 'localStorage', {
 const m = await import('./millidaCatalog')
 type CatalogFile = import('./millidaCatalog').CatalogFile
 
+// millida://open/<slug> can be fired by any web page: only a plain catalog slug may reach the pack page.
+describe('parseOpenLink', () => {
+  const cases: [string, string | null, string][] = [
+    ['arcania-2', 'arcania-2', 'the Arcania 2.0 link the site shares'],
+    ['arcania-2/', 'arcania-2', 'a trailing slash some messengers add'],
+    ['a%72cania', 'arcania', 'percent-encoding of plain letters is still the same slug'],
+    ['', null, 'no slug at all'],
+    ['arcania/2', null, 'an extra segment is not a pack'],
+    ['..', null, 'path traversal'],
+    ['%2e%2e', null, 'encoded path traversal'],
+    ['a%2Fb', null, 'a slash hidden inside the slug'],
+    ['-arcania', null, 'catalog slugs never start with a dash'],
+    ['Arcania', null, 'catalog slugs are lowercase, so one pack has exactly one link'],
+    ['arcania_2', null, 'underscores never appear in pack slugs'],
+    ['%E0%A4%A', null, 'broken percent-encoding must not throw'],
+    ['a'.repeat(65), null, 'longer than any catalog slug'],
+  ]
+  for (const [rest, want, why] of cases) {
+    test(why, () => expect(m.parseOpenLink(rest), `parseOpenLink(${JSON.stringify(rest)}) must give ${want}: ${why}`).toBe(want))
+  }
+})
+
 // Ссылку millida:// может открыть любая страница: разбор обязан пропускать
 // только адреса сайта и отбрасывать всё остальное целиком.
 describe('parseInstallLink', () => {

@@ -6339,5 +6339,7 @@
   "Скальная застава": "Skalná strážnica",
   "Шахтёрский комплекс": "Banský komplex",
   "Багровый галеон": "Karmínová galeóna",
-  "Морская башня": "Morská veža"
+  "Морская башня": "Morská veža",
+  "Ссылка на сборку не распознана": "Odkaz na modpack sa nepodarilo rozpoznať",
+  "Сборки «{name}» нет в каталоге Millida": "Modpack „{name}“ nie je v katalógu Millida"
 }
