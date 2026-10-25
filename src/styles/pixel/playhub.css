@@ -531,8 +531,8 @@
 .pp-hero-cta { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 270px; }
 .pp-hero-cta .pp-cta-wrap, .pp-hero-cta .pp-cta, .pp-hero-cta .pab-prem-wrap { width: 100%; }
 .pp-hero-cta .pm-price { align-self: center; }
-.pp-hero-sub { display: flex; gap: 6px; }
-.pp-hero-sub .btn { flex: 1; justify-content: center; }
+.pp-hero-sub { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-hero-sub .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
 @media (max-width: 899px) { .pp-hero-cta { width: 100%; } }
 
 /* Полоса с кнопкой, когда кнопка шапки ушла за верх окна: вне прокрутки, над её верхом. */
