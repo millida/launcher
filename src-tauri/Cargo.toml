@@ -1,6 +1,6 @@
 [package]
 name = "millida-launcher"
-version = "2.0.269"
+version = "2.0.270"
 description = "Millida Launcher — безопасный лаунчер Minecraft"
 authors = ["Millida"]
 edition = "2021"
@@ -106,7 +106,9 @@ libc = "0.2"
 # (NSWorkspace.setIcon:forFile:), see src/app_icon.rs
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder", "NSWorkspace"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSBundle", "NSString"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSBundle", "NSString", "NSError", "NSAppleEventManager", "NSAppleEventDescriptor", "objc2-core-services"] }
+# Login item without a LaunchAgent: SMAppService.mainApp, see src/autostart_mac.rs
+objc2-service-management = { version = "0.3", default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation", "block2"] }
 
 [profile.release]
 strip = true

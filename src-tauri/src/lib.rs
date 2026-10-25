@@ -4,6 +4,8 @@ use tauri::Manager;
 
 pub mod engine;
 mod app_icon;
+#[cfg(target_os = "macos")]
+mod autostart_mac;
 mod discord;
 mod secrets;
 mod commands;
@@ -206,6 +208,13 @@ pub fn run() {
             engine::install_panic_hook(env!("CARGO_PKG_VERSION").to_string());
             allow_assets(app.handle());
             tray::init(app.handle());
+            // macOS: the old LaunchAgent becomes a login item of the app itself, once and silently.
+            // Read first: the launch event is only current during setup.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = commands::system::started_by_os();
+                autostart_mac::migrate_legacy(&app.package_info().name);
+            }
             // Запущен системой при входе: сразу в трей, окно не выскакивает.
             let shown_after_update = engine::take_show_after_update();
             if commands::system::started_by_os() && !shown_after_update && tray::available() {

@@ -119,6 +119,11 @@ pub fn remember_install_id(id: String) -> Result<(), String> {
 pub const AUTOSTART_ARG: &str = "--autostart";
 
 pub fn started_by_os() -> bool {
+    // A macOS login item gets no arguments: the launch Apple event says it.
+    #[cfg(target_os = "macos")]
+    if crate::autostart_mac::launched_as_login_item() {
+        return true;
+    }
     std::env::args().any(|a| a == AUTOSTART_ARG)
 }
 
@@ -129,6 +134,10 @@ pub fn autostart_state(app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
     if cfg!(debug_assertions) {
         return Ok(false);
+    }
+    #[cfg(target_os = "macos")]
+    if crate::autostart_mac::available() {
+        return Ok(crate::autostart_mac::is_enabled());
     }
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
@@ -142,6 +151,11 @@ pub fn autostart_set(app: tauri::AppHandle, on: bool) -> Result<bool, String> {
     // the owner's Mac (24.10.2026).
     if cfg!(debug_assertions) {
         return Ok(false);
+    }
+    #[cfg(target_os = "macos")]
+    if crate::autostart_mac::available() {
+        crate::autostart_mac::set_enabled(on)?;
+        return Ok(crate::autostart_mac::is_enabled());
     }
     let launch = app.autolaunch();
     let now = launch.is_enabled().unwrap_or(false);
