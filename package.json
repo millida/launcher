@@ -1,7 +1,7 @@
 {
   "name": "millida-launcher",
   "private": true,
-  "version": "2.0.269",
+  "version": "2.0.270",
   "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
