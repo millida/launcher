@@ -15,7 +15,7 @@ export const PROMO_ROTATE_MS = 7_000
 export const DISCORD_INVITE = 'https://discord.gg/ec8xAhDSH7'
 /** Канал Millida в Telegram: баннер зовёт подписаться. */
 export const TELEGRAM_CHAT = 'https://t.me/millida'
-export const ARCANIA_SLUG = 'arcania'
+export { ARCANIA_SLUG } from '../../lib/arcaniaRelease'
 
 /** Слайды, которые сейчас можно показать: сборка без карточки в каталоге выпадает. */
 export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invite: boolean; partners: boolean; ruContent: boolean }): PromoSlide[] {

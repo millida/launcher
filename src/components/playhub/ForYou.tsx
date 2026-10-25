@@ -20,6 +20,8 @@ import type { FeaturedSpot } from './featured'
 import { useAnarchy } from '../../lib/anarchy'
 import { usePromo, type ForYouCard } from '../../state/promo'
 import type { HubPack } from './data'
+import { ArcaniaCard } from '../arcania/ArcaniaCard'
+import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { PackTileArt } from './packArt'
 import { trackImpression } from '../../lib/uiTrack'
 import { track } from '../../lib/telemetry'
@@ -237,6 +239,7 @@ export function ForYou({
   onItem: (section: string, card: SiteCard) => void
 }) {
   const t = useT()
+  const arc2 = useArcania2Live()
   const fyHead = usePromo((s) => s.promo.forYou)
   const an = useAnarchy()
   const [list, setList] = useState<HostServer[] | 'none' | null>(null)
@@ -324,7 +327,9 @@ export function ForYou({
   const head = [arcania, ...pinned, ...rest0.slice(rot), ...rest0.slice(0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL + pinned.length)
   const labs: ReactNode[] = head.length
     ? head.map((p, i) =>
-        p.premium ? (
+        p === arcania && isArcania2(p.slug, arc2) ? (
+          <ArcaniaCard key={'excl:' + p.id} meta={priceLabel(p) || t('Премиум')} pos={fyHead.length + i} onClick={() => onPack(p)} />
+        ) : p.premium ? (
           <Card
             key={'excl:' + p.id}
             kind="premium"

@@ -32,6 +32,8 @@ export interface Promo {
   modesLead: typeof ANARCHY_ID | null
   /** Servers added once to the list of every matching build; empty keeps the lever off. */
   serverList: readonly ListedServer[]
+  /** Arcania 2.0 page and card skin are released; only an explicit true turns them on. */
+  arcania2: boolean
 }
 
 export const DEFAULT_PROMO: Promo = {
@@ -40,6 +42,7 @@ export const DEFAULT_PROMO: Promo = {
   forYou: ['hosting', ANARCHY_ID, 'ONEBLOCK'],
   modesLead: ANARCHY_ID,
   serverList: [],
+  arcania2: false,
 }
 
 const HOST = /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?(?::\d{1,5})?$/
@@ -104,6 +107,7 @@ export function readPromo(raw: unknown): Promo {
     forYou: 'forYou' in v ? readForYou(v.forYou) : DEFAULT_PROMO.forYou,
     modesLead: 'modesLead' in v ? readSlot(v.modesLead, DEFAULT_PROMO.modesLead) : DEFAULT_PROMO.modesLead,
     serverList: readServerList(v.serverList),
+    arcania2: v.arcania2 === true,
   }
 }
 

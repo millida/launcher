@@ -250,6 +250,8 @@ import { tryAutoHeal } from './lib/autoHeal'
 import { sendCompatSignal } from './lib/compatSignal'
 import { syncRunningGame, useGame } from './state/game'
 import { watchPromo } from './state/promo'
+import { watchArcania2 } from './lib/arcaniaRelease'
+import { warmArcaniaCover } from './components/arcania/ArcaniaCard'
 import { watchPromoServers } from './lib/promoServers'
 import { CrashModal } from './components/CrashModal'
 import { LagCard } from './components/LagCard'
@@ -408,6 +410,7 @@ export function App() {
     const stopRelay = initRealtimeRelay()
     initCalls()
     const stopPromo = watchPromo()
+    const stopArcania2 = watchArcania2(warmArcaniaCover)
     const stopStreakReminder = initStreakReminder()
     const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
@@ -486,6 +489,7 @@ export function App() {
     return () => {
             stopRelay()
       stopPromo()
+      stopArcania2()
       stopStreakReminder()
       stopStreakActivity()
       stopPromoServers()

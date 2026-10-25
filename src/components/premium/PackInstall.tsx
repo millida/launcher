@@ -16,7 +16,7 @@ import { useT } from '../../i18n'
 /// Установка платной сборки каталога — тем же путём, каким она шла из раздела
 /// «Контент»: доступ проверяет сервер, отказ открывает окно ключа, после
 /// активации установка продолжается сама.
-export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 'sm' }) {
+export function PackInstallButton({ pack, size, ghost, label: idle }: { pack: PremiumPack; size?: 'sm'; ghost?: boolean; label?: string }) {
   const t = useT()
   const [keyFor, setKeyFor] = useState<string | null>(null)
   const slug = pack.slug || ''
@@ -29,7 +29,7 @@ export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 's
       : task.label
     : done
       ? t('Установлено')
-      : t('Установить')
+      : idle || t('Установить')
 
   const start = () => {
     if (!slug) return
@@ -85,7 +85,7 @@ export function PackInstallButton({ pack, size }: { pack: PremiumPack; size?: 's
         />
       ) : null}
       <button
-        className={'btn primary' + (size === 'sm' ? ' sm' : '')}
+        className={'btn ' + (ghost ? 'ghost' : 'primary') + (size === 'sm' ? ' sm' : '')}
         disabled={running || done}
         data-track="install"
         data-kind="premium"
