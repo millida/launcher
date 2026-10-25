@@ -47,6 +47,10 @@ import type { WeaveKind } from '../catalog/weave'
 import { installReviewCandidate } from '../ModRow'
 import { reviewCandidateFor } from '../../state/mods'
 import { useT } from '../../i18n'
+import { ArcaniaPage } from '../arcania/ArcaniaPage'
+import { ArcaniaLegacy } from '../arcania/ArcaniaLegacy'
+import { HEAD as ARCANIA_HEAD } from '../arcania/content'
+import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 
 /**
  * Страница сборки — одна для всех: премиум, бесплатные нашего каталога и
@@ -316,6 +320,7 @@ export function PackPage({
   onServer: (s: SnapshotServer) => void
 }) {
   const t = useT()
+  const arc2Live = useArcania2Live()
   const profiles = useProfiles((s) => s.profiles)
   const mr = pack.origin === 'modrinth'
   const slug = pack.slug || ''
@@ -538,6 +543,73 @@ export function PackPage({
   // Квадратный значок сборки; обложка в квадрат не лезет — буквы баннера обрезались (владелец 12.10.2026).
   const icon = ownIcon || borrowed.icon || borrowed.cover || (mr ? null : blockIcon(slug || full.title))
 
+  // Главная кнопка — в шапке, рядом с названием; хостинг и сервер — маленькими под ней
+  // (владелец 12.10.2026, улучшение №1: раньше в шапке были только они, а «Установить» — ниже справа).
+  const heroCta = (
+    <div className="pp-hero-cta">
+      {cta}
+      {hostTarget || server ? (
+        <div className="pp-hero-sub">
+          {hostTarget ? (
+            <button className="btn sm secondary" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
+              <Icon id="i-server-cog" /> {t('На хостинг')}
+            </button>
+          ) : null}
+          {hostTarget && (hostTarget.kind === 'partner' || hostTarget.kind === 'modrinth') ? (
+            <button className="btn sm secondary" data-track="host_with_pack" data-src="pack_page" onClick={() => openHostWithPack(hostTarget)}>
+              <Icon id="i-plus" /> {t('Сервер с этой сборкой')}
+            </button>
+          ) : null}
+          {server ? (
+            <button className="btn sm secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
+              <Icon id="i-server" /> {t('Сервер сборки')}
+              {server.isOnline ? (
+                <span className="ph-hero-srv-n">
+                  <span className="ph-dot" aria-hidden="true"></span>
+                  {fmtN(server.online)}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+
+  if (isArcania2(slug, arc2Live))
+    return (
+      <div className="ci" data-section="pack_page" data-kind="arcania" data-id={slug || pack.id}>
+        <StickyCta watch={heroEnd} icon={icon} title={'Arcania ' + ARCANIA_HEAD.version}>
+          {cta}
+        </StickyCta>
+        <Back label={t('Сборки')} onBack={onBack} />
+        <ArcaniaPage
+          cta={heroCta}
+          extra={
+            <>
+              {pack.premium ? <PayNote packId={full.id} /> : null}
+              {keyEntry ? (
+                <div className="pkb-key">
+                  <PackKeyField
+                    slug={slug}
+                    onUnlocked={() => {
+                      showToast(t('Ключ активирован'))
+                      reloadDetail()
+                    }}
+                  />
+                </div>
+              ) : null}
+            </>
+          }
+          legacy={<ArcaniaLegacy onPlay={onPlay} />}
+          installed={!!installed}
+          onPlay={() => installed && onPlay(installed)}
+          heroEnd={heroEnd}
+        />
+        {hostOpen && hostTarget ? <HostInstall target={hostTarget} onClose={() => setHostOpen(false)} /> : null}
+      </div>
+    )
+
   return (
     <div className="ci" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
       <StickyCta watch={heroEnd} icon={icon} title={full.title}>
@@ -553,38 +625,7 @@ export function PackPage({
         line={full.tagline}
         by={author ? t('Собрал {author}', { author }) : null}
         facts={inline}
-        // Главная кнопка — в шапке, рядом с названием; хостинг и сервер — маленькими под ней
-        // (владелец 12.10.2026, улучшение №1: раньше в шапке были только они, а «Установить» — ниже справа).
-        cta={
-          <div className="pp-hero-cta">
-            {cta}
-            {hostTarget || server ? (
-              <div className="pp-hero-sub">
-                {hostTarget ? (
-                  <button className="btn sm secondary" data-sound="open" data-track="host_install" onClick={() => setHostOpen(true)}>
-                    <Icon id="i-server-cog" /> {t('На хостинг')}
-                  </button>
-                ) : null}
-                {hostTarget && (hostTarget.kind === 'partner' || hostTarget.kind === 'modrinth') ? (
-                  <button className="btn sm secondary" data-track="host_with_pack" data-src="pack_page" onClick={() => openHostWithPack(hostTarget)}>
-                    <Icon id="i-plus" /> {t('Сервер с этой сборкой')}
-                  </button>
-                ) : null}
-                {server ? (
-                  <button className="btn sm secondary" data-track="pack_server" data-src="pack_page" onClick={() => onServer(server)}>
-                    <Icon id="i-server" /> {t('Сервер сборки')}
-                    {server.isOnline ? (
-                      <span className="ph-hero-srv-n">
-                        <span className="ph-dot" aria-hidden="true"></span>
-                        {fmtN(server.online)}
-                      </span>
-                    ) : null}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        }
+        cta={heroCta}
       />
       <div ref={heroEnd} className="pp-hero-end" aria-hidden="true" />
 

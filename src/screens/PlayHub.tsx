@@ -62,6 +62,8 @@ import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
 import { hasTauri } from '../ipc/tauri'
 import { t, useMarketOffers, useT } from '../i18n'
 import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
+import { ARCANIA2_SLUG, ARCANIA_SLUG, isArcania2, useArcania2Live } from '../lib/arcaniaRelease'
+import { enterArcania } from '../components/arcania/transition'
 
 /**
  * «Во что играем», версия 6 (владелец 30.09.2026, 15:06 — те же блоки и
@@ -329,6 +331,7 @@ const isArcania = (p: HubPack) => /arcania/i.test(p.slug || p.title)
 
 export function PlayHub({ on }: { on?: boolean }) {
   const t = useT()
+  const arc2 = useArcania2Live()
   const partners = useMarketOffers('partners')
   const current = useLobby((s) => s.picked)
   const anarchy = useAnarchy()
@@ -598,8 +601,12 @@ export function PlayHub({ on }: { on?: boolean }) {
   if (pvpOpen) return wrap(<PvpPage busy={pvpBusy} onPlay={(v) => void playPvp(v)} />)
 
   const openPack = (p: HubPack) => {
-    rememberHub()
-    setPageId(p.id)
+    const open = () => {
+      rememberHub()
+      setPageId(p.id)
+    }
+    if (isArcania2(p.slug, arc2)) enterArcania(open)
+    else open()
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
     track('mode_open', { mode: cat, source })
@@ -637,7 +644,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const obOnline = ownOnline
   // «Для тебя»: Arcania — вторая карточка, бесплатные сборки Millida от
   // самых популярных — в ротацию.
-  const arcaniaPack = premiumPacks.find(isArcania) || premiumPacks[0] || null
+  const arcaniaPack = premiumPacks.find((p) => p.slug === (arc2 ? ARCANIA2_SLUG : ARCANIA_SLUG)) || premiumPacks.find(isArcania) || premiumPacks[0] || null
   const lastBuild = (current && current.kind === 'build' ? mine.find((p) => p.name === current.name) : null) || mine[0] || null
   const myOrder = lastBuild ? [lastBuild, ...mine.filter((p) => p !== lastBuild)] : mine
   // Два ряда по шесть; больше — «Ещё N».

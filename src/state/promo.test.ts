@@ -12,6 +12,8 @@ describe('readPromo', () => {
     ['a new address and version reach the join', { anarchy: { addr: 'Play.MCRU.me', version: '1.21.11' } }, { anarchy: { addr: 'play.mcru.me', version: '1.21.11' } }],
     ['a node IP never reaches the player', { anarchy: { addr: '198.51.100.20:25565' } }, { anarchy: {} }],
     ['a broken version keeps the built-in one', { anarchy: { version: 'latest', name: 'Анархия' } }, { anarchy: { name: 'Анархия' } }],
+    ['Arcania 2.0 is released only by an explicit true', { arcania2: true }, { arcania2: true }],
+    ['a truthy non-boolean never releases Arcania 2.0 early', { arcania2: 'yes' }, { arcania2: false }],
   ]
   for (const [why, raw, want] of cases)
     test(why, () => {

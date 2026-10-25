@@ -47,6 +47,8 @@ import { StarButton } from './StarButton'
 import { Milli } from '../milli/Milli'
 import { aiPackCode, installPackCode } from '../../lib/catalogInstall'
 import { t, useT } from '../../i18n'
+import { ArcaniaCover, ArcaniaFx, ArcaniaName, ArcaniaTag } from '../arcania/ArcaniaCard'
+import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 
 /** Плитка ленты: одна главная кнопка, остальное — на странице материала. */
 const CompactCtx = createContext(false)
@@ -578,9 +580,10 @@ export function SiteRow(props: RowProps) {
   // (правка владельца 24.09.2026: «вместо букв I, L, C — обложка сборки»).
   const logo = card.icon || card.cover
   const starrable = useCatalogCtx().target.kind !== 'server'
+  const arc = isArcania2(card.slug, useArcania2Live())
   return (
     <article
-      className={['card mr-row', starrable ? 'has-star' : '', card.premium ? 'is-premium' : '', partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
+      className={['card mr-row', starrable ? 'has-star' : '', arc ? 'arc2-skin' : card.premium ? 'is-premium' : '', arc ? '' : partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
       data-track="row_open"
       data-kind={trackKind(card, sec)}
       data-id={card.slug}
@@ -593,13 +596,13 @@ export function SiteRow(props: RowProps) {
       </span>
       <div className="mr-body">
         <div className="mr-titleline">
-          <h3 className="mr-title">{name}</h3>
-          {card.premium || card.exclusive ? (
+          <h3 className="mr-title">{arc ? <ArcaniaName /> : name}</h3>
+          {!arc && (card.premium || card.exclusive) ? (
             <span className="mr-prem">
               <Icon id="i-crown" /> {card.exclusive ? t('Эксклюзив') : t('Премиум')}
             </span>
           ) : null}
-          {isExclusive(card.slug) ? <span className="mr-prem excl">{t('Эксклюзив')}</span> : null}
+          {!arc && isExclusive(card.slug) ? <span className="mr-prem excl">{t('Эксклюзив')}</span> : null}
           {card.ru ? <RuMark className="mr-prem ru" by={card.ruBy} /> : null}
           {card.author ? (
             <span className="mr-by" title={card.author}>
@@ -622,6 +625,7 @@ export function SiteRow(props: RowProps) {
         <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
       </div>
       <StarButton section={sec.slug} card={card} />
+      {arc ? <ArcaniaFx /> : null}
     </article>
   )
 }
@@ -661,8 +665,11 @@ export function SiteGalleryCard(props: RowProps) {
   // Скачивания — у всех (владелец 06.10.2026): наши, а если их мало — первоисточника.
   const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
   const logo = card.icon || card.cover
+  const arc = isArcania2(card.slug, useArcania2Live())
   // Arcania — «Эксклюзив» (своя сборка студии), а не «Премиум» (владелец 12.10.2026).
-  const badge = card.exclusive ? (
+  const badge = arc ? (
+    <ArcaniaTag />
+  ) : card.exclusive ? (
     <span className="ph-card-tag prem">{t('Эксклюзив')}</span>
   ) : isExclusive(card.slug) ? (
     <span className="ph-card-tag excl">{t('Эксклюзив')}</span>
@@ -674,7 +681,7 @@ export function SiteGalleryCard(props: RowProps) {
   return (
     <CompactCtx.Provider value={true}>
       <article
-        className={['card mr-gal', shot ? 'has-shot' : 'no-shot', card.premium ? 'is-premium' : '', partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
+        className={['card mr-gal', shot ? 'has-shot' : 'no-shot', arc ? 'arc2-skin' : card.premium ? 'is-premium' : '', arc ? '' : partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
         data-track="row_open"
         data-kind={trackKind(card, sec)}
         data-id={card.slug}
@@ -682,9 +689,15 @@ export function SiteGalleryCard(props: RowProps) {
         onClick={open}
       onPointerEnter={card.launcherOnly && onOpenPackOf(props) ? () => prefetchPack(card.slug) : undefined}
       >
+        {arc ? (
+          <span className="mr-gal-cover" aria-hidden="true">
+            <ArcaniaCover />
+            {badge}
+          </span>
+        ) : null}
         {/* В «визуальных» разделах полоса картинки есть у всех — иначе ряды разной высоты:
             нет скриншота — логотип на своей размытой копии. */}
-        {!shot && visual && logo ? (
+        {!arc && !shot && visual && logo ? (
           <span className="mr-gal-cover" aria-hidden="true">
             <span className="mr-gal-iconcover">
               {img(logo)}
@@ -693,7 +706,7 @@ export function SiteGalleryCard(props: RowProps) {
             {badge}
           </span>
         ) : null}
-        {shot ? (
+        {!arc && shot ? (
           <span className="mr-gal-cover" aria-hidden="true">
             <img
               src={shot}
@@ -717,7 +730,7 @@ export function SiteGalleryCard(props: RowProps) {
               {logo ? img(logo) : <Fallback slug={card.slug} section={sec.slug} title={name} />}
             </span>
             <span className="mr-gal-names">
-              <h3 className="mr-gal-title">{name}</h3>
+              <h3 className="mr-gal-title">{arc ? <ArcaniaName /> : name}</h3>
               <span className="mr-gal-author">
                 <span className="mr-gal-by" title={card.author || undefined}>
                   {card.author ? t('от {author}', { author: shortAuthor(card.author) }) : sec.title}
@@ -731,7 +744,7 @@ export function SiteGalleryCard(props: RowProps) {
                 ) : null}
               </span>
             </span>
-            {shot || (visual && logo) ? null : badge}
+            {arc || shot || (visual && logo) ? null : badge}
           </span>
           {card.summary ? <span className="mr-gal-summary">{card.summary}</span> : null}
           <Tags tags={tags.slice(0, 3)} className="mr-gal-tags" />
@@ -743,6 +756,7 @@ export function SiteGalleryCard(props: RowProps) {
           </span>
         </span>
         <StarButton section={sec.slug} card={card} undo={props.list === 'favorites'} />
+        {arc ? <ArcaniaFx /> : null}
       </article>
     </CompactCtx.Provider>
   )

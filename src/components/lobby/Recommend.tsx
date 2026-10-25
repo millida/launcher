@@ -28,6 +28,9 @@ import { pickFriendsTab } from '../friends/friendsView'
 import { t, useMarket, useMarketOffers, useT, type Market } from '../../i18n'
 import '../../styles/pixel/playhub.css'
 import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
+import { ARCANIA2_SLUG, isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
+import { ArcaniaCover, ArcaniaFx, ArcaniaName } from '../arcania/ArcaniaCard'
+import { enterArcania } from '../arcania/transition'
 
 type PackFace = PrisonFace
 
@@ -42,7 +45,8 @@ export function Recommend({ on }: { on: boolean }) {
   const shown = usePromo((s) => s.promo.lobby === ANARCHY.mode)
   const partners = useMarketOffers('partners')
   const ruContent = useMarketOffers('ru-content')
-  const [packs, setPacks] = useState<{ prison: PackFace | null; arcania: PackFace | null } | undefined>(undefined)
+  const arc2 = useArcania2Live()
+  const [packs, setPacks] = useState<{ prison: PackFace | null; arcania: PackFace | null; arcaniaSlug: string } | undefined>(undefined)
   const [step, setStep] = useState(0)
   // Направление последней смены: слайд въезжает с той стороны, куда листали.
   const [dir, setDir] = useState<1 | -1>(1)
@@ -73,18 +77,19 @@ export function Recommend({ on }: { on: boolean }) {
     const face = (p: { title: string; cover: string | null; online?: number | null } | undefined): PackFace | null =>
       p ? { title: p.title, coverUrl: p.cover, online: typeof p.online === 'number' ? p.online : null } : null
     void loadCatalogPacks().then((list) => {
-      if (alive) setPacks({ prison: face(list.find((x) => x.slug === PRISON_SLUG)), arcania: face(list.find((x) => x.slug === ARCANIA_SLUG)) })
+      const arc = (arc2 && list.find((x) => x.slug === ARCANIA2_SLUG)) || list.find((x) => x.slug === ARCANIA_SLUG)
+      if (alive) setPacks({ prison: face(list.find((x) => x.slug === PRISON_SLUG)), arcania: face(arc), arcaniaSlug: arc?.slug ?? ARCANIA_SLUG })
     }).catch(() => {
-      if (alive) setPacks({ prison: null, arcania: null })
+      if (alive) setPacks({ prison: null, arcania: null, arcaniaSlug: ARCANIA_SLUG })
     })
     return () => {
       alive = false
     }
-  }, [shown])
+  }, [shown, arc2])
 
   useEffect(() => {
     if (!on || !shown || !slide) return
-    const id = slide === 'anarchy' ? 'own_server:' + ANARCHY.mode : slide === 'prisonrpg' || slide === 'arcania' ? 'pack:' + (slide === 'arcania' ? ARCANIA_SLUG : PRISON_SLUG) : 'promo:' + slide
+    const id = slide === 'anarchy' ? 'own_server:' + ANARCHY.mode : slide === 'prisonrpg' || slide === 'arcania' ? 'pack:' + (slide === 'arcania' ? (packs?.arcaniaSlug ?? ARCANIA_SLUG) : PRISON_SLUG) : 'promo:' + slide
     trackImpression('recommend', [id], 'play')
   }, [on, shown, slide])
 
@@ -104,7 +109,7 @@ export function Recommend({ on }: { on: boolean }) {
   const hover: Hover = {}
   let body: ReactNode
   if (slide === 'prisonrpg' && packs?.prison) body = <PrisonRecommend pack={packs.prison} hover={hover} dots={null} />
-  else if (slide === 'arcania' && packs?.arcania) body = <PackPromo slug={ARCANIA_SLUG} pack={packs.arcania} hover={hover} dots={null} />
+  else if (slide === 'arcania' && packs?.arcania) body = <PackPromo slug={packs.arcaniaSlug} pack={packs.arcania} hover={hover} dots={null} />
   else if (slide === 'discord' || slide === 'telegram') body = <ChatPromo kind={slide} reward={rewards[slide]} />
   else if (slide === 'smp') body = <SmpPromo hover={hover} dots={null} />
   else if (slide === 'invite' && invite) body = <InvitePromo plusDays={invite.plusDays} />
@@ -411,13 +416,18 @@ function SmpPromo({ hover, dots }: { hover: Hover; dots: ReactNode }) {
 /** Сборка из каталога (Аркания) во весь баннер: открывает её страницу в «Во что играем». */
 function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; hover: Hover; dots: ReactNode }) {
   const t = useT()
+  const arc = isArcania2(slug, useArcania2Live())
   const open = () => {
-    useLobby.setState({ hubTarget: { pack: slug } })
-    setScreen('playhub')
+    const go = () => {
+      useLobby.setState({ hubTarget: { pack: slug } })
+      setScreen('playhub')
+    }
+    if (arc) enterArcania(go)
+    else go()
   }
   return (
     <button
-      className="lobby-rec lobby-an lobby-pr lobby-pack"
+      className={'lobby-rec lobby-an lobby-pr lobby-pack' + (arc ? ' arc2-skin lobby-arc' : '')}
       data-sound="open"
       data-track="recommend"
       data-section="recommend"
@@ -429,14 +439,19 @@ function PackPromo({ slug, pack, hover, dots }: { slug: string; pack: PackFace; 
       onClick={open}
       {...hover}
     >
-      {pack.coverUrl ? <img className="lpr-art" src={pack.coverUrl} alt="" draggable={false} /> : null}
-      <span className="pr-co">{pack.title}</span>
+      {arc ? (
+        <ArcaniaCover className="lpr-art" />
+      ) : pack.coverUrl ? (
+        <img className="lpr-art" src={pack.coverUrl} alt="" draggable={false} />
+      ) : null}
+      <span className="pr-co">{arc ? <ArcaniaName /> : pack.title}</span>
       <span className="lan-foot">
         <span className="lan-go">
           <Icon id="i-arrow-r" /> {t('Открыть')}
         </span>
       </span>
       {dots}
+      {arc ? <ArcaniaFx /> : null}
     </button>
   )
 }
