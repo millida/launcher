@@ -10,6 +10,7 @@ import { useLobby } from '../../state/lobbyMode'
 import { GENRES, downloadsShort, genresOf, shortPitch, shortTitle } from './premiumPackData'
 import { useProfiles } from '../../state/profiles'
 import { intlTag, t, useT } from '../../i18n'
+import { arcania2Live, useArcania2Live, withoutArcaniaLegacy } from '../../lib/arcaniaRelease'
 
 /*
  * Студия и эксклюзив премиум-сборки (PremiumPackPage):
@@ -72,16 +73,17 @@ function catalogPacks(): Promise<MillidaPack[]> {
 /** Премиум-сборок у студии в каталоге; нет данных — null. */
 export function useStudioCount(slug: string | null | undefined): number | null {
   const [n, setN] = useState<number | null>(null)
+  const arc2 = useArcania2Live()
   useEffect(() => {
     if (!slug) return
     let alive = true
     catalogPacks()
-      .then((l) => alive && setN(l.filter((p) => p.partner?.slug === slug && p.accessRequired && !p.preview).length || null))
+      .then((l) => alive && setN(withoutArcaniaLegacy(l, arc2).filter((p) => p.partner?.slug === slug && p.accessRequired && !p.preview).length || null))
       .catch(() => {})
     return () => {
       alive = false
     }
-  }, [slug])
+  }, [slug, arc2])
   return n
 }
 
@@ -144,7 +146,7 @@ export function StudioModal({
     let alive = true
     setFailed(false)
     catalogPacks()
-      .then((l) => alive && setList(l.filter((p) => p.partner?.slug === studio.slug && !p.preview)))
+      .then((l) => alive && setList(withoutArcaniaLegacy(l, arcania2Live()).filter((p) => p.partner?.slug === studio.slug && !p.preview)))
       .catch(() => alive && setFailed(true))
     return () => {
       alive = false

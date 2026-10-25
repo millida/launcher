@@ -8,6 +8,7 @@ import { CancelLine } from '../components/premium/PremiumBuy'
 import { useLobby } from '../state/lobbyMode'
 import { loadShowcase, type PremiumPack, type PremiumPlan, type PremiumShowcase } from '../lib/premium'
 import { trackFailure } from '../lib/telemetry'
+import { ARCANIA2_SLUG, ARCANIA_SLUG, useArcania2Live, withoutArcaniaLegacy } from '../lib/arcaniaRelease'
 
 /// Витрина платных сборок (docs/REDESIGN-2026-09-22.md §2.2).
 ///
@@ -16,6 +17,7 @@ import { trackFailure } from '../lib/telemetry'
 /// с сервера: чего в ответе нет, того на экране нет.
 export function Premium({ on }: { on: boolean }) {
   const t = useT()
+  const arc2 = useArcania2Live()
   const [data, setData] = useState<PremiumShowcase | null>(null)
   const [state, setState] = useState<'load' | 'ready' | 'error'>('load')
   const [openId, setOpenId] = useState('')
@@ -55,14 +57,15 @@ export function Premium({ on }: { on: boolean }) {
     }
   }, [on, tick])
 
-  const packs: PremiumPack[] = (data && data.packs) || []
+  const packs: PremiumPack[] = withoutArcaniaLegacy((data && data.packs) || [], arc2)
   const plans: PremiumPlan[] = (data && data.plans) || []
   const sub = (data && data.subscription) || null
   /// Уровень, о котором говорит витрина: оформленный игроком, иначе первый.
   const plan: PremiumPlan | null = plans.find((x) => x.id === (sub && sub.planId)) || plans[0] || null
 
   const opened = packs.find((p) => p.id === openId) || null
-  const featured = packs.find((p) => p.id === (data && data.featuredId)) || packs[0] || null
+  const featuredId = arc2 && data?.featuredId === ARCANIA_SLUG ? ARCANIA2_SLUG : data?.featuredId
+  const featured = packs.find((p) => p.id === featuredId) || packs[0] || null
   const rest = featured ? packs.filter((p) => p.id !== featured.id) : packs
 
   // Сборка одна: витрина из неё и состоит — второго экрана, куда идти, нет.

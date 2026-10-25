@@ -310,6 +310,7 @@ export function PackPage({
   server,
   onBack,
   onPlay,
+  onPlayBuild,
   onServer,
 }: {
   pack: HubPack
@@ -317,6 +318,8 @@ export function PackPage({
   onBack: () => void
   /** Запуск: имя установленной сборки на компьютере. */
   onPlay: (build: string) => void
+  /** Starts exactly this local build, not the pack the page shows: Arcania 1.4.3 from the 2.0 page. */
+  onPlayBuild: (build: string) => void
   onServer: (s: SnapshotServer) => void
 }) {
   const t = useT()
@@ -601,7 +604,7 @@ export function PackPage({
               ) : null}
             </>
           }
-          legacy={<ArcaniaLegacy onPlay={onPlay} />}
+          legacy={<ArcaniaLegacy onPlay={onPlayBuild} />}
           installed={!!installed}
           onPlay={() => installed && onPlay(installed)}
           heroEnd={heroEnd}

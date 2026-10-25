@@ -2,6 +2,7 @@ import { Icon } from '../Icon'
 import { priceLabel, type PremiumPack } from '../../lib/premium'
 import { useLobby } from '../../state/lobbyMode'
 import { useT } from '../../i18n'
+import { useArcania2Live, withoutArcaniaLegacy } from '../../lib/arcaniaRelease'
 
 /*
  * «Другие популярные премиум-сборки» внизу премиум-страницы (владелец 06.10.2026):
@@ -29,7 +30,8 @@ const rank = (p: PremiumPack) => {
 export function PremiumMore({ current }: { current: string }) {
   const t = useT()
   const all = useLobby((s) => s.premium)
-  const list = all
+  const arc2 = useArcania2Live()
+  const list = withoutArcaniaLegacy(all, arc2)
     .filter((p) => p.slug && p.slug !== current && p.coverUrl)
     .map((p, i) => ({ p, i, r: rank(p) }))
     .sort((a, b) => a.r - b.r || (b.p.downloads || 0) - (a.p.downloads || 0) || a.i - b.i)

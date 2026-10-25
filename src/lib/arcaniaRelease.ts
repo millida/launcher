@@ -25,3 +25,11 @@ export function watchArcania2(onRelease: () => void): () => void {
   apply(arcania2Live())
   return usePromo.subscribe((s) => apply(released(s.promo.arcania2)))
 }
+
+/** Once 2.0 is out, 1.4.3 is reachable only from the 2.0 page and from an installed build, never from a list. */
+export const isArcaniaLegacy = (slug: string | null | undefined, live: boolean): boolean => live && slug === ARCANIA_SLUG
+
+export const withoutArcaniaLegacy = <T extends { slug?: string | null; id?: string }>(list: readonly T[], live: boolean): T[] =>
+  list.filter((p) => !isArcaniaLegacy(p.slug ?? p.id, live))
+
+export const arcaniaLead = (live: boolean): string => (live ? ARCANIA2_SLUG : ARCANIA_SLUG)

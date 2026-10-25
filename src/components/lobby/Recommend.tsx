@@ -28,7 +28,7 @@ import { pickFriendsTab } from '../friends/friendsView'
 import { t, useMarket, useMarketOffers, useT, type Market } from '../../i18n'
 import '../../styles/pixel/playhub.css'
 import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
-import { ARCANIA2_SLUG, isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
+import { arcaniaLead, isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { ArcaniaCover, ArcaniaFx, ArcaniaName } from '../arcania/ArcaniaCard'
 import { enterArcania } from '../arcania/transition'
 
@@ -77,7 +77,7 @@ export function Recommend({ on }: { on: boolean }) {
     const face = (p: { title: string; cover: string | null; online?: number | null } | undefined): PackFace | null =>
       p ? { title: p.title, coverUrl: p.cover, online: typeof p.online === 'number' ? p.online : null } : null
     void loadCatalogPacks().then((list) => {
-      const arc = (arc2 && list.find((x) => x.slug === ARCANIA2_SLUG)) || list.find((x) => x.slug === ARCANIA_SLUG)
+      const arc = list.find((x) => x.slug === arcaniaLead(arc2))
       if (alive) setPacks({ prison: face(list.find((x) => x.slug === PRISON_SLUG)), arcania: face(arc), arcaniaSlug: arc?.slug ?? ARCANIA_SLUG })
     }).catch(() => {
       if (alive) setPacks({ prison: null, arcania: null, arcaniaSlug: ARCANIA_SLUG })

@@ -62,7 +62,7 @@ import { ensurePvpBuild, pvpBuildName } from '../lib/versionBuild'
 import { hasTauri } from '../ipc/tauri'
 import { t, useMarketOffers, useT } from '../i18n'
 import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
-import { ARCANIA2_SLUG, ARCANIA_SLUG, isArcania2, useArcania2Live } from '../lib/arcaniaRelease'
+import { ARCANIA2_SLUG, ARCANIA_SLUG, isArcania2, useArcania2Live, withoutArcaniaLegacy } from '../lib/arcaniaRelease'
 import { enterArcania } from '../components/arcania/transition'
 
 /**
@@ -468,8 +468,9 @@ export function PlayHub({ on }: { on?: boolean }) {
     }
     for (const c of packs || [])
       if (c.accessRequired && !seen.has(c.slug)) out.push({ ...packFromCatalog(c), premium: true, origin: 'millida' })
-    return [...out.filter(isArcania), ...out.filter((p) => !isArcania(p))]
-  }, [premium, packs])
+    const listed = withoutArcaniaLegacy(out, arc2)
+    return [...listed.filter(isArcania), ...listed.filter((p) => !isArcania(p))]
+  }, [premium, packs, arc2])
 
   // Наши сборки каталога Millida целиком плюс реальный каталог Modrinth.
   const catalogPacks = useMemo<HubPack[]>(() => {
@@ -594,6 +595,7 @@ export function PlayHub({ on }: { on?: boolean }) {
         server={packServer}
         onBack={() => setPageId(null)}
         onPlay={(build) => launch(page.origin === 'millida' ? premiumMode(page) : { kind: 'build', name: build })}
+        onPlayBuild={(build) => launch({ kind: 'build', name: build })}
         onServer={(s) => launch(serverMode(s))}
       />,
     )
@@ -605,7 +607,7 @@ export function PlayHub({ on }: { on?: boolean }) {
       rememberHub()
       setPageId(p.id)
     }
-    if (isArcania2(p.slug, arc2)) enterArcania(open)
+    if (isArcania2(p.slug || p.id, arc2)) enterArcania(open)
     else open()
   }
   const pickMode = (cat: string, source: 'hub' | 'search' | 'foryou' = 'hub') => {
@@ -644,7 +646,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const obOnline = ownOnline
   // «Для тебя»: Arcania — вторая карточка, бесплатные сборки Millida от
   // самых популярных — в ротацию.
-  const arcaniaPack = premiumPacks.find((p) => p.slug === (arc2 ? ARCANIA2_SLUG : ARCANIA_SLUG)) || premiumPacks.find(isArcania) || premiumPacks[0] || null
+  const arcaniaPack = premiumPacks.find((p) => (p.slug || p.id) === (arc2 ? ARCANIA2_SLUG : ARCANIA_SLUG)) || premiumPacks.find(isArcania) || premiumPacks[0] || null
   const lastBuild = (current && current.kind === 'build' ? mine.find((p) => p.name === current.name) : null) || mine[0] || null
   const myOrder = lastBuild ? [lastBuild, ...mine.filter((p) => p !== lastBuild)] : mine
   // Два ряда по шесть; больше — «Ещё N».
