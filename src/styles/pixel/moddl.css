@@ -58,7 +58,7 @@
 .mdl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; font: 700 12px/1 var(--m-font); background: var(--m-accent-soft); color: var(--m-fg); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; flex: none; --px-n: 4px; clip-path: var(--px-4); }
 .mdl-chip img { width: 20px; height: 20px; }
 
-.mdl-review-back { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: rgba(6, 8, 7, .6); }
+.mdl-review-back { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; background: rgba(6, 8, 7, .6); }
 .mdl-review { width: min(560px, 92%); max-height: 80%; display: flex; flex-direction: column; gap: 12px; padding: 16px; background-color: var(--m-surface); }
 .mdl-rv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; }
 .mdl-rv-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--m-surface-2); --px-n: 4px; clip-path: var(--px-4); }
