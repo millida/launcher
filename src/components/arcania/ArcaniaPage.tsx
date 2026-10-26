@@ -7,6 +7,7 @@ import { Bosses } from './Bosses'
 import { Stats } from './Stats'
 import { World } from './World'
 import { arriveArcania } from './transition'
+import type { HeroAction } from './offer'
 import './arcania.css'
 
 function withVersion(text: string): ReactNode {
@@ -26,6 +27,7 @@ export function ArcaniaPage({
   extra,
   legacy,
   installed,
+  hero,
   onPlay,
   heroEnd,
 }: {
@@ -33,11 +35,13 @@ export function ArcaniaPage({
   extra: ReactNode
   legacy: ReactNode
   installed: boolean
+  hero: HeroAction
   onPlay: () => void
   heroEnd: React.RefObject<HTMLDivElement | null>
 }) {
   const t = useT()
   const ctaRef = useRef<HTMLDivElement>(null)
+  const headRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => arriveArcania(), [])
 
@@ -53,17 +57,20 @@ export function ArcaniaPage({
   }, [])
 
   const play = () => {
-    if (installed) return onPlay()
-    const btn = ctaRef.current?.querySelector('button')
-    if (btn) btn.click()
-    else ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (hero === 'play') return onPlay()
+    const install = hero === 'install' ? ctaRef.current?.querySelector<HTMLButtonElement>('[data-hero-install] button') : null
+    if (install) return install.click()
+    const key = headRef.current?.querySelector<HTMLInputElement>('.pkb-key input')
+    const target = key ?? ctaRef.current
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    key?.focus({ preventScroll: true })
   }
 
   return (
     <div className="arc" ref={rootRef}>
       <HeroCast installed={installed} onPlay={play} />
 
-      <div className="arc-head">
+      <div className="arc-head" ref={headRef}>
         <h1>{withVersion(t('ARCANIA {v} вышла'))}</h1>
         <p>{t(HEAD.lead)}</p>
         <div className="ci-cta arc-cta" ref={ctaRef}>

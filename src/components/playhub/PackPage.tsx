@@ -51,6 +51,10 @@ import { ArcaniaPage } from '../arcania/ArcaniaPage'
 import { ArcaniaLegacy } from '../arcania/ArcaniaLegacy'
 import { HEAD as ARCANIA_HEAD } from '../arcania/content'
 import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
+import { arcaniaOffer, heroAction } from '../arcania/offer'
+import { sellsPaidPacks } from '../../lib/paidPacks'
+import { useHasMillida } from '../../state/auth'
+import { openAccountAdd } from '../../state/accountAdd'
 
 /**
  * Страница сборки — одна для всех: премиум, бесплатные нашего каталога и
@@ -330,6 +334,9 @@ export function PackPage({
   const [view, setView] = useState<PackView | null>(() => onceNow<PackView>('pv:' + slug))
   const [item, setItem] = useState<CatalogItem | null>(() => onceNow<CatalogItem>('ci:' + slug))
   const [detail, setDetail] = useState<PremiumPackDetail | null>(() => onceNow<PremiumPackDetail>('pd:' + pack.id))
+  const [detailFailed, setDetailFailed] = useState(false)
+  const signedIn = useHasMillida()
+  const seenSignedIn = useRef(signedIn)
   // Пока главного нет (описание, а у премиума ещё и доступ) — каркас страницы, а не
   // половина страницы, которая потом перестраивается. Не дольше 2,5 с.
   const [waited, setWaited] = useState(false)
@@ -363,6 +370,7 @@ export function PackPage({
     setView(onceNow<PackView>('pv:' + slug))
     setItem(onceNow<CatalogItem>('ci:' + slug))
     setDetail(onceNow<PremiumPackDetail>('pd:' + pack.id))
+    setDetailFailed(false)
     setProject(null)
     setVersions([])
     setHostTarget(null)
@@ -396,8 +404,13 @@ export function PackPage({
       })
     }
     if (pack.premium) {
-      if (pack.source === 'premium')
-        void remember('pd:' + pack.id, once('pd:' + pack.id, () => loadPremiumPack(pack.id))).then((d) => alive && d && setDetail(d))
+      // Arcania 2.0 sells and takes keys on its own page even when it was opened from the catalog card.
+      if (pack.source === 'premium' || isArcania2(slug, arc2Live))
+        void remember('pd:' + pack.id, once('pd:' + pack.id, () => loadPremiumPack(pack.id))).then((d) => {
+          if (!alive) return
+          if (d) setDetail(d)
+          else setDetailFailed(true)
+        })
       void loadPremium()
         .then((s) => {
           if (!alive) return
@@ -488,6 +501,16 @@ export function PackPage({
       })
       .catch(() => {})
   }
+  const retryDetail = () => {
+    setDetailFailed(false)
+    void remember('pd:' + pack.id, once('pd:' + pack.id, () => loadPremiumPack(pack.id))).then((d) => (d ? setDetail(d) : setDetailFailed(true)))
+  }
+  // The detail answered for a guest knows nothing of the account: after sign-in access and plans are asked again.
+  useEffect(() => {
+    if (seenSignedIn.current === signedIn) return
+    seenSignedIn.current = signedIn
+    if (signedIn && isArcania2(slug, arc2Live)) reloadDetail()
+  }, [signedIn])
   const ready = mr ? !!project : !!view && (!pack.premium || pack.source !== 'premium' || !!detail)
   if (!ready && !waited) return <PackPageSkeleton pack={pack} onBack={onBack} />
   const keyEntry = !installed && !!slug && !!detail && hasPlanChoice(detail) && !!full.acceptsKeys && !hasAccess(full, sub)
@@ -548,9 +571,9 @@ export function PackPage({
 
   // Главная кнопка — в шапке, рядом с названием; хостинг и сервер — маленькими под ней
   // (владелец 12.10.2026, улучшение №1: раньше в шапке были только они, а «Установить» — ниже справа).
-  const heroCta = (
+  const heroOf = (main: ReactNode) => (
     <div className="pp-hero-cta">
-      {cta}
+      {main}
       {hostTarget || server ? (
         <div className="pp-hero-sub">
           {hostTarget ? (
@@ -578,23 +601,75 @@ export function PackPage({
       ) : null}
     </div>
   )
+  const heroCta = heroOf(cta)
 
-  if (isArcania2(slug, arc2Live))
+  if (isArcania2(slug, arc2Live)) {
+    const offer = arcaniaOffer({
+      installed: !!installed,
+      signedIn,
+      access: hasAccess(full, sub) || hasAccess(full, liveSubscription(detail)),
+      detail: detail ? 'ready' : detailFailed ? 'failed' : 'loading',
+      sells: sellsPaidPacks(),
+    })
+    let arcMain: ReactNode = null
+    if (offer === 'play') arcMain = cta
+    else if (offer === 'install')
+      arcMain = (
+        <span className="pp-cta-wrap" data-hero-install>
+          <PackInstallButton pack={full} />
+        </span>
+      )
+    else if (offer === 'signin')
+      arcMain = (
+        <button className="btn lg primary pp-cta" data-sound="open" data-track="arcania_signin" data-src="pack_page" onClick={() => openAccountAdd('millida')}>
+          <Icon id="i-login" /> {t('Войти')}
+        </button>
+      )
+    else if (offer === 'loading') arcMain = <span className="skel pp-skel-cta" aria-busy="true" />
+    else if (offer === 'error')
+      arcMain = (
+        <button className="btn lg secondary pp-cta" data-track="arcania_retry" data-src="pack_page" onClick={retryDetail}>
+          <Icon id="i-restart" /> {t('Повторить')}
+        </button>
+      )
+    else if (offer === 'buy')
+      arcMain =
+        detail && hasPlanChoice(detail) ? (
+          <PlanButtons pack={full} plans={detail.plans || []} wrap="pp-cta-wrap" onOwned={reloadDetail} />
+        ) : (
+          <>
+            <PriceLine pack={full} plan={plan} sub={sub} />
+            <span className="pp-cta-wrap">
+              <BuyButton pack={full} plan={plan} sub={sub} onOwned={reloadDetail} />
+            </span>
+          </>
+        )
     return (
       <div className="ci" data-section="pack_page" data-kind="arcania" data-id={slug || pack.id}>
         <StickyCta watch={heroEnd} icon={icon} title={'Arcania ' + ARCANIA_HEAD.version}>
-          {cta}
+          {arcMain}
         </StickyCta>
         <Back label={t('Сборки')} onBack={onBack} />
         <ArcaniaPage
-          cta={heroCta}
+          cta={heroOf(arcMain)}
           extra={
             <>
               {pack.premium ? <PayNote packId={full.id} /> : null}
-              {keyEntry ? (
+              {offer === 'signin' ? (
+                <div className="pkb-key">
+                  <div className="pkb-bought">
+                    <b>
+                      <Icon id="i-key" /> {t('Войдите в аккаунт Millida, чтобы купить или ввести ключ')}
+                    </b>
+                  </div>
+                </div>
+              ) : null}
+              {offer === 'error' ? <span className="pkb-err">{t('Цены и подписки не загрузились — проверьте интернет и нажмите «Повторить»')}</span> : null}
+              {offer === 'buy' || offer === 'key' ? (
                 <div className="pkb-key">
                   <PackKeyField
                     slug={slug}
+                    title={t('Уже купили на arcania.fun? Введите ключ')}
                     onUnlocked={() => {
                       showToast(t('Ключ активирован'))
                       reloadDetail()
@@ -606,12 +681,14 @@ export function PackPage({
           }
           legacy={<ArcaniaLegacy onPlay={onPlayBuild} />}
           installed={!!installed}
+          hero={heroAction(offer)}
           onPlay={() => installed && onPlay(installed)}
           heroEnd={heroEnd}
         />
         {hostOpen && hostTarget ? <HostInstall target={hostTarget} onClose={() => setHostOpen(false)} /> : null}
       </div>
     )
+  }
 
   return (
     <div className="ci" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>

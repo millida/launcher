@@ -6342,5 +6342,8 @@
   "Сборки «{name}» нет в каталоге Millida": "Paczki „{name}” nie ma w katalogu Millida",
   "Уже купили?": "Już kupione?",
   "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Nie trzeba płacić drugi raz. Kupiłeś na stronie autora paczki? Wpisz klucz z e-maila lub z konta na jego stronie.",
-  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Zapłaciłeś na millida.net? Zaloguj się do launchera tym samym kontem, a dostęp otworzy się sam."
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Zapłaciłeś na millida.net? Zaloguj się do launchera tym samym kontem, a dostęp otworzy się sam.",
+  "Уже купили на arcania.fun? Введите ключ": "Już kupione na arcania.fun? Wpisz klucz",
+  "Войдите в аккаунт Millida, чтобы купить или ввести ключ": "Zaloguj się na konto Millida, aby kupić lub wpisać klucz",
+  "Цены и подписки не загрузились — проверьте интернет и нажмите «Повторить»": "Ceny i subskrypcje się nie wczytały — sprawdź internet i kliknij „Ponów”"
 }

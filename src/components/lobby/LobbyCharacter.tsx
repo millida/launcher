@@ -303,8 +303,8 @@ export function LobbyCharacter({
   const skinMasks = useMemo(() => {
     if (!look) return ''
     const outfit = look.items.map((x) => x.item)
-    return maskUrls(outfit, look.slim, skinMaskEmote(outfit, !!shop, maskShow)).join('\n')
-  }, [look, shop, maskShow])
+    return maskUrls(outfit, look.slim, skinMaskEmote(outfit, !!shop && emoting, maskShow)).join('\n')
+  }, [look, shop, maskShow, emoting])
   const [awake, setAwake] = useState(false)
   const [tag, setTag] = useState<{ x: number; y: number } | null>(null)
   // Ник следует за головой (правка владельца 23.09.2026: в прыжке и эмоции
@@ -615,6 +615,7 @@ export function LobbyCharacter({
     const engine = viewerRef.current
     if (!engine || !ready || !look || typeof engine.clearCosmetics !== 'function') return
     let alive = true
+    let emoteDone: ReturnType<typeof setTimeout> | undefined
     engine.clearCosmetics()
     setEmoting(false)
     const outfit = look.items.map((x) => x.item)
@@ -623,6 +624,7 @@ export function LobbyCharacter({
     // с первой готовой вещью, остальные подтягиваются следом (жалоба 10.10.2026:
     // «медленно надевается»). Кадр от вещей не зависит.
     let dressedCount = 0
+    const emoteProps: { object: import('three').Object3D }[] = []
     let settled = 0
     let revealed = false
     const reveal = () => {
@@ -641,6 +643,17 @@ export function LobbyCharacter({
         if (playing) engine.setAnimation(pinned(playing) as unknown as SkinAnimation)
         setEmoting(!!playing)
         emote = { sequence, playing }
+        // The fitting room shows a tried-on emote long enough to read, then rests:
+        // an endless loop looked like the figure shaking its head forever.
+        if (playing && sequence)
+          emoteDone = setTimeout(
+            () => {
+              if (!alive) return
+              for (const piece of emoteProps) piece.object.parent?.remove(piece.object)
+              setEmoting(false)
+            },
+            emoteShowMs(sequence.intro?.length ?? 0, sequence.main.length),
+          )
       }
       if (!got.file || !got.texture) return
       const geometry = look.slim && got.file.geometrySlim ? got.file.geometrySlim : got.file.geometry
@@ -657,6 +670,7 @@ export function LobbyCharacter({
           got.glow,
         )) {
           engine.attachCosmetic(piece.anchor, piece.object)
+          if (emote?.playing) emoteProps.push(piece)
           dressed = true
         }
         if (dressed) dressedCount += 1
@@ -682,6 +696,7 @@ export function LobbyCharacter({
     }
     return () => {
       alive = false
+      clearTimeout(emoteDone)
       engine.clearCosmetics()
     }
   }, [look, ready])
