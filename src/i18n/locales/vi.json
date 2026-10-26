@@ -6345,5 +6345,8 @@
   "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” không có trong danh mục Millida",
   "Уже купили?": "Đã mua rồi?",
   "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Không cần trả tiền lần hai. Đã mua trên trang của tác giả modpack? Hãy nhập khóa từ email hoặc từ tài khoản của bạn trên trang đó.",
-  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Đã thanh toán trên millida.net? Đăng nhập launcher bằng cùng tài khoản, quyền truy cập sẽ tự mở."
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Đã thanh toán trên millida.net? Đăng nhập launcher bằng cùng tài khoản, quyền truy cập sẽ tự mở.",
+  "Уже купили на arcania.fun? Введите ключ": "Đã mua trên arcania.fun? Nhập mã khóa",
+  "Войдите в аккаунт Millida, чтобы купить или ввести ключ": "Đăng nhập tài khoản Millida để mua hoặc nhập mã khóa",
+  "Цены и подписки не загрузились — проверьте интернет и нажмите «Повторить»": "Không tải được giá và gói đăng ký — kiểm tra kết nối mạng rồi nhấn “Thử lại”"
 }

@@ -6342,5 +6342,8 @@
   "Сборки «{name}» нет в каталоге Millida": "“{name}” mod paketi Millida kataloğunda yok",
   "Уже купили?": "Zaten satın aldınız mı?",
   "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "İkinci kez ödemenize gerek yok. Mod paketinin yazarının sitesinden mi aldınız? E-postadaki veya onun sitesindeki hesabınızdaki anahtarı girin.",
-  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "millida.net üzerinden mi ödediniz? Başlatıcıya aynı hesapla giriş yapın, erişim kendiliğinden açılır."
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "millida.net üzerinden mi ödediniz? Başlatıcıya aynı hesapla giriş yapın, erişim kendiliğinden açılır.",
+  "Уже купили на arcania.fun? Введите ключ": "arcania.fun'dan zaten satın aldınız mı? Anahtarınızı girin",
+  "Войдите в аккаунт Millida, чтобы купить или ввести ключ": "Satın almak veya anahtar girmek için Millida hesabınıza giriş yapın",
+  "Цены и подписки не загрузились — проверьте интернет и нажмите «Повторить»": "Fiyatlar ve abonelikler yüklenemedi — internet bağlantınızı kontrol edip “Yeniden dene”ye basın"
 }

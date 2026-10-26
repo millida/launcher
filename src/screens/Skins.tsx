@@ -76,6 +76,7 @@ import { hidesRegularCape, maskUrls, pieceCover } from '../lib/cosmeticCover'
 import { maskedSkin } from '../lib/maskedSkin'
 import { sectionTakeOff } from '../lib/sectionTakeOff'
 import { CosmeticEmote, emoteClip } from '../lib/cosmeticEmote'
+import { emoteShowMs } from '../lib/lobbyShow'
 import { emoteSequence } from '../lib/emoteSequence'
 import { defaultVariant } from '../lib/cosmeticVariants'
 import { starredFirst, starredIds, toggleStar } from '../state/cosmeticStars'
@@ -1046,8 +1047,8 @@ export function Skins({ on }: { on: boolean }) {
       .filter((c): c is CosmeticItem => Boolean(c))
   }, [worn, fitting, cosmetics])
   const skinMasks = useMemo(
-    () => maskUrls(dressed, variant === 'slim', dressed.find((c) => c.slot === 'EMOTE')).join(' '),
-    [dressed, variant],
+    () => maskUrls(dressed, variant === 'slim', emoting ? dressed.find((c) => c.slot === 'EMOTE') : undefined).join(' '),
+    [dressed, variant, emoting],
   )
   const capeCovered = useMemo(() => hidesRegularCape(dressed), [dressed])
 
@@ -1957,6 +1958,7 @@ export function Skins({ on }: { on: boolean }) {
     // такого объекта новых методов нет, и вызов молча снёс бы весь экран.
     if (!engine || !engineReady || typeof engine.clearCosmetics !== 'function') return
     let alive = true
+    let emoteDone: ReturnType<typeof setTimeout> | undefined
     engine.clearCosmetics()
     const partnerReady = typeof engine.setPartner === 'function'
     if (partnerReady) void engine.setPartner(null)
@@ -1990,6 +1992,17 @@ export function Skins({ on }: { on: boolean }) {
           engine.setAnimation(playing as unknown as SkinAnimation)
           engine.setCursorFollow(false)
           setEmoting(true)
+          // An endless loop reads as a stuck figure shaking its head: the tried-on emote plays
+          // long enough to be seen, then the figure hands back to its rest and occasional shows.
+          emoteDone = setTimeout(
+            () => {
+              if (!alive) return
+              for (const piece of emoteProps) piece.object.parent?.remove(piece.object)
+              if (partnerReady) void engine.setPartner(null)
+              setEmoting(false)
+            },
+            emoteShowMs(sequence.intro?.length ?? 0, sequence.main.length),
+          )
         } else {
           setEmoting(false)
         }
@@ -2018,6 +2031,7 @@ export function Skins({ on }: { on: boolean }) {
               if (alive) showToast(t('Второй участник эмоции не загрузился — видна только твоя половина'), 'error')
             })
         }
+        const emoteProps: { object: { parent: { remove(o: unknown): void } | null } }[] = []
         for (const got of loaded) {
           if (!got.file) continue
           const skin = textureOf(got.item)
@@ -2035,6 +2049,7 @@ export function Skins({ on }: { on: boolean }) {
               glowOf(got.item),
             )) {
               engine.attachCosmetic(piece.anchor, piece.object)
+              if (got === emote) emoteProps.push(piece as unknown as (typeof emoteProps)[number])
             }
           } catch {
             // Кривая модель не должна гасить весь экран: вещь просто не
@@ -2048,6 +2063,7 @@ export function Skins({ on }: { on: boolean }) {
     )
     return () => {
       alive = false
+      clearTimeout(emoteDone)
       setFitLoading([])
       engine.clearCosmetics()
       if (partnerReady) void engine.setPartner(null)

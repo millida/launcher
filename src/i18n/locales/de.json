@@ -6342,5 +6342,8 @@
   "Сборки «{name}» нет в каталоге Millida": "Das Modpack „{name}“ ist nicht im Millida-Katalog",
   "Уже купили?": "Schon gekauft?",
   "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Sie müssen nicht zweimal zahlen. Auf der Website des Modpack-Autors gekauft? Geben Sie den Schlüssel aus der E-Mail oder aus Ihrem Konto auf seiner Website ein.",
-  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Auf millida.net bezahlt? Melden Sie sich im Launcher mit demselben Konto an, der Zugriff wird automatisch freigeschaltet."
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Auf millida.net bezahlt? Melden Sie sich im Launcher mit demselben Konto an, der Zugriff wird automatisch freigeschaltet.",
+  "Уже купили на arcania.fun? Введите ключ": "Schon auf arcania.fun gekauft? Gib deinen Schlüssel ein",
+  "Войдите в аккаунт Millida, чтобы купить или ввести ключ": "Melde dich bei deinem Millida-Konto an, um zu kaufen oder einen Schlüssel einzugeben",
+  "Цены и подписки не загрузились — проверьте интернет и нажмите «Повторить»": "Preise und Abos wurden nicht geladen — prüfe deine Internetverbindung und tippe auf „Erneut versuchen“"
 }

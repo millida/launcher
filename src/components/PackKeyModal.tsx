@@ -46,7 +46,7 @@ interface Fact {
   label: string
 }
 
-export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: () => void }) {
+export function PackKeyField({ slug, title, onUnlocked }: { slug: string; title?: string; onUnlocked: () => void }) {
   const t = useT()
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -70,7 +70,7 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
     <>
       <div className="pkb-bought">
         <b>
-          <Icon id="i-key" /> {t('Уже купили?')}
+          <Icon id="i-key" /> {title ?? t('Уже купили?')}
         </b>
         <span>{t('Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.')}</span>
         <span>{t('Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.')}</span>
