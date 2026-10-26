@@ -6339,5 +6339,8 @@
   "Багровый галеон": "Kızıl Kalyon",
   "Морская башня": "Deniz Kulesi",
   "Ссылка на сборку не распознана": "Mod paketi bağlantısı tanınmadı",
-  "Сборки «{name}» нет в каталоге Millida": "“{name}” mod paketi Millida kataloğunda yok"
+  "Сборки «{name}» нет в каталоге Millida": "“{name}” mod paketi Millida kataloğunda yok",
+  "Уже купили?": "Zaten satın aldınız mı?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "İkinci kez ödemenize gerek yok. Mod paketinin yazarının sitesinden mi aldınız? E-postadaki veya onun sitesindeki hesabınızdaki anahtarı girin.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "millida.net üzerinden mi ödediniz? Başlatıcıya aynı hesapla giriş yapın, erişim kendiliğinden açılır."
 }

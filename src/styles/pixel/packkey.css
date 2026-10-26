@@ -98,6 +98,9 @@
 .pkb-key { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
 .pkb-key-why { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--m-fg-subtle); }
 .pkb-key-why svg { width: 14px; height: 14px; }
+.pkb-bought { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.4; color: var(--m-fg-subtle); }
+.pkb-bought b { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--m-fg); }
+.pkb-bought svg { width: 14px; height: 14px; }
 .pkb-key-row { display: flex; gap: 8px; }
 .pkb-key-row .input { flex: 1; min-width: 0; letter-spacing: 0.06em; }
 .pkb-err { font-size: 13px; color: var(--m-danger); }

@@ -68,6 +68,13 @@ export function PackKeyField({ slug, onUnlocked }: { slug: string; onUnlocked: (
 
   return (
     <>
+      <div className="pkb-bought">
+        <b>
+          <Icon id="i-key" /> {t('Уже купили?')}
+        </b>
+        <span>{t('Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.')}</span>
+        <span>{t('Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.')}</span>
+      </div>
       <div className="pkb-key-row">
         <div className="input">
           <input

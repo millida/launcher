@@ -528,6 +528,7 @@ export interface HostingPack {
   minRamMb: number
   paidOnly: boolean
   requireKey: boolean
+  launcherSlug?: string | null
 }
 
 let hpCache: Promise<HostingPack[]> | null = null
@@ -561,12 +562,23 @@ const initials = (s: string) =>
  * сборки независимо, общего поля нет — сверяем ключ со слагом без номера
  * («lost-souls-2» → «lost-souls»), с названием и с аббревиатурой
  * («dotg» → «Dominion over the Gods»).
+ *
+ * Хостинг сам называет свою карточку каталога (`launcherSlug`) — тогда
+ * сверяем только её: без этого «arcania-2» и «Arcania 2.0» после срезания
+ * номера совпадали с серверной Arcania 1.4 на 1.20.1, и страница 2.0
+ * продавала сервер чужой версии.
  */
 export function hostingPackFor(p: { slug?: string | null; title: string }, list: HostingPack[]): HostingPack | null {
+  const own = (p.slug || '').toLowerCase()
+  if (own) {
+    const bound = list.find((h) => h.launcherSlug?.toLowerCase() === own)
+    if (bound) return bound
+  }
   const slug = norm(p.slug || '')
   const title = norm(p.title)
   return (
     list.find((h) => {
+      if (h.launcherSlug) return false
       const k = norm(h.key)
       const n = norm(h.name)
       return (slug && (k === slug || n === slug || initials(h.name) === slug)) || k === title || n === title

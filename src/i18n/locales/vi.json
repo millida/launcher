@@ -6342,5 +6342,8 @@
   "Багровый галеон": "Thuyền Galleon Đỏ Thẫm",
   "Морская башня": "Tháp Biển",
   "Ссылка на сборку не распознана": "Không nhận diện được liên kết modpack",
-  "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” không có trong danh mục Millida"
+  "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” không có trong danh mục Millida",
+  "Уже купили?": "Đã mua rồi?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Không cần trả tiền lần hai. Đã mua trên trang của tác giả modpack? Hãy nhập khóa từ email hoặc từ tài khoản của bạn trên trang đó.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Đã thanh toán trên millida.net? Đăng nhập launcher bằng cùng tài khoản, quyền truy cập sẽ tự mở."
 }

@@ -6339,5 +6339,8 @@
   "Багровый галеон": "Crimson Galleon",
   "Морская башня": "Sea Tower",
   "Ссылка на сборку не распознана": "The modpack link was not recognized",
-  "Сборки «{name}» нет в каталоге Millida": "The modpack “{name}” is not in the Millida catalog"
+  "Сборки «{name}» нет в каталоге Millida": "The modpack “{name}” is not in the Millida catalog",
+  "Уже купили?": "Already bought it?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "No need to pay twice. Bought it on the modpack author's site? Enter the key from the email or from your account on their site.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Paid on millida.net? Sign in to the launcher with the same account and access opens by itself."
 }

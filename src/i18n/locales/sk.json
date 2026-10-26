@@ -6210,7 +6210,6 @@
   "Новый в 2.0": "Nový v 2.0",
   "Начать": "Začať",
   "играть": "hrať",
-  "сейчас": "teraz",
   "Что нового в 2.0": "Čo je nové v 2.0",
   "боссов ждут в игре": "bossov čaká v hre",
   "Arcania — сборка, где ты сам выбираешь путь: стань": "Arcania je modpack, v ktorom si cestu vyberáš sám: staň sa",
@@ -6231,7 +6230,6 @@
   "Лес": "Les",
   "Сакура": "Sakura",
   "Западные земли": "Západné krajiny",
-  "Зима": "Zima",
   "Вулкан": "Sopka",
   "Море": "More",
   "логово босса": "brloh bossa",
@@ -6341,5 +6339,8 @@
   "Багровый галеон": "Karmínová galeóna",
   "Морская башня": "Morská veža",
   "Ссылка на сборку не распознана": "Odkaz na modpack sa nepodarilo rozpoznať",
-  "Сборки «{name}» нет в каталоге Millida": "Modpack „{name}“ nie je v katalógu Millida"
+  "Сборки «{name}» нет в каталоге Millida": "Modpack „{name}“ nie je v katalógu Millida",
+  "Уже купили?": "Už ste kúpili?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Druhýkrát platiť netreba. Kúpili ste na stránke autora modpacku? Zadajte kľúč z e-mailu alebo z účtu na jeho stránke.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Platili ste na millida.net? Prihláste sa do launchera tým istým účtom a prístup sa otvorí sám."
 }

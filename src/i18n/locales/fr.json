@@ -6340,5 +6340,8 @@
   "Багровый галеон": "Galion pourpre",
   "Морская башня": "Tour marine",
   "Ссылка на сборку не распознана": "Le lien du modpack n’a pas été reconnu",
-  "Сборки «{name}» нет в каталоге Millida": "Le modpack « {name} » n’est pas dans le catalogue Millida"
+  "Сборки «{name}» нет в каталоге Millida": "Le modpack « {name} » n’est pas dans le catalogue Millida",
+  "Уже купили?": "Déjà acheté ?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Inutile de payer deux fois. Acheté sur le site de l'auteur du modpack ? Saisissez la clé reçue par e-mail ou dans votre compte sur son site.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Payé sur millida.net ? Connectez-vous au launcher avec le même compte, l’accès s’ouvrira tout seul."
 }
