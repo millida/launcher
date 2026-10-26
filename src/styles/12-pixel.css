@@ -561,6 +561,35 @@ img[src$='/millida-logo.svg'] { border-radius: 0 !important; }
   .px-excl::after { animation: none; }
 }
 
+/* Running light along the 3px ring of a 10px cut: the Arcania card frame, shared with the lobby tiles.
+   The ring is static; a square conic layer of side width + height rotates under it, so the motion
+   stays on the compositor. Colours come from --run-lo / --run-mid / --run-hi. */
+.px-run-ring {
+  --run-lo: #2f5a24;
+  --run-mid: #7bd35a;
+  --run-hi: #eaffdf;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  container-type: size;
+  clip-path: var(--px-ring-10);
+  background: var(--run-lo);
+}
+.px-run-ring::before {
+  content: '';
+  position: absolute;
+  inset: -300%;
+  inset: -50cqw -50cqh;
+  background: conic-gradient(var(--run-lo) 0 30%, var(--run-mid) 40%, var(--run-hi) 45%, var(--run-mid) 50%, var(--run-lo) 60% 80%, var(--run-mid) 90%, var(--run-hi) 95%, var(--run-mid) 100%);
+  animation: px-run-ring 4.8s linear infinite;
+}
+@keyframes px-run-ring { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .px-run-ring { background: var(--run-mid); }
+  .px-run-ring::before { display: none; }
+}
+
 /* Окно «Как это работает» под входом Microsoft: тот же текст, что на сайте
    /launcher/bezopasnost (src/lib/securityContent.ts — копия файла сайта). */
 .sec-info { display: flex; flex-direction: column; min-height: 0; }

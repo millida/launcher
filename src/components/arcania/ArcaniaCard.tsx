@@ -102,7 +102,7 @@ export function ArcaniaFx() {
           <i key={x} style={{ '--x': x, '--s': s + 'px', '--t': t + 's', '--d': d + 's', '--c': c } as CSSProperties} />
         ))}
       </span>
-      <span className="arc2-frame" />
+      <span className="px-run-ring" />
     </span>
   )
 }

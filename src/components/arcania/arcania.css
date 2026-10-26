@@ -85,12 +85,6 @@
 
 :root[data-arcania2] .fy-card.is-excl::after { content: none; }
 
-@property --arc2-run {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
 .arc2-skin {
   position: relative;
   isolation: isolate;
@@ -174,25 +168,7 @@
 .arc2-fx > * { transition: filter 450ms ease, opacity 450ms ease; }
 .arc2-skin:hover .arc2-glow { filter: brightness(1.6); }
 .arc2-skin:hover .arc2-sparks { filter: brightness(1.4); }
-.arc2-skin:hover .arc2-frame { filter: brightness(1.35) saturate(1.2); }
-
-.arc2-frame {
-  clip-path: var(--px-ring-10);
-  background: conic-gradient(
-    from var(--arc2-run),
-    #2f5a24 0 30%,
-    #7bd35a 40%,
-    #eaffdf 45%,
-    #7bd35a 50%,
-    #2f5a24 60% 80%,
-    #7bd35a 90%,
-    #eaffdf 95%,
-    #7bd35a 100%
-  );
-  animation: arc2-run 4.8s linear infinite;
-}
-
-@keyframes arc2-run { to { --arc2-run: 360deg; } }
+.arc2-skin:hover .px-run-ring { filter: brightness(1.35) saturate(1.2); }
 
 .arc2-tag {
   position: absolute;

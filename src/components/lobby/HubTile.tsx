@@ -138,6 +138,7 @@ export function HubTile({ kind, className, daily }: { kind: HubTileKind; classNa
           <span className="ht-edge-t" />
         </span>
       </span>
+      {kind === 'server' && !daily ? <span className="px-run-ring ht-run" aria-hidden="true" /> : null}
       <span className="ht-artbox" aria-hidden="true">
         <img className="ht-art" src={daily?.art || ART[kind]} alt="" draggable={false} />
       </span>
