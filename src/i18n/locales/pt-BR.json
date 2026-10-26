@@ -6339,5 +6339,8 @@
   "Багровый галеон": "Galeão carmesim",
   "Морская башня": "Torre marinha",
   "Ссылка на сборку не распознана": "O link do modpack não foi reconhecido",
-  "Сборки «{name}» нет в каталоге Millida": "O modpack “{name}” não está no catálogo da Millida"
+  "Сборки «{name}» нет в каталоге Millida": "O modpack “{name}” não está no catálogo da Millida",
+  "Уже купили?": "Já comprou?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Não precisa pagar de novo. Comprou no site do autor do modpack? Digite a chave do e-mail ou da sua conta no site dele.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Pagou no millida.net? Entre no launcher com a mesma conta e o acesso abrirá sozinho."
 }

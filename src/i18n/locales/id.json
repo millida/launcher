@@ -6343,5 +6343,8 @@
   "Багровый галеон": "Galiung Merah",
   "Морская башня": "Menara Laut",
   "Ссылка на сборку не распознана": "Tautan modpack tidak dikenali",
-  "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” tidak ada di katalog Millida"
+  "Сборки «{name}» нет в каталоге Millida": "Modpack “{name}” tidak ada di katalog Millida",
+  "Уже купили?": "Sudah membeli?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Tidak perlu membayar dua kali. Membeli di situs pembuat modpack? Masukkan kunci dari email atau dari akun Anda di situsnya.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Membayar di millida.net? Masuk ke launcher dengan akun yang sama dan akses akan terbuka sendiri."
 }

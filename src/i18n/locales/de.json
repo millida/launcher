@@ -6339,5 +6339,8 @@
   "Багровый галеон": "Karmesinrote Galeone",
   "Морская башня": "Meeresturm",
   "Ссылка на сборку не распознана": "Der Modpack-Link wurde nicht erkannt",
-  "Сборки «{name}» нет в каталоге Millida": "Das Modpack „{name}“ ist nicht im Millida-Katalog"
+  "Сборки «{name}» нет в каталоге Millida": "Das Modpack „{name}“ ist nicht im Millida-Katalog",
+  "Уже купили?": "Schon gekauft?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Sie müssen nicht zweimal zahlen. Auf der Website des Modpack-Autors gekauft? Geben Sie den Schlüssel aus der E-Mail oder aus Ihrem Konto auf seiner Website ein.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Auf millida.net bezahlt? Melden Sie sich im Launcher mit demselben Konto an, der Zugriff wird automatisch freigeschaltet."
 }

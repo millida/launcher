@@ -6339,5 +6339,8 @@
   "Багровый галеон": "Szkarłatny galeon",
   "Морская башня": "Morska wieża",
   "Ссылка на сборку не распознана": "Nie rozpoznano linku do paczki",
-  "Сборки «{name}» нет в каталоге Millida": "Paczki „{name}” nie ma w katalogu Millida"
+  "Сборки «{name}» нет в каталоге Millida": "Paczki „{name}” nie ma w katalogu Millida",
+  "Уже купили?": "Już kupione?",
+  "Платить второй раз не нужно. Купили на сайте автора сборки — введите ключ из письма или личного кабинета на его сайте.": "Nie trzeba płacić drugi raz. Kupiłeś na stronie autora paczki? Wpisz klucz z e-maila lub z konta na jego stronie.",
+  "Оплатили на millida.net — войдите в лаунчер тем же аккаунтом, доступ откроется сам.": "Zapłaciłeś na millida.net? Zaloguj się do launchera tym samym kontem, a dostęp otworzy się sam."
 }

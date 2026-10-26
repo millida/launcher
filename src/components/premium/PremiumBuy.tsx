@@ -855,7 +855,7 @@ export function PremiumAccessCard(p: AccessCardProps) {
                 {fine && !busy ? <span className="pab-fine">{fine}</span> : null}
                 {keyEntry && !keyOpen ? (
                   <button className="btn sm ghost pab-keylink" data-track="premium_key_open" onClick={() => setKeyOpen(true)}>
-                    <Icon id="i-key" /> {t('Есть ключ?')}
+                    <Icon id="i-key" /> {t('Уже купили?')}
                   </button>
                 ) : null}
               </span>
