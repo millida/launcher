@@ -140,6 +140,11 @@
      над кромкой только макушки — 24px (16% высоты арта). */
   --ht-art-h: 150px; --ht-art-x: -52%; --ht-over: 24px;
 }
+.px-run-ring.ht-run {
+  --run-lo: color-mix(in srgb, var(--m-accent) 40%, #000);
+  --run-mid: var(--m-accent);
+  --run-hi: color-mix(in srgb, var(--m-accent) 15%, #fff);
+}
 .ht-ribbon {
   /* Лента на верхнем шве плашки подписи, справа: лица открыты. */
   position: absolute; z-index: 4; right: 8px; top: -11px; padding: 4px 7px 5px;
