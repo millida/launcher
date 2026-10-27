@@ -1164,6 +1164,202 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
     Ok(audit)
 }
 
+/// Mod ids the enabled mods of a build require and nothing enabled answers for, with the title
+/// of the first mod that asks for each. Read from the jars alone: no catalogue, no network.
+pub(crate) fn launch_missing(locals: &[LocalMeta], runs: &[String], loader_id: &str, loader_version: Option<&str>) -> Vec<(String, String)> {
+    let have: HashSet<&str> = locals
+        .iter()
+        .flat_map(|m| std::iter::once(m.mod_id.as_str()).chain(m.provides.iter().map(String::as_str)))
+        .filter(|id| !id.is_empty())
+        .collect();
+    let mut out: Vec<(String, String)> = vec![];
+    for m in locals {
+        let Some((requires, _)) = relations_on(m, runs) else { continue };
+        for id in requires {
+            if have.contains(id.as_str()) || is_env_mod_id(id) || loader_provides(loader_id, loader_version, id) || out.iter().any(|(o, _)| o == id) {
+                continue;
+            }
+            out.push((id.clone(), if m.title.is_empty() { m.file_name.clone() } else { m.title.clone() }));
+        }
+    }
+    out
+}
+
+/// Fewest-first cap on what one launch looks for: a build that misses more than this is broken in
+/// a way a launch should not try to repair on its own.
+const LAUNCH_DEPS_MAX: usize = 6;
+/// A dependency nothing could be found for is not asked about again for this long, as long as the
+/// mods of the build stay the same.
+const LAUNCH_DEPS_MISS_TTL: u64 = 24 * 3600;
+const LAUNCH_DEPS_MISS_FILE: &str = "millida-deps-miss.json";
+
+/// What the launch did about missing dependencies.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct LaunchDeps {
+    /// Titles of the mods it put in.
+    pub installed: Vec<String>,
+    /// Mod ids it put nothing in for: no file for this build, or the mod is in the build in a form
+    /// the jars do not show (another name, switched off).
+    pub unresolved: Vec<String>,
+}
+
+/// The enabled mods of the build: their files without `.disabled`.
+fn enabled_mod_files(profile: &str) -> HashSet<String> {
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    std::fs::read_dir(dir)
+        .map(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| !n.to_ascii_lowercase().ends_with(".disabled")).collect())
+        .unwrap_or_default()
+}
+
+/// What the build's mods folder looks like (names, sizes, times) and which game it is for, as a key:
+/// a build found complete is not read again until this changes, and a dependency that could not be
+/// found is not looked for again.
+fn folder_key(profile: &str) -> String {
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    let mut parts: Vec<String> = std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| {
+                    let m = e.metadata().ok()?;
+                    let t = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+                    Some(format!("{}:{}:{}", e.file_name().to_string_lossy(), m.len(), t))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    parts.sort();
+    if let Some(p) = load_profiles().into_iter().find(|p| p.name == profile) {
+        parts.push(format!("{}|{}|{}", p.version, p.loader_id(), p.loader_version.unwrap_or_default()));
+    }
+    sha256_hex(parts.join("\n").as_bytes())
+}
+
+/// Builds whose enabled mods were found complete (or missing only what was looked for in vain), by
+/// their folder key then: a launch with the same folder reads no jar descriptions at all.
+fn complete_builds() -> &'static std::sync::Mutex<HashMap<String, String>> {
+    static DONE: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> = std::sync::OnceLock::new();
+    DONE.get_or_init(Default::default)
+}
+
+fn known_complete(profile: &str, key: &str) -> bool {
+    complete_builds().lock().map(|m| m.get(profile).is_some_and(|k| k == key)).unwrap_or(false)
+}
+
+fn mark_complete(profile: &str, key: String) {
+    if let Ok(mut m) = complete_builds().lock() {
+        m.insert(profile.to_string(), key);
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Ids looked for in vain for these same mods within the last day.
+pub(crate) fn known_misses(record: &Value, key: &str, now: u64) -> HashSet<String> {
+    if record["key"].as_str() != Some(key) || now.saturating_sub(record["at"].as_u64().unwrap_or(0)) > LAUNCH_DEPS_MISS_TTL {
+        return HashSet::new();
+    }
+    record["ids"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default()
+}
+
+/// The build's enabled mods and what they require that nothing answers for. None for a build that
+/// is not ours to complete (a catalogue build) or loads no mods.
+async fn launch_requirements(profile: &str) -> Option<(Ctx, Vec<(String, String)>)> {
+    if is_catalog_pack(profile) {
+        return None;
+    }
+    let ctx = ctx_of(profile, "mod");
+    if !matches!(ctx.loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
+        return None;
+    }
+    let loader_version = load_profiles().into_iter().find(|p| p.name == profile).and_then(|p| p.loader_version);
+    let runs: Vec<String> = std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect();
+    let enabled = enabled_mod_files(profile);
+    let locals: Vec<LocalMeta> = scan_mods(profile).await.into_iter().filter(|m| enabled.contains(&m.file_name)).collect();
+    let missing = launch_missing(&locals, &runs, &ctx.loader_id, loader_version.as_deref());
+    Some((ctx, missing))
+}
+
+/// How many requirements of the build's mods are missing, from the jars alone (no network): the
+/// lobby reads them ahead of Play, which also brings the cache of the jars' descriptions up to date.
+pub(crate) async fn missing_launch_deps(profile: &str) -> u32 {
+    let key = folder_key(profile);
+    if known_complete(profile, &key) {
+        return 0;
+    }
+    let missing = launch_requirements(profile).await.map(|(_, m)| m.len() as u32).unwrap_or(0);
+    if missing == 0 {
+        mark_complete(profile, key);
+    }
+    missing
+}
+
+/// Missing dependencies of the build's mods, put in before the game starts: a mod requiring one the
+/// build does not have stops the loader before the window, and that is 17.5 % of all crashes. Only
+/// when something is missing does this go to Modrinth; a catalogue build is its author's and is
+/// left as shipped.
+pub(crate) async fn settle_launch_deps(app: &AppHandle, profile: &str) -> LaunchDeps {
+    let mut out = LaunchDeps::default();
+    let key = folder_key(profile);
+    if known_complete(profile, &key) {
+        return out;
+    }
+    let Some((ctx, missing)) = launch_requirements(profile).await else { return out };
+    if missing.is_empty() {
+        mark_complete(profile, key);
+        return out;
+    }
+    let miss_path = profile_dir(profile).join(LAUNCH_DEPS_MISS_FILE);
+    let record: Value = std::fs::read(&miss_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+    let known = known_misses(&record, &key, now_secs());
+    let todo: Vec<(String, String)> = missing.into_iter().filter(|(id, _)| !known.contains(id)).take(LAUNCH_DEPS_MAX).collect();
+    if todo.is_empty() {
+        // Everything missing was looked for in vain lately: nothing to do for this folder.
+        mark_complete(profile, key);
+        return out;
+    }
+    // Written before the network is asked, as if nothing will be found: a launch that runs out of
+    // its time while Modrinth hangs must not make the next one wait the same again.
+    let record_misses = |ids: &mut Vec<String>| {
+        ids.sort();
+        ids.dedup();
+        let _ = write_json_atomic(&miss_path, &serde_json::json!({ "key": folder_key(profile), "at": now_secs(), "ids": ids }));
+    };
+    let mut pessimistic: Vec<String> = known.iter().cloned().chain(todo.iter().map(|(id, _)| id.clone())).collect();
+    record_misses(&mut pessimistic);
+    let installed = installed_index(profile);
+    let picks: Vec<_> = todo.iter().map(|(id, _)| pick_modrinth(&ctx, catalog_slug(id), "")).collect();
+    let picked: Vec<Result<Pick, String>> = futures::stream::iter(picks).buffered(PARALLEL).collect().await;
+    for ((id, _needed_by), pick) in todo.iter().zip(picked) {
+        let Ok(p) = pick else {
+            out.unresolved.push(id.clone());
+            continue;
+        };
+        // Already in the build under another name, or switched off by the player: theirs to decide,
+        // and not looked for again while the mods stay the same.
+        if installed.has(&p.node.project_id, &p.node.title) {
+            out.unresolved.push(id.clone());
+            continue;
+        }
+        emit(app, "mod", 50.0, &format!("Ставим {}…", p.node.title));
+        if install_pick(&ctx, &p).await.is_ok() {
+            out.installed.push(p.node.title.clone());
+            install_required(&ctx, p.deps).await;
+        } else {
+            out.unresolved.push(id.clone());
+        }
+    }
+    if out.unresolved.is_empty() && known.is_empty() {
+        let _ = std::fs::remove_file(&miss_path);
+    } else {
+        // Keyed by the folder as this launch leaves it: what was put in is part of it.
+        let mut ids: Vec<String> = known.into_iter().chain(out.unresolved.iter().cloned()).collect();
+        record_misses(&mut ids);
+    }
+    out
+}
+
 /// A catalogue pack is judged by its author, not by the files in `mods/`: a
 /// protected pack loads most of its mods from `libraries` (Arcania keeps 308
 /// there, Prism among them) and carries Forge jars its loader skips, so the
@@ -1199,7 +1395,7 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, BreakRule, LocalMeta};
+    use super::{jar_blockers, known_misses, launch_missing, BreakRule, LocalMeta};
 
     fn declared_jar(file: &str, id: &str, version: &str, requires: &[&str], breaks: &[(&str, &str)]) -> LocalMeta {
         LocalMeta {
@@ -1245,6 +1441,37 @@ mod tests {
             assert_eq!(got.missing, missing, "{}: missing requirements. Why pinned: {why}", incoming.file_name);
             assert_eq!(got.clashes.len(), clashes, "{}: clashes {:?}. Why pinned: {why}", incoming.file_name, got.clashes);
         }
+    }
+
+    /// The launch looks for exactly what the enabled mods require and nothing in the build answers
+    /// for: a library bundled inside another jar, the loader itself and Fabric Loader's own
+    /// MixinExtras are not missing, and a requirement asked for twice is looked for once.
+    #[test]
+    fn a_launch_looks_only_for_what_nothing_in_the_build_answers_for() {
+        let runs = vec!["fabric".to_string()];
+        let culling = declared_jar("moreculling.jar", "moreculling", "1.0", &["cloth-config", "fabric-api", "minecraft", "mixinextras"], &[]);
+        let lithium = declared_jar("lithium.jar", "lithium", "0.15", &["fabric-api", "mixinextras"], &[]);
+        let mut api = declared_jar("fabric-api.jar", "fabric-api", "0.92", &[], &[]);
+        api.provides = vec!["fabric-rendering-v1".into()];
+        let needs_module = declared_jar("x.jar", "x", "1", &["fabric-rendering-v1"], &[]);
+        let missing = |locals: &[LocalMeta], lv: Option<&str>| -> Vec<String> {
+            launch_missing(locals, &runs, "fabric", lv).into_iter().map(|(id, _)| id).collect()
+        };
+        assert_eq!(missing(&[culling.clone(), lithium.clone()], Some("0.16.10")), vec!["cloth-config", "fabric-api"], "each id once, the game and the loader left out");
+        assert_eq!(missing(&[culling.clone(), lithium.clone()], Some("0.14.21")), vec!["cloth-config", "fabric-api", "mixinextras"], "Fabric Loader older than 0.15 does not bundle MixinExtras");
+        assert_eq!(missing(&[culling.clone(), lithium, api.clone(), needs_module], Some("0.16.10")), vec!["cloth-config"], "a module inside Fabric API answers for itself");
+        let (id, by) = launch_missing(&[culling], &runs, "fabric", None).remove(0);
+        assert_eq!((id.as_str(), by.as_str()), ("cloth-config", "moreculling"), "the player hears which mod asked for it");
+        assert!(missing(&[api], None).is_empty(), "a complete build costs no lookup at all");
+    }
+
+    #[test]
+    fn a_dependency_not_found_is_not_looked_for_again_until_the_mods_change() {
+        let record = serde_json::json!({"key": "k1", "at": 1000, "ids": ["ghostlib"]});
+        assert!(known_misses(&record, "k1", 1000 + 3600).contains("ghostlib"), "same mods, within the day: skipped");
+        assert!(known_misses(&record, "k2", 1000 + 3600).is_empty(), "the mods changed: asked again");
+        assert!(known_misses(&record, "k1", 1000 + 25 * 3600).is_empty(), "a day later: asked again");
+        assert!(known_misses(&serde_json::Value::Null, "k1", 0).is_empty());
     }
 
     #[test]

@@ -101,3 +101,33 @@ test.skipIf(!READY)('атрибут «только чтение» снимает
   chmodSync(target, 0o666)
   expect(readFileSync(target, 'utf8'), 'защищённый от записи файл не обновился').toBe('NEW-PAYLOAD')
 }, 120_000)
+
+// Хук удаления собирается вместе с шаблоном Tauri, где есть $UpdateMode; здесь
+// он только компилируется (не запускается: он чистит реестр текущего пользователя).
+const UNINSTALL_HARNESS = `Unicode true
+OutFile "\${OUT}"
+SilentInstall silent
+RequestExecutionLevel user
+Var UpdateMode
+!include "\${HOOKS}"
+Section
+  StrCpy $UpdateMode 1
+  StrCpy $INSTDIR "\${TESTDIR}"
+  !insertmacro NSIS_HOOK_PREUNINSTALL
+  !insertmacro NSIS_HOOK_POSTUNINSTALL
+SectionEnd
+`
+
+test.skipIf(!READY)('хук удаления (следы: кэш WebView2, автозапуск, видеокарта, ссылка) компилируется', () => {
+  const dir = join(root, 'uninstall')
+  mkdirSync(dir, { recursive: true })
+  const script = join(root, 'uninstall.nsi')
+  writeFileSync(script, UNINSTALL_HARNESS)
+  const built = spawnSync(
+    MAKENSIS,
+    ['/V2', `/DOUT=${join(root, 'uninstall.exe')}`, `/DHOOKS=${HOOKS}`, `/DTESTDIR=${dir}`, '/DMAINBINARYNAME=millida-hooktest', script],
+    { encoding: 'utf8', env: { ...process.env, NSISDIR: NSIS_DIR } },
+  )
+  expect(built.stderr + built.stdout, 'хук удаления не компилируется — релизный установщик не соберётся').not.toContain('Error')
+  expect(built.status, 'makensis завершился с ошибкой').toBe(0)
+}, 120_000)

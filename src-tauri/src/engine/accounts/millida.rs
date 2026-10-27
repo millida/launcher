@@ -525,6 +525,29 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
     }
 }
 
+/// When an access token ends: its `exp` claim, read without checking the signature (the server
+/// checks it; this only decides whether to renew early).
+pub(crate) fn token_expiry(jwt: &str) -> Option<u64> {
+    use base64::Engine as _;
+    let payload = jwt.split('.').nth(1)?;
+    let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: Value = serde_json::from_slice(&raw).ok()?;
+    claims["exp"].as_u64()
+}
+
+/// Renews the account's token ahead of Play when it ends within `window`. Otherwise the first
+/// request of the launch is refused, renews on the way and asks again: two more round trips
+/// while the player waits. One renewal per token lifetime; a renewal on cooldown is not forced.
+pub(crate) async fn refresh_millida_if_expiring(window: std::time::Duration) {
+    let Some(token) = millida_token() else { return };
+    let Some(exp) = token_expiry(&token) else { return };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if exp > now + window.as_secs() || refresh_on_cooldown() {
+        return;
+    }
+    let _ = refresh_session(Some(token)).await;
+}
+
 /// The only way the launcher talks to the Millida API as the signed-in user:
 /// the token is read from the vault here and never leaves the core.
 pub async fn millida_api_auth(path: String, method: String, body: Option<Value>) -> Result<Value, String> {

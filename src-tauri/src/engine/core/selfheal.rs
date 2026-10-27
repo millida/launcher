@@ -54,6 +54,12 @@ fn now() -> u64 {
 pub fn mark_frontend_ready() {
     FRONTEND_UP.store(true, Ordering::SeqCst);
     let _ = std::fs::remove_file(state_file());
+    // This copy opened its page, so the one a patch update left beside it (`.millida-prev`) is no longer needed.
+    // Deleted at the start before, it left nothing to go back to when the new exe was the one that did not open.
+    static LEFTOVERS: std::sync::Once = std::sync::Once::new();
+    LEFTOVERS.call_once(|| {
+        std::thread::spawn(super::selfdelta::clean_leftovers);
+    });
 }
 
 fn frontend_ready() -> bool {

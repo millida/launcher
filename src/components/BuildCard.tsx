@@ -4,7 +4,7 @@ import { BuildIcon } from './playhub/BuildIcon'
 import { ContextMenu, type ContextItem } from './ContextMenu'
 import { LOADER_NAME, fmtPlaytime, whenText } from '../lib/format'
 import { useGuarded, useProfiles } from '../state/profiles'
-import { openBuildSettings, openBuildShare, type InstanceTab } from '../state/instance'
+import { openBuildGraphics, openBuildSettings, openBuildShare, type InstanceTab } from '../state/instance'
 import { realLaunch } from '../lib/launch'
 import { useLobby } from '../state/lobbyMode'
 import { useGame } from '../state/game'
@@ -71,6 +71,15 @@ export function BuildCard({
   const guarded = useGuarded(p.name)
   const allItems: ContextItem[] = [
     { id: 'play', label: running ? t('Запустить ещё копию') : t('Играть'), icon: 'i-play', onPick: () => play() },
+    {
+      id: 'graphics',
+      label: t('Графика'),
+      icon: 'i-settings',
+      onPick: () => {
+        setSelected(p.name)
+        openBuildGraphics(p.name)
+      },
+    },
     { id: 'rename', label: t('Переименовать'), icon: 'i-edit', separated: true, onPick: () => go('opts', true) },
     {
       id: 'share',
@@ -119,6 +128,10 @@ export function BuildCard({
         data-private
         onClick={(e) => {
           setSelected(p.name)
+          if ((e.target as HTMLElement).closest('.build-gfx')) {
+            openBuildGraphics(p.name)
+            return
+          }
           if ((e.target as HTMLElement).closest('.build-cover')) {
             void refresh()
             play()
@@ -147,6 +160,11 @@ export function BuildCard({
         <span className="build-body">
           <b>{p.name}</b>
           <span className="meta">{LOADER_NAME(p) + ' · ' + p.version}</span>
+          {/* Рядом с «Играть» на обложке: сразу к пресетам графики сборки. */}
+          <span className="build-gfx" data-nosound aria-label={t('Графика')}>
+            <Icon id="i-settings" />
+            {t('Графика')}
+          </span>
           {hours ? (
             <span className="meta build-hours">
               <Icon id="i-clock" />

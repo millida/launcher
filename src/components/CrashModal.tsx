@@ -241,7 +241,7 @@ export function CrashModal() {
               data-track="crash_live_log"
               onClick={() => {
                 close()
-                void import('./LiveLog').then((m) => m.openLiveLog())
+                void import('./liveLogStore').then((m) => m.openLiveLog())
               }}
             >
               <Icon id="i-list" /> {t('Лог')}
