@@ -18,6 +18,7 @@ import { SafetyModal } from '../components/SafetyModal'
 import { SharePackModal } from '../components/SharePackModal'
 import { PackUpdateRow } from '../components/PackUpdateRow'
 import { ShadersRow } from '../components/ShadersRow'
+import { BuildGfxPresets } from '../components/GfxPresets'
 import { ShortcutRow } from '../components/ShortcutRow'
 import { CommonShareRows } from '../components/CommonShareRows'
 import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
@@ -131,6 +132,7 @@ import { trackFailure } from '../lib/telemetry'
 import { hasMillidaAccount, mirrorAsset } from '../lib/api'
 import { t, tx, useT } from '../i18n'
 import { LaunchHooksBlock } from '../components/build/LaunchHooksBlock'
+import { noted } from '../lib/noted'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
@@ -176,6 +178,15 @@ const acceptsFile = (kind: string, p: string) => {
 const CATALOG_PACK_PAGE = 'https://millida.net/modpacks/'
 
 /** A protected build is shared by its catalogue page: its own files are the author's to show. */
+/** Пресеты графики рисуются, когда ядро ответило: ждём блок до полутора секунд и прокручиваем к нему. */
+function scrollToGfx(triesLeft = 30) {
+  requestAnimationFrame(() => {
+    const block = document.getElementById('bsGfx')
+    if (block) block.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    else if (triesLeft > 0) setTimeout(() => scrollToGfx(triesLeft - 1), 50)
+  })
+}
+
 function shareCatalogLink(profile: string) {
   loadProfileSettings(profile)
     .then((s) => {
@@ -313,6 +324,8 @@ export function InstancePage() {
   }, [profile, ram, ramMax])
   const [boost, setBoost] = useState<FpsBoostState | null>(null)
   const [boostBusy, setBoostBusy] = useState(false)
+  /// Пресет графики меняет шейдеры и буст: строка шейдеров перечитывает своё состояние.
+  const [gfxRev, setGfxRev] = useState(0)
   const [skinMod, setSkinModState] = useState<SkinModState | null>(null)
   const [skinModBusy, setSkinModBusy] = useState(false)
   const skinOff = skinModOff(skinMod)
@@ -638,8 +651,12 @@ export function InstancePage() {
 
   useEffect(() => {
     if (!modal.open || !profile) return
-    const { tab: wantTab, focusRename, share: wantShare } = useInstance.getState()
+    const { tab: wantTab, focusRename, share: wantShare, focusGfx } = useInstance.getState()
     setTab(wantTab)
+    if (focusGfx) {
+      useInstance.getState().set({ focusGfx: false })
+      scrollToGfx()
+    }
     if (wantTab === 'worlds') loadWorlds()
     if (wantTab === 'logs') loadLogs()
     // The rename input lives on the Settings tab, so focus is set after that
@@ -1415,6 +1432,16 @@ export function InstancePage() {
                 }}
               >
                 <Icon id="i-link" /> {t('Поделиться')}
+              </button>
+              <button
+                className="btn lg secondary inst-gfx"
+                data-track="build_gfx"
+                onClick={() => {
+                  setTab('opts')
+                  scrollToGfx()
+                }}
+              >
+                <Icon id="i-settings" /> {t('Графика')}
               </button>
               {thisRunning ? (
                 <button
@@ -2624,6 +2651,18 @@ export function InstancePage() {
                   }}
                 />
               </div>
+              {profile && pr ? (
+                <BuildGfxPresets
+                  profile={profile}
+                  loader={loaderId(pr)}
+                  version={pr.version}
+                  onChange={() => {
+                    loadMods()
+                    setGfxRev((n) => n + 1)
+                    void fpsBoostState(profile).then(setBoost).catch(noted('instance-boost'))
+                  }}
+                />
+              ) : null}
               {boost && boost.applicable === false && !boost.enabled ? null : (
               <div className="set-row">
                 <span className="lab">
@@ -2670,7 +2709,7 @@ export function InstancePage() {
                   ></span>
                 </div>
               ) : null}
-              {profile ? <ShadersRow profile={profile} onChange={() => loadMods()} /> : null}
+              {profile ? <ShadersRow key={'shaders-' + gfxRev} profile={profile} onChange={() => loadMods()} /> : null}
               {pr && loaderId(pr) !== 'vanilla' ? (
                 <div className="set-row">
                   <span className="lab">

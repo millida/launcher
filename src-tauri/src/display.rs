@@ -60,9 +60,11 @@ mod win {
     pub fn watch(app: &AppHandle) {
         let Some(window) = app.get_webview_window("main") else { return };
         let Ok(hwnd) = window.hwnd() else { return };
-        if APP.set(app.clone()).is_err() {
-            return;
-        }
+        // A rebuilt main window (background.rs) is a new HWND and needs the
+        // subclass again; the app handle stays the same.
+        let _ = APP.set(app.clone());
+        MINIMIZED.store(false, Ordering::Relaxed);
+        DEFERRED.store(false, Ordering::SeqCst);
         // unsafe: attach a message handler to the main window (WinAPI SetWindowSubclass).
         unsafe {
             SetWindowSubclass(hwnd.0 as HWND, Some(proc), SUBCLASS_ID, 0);
@@ -90,12 +92,12 @@ mod win {
         // Убранное в трей окно (hide) не шлёт WM_SIZE: WebView2 считал себя
         // видимым и рисовал лобби каждый кадр прямо поверх идущей игры.
         if msg == WM_SHOWWINDOW {
-            set_webview_visible(wparam != 0 && !MINIMIZED.load(Ordering::Relaxed));
+            set_webview_visible(wparam != 0 && !MINIMIZED.load(Ordering::Relaxed), false);
         }
         if msg == WM_SIZE {
             let away = wparam == SIZE_MINIMIZED;
-            MINIMIZED.store(away, Ordering::Relaxed);
-            set_webview_visible(!away);
+            let was = MINIMIZED.swap(away, Ordering::Relaxed);
+            set_webview_visible(!away, was != away);
             if !away && DEFERRED.swap(false, Ordering::SeqCst) {
                 schedule();
             }
@@ -110,7 +112,9 @@ mod win {
     /// screen; nothing in Tauri does it, so the message loop does. It is also
     /// what stops the wallpaper from being rendered while nobody looks at it —
     /// in the tray (WM_SHOWWINDOW) as well as minimized (WM_SIZE).
-    fn set_webview_visible(visible: bool) {
+    /// `memory`: a minimize or restore also moves the WebView2 memory target
+    /// (LOW while minimized, NORMAL back) without waiting for the page.
+    fn set_webview_visible(visible: bool, memory: bool) {
         // Окно разрушается на выходе и шлёт WM_SIZE; событие в главный поток
         // после разрушения цикла роняет tao («cannot move state from Destroyed»).
         if crate::exiting() {
@@ -122,6 +126,9 @@ mod win {
             let _ = window.with_webview(move |webview| unsafe {
                 let _ = webview.controller().SetIsVisible(visible);
             });
+            if memory {
+                crate::webview_health::set_low_memory(&window, !visible);
+            }
         });
     }
 

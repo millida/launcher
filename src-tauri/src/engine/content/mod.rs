@@ -12,6 +12,8 @@ mod millida_mod;
 mod catalog_pack;
 mod catalog_file;
 mod pack_delta;
+mod pack_stream;
+mod pack_install;
 mod pack_card;
 mod pack_contents;
 mod pack_edits;

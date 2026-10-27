@@ -5,7 +5,7 @@ import { startTour } from './tour'
 const DONE = 'm-onb-done'
 const EVER = 'm-mil-ever'
 
-export const ONBOARDING_STEPS = 6
+export const ONBOARDING_STEPS = 7
 /** Шаг «Кто тебя позвал?» — без аккаунта Millida спрашивать некого. */
 export const INVITER_STEP = 1
 
