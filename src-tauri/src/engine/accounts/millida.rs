@@ -465,10 +465,20 @@ fn verdict_for(err: &str) -> RefreshVerdict {
     if err == "http 401" { RefreshVerdict::SessionOver } else { RefreshVerdict::TryLater }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum Refreshed {
     Token(String),
     Dead,
+    SignedOut,
     Unavailable,
+}
+
+/// With no refresh token left, an access token alone is a session that has ended, while no
+/// tokens at all is a player who never signed in (offline nick or licence only). Only the first
+/// is reported as `unauthorized`: the webview reads that as "session expired" and sends the
+/// player to the sign-in screen, which would otherwise happen on every sign-in-only request.
+fn without_refresh_token(has_access: bool) -> Refreshed {
+    if has_access { Refreshed::Dead } else { Refreshed::SignedOut }
 }
 
 /// Serialized behind a mutex: concurrent callers hitting 401 at once would
@@ -486,7 +496,7 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
     if current.is_some() && current != used {
         return Refreshed::Token(current.unwrap_or_default());
     }
-    let Some(rt) = stored_refresh else { return Refreshed::Dead };
+    let Some(rt) = stored_refresh else { return without_refresh_token(current.is_some()) };
     if refresh_on_cooldown() {
         return Refreshed::Unavailable;
     }
@@ -537,7 +547,7 @@ pub async fn millida_api_auth_in(
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market, lang).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -630,7 +640,7 @@ pub async fn millida_upload_raw_auth(
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_upload_raw_in(&path, &method, body, Some(fresh), progress).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -720,7 +730,7 @@ pub async fn millida_post_bytes_auth(path: String, bytes: Vec<u8>) -> Result<Val
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_post_bytes(path, bytes, Some(fresh)).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -748,7 +758,7 @@ pub async fn millida_upload_auth(
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_upload(path, filename, mime, bytes, fields, Some(fresh)).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -893,7 +903,7 @@ mod tests {
 
     use super::{
         api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
-        upload_route_allowed, verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
+        upload_route_allowed, verdict_for, without_refresh_token, RefreshVerdict, Refreshed, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
 
@@ -1077,6 +1087,22 @@ mod tests {
                 expected,
                 "refresh answer {answer:?} judged wrong. Reason this case is pinned: {why}",
             );
+        }
+    }
+
+    #[test]
+    fn missing_refresh_token_verdicts() {
+        // (access token stored, outcome, why this case is pinned)
+        let cases: &[(bool, Refreshed, &str)] = &[
+            (true, Refreshed::Dead, "an access token whose refresh token is gone cannot be renewed: the session is over"),
+            (
+                false,
+                Refreshed::SignedOut,
+                "an offline-only player has no session to expire; reporting it as expired logged them out on every start",
+            ),
+        ];
+        for (has_access, expected, why) in cases {
+            assert_eq!(&without_refresh_token(*has_access), expected, "access token stored: {has_access}. {why}");
         }
     }
 

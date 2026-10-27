@@ -18,12 +18,12 @@ import { SafetyModal } from '../components/SafetyModal'
 import { SharePackModal } from '../components/SharePackModal'
 import { PackUpdateRow } from '../components/PackUpdateRow'
 import { ShadersRow } from '../components/ShadersRow'
+import { ShortcutRow } from '../components/ShortcutRow'
+import { CommonShareRows } from '../components/CommonShareRows'
 import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
 import { TunePanel } from '../components/TunePanel'
 import { buildRamGb, setBuildRamMb } from '../lib/ramPref'
 import { IconEditor } from '../components/IconEditor'
-import { ShortcutRow } from '../components/ShortcutRow'
-import { CommonShareRows } from '../components/CommonShareRows'
 import { recallIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import { uiConfirm } from '../state/confirm'
 import { isOwnModFile, keepAfterOwnModConfirm, skinModOff } from '../lib/millidaModGuard'
@@ -2715,6 +2715,7 @@ export function InstancePage() {
               ) : null}
               {profile ? <CommonShareRows profile={profile} /> : null}
               <div className="bx-opts-cap">{t('Файлы')}</div>
+              {profile ? <ShortcutRow profile={profile} /> : null}
               <div className="set-row">
                 <span className="lab">
                   {t('Починить сборку')}
@@ -2793,7 +2794,6 @@ export function InstancePage() {
                   onClick={() => {
                     if (!profile || !pr) return
                     useMigrate.getState().open(profile, pr.version, loaderId(pr))
-              {profile ? <ShortcutRow profile={profile} /> : null}
                   }}
                 >
                   <Icon id="i-arrow-r" /> {t('Перенести')}
@@ -3019,8 +3019,8 @@ export function InstancePage() {
                   onClick={async () => {
                     if (
                       !(await uiConfirm(
-                        t('Удалить сборку «{name}» со всеми модами, мирами и часами игры? Отменить будет нельзя. Введи её название, чтобы удалить.', { name: profile ?? '' }),
-                        { confirmLabel: t('Удалить'), typeToConfirm: profile ?? undefined },
+                        t('Удалить сборку «{name}» со всеми модами, мирами и часами игры? Отменить будет нельзя.', { name: profile ?? '' }),
+                        { confirmLabel: t('Удалить') },
                       ))
                     )
                       return

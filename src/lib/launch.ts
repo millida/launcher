@@ -303,6 +303,8 @@ let updatingKey: string | null = null
  * `openCard` shows the launch progress for paths that have no card of their own.
  */
 async function freshenPack(profile: string, epoch: number, openCard: boolean): Promise<void> {
+  await followFriendBuild(profile)
+  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   const step = await packStepForLaunch(profile)
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   if (step.kind === 'launch-unchecked') {
@@ -323,8 +325,6 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   })
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: t('Готовимся…') })
-  await followFriendBuild(profile)
-  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   const next = afterPackUpdate(u, outcome)
   if (next.toast) showToast(next.toast, 'error')
   if (!next.launch) {
