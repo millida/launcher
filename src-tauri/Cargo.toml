@@ -112,7 +112,9 @@ objc2-service-management = { version = "0.3", default-features = false, features
 
 [profile.release]
 strip = true
-lto = "thin"
+# The app crate and the cross-crate LTO link took 8 of the 13 minutes of a Windows
+# release build; a launcher gains nothing measurable from LTO, releases do from speed.
+lto = false
 codegen-units = 1
 
 # The app crate is the critical path of a release build: with a single codegen

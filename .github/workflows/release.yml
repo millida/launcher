@@ -12,6 +12,9 @@ name: Release
 on:
   push:
     tags: ["v*"]
+    # The public main moves with every stable release. Building it fills the Rust
+    # caches that tag builds may read: a cache saved on a tag is visible to that tag alone.
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -84,7 +87,7 @@ jobs:
       SIGNING_POLICY: ${{ inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY }}
       # Not SIGN: linuxdeploy-plugin-appimage treats any SIGN value as a request
       # to GPG-sign the AppImage and fails without a key.
-      WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
+      WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && github.ref != 'refs/heads/main' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
       RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
       - name: Install Linux dependencies
@@ -135,15 +138,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # A cache saved on a tag is visible only to that same tag, so the next
-      # release can never restore it; saving just evicts reusable entries.
+      # A cache saved on a tag is visible only to that same tag, so only main saves;
+      # every release tag restores what the last main build left.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.target }}-${{ matrix.container }}
-          save-if: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Set version from the tag
+        if: github.ref != 'refs/heads/main'
         shell: bash
         env:
           VERSION_INPUT: ${{ inputs.version }}
@@ -307,6 +311,7 @@ jobs:
           fi
 
       - name: Collect bundles
+        if: github.ref != 'refs/heads/main'
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
@@ -317,6 +322,7 @@ jobs:
         run: bash .github/scripts/collect-bundles.sh
 
       - uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/main'
         with:
           name: bundle-${{ matrix.target }}
           retention-days: 3
@@ -365,6 +371,7 @@ jobs:
           restore-keys: macos-${{ matrix.target }}-
 
       - name: Set version from the tag
+        if: github.ref != 'refs/heads/main'
         run: bash .github/scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       # RUSTUP_TOOLCHAIN overrides rust-toolchain.toml: the image ships a minimal
@@ -396,6 +403,7 @@ jobs:
             '
 
       - name: Collect bundles
+        if: github.ref != 'refs/heads/main'
         env:
           TARGET: ${{ matrix.target }}
           UPDATER_KEY: ${{ matrix.updater_key }}
@@ -405,6 +413,7 @@ jobs:
         run: bash .github/scripts/collect-bundles.sh
 
       - uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/main'
         with:
           name: bundle-${{ matrix.target }}
           retention-days: 3
@@ -417,7 +426,7 @@ jobs:
     # Not a plain success check: an optional matrix leg may fail. Required
     # targets are enforced by release-assets.mjs, and a leg uploads its bundles
     # only as its last step, so a missing bundle means a failed build.
-    if: ${{ !cancelled() && github.event_name == 'push' && needs.macos.result == 'success' && needs.build.result != 'skipped' }}
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') && needs.macos.result == 'success' && needs.build.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
