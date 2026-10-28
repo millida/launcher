@@ -39,6 +39,7 @@ import { holdLaunchForHdSkin } from './skinLock'
 import { claimJoin } from './joinClaim'
 import { t, tx } from '../i18n'
 import { CORE_LAUNCH_CANCELLED, coreErrorText, mentionsCancel } from './coreErrors'
+import { horizonReason } from './horizonError'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
@@ -686,6 +687,14 @@ function doLaunch(name: string) {
           if (pack.pack) usePackKey.getState().show(pack.pack, prof, reason, () => realLaunch(prof))
           else showLaunchError(err)
         })
+        return
+      }
+      const horizon = prof ? horizonReason(err) : null
+      if (horizon && prof) {
+        surfaceLaunchFailure()
+        void import('./horizon')
+          .then((m) => m.offerJavaStart(prof, horizon, () => realLaunch(prof)))
+          .catch(() => showLaunchError(err))
         return
       }
       showLaunchError(err)

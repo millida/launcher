@@ -5,6 +5,7 @@ import { FilesTab } from '../components/build/FilesTab'
 import { normalizeGroup } from '../lib/buildGroups'
 import { ExportModal } from '../components/build/ExportModal'
 import { LinuxToolsRows } from '../components/build/LinuxToolsRows'
+import { HorizonBuildRow } from '../components/build/HorizonBeta'
 import { PackwizRow } from '../components/build/PackwizRow'
 import { DEMO_MODS } from '../lib/demoMods'
 import { DEMO_USER } from '../lib/demo'
@@ -133,6 +134,7 @@ import { hasMillidaAccount, mirrorAsset } from '../lib/api'
 import { t, tx, useT } from '../i18n'
 import { LaunchHooksBlock } from '../components/build/LaunchHooksBlock'
 import { noted } from '../lib/noted'
+import { versionAtLeast } from '../lib/promoServers'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
@@ -240,6 +242,8 @@ const CONNECTOR_ITEMS = [
   { source: 'modrinth', project_id: 'connector' },
   { source: 'modrinth', project_id: 'forgified-fabric-api' },
 ]
+/** Connector has no build for older games: offering it on 1.7.10 ended in «нет версии под 1.7.10». */
+const CONNECTOR_MIN_GAME = '1.20.1'
 const fabricOnly = (m: ModFile) => {
   const ls = m.loaders?.length ? m.loaders : m.loader ? [m.loader] : []
   return ls.includes('fabric') && !ls.includes('forge') && !ls.includes('neoforge')
@@ -294,6 +298,7 @@ export function InstancePage() {
   const [tagFilter, setTagFilter] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
   const [packSafetyOpen, setPackSafetyOpen] = useState(false)
+  const [fileSafetyOpen, setFileSafetyOpen] = useState(false)
   const [authorRamGb, setAuthorRamGb] = useState(0)
   const [authorLocked, setAuthorLocked] = useState(false)
   const [embedded, setEmbedded] = useState<string[]>([])
@@ -1194,7 +1199,8 @@ export function InstancePage() {
   const grouped = kind === 'mod' && !cq && !filter && !tagFilter
   const manualCount = items.filter((i) => i.origin === 'manual').length
   const forgeLike = !!pr && (loaderId(pr) === 'forge' || loaderId(pr) === 'neoforge')
-  const fabricOnForge = forgeLike && kind === 'mod' ? items.filter((i) => i.enabled && fabricOnly(i)) : []
+  const bridgeable = forgeLike && kind === 'mod' && !!pr && versionAtLeast(pr.version, CONNECTOR_MIN_GAME)
+  const fabricOnForge = bridgeable ? items.filter((i) => i.enabled && fabricOnly(i)) : []
   const hasConnector = items.some(isConnector)
   const libs = grouped ? shownItems.filter((i) => isLibraryMod(i)) : []
   const mains = grouped ? shownItems.filter((i) => !isLibraryMod(i)) : shownItems
@@ -1885,6 +1891,7 @@ export function InstancePage() {
                 />
               ) : null}
               {packSafetyOpen && profile ? <SafetyModal profile={profile} scope="packs" onClose={() => setPackSafetyOpen(false)} onChanged={() => loadMods()} /> : null}
+              {fileSafetyOpen ? <SafetyModal profile="" scope="files" onClose={() => setFileSafetyOpen(false)} onChanged={() => {}} /> : null}
               {exportOpen && profile ? <ExportModal profile={profile} ramGb={ram} onClose={() => setExportOpen(false)} /> : null}
               {moreMenu ? (
                 <ContextMenu
@@ -1896,6 +1903,7 @@ export function InstancePage() {
                       items.length && scanLabel === t('Сканировать') ? { id: 'scan', label: t('Опознать файлы'), icon: 'i-search', onPick: runScan } : null,
                       kind === 'mod' && items.length ? { id: 'safety', label: t('Проверить безопасность'), icon: 'i-shield', onPick: () => setSafetyOpen(true) } : null,
                       kind !== 'mod' ? { id: 'safety-packs', label: t('Проверить паки и карты'), icon: 'i-shield', onPick: () => setPackSafetyOpen(true) } : null,
+                      kind === 'mod' && hasTauri() ? { id: 'safety-files', label: t('Проверить любой файл на вирусы'), icon: 'i-shield', onPick: () => setFileSafetyOpen(true) } : null,
                       { id: 'export', label: t('Экспорт в .mrpack'), icon: 'i-download', onPick: runExport },
                       { id: 'export-other', label: t('Экспорт для других лаунчеров'), icon: 'i-download', onPick: () => setExportOpen(true) },
                       { id: 'template', label: t('Сохранить как шаблон'), icon: 'i-copy', onPick: saveTemplate },
@@ -2488,6 +2496,7 @@ export function InstancePage() {
                   ) : null}
                 </div>
               </div>
+              {profile && pr ? <HorizonBuildRow profile={profile} version={pr.version} loader={loaderId(pr)} /> : null}
               <div className="set-row" style={{ alignItems: 'center' }}>
                 <span className="lab">
                   {t('Иконка')}

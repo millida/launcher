@@ -493,6 +493,12 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
         let who = sign_in(app.clone(), auth_source, nick).await?;
         return launch_native(app, profile, who.nick.clone(), who.auth.clone(), &settings, native?).await;
     }
+    if let Some(wanted) = horizon_wanted(&profile, &game_version, &loader_id) {
+        let asset = wanted?;
+        let who = sign_in(app.clone(), auth_source, nick).await?;
+        let ask = HorizonAsk { profile, nick: who.nick.clone(), auth: who.auth.clone(), settings, asset };
+        return launch_horizon(app, ask, perf).await;
+    }
     share_common_before_launch(&profile);
     let game_dir = profile_dir(&profile);
     // the descriptor is a file in the profile folder: it is honoured only for

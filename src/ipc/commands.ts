@@ -1627,6 +1627,7 @@ export interface SafetyReport {
 }
 
 export const scanModSafety = (profile: string) => invoke<SafetyReport>('scan_mod_safety', { profile })
+export const scanPickedFiles = () => invoke<SafetyReport | null>('scan_picked_files')
 export const quarantineMods = (profile: string, files: string[]) =>
   invoke<number>('quarantine_mods', { profile, files })
 
@@ -1889,6 +1890,22 @@ export interface LinuxTools {
 export const linuxToolsState = (profile: string) => invoke<LinuxTools>('linux_tools_state', { profile })
 export const setLinuxTools = (profile: string, gamemode: boolean, gamescope: boolean) =>
   invoke<LinuxTools>('set_linux_tools', { profile, gamemode, gamescope })
+
+/** Horizon beta engine (engine/game/horizon.rs): only vanilla 26.3 on a platform with a pinned build. */
+export interface HorizonState {
+  available: boolean
+  enabled: boolean
+  reason: string | null
+  release: string
+}
+
+/** Launch errors with this prefix came from Horizon: the window offers the usual Java start. */
+export const HORIZON_FAIL_PREFIX = 'horizon: '
+
+export const horizonState = (profile: string) => invoke<HorizonState>('horizon_state', { profile })
+export const horizonStateFor = (version: string, loader: string) => invoke<HorizonState>('horizon_state_for', { version, loader })
+export const setHorizon = (profile: string, on: boolean) => invoke<HorizonState>('set_horizon', { profile, on })
+export const horizonJavaOnce = (profile: string) => invoke<void>('horizon_java_once', { profile })
 
 export const scanPackSafety = (profile: string) => invoke<SafetyReport>('scan_pack_safety', { profile })
 export const quarantinePacks = (profile: string, files: string[]) => invoke<number>('quarantine_packs', { profile, files })

@@ -17,6 +17,9 @@ Var MillidaIndex
 Var MillidaName
 Var MillidaPrefix
 Var MillidaLen
+Var MillidaWipe
+Var MillidaFind
+Var MillidaEntry
 
 ; NSIS aborts the install with "Error opening file for writing" whenever the
 ; target is still held: the app running from the tray, an elevated instance the
@@ -83,7 +86,7 @@ Var MillidaLen
 !macroend
 
 ; The game folder the player picked lives in game-root.txt inside the app data,
-; which the «delete app data» box may remove before the post-uninstall hook runs.
+; read before the uninstall removes anything.
 !macro MillidaReadGameRoot
   SetShellVarContext current
   StrCpy $MillidaGameRoot ""
@@ -130,11 +133,46 @@ Var MillidaLen
   ${EndIf}
 !macroend
 
+; Empties _dir except the entries named _keep1/_keep2/_keep3 («-» keeps nothing more).
+!macro MillidaWipeDirExcept _dir _keep1 _keep2 _keep3
+  ClearErrors
+  FindFirst $MillidaFind $MillidaEntry "${_dir}\*"
+  ${DoUntil} ${Errors}
+    ${If} $MillidaEntry != "."
+    ${AndIf} $MillidaEntry != ".."
+    ${AndIf} $MillidaEntry != "${_keep1}"
+    ${AndIf} $MillidaEntry != "${_keep2}"
+    ${AndIf} $MillidaEntry != "${_keep3}"
+      ${If} ${FileExists} "${_dir}\$MillidaEntry\*"
+        RmDir /r "${_dir}\$MillidaEntry"
+      ${Else}
+        Delete "${_dir}\$MillidaEntry"
+      ${EndIf}
+    ${EndIf}
+    ClearErrors
+    FindNext $MillidaFind $MillidaEntry
+  ${Loop}
+  FindClose $MillidaFind
+!macroend
+
+; The «delete app data» box stands for accounts, settings and caches, but Tauri's own
+; handling removes the whole app data folder, and with it the default game folder:
+; a player reinstalling the launcher lost builds and worlds played for weeks. The
+; box is taken over before Tauri acts on it and the same folders are emptied here,
+; keeping the builds (minecraft\profiles), their list and the pointer to a game
+; folder picked by hand. The launcher adopts kept build folders on the next start.
+!macro MillidaWipeKeepingBuilds _roaming _local
+  RmDir /r "${_local}"
+  !insertmacro MillidaWipeDirExcept "${_roaming}" "minecraft" "profiles.json" "game-root.txt"
+  !insertmacro MillidaWipeDirExcept "${_roaming}\minecraft" "profiles" "-" "-"
+  RmDir "${_roaming}\minecraft"
+  RmDir "${_roaming}"
+!macroend
+
 ; What the uninstaller always removes, «delete app data» box or not: the WebView2
 ; caches (never the page's own storage), the autostart entries, the millida:// link
-; if it still points here and the GPU choices for our java. Builds, worlds, accounts
-; and settings stay unless the player ticks the box (Tauri's own, off by default; it
-; removes the whole app data folders before this hook runs). The page keeps the
+; if it still points here and the GPU choices for our java. Accounts and settings
+; stay unless the player ticks the box; builds and worlds stay always. The page keeps the
 ; account list, the statistics opt-out and its other settings in WebView2's Local
 ; Storage and IndexedDB, so those folders are left alone here. A game folder picked
 ; by hand is never removed — it may be shared with another launcher. Updates
@@ -176,6 +214,12 @@ Var MillidaLen
 ; would mark the install alive again on the server. The timeout keeps a hung
 ; network from holding the uninstall.
 !macro NSIS_HOOK_PREUNINSTALL
+  StrCpy $MillidaWipe 0
+  ${If} $DeleteAppDataCheckboxState = 1
+  ${AndIf} $UpdateMode <> 1
+    StrCpy $DeleteAppDataCheckboxState 0
+    StrCpy $MillidaWipe 1
+  ${EndIf}
   !insertmacro MillidaReadGameRoot
   !insertmacro MillidaFreeInstallDir
   ${If} ${FileExists} "$INSTDIR\${MILLIDA_MAIN_EXE}"
@@ -187,4 +231,8 @@ Var MillidaLen
 !macro NSIS_HOOK_POSTUNINSTALL
   Delete /REBOOTOK "$INSTDIR\*${MILLIDA_ASIDE}*"
   !insertmacro MillidaCleanTraces
+  ${If} $MillidaWipe = 1
+    SetShellVarContext current
+    !insertmacro MillidaWipeKeepingBuilds "$APPDATA\net.millida.launcher" "$LOCALAPPDATA\net.millida.launcher"
+  ${EndIf}
 !macroend
