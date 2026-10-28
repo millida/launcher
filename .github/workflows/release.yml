@@ -139,9 +139,12 @@ jobs:
           targets: ${{ matrix.target }}
 
       # A cache saved on a tag is visible only to that same tag, so only main saves;
-      # every release tag restores what the last main build left.
+      # every release tag restores what the last main build left. The prefix keeps
+      # entries written by other workflows on main out of the signed build, and every
+      # action that runs on main is pinned to a commit.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
+          prefix-key: release-v1
           workspaces: src-tauri -> target
           key: ${{ matrix.target }}-${{ matrix.container }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
