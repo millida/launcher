@@ -1,7 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { useT } from '../../i18n'
-import { CAST, art, type ClassCard } from './content'
-import { useArcaniaArt } from './useArcaniaArt'
+import { ART, CAST, type ClassCard } from './content'
 import './hero-cast.css'
 
 const SPARKS = [
@@ -13,7 +12,6 @@ const SPARKS = [
 ] as const
 
 export function HeroCast({ installed, onPlay }: { installed: boolean; onPlay: () => void }) {
-  useArcaniaArt()
   const t = useT()
   const [lit, setLit] = useState<number | null>(null)
   const playIndex = CAST.findIndex((c) => 'play' in c)
@@ -76,7 +74,7 @@ function ClassTile({ card, lit, onEnter }: { card: ClassCard; lit: boolean; onEn
         ))}
       </span>
       <span className="arc-hero">
-        <img src={art(card.id + '.webp')} alt="" draggable={false} />
+        <img src={ART + card.id + '.webp'} alt="" draggable={false} />
       </span>
       <span className="arc-label">
         <small>{t('Стань')}</small>

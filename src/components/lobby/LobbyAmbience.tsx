@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { dayPhase, particleStyle, seasonOf, type DayPhase, type Season } from '../../lib/ambience'
 import { useAmbience } from '../../state/ambience'
 import { useViewPrefs } from '../../state/viewPrefs'
-import { liveInterval } from '../../lib/liveInterval'
 
 const CLOCK_TICK_MS = 60_000
 const PIXEL = 2
@@ -29,7 +28,8 @@ function useNow(enabled: boolean): Date {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     if (!enabled) return
-    return liveInterval(() => setNow(new Date()), CLOCK_TICK_MS)
+    const id = setInterval(() => setNow(new Date()), CLOCK_TICK_MS)
+    return () => clearInterval(id)
   }, [enabled])
   return now
 }

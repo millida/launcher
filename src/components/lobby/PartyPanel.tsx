@@ -28,7 +28,6 @@ import { setScreen, showToast } from '../../state/ui'
 import '../../styles/pixel/party-panel.css'
 import { t, useMarketOffers, useT } from '../../i18n'
 import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
-import { liveInterval } from '../../lib/liveInterval'
 
 const CHAT_MAX = 300
 /** Быстрые фразы: договориться в один клик, без набора текста (как командный чат в Brawl Stars). */
@@ -44,7 +43,8 @@ function useNow(live: boolean, fast = false) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     if (!live) return
-    return liveInterval(() => setNow(Date.now()), fast ? 250 : 1000)
+    const t = window.setInterval(() => setNow(Date.now()), fast ? 250 : 1000)
+    return () => window.clearInterval(t)
   }, [live, fast])
   return now
 }

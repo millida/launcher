@@ -17,7 +17,6 @@ use std::time::{Duration, Instant, SystemTime};
 use tauri::AppHandle;
 
 const PING_EVERY: Duration = Duration::from_secs(2);
-const IDLE_PING_EVERY: Duration = Duration::from_secs(30);
 
 /// A blocking call this long on the UI thread is not slow work, it is a hang:
 /// Windows itself starts ghosting the window at five seconds.
@@ -57,17 +56,9 @@ pub fn watch(app: &AppHandle) {
             let mut closed = false;
             let mut last = (Instant::now(), SystemTime::now());
             loop {
-                // No window in the tray (background.rs): nothing to freeze, and
-                // the core should not wake every two seconds for nobody.
-                let away = crate::background::unloaded();
-                std::thread::sleep(if away { IDLE_PING_EVERY } else { PING_EVERY });
+                std::thread::sleep(PING_EVERY);
                 if crate::exiting() {
                     return;
-                }
-                if away && crate::background::unloaded() {
-                    silent = Duration::ZERO;
-                    last = (Instant::now(), SystemTime::now());
-                    continue;
                 }
                 let now = (Instant::now(), SystemTime::now());
                 let gap = owed(now.0.duration_since(last.0), now.1.duration_since(last.1).ok());

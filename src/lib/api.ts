@@ -4,7 +4,6 @@ import { hasTauri } from '../ipc/tauri'
 import { millidaApi, openUrl, type ApiMarket } from '../ipc/commands'
 import { getLocale, getMarket } from '../i18n'
 import { hasMillidaSession } from './secure'
-import { sellsPaidPacks } from './paidPacks'
 import { shortfallMarker } from './money'
 import { DEMO_USER, ECONOMY_SHOWCASE, demoAnswer } from './demo'
 
@@ -62,11 +61,9 @@ export function langHeaders(): Record<string, string> {
 }
 
 /// The API keeps a separate server rating per market and picks it by header, the
-/// same way cobblo.net asks for the English one. The premium shelf follows the
-/// paid-pack market: abroad it holds only the packs of worldwide partners.
+/// same way cobblo.net asks for the English one. Only the rating is split.
 export function marketFor(pathname: string): ApiMarket | undefined {
-  if (pathname.startsWith('/launcher/premium')) return sellsPaidPacks() ? undefined : 'EN'
-  if (!pathname.startsWith('/rating/')) return undefined
+  if (!pathname.startsWith('/rating/') && !pathname.startsWith('/launcher/premium')) return undefined
   return getMarket() === 'RU' ? undefined : 'EN'
 }
 

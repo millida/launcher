@@ -3,7 +3,6 @@ import { hasTauri } from '../ipc/tauri'
 import {
   createProfile,
   fpsBoostState,
-  gfxPresetState,
   millidaModInstall,
   millidaModState,
   setFpsBoost,
@@ -155,16 +154,6 @@ async function fabricBuild(version: string, name: string): Promise<string | null
   return p.name
 }
 
-/**
- * Новая ревизия набора («stale») переделывает режим в сборке: ставит закреплённые версии и
- * убирает моды, которые прежний набор ставил сам. Новой сборке (игра ещё не запускалась —
- * нет options.txt) это можно; сыгранная не меняется молча, её набор обновляет сам игрок
- * через «Оптимизировать мои сборки». Нет ответа ядра о сборке — считаем её сыгранной.
- */
-export function fpsTopUpAllowed(st: { stale: boolean }, gfx: { fresh: boolean } | null): boolean {
-  return st.stale && gfx?.fresh === true
-}
-
 /** FPS-моды: включить (поставить недостающие) или выключить без удаления. */
 async function applyFps(profile: string, on: boolean): Promise<void> {
   const st = await fpsBoostState(profile)
@@ -172,8 +161,7 @@ async function applyFps(profile: string, on: boolean): Promise<void> {
     await setFpsBoost(profile, true, true, await hardwareVideo())
     return
   }
-  if (on && st.stale && fpsTopUpAllowed(st, await gfxPresetState(profile).catch(() => null)))
-    await setFpsBoost(profile, true, true, await hardwareVideo())
+  if (on && st.stale) await setFpsBoost(profile, true, true, await hardwareVideo())
   // Режим уже включён: его моды могли быть выключены этим же переключателем.
   for (const file of st.mods) await toggleContent(profile, 'mod', file, on).catch(() => {})
 }

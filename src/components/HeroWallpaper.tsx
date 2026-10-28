@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { H, SCENES, VIDEOS, W, isVideoWp, markVideoBroken, videoMediaOf, videoSrcOf } from '../lib/wallpaper'
-import { useMedia } from '../lib/media'
+import { H, SCENES, VIDEOS, W, isVideoWp, markVideoBroken, videoSrcOf } from '../lib/wallpaper'
 import { useWallpaper } from '../state/wallpaper'
 import { tauri } from '../ipc/tauri'
 import { onRenderGate, renderLive } from '../lib/renderGate'
 import type { UnlistenFn } from '../ipc/tauri'
-import { liveInterval } from '../lib/liveInterval'
 
 const PAUSE_DELAY = 1500
 
 export function useHeroWallpaper(screenOn = true) {
   const { wpCur, wpAnimOn, custom } = useWallpaper()
-  // The clip comes from the media cache: the core fetches it the first time this wallpaper is chosen, and the
-  // poster is shown until the file lands (the effect below runs again when `clipUrl` appears).
-  const clipUrl = useMedia(videoMediaOf(wpCur))
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -134,11 +129,12 @@ export function useHeroWallpaper(screenOn = true) {
   // WKWebView may fire neither canplay nor loadeddata; fall back to polling readyState.
   useEffect(() => {
     if (!isVideoWp(wpCur) || videoReady || !videoSrcOf(wpCur)) return
-    return liveInterval(() => {
+    const t = setInterval(() => {
       const v = videoRef.current
       if (v && v.readyState >= 2) setVideoReady(true)
     }, 400)
-  }, [wpCur, videoReady, clipUrl])
+    return () => clearInterval(t)
+  }, [wpCur, videoReady])
 
   useEffect(() => {
     const v = videoRef.current
@@ -172,7 +168,7 @@ export function useHeroWallpaper(screenOn = true) {
       if (g && SCENES[wpCur]) SCENES[wpCur].draw(g, 10, 0, 0)
       requestAnimationFrame(() => setCanvasReady(true))
     }
-  }, [wpCur, clipUrl])
+  }, [wpCur])
 
   useEffect(() => {
     sync()

@@ -24,7 +24,6 @@ import './styles/pixel/premium.css'
 import './styles/pixel/rail.css'
 import './styles/pixel/shop.css'
 import './styles/pixel/settings.css'
-import './styles/pixel/gfx-presets.css'
 import './styles/pixel/shell.css'
 import './styles/pixel/social.css'
 import { App } from './App'
@@ -33,11 +32,9 @@ import { initAccent } from './lib/accent'
 import { initPremiumTheme } from './lib/premiumTheme'
 import './styles/pixel/premium-theme.css'
 import './styles/classic.css'
-// Последним: лёгкий режим и «меньше движения» бьют остальные правила (lib/liteMode.ts).
-import './styles/13-lite.css'
+import { Overlay } from './screens/Overlay'
 import { openExt } from './lib/api'
 import { initRenderGate } from './lib/renderGate'
-import { initLiteMode } from './lib/liteMode'
 import { initJankWatch } from './lib/jank'
 import { webviewFailure } from './lib/webviewHealth'
 import { installAspectRatioFallback } from './lib/aspectRatioFallback'
@@ -74,8 +71,6 @@ if (isOverlay) {
 } else {
   // Премиум-темы PLUS / Diamond: сохранённая рисуется сразу, дальше — по подписке.
   initPremiumTheme()
-  // Лёгкий режим по железу — класс на <html> до первого кадра.
-  initLiteMode()
   // Окно лаунчера замирает, пока не видно или поверх идёт игра.
   initRenderGate()
   initJankWatch()
@@ -86,7 +81,4 @@ if (isOverlay) {
 installAspectRatioFallback()
 installBrokenImageGuard()
 
-const root = createRoot(document.getElementById('root')!)
-// Оверлей игры — тот же бандл по якорю, но его код (чат поверх игры) основному окну не нужен.
-if (isOverlay) void import('./screens/Overlay').then(({ Overlay }) => root.render(<Overlay />))
-else root.render(<App />)
+createRoot(document.getElementById('root')!).render(isOverlay ? <Overlay /> : <App />)

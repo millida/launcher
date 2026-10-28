@@ -33,7 +33,6 @@ import { openGameFromLink } from './gameInvite'
 import { t } from '../i18n'
 import { normalizePartyCode, partyCodeOk, prettyPartyCode } from './party'
 import { joinPartyByCode } from '../state/party'
-import { noted } from './noted'
 
 function handle(raw: string) {
   let url: URL
@@ -240,15 +239,12 @@ function handle(raw: string) {
   }
 }
 
-/** `pending`: links the core kept while the window was unloaded; they replace the start link. */
-export function initDeepLinks(pending?: string[]) {
+export function initDeepLinks() {
   if (!hasTauri()) return
-  if (pending) pending.forEach(handle)
-  else
-    void getCurrent()
-      .then((urls) => (urls || []).forEach(handle))
-      .catch(noted('deeplink-current'))
-  void onOpenUrl((urls) => urls.forEach(handle)).catch(noted('deeplink-open'))
+  void getCurrent()
+    .then((urls) => (urls || []).forEach(handle))
+    .catch(() => {})
+  void onOpenUrl((urls) => urls.forEach(handle)).catch(() => {})
 }
 
 /// millida://launch?profile=…&quickplay=world:<folder>|server:<addr>&key=… —

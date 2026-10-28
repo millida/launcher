@@ -5,7 +5,8 @@ import { LicenceBuyLink, type GameAccountKind } from '../components/AccountChoic
 import { KindPanel } from '../modals/AccountAdd'
 import { LangPicker } from '../components/LangPicker'
 import { useT } from '../i18n'
-import { cancelWebLogin, copyUserCode, copyVerifyLink, startWebLogin, useLogin } from '../state/login'
+import { cancelWebLogin, copyUserCode, copyVerifyLink, quickStart, startWebLogin, useLogin } from '../state/login'
+import { millidaEver } from '../state/onboarding'
 import { finishFirstRun, useFirstRun } from '../state/firstRun'
 import { isGameAccountKind, useAccounts } from '../state/accounts'
 import { refreshGameNick } from '../state/gameNick'
@@ -59,6 +60,7 @@ export function Login({ on }: { on: boolean }) {
   const t = useT()
   const login = useLogin()
   const artRef = useRef<HTMLImageElement>(null)
+  const guestAllowed = millidaEver()
   const step = useFirstRun((s) => s.open)
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -136,6 +138,11 @@ export function Login({ on }: { on: boolean }) {
             </div>
           )}
 
+          {guestAllowed ? (
+            <button className="btn md secondary login-guest lg2-guest" id="quickStart" onClick={quickStart}>
+              {t('Играть гостем')}
+            </button>
+          ) : null}
           <div className="trust">
             <Icon id="i-shield" />
             <span>{t('Пароль — только на сайте Millida')}</span>

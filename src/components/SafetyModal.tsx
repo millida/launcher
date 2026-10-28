@@ -4,10 +4,8 @@ import { fmtSize } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
-import { quarantineMods, quarantinePacks, scanModSafety, scanPackSafety, scanPickedFiles, type ModVerdict, type SafetyReport } from '../ipc/commands'
+import { quarantineMods, quarantinePacks, scanModSafety, scanPackSafety, type ModVerdict, type SafetyReport } from '../ipc/commands'
 import { t, tx, useT } from '../i18n'
-
-const NOTE_BREAK = '\n'
 
 const VERDICTS: Record<ModVerdict['verdict'], { label: string; tone: string; help: string }> = {
   blocked: {
@@ -52,8 +50,8 @@ interface Props {
   profile: string
   onClose: () => void
   onChanged: () => void
-  /** packs: resource packs, shader packs, data packs and worlds instead of mods; files: any files picked from disk. */
-  scope?: 'mods' | 'packs' | 'files'
+  /** packs: resource packs, shader packs, data packs and worlds instead of mods. */
+  scope?: 'mods' | 'packs'
 }
 
 const CLEAN = {
@@ -68,7 +66,7 @@ const CLEAN = {
 
 export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Props) {
   const packs = scope === 'packs'
-  const files = scope === 'files'
+  const scanFn = packs ? scanPackSafety : scanModSafety
   const t = useT()
   const [report, setReport] = useState<SafetyReport | null>(null)
   const [busy, setBusy] = useState(true)
@@ -78,8 +76,8 @@ export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Pro
     if (!hasTauri()) return
     setBusy(true)
     setError('')
-    ;(files ? scanPickedFiles() : (packs ? scanPackSafety : scanModSafety)(profile))
-      .then((r) => (r ? setReport(r) : onClose()))
+    scanFn(profile)
+      .then(setReport)
       .catch((e) => {
         console.error('scanModSafety', e)
         setError(tx(e))
@@ -95,7 +93,7 @@ export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Pro
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const risky = (files ? [] : (report?.items ?? [])).filter(
+  const risky = (report?.items ?? []).filter(
     (i) => (i.verdict === 'blocked' || i.verdict === 'suspicious') && i.enabled,
   )
 
@@ -108,7 +106,7 @@ export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Pro
       .then((n) => {
         showToast(t('{n} файлов отключено', { n }), 'ok')
         onChanged()
-        return (packs ? scanPackSafety : scanModSafety)(profile).then(setReport)
+        return scanFn(profile).then(setReport)
       })
       .catch((e) => showToast('' + e, 'error'))
       .finally(() => setBusy(false))
@@ -122,12 +120,10 @@ export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Pro
             <Icon id="i-shield" />
           </span>
           <div>
-            <h3>{files ? t('Проверка файлов') : packs ? t('Проверка паков и карт') : t('Проверка модов')}</h3>
-            {files ? null : (
-              <div className="sub" style={{ marginTop: '2px' }}>
-                {profile}
-              </div>
-            )}
+            <h3>{packs ? t('Проверка паков и карт') : t('Проверка модов')}</h3>
+            <div className="sub" style={{ marginTop: '2px' }}>
+              {profile}
+            </div>
           </div>
         </div>
 
@@ -155,17 +151,14 @@ export function SafetyModal({ profile, onClose, onChanged, scope = 'mods' }: Pro
               ) : null}
               {report.blocked ? <span className="safety-pill danger">{t('{n} опасных', { n: report.blocked })}</span> : null}
             </div>
-            {report.note ? <p className="faint-note">{report.note.split(NOTE_BREAK).map((n) => tx(n)).join('. ')}</p> : null}
-            {report.checked === 0 ? <p className="faint-note">{files ? t('Файлы не прочитались') : packs ? t('Паков и карт нет') : t('Модов нет')}</p> : null}
-            {files && report.blocked + report.suspicious > 0 ? (
-              <p className="faint-note">{t('Лаунчер эти файлы не трогает: опасные удали с диска сам')}</p>
-            ) : null}
+            {report.note ? <p className="faint-note">{tx(report.note)}</p> : null}
+            {report.checked === 0 ? <p className="faint-note">{packs ? t('Паков и карт нет') : t('Модов нет')}</p> : null}
 
             <div className="safety-list">
               {report.items.map((item) => {
                 const v = (item.verdict as string) === 'clean' ? CLEAN : VERDICTS[item.verdict]
                 return (
-                  <div className={'safety-row ' + (v.tone || 'plain')} key={item.file + item.sha1}>
+                  <div className={'safety-row ' + (v.tone || 'plain')} key={item.file}>
                     <span className="safety-mark">{v.label}</span>
                     <span className="safety-body">
                       <b>

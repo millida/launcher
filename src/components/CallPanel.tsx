@@ -24,7 +24,6 @@ import { openChat, openRoomChat } from '../state/friends'
 import { canShareScreen } from '../lib/call/screen'
 import { canUseCamera } from '../lib/call/camera'
 import { t, useT } from '../i18n'
-import { liveInterval } from '../lib/liveInterval'
 
 /// Индикатор связи: точное значение задержки в панели звонка никому не нужно,
 /// нужен ответ на вопрос «нормально ли слышно».
@@ -38,7 +37,8 @@ function qualityLabel(rttMs: number | null, lossPct: number): { text: string; cl
 function Timer({ from }: { from: number }) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
-    return liveInterval(() => setNow(Date.now()), 1000)
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
   }, [])
   return <>{fmtCallTime(now - from)}</>
 }

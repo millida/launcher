@@ -7,7 +7,6 @@ import { installTarget } from '../lib/errorReport'
 import { trackFailure } from '../lib/telemetry'
 import { buildTag } from '../lib/telemetryPrivacy'
 import { showToast } from './ui'
-import { registerUnloadHold } from '../lib/unloadHold'
 import { t, tx } from '../i18n'
 import { CORE_INSTALL_CANCELLED, CORE_PICK_CANCELLED } from '../lib/coreErrors'
 
@@ -51,8 +50,6 @@ export interface InstallTask {
   versionId?: string
   paused?: boolean
   pausable?: boolean
-  /** Секунд до конца; null — ядро не берётся сказать. */
-  eta?: number | null
 }
 
 interface InstallsState {
@@ -82,7 +79,6 @@ export const useInstalls = create<InstallsState>((set, get) => ({
       versionId: task.versionId !== undefined ? task.versionId : prev && prev.versionId,
       paused: task.paused !== undefined ? task.paused : prev && prev.paused,
       pausable: task.pausable !== undefined ? task.pausable : prev && prev.pausable,
-      eta: task.eta !== undefined ? task.eta : prev && prev.eta,
     }
     set({ tasks: { ...get().tasks, [key]: next } })
   },
@@ -92,13 +88,6 @@ export const useInstalls = create<InstallsState>((set, get) => ({
     set({ tasks })
   },
 }))
-
-// Installs the page drives (several core calls in a row) would stop halfway with
-// the page: the window waits in the tray until they are done.
-registerUnloadHold(
-  () => (Object.values(useInstalls.getState().tasks).some((task) => task.state === 'run') ? 'install' : null),
-  (cb) => useInstalls.subscribe(cb),
-)
 
 export const installTask = (key: string): InstallTask | undefined => useInstalls.getState().tasks[key]
 
@@ -247,10 +236,10 @@ export function initInstalls(): void {
       return
     }
     if (!known) {
-      useInstalls.getState().patch(p.key, { title: p.title, label: t('Ставим…'), pct: p.pct, msg: p.msg, pausable: p.pausable, eta: p.eta ?? null })
+      useInstalls.getState().patch(p.key, { title: p.title, label: t('Ставим…'), pct: p.pct, msg: p.msg, pausable: p.pausable })
       return
     }
-    useInstalls.getState().patch(p.key, { title: p.title || known.title, pct: p.pct, msg: p.msg, pausable: p.pausable, eta: p.eta ?? null })
+    useInstalls.getState().patch(p.key, { title: p.title || known.title, pct: p.pct, msg: p.msg, pausable: p.pausable })
   })
   void activeInstalls()
     .then((list) => {
