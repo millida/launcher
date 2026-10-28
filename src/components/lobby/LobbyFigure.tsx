@@ -4,6 +4,7 @@ import { getAccount } from '../../state/accounts'
 import { setScreen } from '../../state/ui'
 import { lobby3dAllowed, mark3dLoaded, useIdle3d } from '../../lib/lazy3d'
 import { loadLookSkin } from '../../lib/lobbySkin'
+import { keptLookSkin } from '../../lib/lookCache'
 import { readLobbyStill, type LobbyStill } from '../../lib/lobbyStill'
 import { FlatFigure } from '../character/FlatFigure'
 import { noted } from '../../lib/noted'
@@ -70,7 +71,8 @@ export function LobbyFigure({ on }: { on: boolean }) {
   useEffect(() => {
     if (!needFlat || flat) return
     let alive = true
-    void loadLookSkin(nick, signedIn)
+    void keptLookSkin(nick)
+      .then((kept) => kept ?? loadLookSkin(nick, signedIn))
       .then((l) => alive && setFlat({ skin: l.skin, slim: l.slim }))
       .catch(noted('lobby-figure'))
     return () => {

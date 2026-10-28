@@ -7,6 +7,7 @@ mod localmeta;
 mod scan;
 mod deps;
 mod safety;
+mod defender;
 mod fingerprint;
 mod millida_mod;
 mod catalog_pack;

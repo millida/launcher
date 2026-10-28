@@ -9,6 +9,8 @@ import type { SkinAnimation, SkinViewEngine } from '../../vendor/mine3d'
 import { textureSource } from '../../lib/textureSource'
 import { loadImg } from '../../lib/skinArms'
 import { loadLookSkin, nickLookSkin, type LookSkin } from '../../lib/lobbySkin'
+import { keepLookSkin, keptLookSkin } from '../../lib/lookCache'
+import { noted } from '../../lib/noted'
 import { useViewPrefs } from '../../state/viewPrefs'
 import { LOOK_EVENT, catalogKnowing, gameProfile, loadCosmeticCatalog, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
@@ -150,15 +152,19 @@ const OUTFIT_WAIT_MS = 2500
 const WARDROBE_WAIT_MS = 3500
 
 function loadLook(nick: string, signedIn: boolean): { first: Promise<Look>; full: Promise<Look> } {
-  return lookStages<LookSkin, Pick<Look, 'items' | 'show'>>(
+  const skin = loadLookSkin(nick, signedIn)
+  const staged = lookStages<LookSkin, Pick<Look, 'items' | 'show'>>(
     {
-      skin: loadLookSkin(nick, signedIn),
+      skin,
       nickSkin: () => nickLookSkin(nick),
       outfit: loadLookOutfit(signedIn),
       noOutfit: { items: [], show: [] },
     },
     { skinMs: WARDROBE_WAIT_MS, outfitMs: OUTFIT_WAIT_MS },
   )
+  void skin.then((s) => keepLookSkin(nick, s), noted('lobby-look-keep'))
+  const first = keptLookSkin(nick).then((k): Promise<Look> => (k ? Promise.resolve({ ...k, items: [], show: [] }) : staged.first))
+  return { first, full: staged.full }
 }
 
 async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | 'show'>> {
@@ -288,6 +294,11 @@ export function LobbyCharacter({
   const [skinFor, setSkinFor] = useState('')
   const [dressedFor, setDressedFor] = useState('')
   const shown = !!look && skinFor === lookKey(look) && dressedFor === lookKey(look)
+  const [shownOn, setShownOn] = useState(0)
+  useEffect(() => {
+    if (shown && ready) setShownOn(ready)
+  }, [shown, ready])
+  const visible = shown || (!shop && ready !== 0 && shownOn === ready)
   const [emoting, setEmoting] = useState(false)
   const onShownRef = useRef(onShown)
   onShownRef.current = onShown
@@ -916,7 +927,7 @@ export function LobbyCharacter({
   return (
     <div
       ref={stageRef}
-      className={'lobby-char' + (shop ? ' shop-stage' : '') + (shown ? ' shown' : '')}
+      className={'lobby-char' + (shop ? ' shop-stage' : '') + (visible ? ' shown' : '')}
       onPointerDown={(e) => {
         const engine = viewerRef.current
         if (!engine || e.button !== 0) return
@@ -971,7 +982,7 @@ export function LobbyCharacter({
     >
       <canvas key={glEpoch} ref={canvasRef} aria-label={t('Персонаж {nick}', { nick })} />
       <span ref={tagWrap} className="lobby-tag-follow">
-        {shop ? null : <Nametag nick={nick} at={shown ? tag : null} />}
+        {shop ? null : <Nametag nick={nick} at={visible ? tag : null} />}
       </span>
       {shop ? null : (
         <PartyOverlay

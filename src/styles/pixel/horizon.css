@@ -1,0 +1,16 @@
+.hz-row { display: flex; align-items: center; gap: 12px; }
+.hz-row.off .tgl { cursor: not-allowed; }
+.hz-row.off .hz-title { opacity: 0.55; }
+.hz-lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hz-title { display: flex; align-items: center; gap: 8px; }
+.hz-title b { font-size: 14px; font-weight: 700; }
+.hz-lab small { display: block; font-size: 12px; font-weight: 500; color: var(--m-fg-subtle); }
+.hz-badge {
+  flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
+  font: 800 10.5px/1 var(--m-font); letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--m-warning); background: var(--m-warning-soft);
+}
+.hz-new {
+  min-height: 52px; padding: 8px 12px; background-color: var(--m-inset);
+  --px-n: 5px; clip-path: var(--px-5);
+}

@@ -680,6 +680,26 @@ pub async fn set_profile_java_vendor(app: tauri::AppHandle, profile: String, ven
 }
 
 #[tauri::command(async)]
+pub fn horizon_state(profile: String) -> engine::HorizonState {
+    engine::horizon_state(&profile)
+}
+
+#[tauri::command(async)]
+pub fn horizon_state_for(version: String, loader: String) -> engine::HorizonState {
+    engine::horizon_state_for(&version, &loader)
+}
+
+#[tauri::command(async)]
+pub fn set_horizon(profile: String, on: bool) -> Result<engine::HorizonState, String> {
+    engine::set_horizon(&profile, on)
+}
+
+#[tauri::command]
+pub fn horizon_java_once(profile: String) {
+    engine::horizon_java_once(&profile)
+}
+
+#[tauri::command(async)]
 pub fn linux_tools_state(profile: String) -> engine::LinuxTools {
     engine::linux_tools_state(&profile)
 }

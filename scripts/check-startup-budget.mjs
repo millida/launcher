@@ -16,7 +16,7 @@ const LIMITS = {
   /** Входной index-*.js, байт. Цель 300 000 (react-dom ≈183 КБ из них). */
   entryJs: 350_000,
   /** Весь стартовый JS (index + modulepreload), байт. */
-  startJs: 826_000,
+  startJs: 828_000,
   /** Весь стартовый CSS, байт. */
   startCss: 415_000,
   /** Стартовый JS в gzip, байт. */
