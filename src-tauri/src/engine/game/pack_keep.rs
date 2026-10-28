@@ -1,7 +1,7 @@
 // What to keep on the player's side when a catalog modpack updates: their worlds, settings, server list, own mods.
 // Works only in the folder of this modpack. Downloads and runs nothing.
 use crate::engine::*;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// A paid pack that loses its access leaves the disk, the player's own things
@@ -9,6 +9,18 @@ use std::path::{Path, PathBuf};
 /// settings are moved aside before the pack is removed and come back when the
 /// same pack is installed again.
 const SHIPPED_FILE: &str = "millida-pack-files.json";
+
+/// What each file the pack shipped looked like at install time. An update needs
+/// three versions of a file to judge it: what the old version shipped, what the
+/// player has now, what the next version ships. Only the author's edits reach
+/// the player; whatever the author left alone stays as the player made it.
+const SHIPPED_HASHES_FILE: &str = "millida-pack-hashes.json";
+
+/// Larger files are pack content (encrypted blobs, bundled jars), not settings
+/// or progress, and hashing them on every update would cost seconds.
+const TRACKED_FILE_MAX_BYTES: u64 = 32 << 20;
+
+type Hashes = BTreeMap<String, String>;
 
 const ALWAYS_KEEP: [&str; 9] = [
     "saves",
@@ -28,7 +40,7 @@ const PER_ENTRY: [&str; 2] = ["resourcepacks", "shaderpacks"];
 
 /// The paid content itself and what carries the launch signature never leaves
 /// with the player's files, whatever the pack or the player put there.
-const NEVER_KEEP: [&str; 12] = [
+const NEVER_KEEP: [&str; 13] = [
     "libraries",
     "mods",
     "natives",
@@ -41,6 +53,7 @@ const NEVER_KEEP: [&str; 12] = [
     ".fabric",
     ".mixin.out",
     SHIPPED_FILE,
+    SHIPPED_HASHES_FILE,
 ];
 
 /// The slug names a folder that files are moved into and back out of, so an
@@ -67,7 +80,111 @@ pub fn record_shipped(pdir: &Path) -> Result<(), String> {
         shipped.extend(names_in(&pdir.join(folder)).into_iter().map(|n| format!("{}/{}", folder, n)));
     }
     let body = serde_json::to_vec(&shipped).map_err(|e| e.to_string())?;
-    std::fs::write(pdir.join(SHIPPED_FILE), body).map_err(|e| format!("Не удалось записать состав сборки: {}", e))
+    std::fs::write(pdir.join(SHIPPED_FILE), body).map_err(|e| format!("Не удалось записать состав сборки: {}", e))?;
+    let hashes = serde_json::to_vec(&hash_tracked(pdir, &names_in(pdir))?).map_err(|e| e.to_string())?;
+    std::fs::write(pdir.join(SHIPPED_HASHES_FILE), hashes).map_err(|e| format!("Не удалось записать состав сборки: {}", e))
+}
+
+/// Entries whose files are judged one by one on an update: settings and
+/// progress the pack ships. Worlds and screenshots move whole, resource packs
+/// entry by entry, and the paid content never leaves with the player.
+fn tracked_entry(pdir: &Path, name: &str) -> bool {
+    let whole_folder = ALWAYS_KEEP.contains(&name) && pdir.join(name).is_dir();
+    !(NEVER_KEEP.contains(&name)
+        || PER_ENTRY.contains(&name)
+        || whole_folder
+        || name == PACK_LAUNCH_FILE
+        || is_launcher_service_file(name))
+}
+
+fn tracked_files(pdir: &Path, entries: &[String]) -> Vec<String> {
+    fn walk(root: &Path, rel: &str, out: &mut Vec<String>) {
+        let Ok(meta) = std::fs::symlink_metadata(root.join(rel)) else { return };
+        if meta.is_dir() {
+            for name in names_in(&root.join(rel)) {
+                walk(root, &format!("{}/{}", rel, name), out);
+            }
+        } else if meta.is_file() && meta.len() <= TRACKED_FILE_MAX_BYTES {
+            out.push(rel.to_string());
+        }
+    }
+    let mut out = Vec::new();
+    for name in entries.iter().filter(|n| tracked_entry(pdir, n)) {
+        walk(pdir, name, &mut out);
+    }
+    out
+}
+
+fn hash_tracked(pdir: &Path, entries: &[String]) -> Result<Hashes, String> {
+    tracked_files(pdir, entries)
+        .into_iter()
+        .map(|rel| sha256_file(&pdir.join(&rel)).map(|h| (rel, h)))
+        .collect()
+}
+
+fn read_hashes(pdir: &Path) -> Option<Hashes> {
+    let raw = std::fs::read(pdir.join(SHIPPED_HASHES_FILE)).ok()?;
+    serde_json::from_slice(&raw).ok()
+}
+
+#[derive(Debug, PartialEq)]
+enum Edit {
+    /// The next version's copy stays.
+    Leave,
+    /// The player's copy replaces the next version's.
+    Carry,
+    /// The author changed what the player had changed too: the author wins and
+    /// the player's copy waits in the keep folder.
+    Shelve,
+}
+
+/// One file across three versions -> who wins. `was` is what the installed
+/// version shipped, `None` with `recorded` set means the game or the player made
+/// the file. Without a record the shipped copy is unknown, so only files the
+/// next version does not ship can be told to be the player's.
+fn edit_verdict(theirs: &str, was: Option<&str>, now: Option<&str>, recorded: bool) -> Edit {
+    if !recorded {
+        return if now.is_none() { Edit::Carry } else { Edit::Leave };
+    }
+    match (was, now) {
+        (Some(was), _) if was == theirs => Edit::Leave,
+        (Some(was), Some(now)) if was == now => Edit::Carry,
+        (Some(_), _) => Edit::Shelve,
+        (None, None) => Edit::Carry,
+        (None, Some(now)) if now == theirs => Edit::Leave,
+        (None, Some(_)) => Edit::Shelve,
+    }
+}
+
+/// Settings and progress inside the folders the pack ships (`config/` and the
+/// like) and the shipped game settings. Before this an update replaced those
+/// folders whole, and every release of the pack wiped quest maps and
+/// skill progress mods keep in `config/`.
+fn carry_edited(from: &Path, to: &Path, keep: &Path, old: Option<&Hashes>) -> Result<usize, String> {
+    let (Some(shipped), Some(now)) = (read_shipped(from), read_hashes(to)) else { return Ok(0) };
+    let entries: Vec<String> = names_in(from)
+        .into_iter()
+        .filter(|name| shipped.contains(name))
+        .filter(|name| !player_made(name) || old.is_some_and(|o| o.contains_key(name)))
+        .collect();
+    let mut carried = 0;
+    for rel in tracked_files(from, &entries) {
+        // A file too large to be tracked is still the next version's when it is on disk.
+        let next = now.get(&rel).map(String::as_str).or_else(|| to.join(&rel).exists().then_some(""));
+        let was = old.and_then(|o| o.get(&rel)).map(String::as_str);
+        let theirs = match old {
+            Some(_) => sha256_file(&from.join(&rel))?,
+            None => String::new(),
+        };
+        let res = match edit_verdict(&theirs, was, next, old.is_some()) {
+            Edit::Leave => continue,
+            Edit::Carry => copy_path(&from.join(&rel), &to.join(&rel)),
+            Edit::Shelve => copy_path(&from.join(&rel), &free_target(keep.join(&rel))),
+        };
+        res.map_err(|e| format!("не удалось перенести «{}»: {}", rel, e))?;
+        carried += 1;
+    }
+    Ok(carried)
 }
 
 pub(crate) fn shipped_recorded_at(pdir: &Path) -> Option<std::time::SystemTime> {
@@ -239,13 +356,20 @@ pub(crate) fn withhold_player_made(overrides: &Path, pdir: &Path) {
 /// next version adds still arrives. Everything else the player or the game
 /// added yields to what the next version ships, since a repaired config must
 /// not be put back to the broken one, and the player's copy goes to the keep
-/// folder instead of the bin.
+/// folder instead of the bin. Files the pack itself shipped are judged one by
+/// one in `carry_edited`: the player's edit survives unless the author changed
+/// the same file.
 pub fn carry_player_files(from: &Path, to: &Path, slug: &str) -> Result<usize, String> {
     carry_into(from, to, &keep_root(slug)?)
 }
 
 fn carry_into(from: &Path, to: &Path, keep: &Path) -> Result<usize, String> {
-    let entries = player_entries(from);
+    let old = read_hashes(from);
+    let edited = carry_edited(from, to, keep, old.as_ref())?;
+    let entries: Vec<String> = player_entries(from)
+        .into_iter()
+        .filter(|rel| !old.as_ref().is_some_and(|o| o.contains_key(rel)))
+        .collect();
     for rel in &entries {
         let src = from.join(rel);
         let dst = to.join(rel);
@@ -261,7 +385,7 @@ fn carry_into(from: &Path, to: &Path, keep: &Path) -> Result<usize, String> {
         };
         res.map_err(|e| format!("не удалось перенести «{}»: {}", rel, e))?;
     }
-    Ok(entries.len())
+    Ok(entries.len() + edited)
 }
 
 /// A link is refused rather than skipped: the new version would silently come
@@ -446,6 +570,113 @@ mod tests {
             Some("player"),
             "копия игрока, уступившая новой версии, откладывается, а не выбрасывается"
         );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// (player's copy, what the installed version shipped, what the next one
+    /// ships, record present) -> who wins.
+    #[test]
+    fn a_shipped_file_follows_whoever_changed_it() {
+        type Case = (&'static str, Option<&'static str>, Option<&'static str>, bool, Edit, &'static str);
+        let cases: &[Case] = &[
+            ("a", Some("a"), Some("b"), true, Edit::Leave, "автор поменял, игрок не трогал — у игрока новая версия автора"),
+            ("p", Some("a"), Some("a"), true, Edit::Carry, "игрок поменял, автор не трогал — правка игрока переживает обновление"),
+            ("p", Some("a"), Some("b"), true, Edit::Shelve, "поменяли оба — побеждает автор, копия игрока откладывается"),
+            ("p", Some("a"), None, true, Edit::Shelve, "автор убрал файл, который игрок менял, — копия откладывается, а не теряется"),
+            ("a", Some("a"), None, true, Edit::Leave, "автор убрал нетронутый файл — он уходит"),
+            ("p", None, None, true, Edit::Carry, "прогресс, который игра записала в config, переезжает"),
+            ("p", None, Some("p"), true, Edit::Leave, "автор начал возить тот же файл — копировать нечего"),
+            ("p", None, Some("b"), true, Edit::Shelve, "автор начал возить свой файл на месте файла игрока — побеждает автор"),
+            ("", None, None, false, Edit::Carry, "без описи файл, которого нет в новой версии, считается игрока"),
+            ("", None, Some("b"), false, Edit::Leave, "без описи нельзя понять, чья правка, — остаётся версия автора"),
+        ];
+        for (theirs, was, now, recorded, want, why) in cases {
+            assert_eq!(edit_verdict(theirs, *was, *now, *recorded), *want, "{why}");
+        }
+    }
+
+    /// Arcania keeps quest map and skill progress in `config/`, and every release
+    /// used to replace the folder whole: the map reset on each update.
+    #[test]
+    fn progress_in_config_survives_an_update_and_the_authors_edits_still_arrive() {
+        let base = std::env::temp_dir().join(format!("millida-pack-edited-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (old, new, keep) = (base.join("old"), base.join("new"), base.join("keep"));
+        fn put(root: &Path, files: &[(&str, &str)]) {
+            for (rel, body) in files {
+                let p = root.join(rel);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, body).unwrap();
+            }
+        }
+        put(&old, &[
+            ("config/quest_map.toml", "pack"),
+            ("config/skills/abilities.json", "pack"),
+            ("config/balance.toml", "v1"),
+            ("config/tweak.toml", "v1"),
+            ("options.txt", "author v1"),
+            ("servers.dat", "pack"),
+        ]);
+        record_shipped(&old).unwrap();
+        put(&old, &[
+            ("config/quest_map.toml", "player progress"),
+            ("config/skills/abilities.json", "player skills"),
+            ("config/quest_tracked.txt", "made by the game"),
+            ("config/tweak.toml", "player"),
+            ("options.txt", "player keys"),
+            ("servers.dat", "player servers"),
+        ]);
+        put(&new, &[
+            ("config/quest_map.toml", "pack"),
+            ("config/skills/abilities.json", "pack"),
+            ("config/balance.toml", "v2"),
+            ("config/tweak.toml", "v2"),
+            ("options.txt", "author v2"),
+            ("servers.dat", "pack"),
+        ]);
+        record_shipped(&new).unwrap();
+
+        carry_into(&old, &new, &keep).expect("перенос не должен падать");
+
+        let cases: &[(&str, &str, &str)] = &[
+            ("config/quest_map.toml", "player progress", "прогресс карты квестов не сбрасывается обновлением"),
+            ("config/skills/abilities.json", "player skills", "прогресс навыков во вложенной папке тоже"),
+            ("config/quest_tracked.txt", "made by the game", "файл, записанный игрой, переезжает"),
+            ("config/balance.toml", "v2", "правка автора доезжает до игрока"),
+            ("config/tweak.toml", "v2", "поменяли оба — побеждает автор"),
+            ("options.txt", "author v2", "автор обновил options.txt — он обновился у всех"),
+            ("servers.dat", "player servers", "автор не трогал servers.dat — у игрока остаётся свой"),
+        ];
+        for (rel, want, why) in cases {
+            assert_eq!(std::fs::read_to_string(new.join(rel)).ok().as_deref(), Some(*want), "«{rel}»: {why}");
+        }
+        for (rel, want) in [("config/tweak.toml", "player"), ("options.txt", "player keys")] {
+            assert_eq!(std::fs::read_to_string(keep.join(rel)).ok().as_deref(), Some(want), "уступившая копия игрока «{rel}» откладывается");
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Installed before the hashes were recorded: what the game wrote into the
+    /// pack's folders and the next version does not ship still moves over.
+    #[test]
+    fn a_pack_without_hashes_still_keeps_what_the_game_wrote() {
+        let base = std::env::temp_dir().join(format!("millida-pack-legacy-edit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (old, new, keep) = (base.join("old"), base.join("new"), base.join("keep"));
+        for (root, rel, body) in [(&old, "config/a.toml", "pack"), (&new, "config/a.toml", "fixed")] {
+            std::fs::create_dir_all(root.join("config")).unwrap();
+            std::fs::write(root.join(rel), body).unwrap();
+        }
+        record_shipped(&old).unwrap();
+        std::fs::remove_file(old.join(SHIPPED_HASHES_FILE)).unwrap();
+        std::fs::write(old.join("config/a.toml"), "player").unwrap();
+        std::fs::write(old.join("config/progress.json"), "player").unwrap();
+        record_shipped(&new).unwrap();
+
+        carry_into(&old, &new, &keep).unwrap();
+
+        assert_eq!(std::fs::read_to_string(new.join("config/progress.json")).ok().as_deref(), Some("player"), "записанное игрой переезжает и без описи");
+        assert_eq!(std::fs::read_to_string(new.join("config/a.toml")).ok().as_deref(), Some("fixed"), "без описи файл автора остаётся из новой версии");
         let _ = std::fs::remove_dir_all(&base);
     }
 

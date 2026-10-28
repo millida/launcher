@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "millida-launcher"
-version = "2.0.283"
+version = "2.0.284"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
