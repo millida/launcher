@@ -47,7 +47,6 @@ import '../../styles/pixel/milli.css'
 // Анимации ленты и карточки (моушн-дизайнер): подключаются, как только файл появится.
 import.meta.glob('../../styles/pixel/milli-motion.css', { eager: true })
 import { intlTag, t, useT } from '../../i18n'
-import { liveInterval } from '../../lib/liveInterval'
 
 /** Правило 11: игроку не больше двух подсказок; «Отмени» не дублирует кнопку «Отменить» события. */
 function replyChips(m: MilliMessage): string[] {
@@ -178,7 +177,8 @@ function Hotbar() {
   const [press, setPress] = useState(-1)
   useEffect(() => {
     if (!open || hold) return
-    return liveInterval(() => setSel((v) => (v + 1) % EXAMPLES.length), 2_600)
+    const id = window.setInterval(() => setSel((v) => (v + 1) % EXAMPLES.length), 2_600)
+    return () => window.clearInterval(id)
   }, [open, hold])
   const pick = (i: number) => setSel(i)
   const cur = EXAMPLES[sel]!
@@ -488,7 +488,8 @@ function Thinking() {
   const editing = useBench((s) => !!s.head)
   useEffect(() => {
     const started = Date.now()
-    return liveInterval(() => setElapsed(Date.now() - started), 1_000)
+    const id = window.setInterval(() => setElapsed(Date.now() - started), 1_000)
+    return () => window.clearInterval(id)
   }, [])
   // «Понимаю запрос» сервер шлёт на любой ход; сборка — только когда пошли следующие этапы.
   const live = stages.some((st) => st.key !== 'plan')
@@ -607,7 +608,7 @@ function Hello({ mood }: { mood: MilliMode }) {
   useEffect(() => {
     if (!free || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
     let off: number | undefined
-    const tick = liveInterval(() => {
+    const tick = window.setInterval(() => {
       setTryOn(true)
       off = window.setTimeout(() => setTryOn(false), 2400)
     }, 9000)
@@ -616,7 +617,7 @@ function Hello({ mood }: { mood: MilliMode }) {
       off = window.setTimeout(() => setTryOn(false), 2400)
     }, 2500)
     return () => {
-      tick()
+      window.clearInterval(tick)
       window.clearTimeout(first)
       window.clearTimeout(off)
     }
@@ -767,11 +768,11 @@ function Panel() {
       away = el.scrollHeight - el.scrollTop - el.clientHeight > 80
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    const stopFollow = liveInterval(() => {
+    const id = window.setInterval(() => {
       if (!away && el.scrollHeight - el.scrollTop - el.clientHeight > 1) el.scrollTop = el.scrollHeight
     }, 200)
     return () => {
-      stopFollow()
+      window.clearInterval(id)
       el.removeEventListener('scroll', onScroll)
     }
   }, [pending])

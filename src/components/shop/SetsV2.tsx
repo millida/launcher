@@ -5,7 +5,7 @@ import { Ruby } from '../Ruby'
 import type { SetColorwayView, SetView } from '../../lib/rubies'
 import { Dots, PxThumb, THEME_TONE, defaultWay } from './Sets'
 import { SetShot, ShopStage } from './ShopStage'
-import { warmOutfitShots } from '../../lib/outfitShotLazy'
+import { warmOutfitShots } from '../../lib/outfitSnapshot'
 import { Countdown, Head } from './parts'
 import { intlTag, useT } from '../../i18n'
 
@@ -36,11 +36,7 @@ export function useRailEdges(rail: React.RefObject<HTMLDivElement | null>, dep: 
   useEffect(() => {
     const el = rail.current
     if (!el) return
-    const upd = () => {
-      const l = el.scrollLeft > 4
-      const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
-      setEdge((prev) => (prev.l === l && prev.r === r ? prev : { l, r }))
-    }
+    const upd = () => setEdge({ l: el.scrollLeft > 4, r: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 })
     upd()
     el.addEventListener('scroll', upd, { passive: true })
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(upd)

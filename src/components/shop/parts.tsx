@@ -8,7 +8,6 @@ import { cosmeticSlotIcon } from '../../lib/cosmeticSlots'
 import type { ItemRef } from '../../lib/rubies'
 import { RARITY_TONE } from './rarity'
 import { intlTag, t } from '../../i18n'
-import { liveInterval } from '../../lib/liveInterval'
 
 /**
  * Осколок — вторая валюта. Рисунок, а не значок: как рубин, это предмет,
@@ -39,15 +38,15 @@ export function hoursLeft(iso: string): number {
  * без красного, обновляется раз в 20 секунд. Одни часы на весь экран. */
 
 const listeners = new Set<(now: number) => void>()
-let tick: (() => void) | null = null
+let tick = 0
 function subscribeNow(fn: (now: number) => void) {
   listeners.add(fn)
-  if (!tick) tick = liveInterval(() => listeners.forEach((l) => l(Date.now())), 20_000)
+  if (!tick) tick = window.setInterval(() => listeners.forEach((l) => l(Date.now())), 20_000)
   return () => {
     listeners.delete(fn)
     if (!listeners.size) {
-      tick?.()
-      tick = null
+      window.clearInterval(tick)
+      tick = 0
     }
   }
 }

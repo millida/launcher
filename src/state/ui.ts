@@ -1,9 +1,7 @@
 import { startTransition } from 'react'
-import { screenReady } from '../lib/screenReady'
 import { create } from 'zustand'
 import { playSound } from '../lib/sound'
 import { TOAST_TEXT_MAX, clipText } from '../lib/format'
-import { screenClicked } from '../lib/screenOpen'
 import { tx } from '../i18n'
 import type { SoundEvent } from '../lib/sound'
 
@@ -52,7 +50,7 @@ export interface PrelaunchState {
 }
 
 export type ToastKind = 'ok' | 'error'
-export type SettingsTab = 'look' | 'graphics' | 'sound' | 'notify' | 'game' | 'files' | 'window' | 'privacy' | 'about'
+export type SettingsTab = 'look' | 'sound' | 'notify' | 'game' | 'files' | 'window' | 'privacy' | 'about'
 export type SettingsFocus = 'mic' | null
 
 export interface ToastAction {
@@ -63,8 +61,6 @@ export interface ToastAction {
 interface UiState {
   logged: boolean
   screen: ScreenId
-  /** Переход на экран идёт в фоне (код экрана загружен, он ещё рисуется): старый экран притушен. */
-  navPending: boolean
   toastMsg: string
   toastKind: ToastKind
   toastShow: boolean
@@ -110,7 +106,6 @@ const closeTimers: Partial<Record<ModalId, ReturnType<typeof setTimeout>>> = {}
 export const useUi = create<UiState>((set, get) => ({
   logged: hasStoredAccount(),
   screen: 'play',
-  navPending: false,
   toastMsg: 'Скопировано',
   toastKind: 'ok',
   toastShow: false,
@@ -132,15 +127,9 @@ export const useUi = create<UiState>((set, get) => ({
   },
   prelaunch: { open: false, sub: 'Fabulously Optimized · Fabric', stage: 0, msg: null, pct: 0, mode: 'launch' },
   setLogged: (v) => set({ logged: v }),
-  // Код экрана уже в памяти: рисуем его переходом (старый экран остаётся, пока новый не готов, и
-  // притушен — нажатие видно сразу). Кода ещё нет — переключаем сразу: вместо пустого ожидания
-  // человек видит скелетон, пока чанк грузится.
-  setScreen: (s) => {
-    screenClicked(s, get().screen)
-    if (!screenReady(s)) return set({ screen: s, navPending: false })
-    set({ navPending: true })
-    startTransition(() => set({ screen: s, navPending: false }))
-  },
+  // Transition keeps the current screen mounted while the next chunk loads,
+  // instead of flashing the empty Suspense fallback.
+  setScreen: (s) => startTransition(() => set({ screen: s })),
   showToast: (msg, kind, sound, action) => {
     const k = kind || (ERROR_RE.test(msg) ? 'error' : 'ok')
     // A build name or a server answer can be arbitrarily long; the toast is a

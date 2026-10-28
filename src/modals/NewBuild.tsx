@@ -3,7 +3,7 @@ import { Icon } from '../components/Icon'
 import { Select } from '../components/Select'
 import { BuildIcon, IconPicker } from '../components/playhub/BuildIcon'
 import { hasTauri } from '../ipc/tauri'
-import { applyBuildTemplate, createProfile, deleteBuildTemplate, listBuildTemplates, setFpsBoost, setHorizon } from '../ipc/commands'
+import { applyBuildTemplate, createProfile, deleteBuildTemplate, listBuildTemplates, setFpsBoost } from '../ipc/commands'
 import type { BuildTemplate } from '../ipc/commands'
 import { apiErrorText } from '../lib/apiError'
 import '../styles/pixel/build-extras.css'
@@ -30,7 +30,6 @@ import { aiPresetFor } from '../lib/aiBuilder'
 import { openMilli } from '../state/milli'
 import { openHubBuild } from '../components/playhub/hubTab'
 import { tx, useT } from '../i18n'
-import { HorizonNewBuildRow, useHorizonFor } from '../components/build/HorizonBeta'
 
 /**
  * «Новая сборка» (правки владельца 23.09.2026, 19:40): иконка сборки как в
@@ -66,7 +65,6 @@ export function NewBuildModal() {
   const [icon, setIcon] = useState<string>(randomIcon)
   const [pickIcon, setPickIcon] = useState(false)
   const [fps, setFps] = useState(true)
-  const [horizon, setHorizonOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [join, setJoin] = useState<JoinIntent | null>(null)
   const [query, setQuery] = useState('')
@@ -82,7 +80,6 @@ export function NewBuildModal() {
   const verKind = kindOf.get(ver) || 'release'
   const blocks = useLoaderBlocks(ver, verKind, modal.open)
   const lb = useLoaderBuilds(loader, ver, modal.open && !blocks[loader])
-  const horizonSt = useHorizonFor(ver, loader, modal.open)
 
   // По умолчанию — только релизы; «Снапшоты и беты» добавляет снапшоты,
   // pre-release, rc и старые beta/alpha из того же манифеста Mojang.
@@ -130,7 +127,6 @@ export function NewBuildModal() {
     setIcon(randomIcon())
     setPickIcon(false)
     setFps(true)
-    setHorizonOn(false)
     setBusy(false)
     setQuery('')
     setVanillaAsk(false)
@@ -203,8 +199,6 @@ export function NewBuildModal() {
             )
             .catch((e) => showToast(apiErrorText(e, t('Не удалось применить шаблон')), 'error'))
         if (withFps) await setFpsBoost(p.name, true, false, await hardwareVideo()).catch((e) => console.error('[new-build] fps', e))
-        if (horizon && horizonSt?.available)
-          await setHorizon(p.name, true).catch((e) => showToast(apiErrorText(e, t('Не удалось сохранить настройку')), 'error'))
         await useProfiles.getState().refresh()
         showReward({ level: 'mid', items: [{ name: p.name, art: <BuildIcon icon={icon} size={60} /> }], title: t('Сборка создана'), sub: p.name })
         close()
@@ -430,7 +424,6 @@ export function NewBuildModal() {
             ></span>
           </div>
         </div>
-        {horizonSt ? <HorizonNewBuildRow st={horizonSt} on={horizon} onChange={setHorizonOn} /> : null}
 
         <div className="nb-foot">
           <button
