@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
 import { openImage } from '../ImageLightbox'
 import { useT } from '../../i18n'
+import { liveInterval } from '../../lib/liveInterval'
 
 /*
  * Мини-плеер над описанием (владелец 05.10.2026: «чтобы игроку не нужно было
@@ -37,10 +38,9 @@ export function MediaStrip({ urls, video, onAll }: { urls: string[]; video?: str
   useEffect(() => {
     if (n < 2 || playing) return
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    const t = window.setInterval(() => {
-      if (!hover.current && document.visibilityState === 'visible') setAt((i) => (i + 1) % n)
+    return liveInterval(() => {
+      if (!hover.current) setAt((i) => (i + 1) % n)
     }, STEP_MS)
-    return () => window.clearInterval(t)
   }, [n, playing, key])
   if (!n) return null
   const cur = frames[Math.min(at, n - 1)]!

@@ -1,6 +1,6 @@
 import { getLocale, type Locale } from '../../i18n'
 
-const TRANSLATED = ['en', 'de', 'pl', 'tr', 'pt-BR', 'es'] as const satisfies readonly Locale[]
+const TRANSLATED = ['en', 'de', 'pl', 'tr', 'pt-BR', 'es', 'uk'] as const satisfies readonly Locale[]
 
 export type CatalogLang = (typeof TRANSLATED)[number]
 

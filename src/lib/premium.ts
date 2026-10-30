@@ -1,5 +1,5 @@
 import { api } from './api'
-import { sellsPaidPacks } from './paidPacks'
+import { marketPacks } from './paidPacks'
 import { hasTauri } from '../ipc/tauri'
 import { millidaPacks } from '../ipc/commands'
 import type { MillidaPack } from '../ipc/commands'
@@ -149,17 +149,15 @@ export function packFromCatalog(p: MillidaPack): PremiumPack {
 /// Витрина: сначала будущий адрес подписок, иначе — платные сборки каталога,
 /// которые у нас есть прямо сейчас. Пусто в обоих — экран говорит «скоро».
 export async function loadShowcase(): Promise<PremiumShowcase> {
-  if (!sellsPaidPacks()) return { subscription: null, plans: [], packs: [] }
   const shown = await loadPremium().catch(() => null)
   if (shown && shown.packs && shown.packs.length)
     return { ...shown, packs: shown.packs.map((x) => ({ source: 'premium' as const, ...x })) }
   const list = await loadCatalogPacks()
-  const packs = (Array.isArray(list) ? list : []).filter((p) => p && p.accessRequired).map(packFromCatalog)
+  const packs = marketPacks((Array.isArray(list) ? list : []).filter((p) => p && p.accessRequired)).map(packFromCatalog)
   return { subscription: (shown && shown.subscription) || null, plans: (shown && shown.plans) || [], packs }
 }
 
 export function loadPremiumPack(id: string): Promise<PremiumPackDetail> {
-  if (!sellsPaidPacks()) return Promise.reject(new Error('http 404'))
   return api<PremiumPackDetail>('/launcher/premium/' + encodeURIComponent(id))
 }
 
