@@ -69,6 +69,19 @@ pub async fn save_picture_as(src: engine::PictureRef) -> Result<Option<String>, 
     engine::save_picture_as(src).await
 }
 
+/// Big media files already in the cache, name -> path. The names are the manifest's (media/manifest.json).
+#[tauri::command]
+pub async fn media_ready() -> Result<std::collections::BTreeMap<String, String>, String> {
+    super::blocking(engine::media_ready).await
+}
+
+/// Downloads the named media files (or everything under a name that ends in `/`) and answers with the paths of
+/// what is on disk afterwards. The window names files; addresses and hashes live in the core.
+#[tauri::command]
+pub async fn media_fetch(names: Vec<String>) -> std::collections::BTreeMap<String, String> {
+    engine::media_fetch(names).await
+}
+
 #[tauri::command]
 pub fn music_tracks() -> Vec<engine::MusicTrack> { engine::music_tracks() }
 
@@ -223,6 +236,18 @@ fn collect_device_specs() -> DeviceSpecs {
     }
 }
 
+/// SSD or spinning disk under the games folder: "ssd", "hdd" or "unknown". One word for usage
+/// statistics, read from the drive itself; the folder is the core's own, not the page's.
+#[tauri::command]
+pub async fn disk_kind() -> Result<String, String> {
+    static KIND: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    if let Some(known) = KIND.get() {
+        return Ok(known.clone());
+    }
+    let kind = super::blocking(|| engine::disk_kind(&engine::game_root()).to_string()).await?;
+    Ok(KIND.get_or_init(|| kind).clone())
+}
+
 /// Hiding is gated on a live tray icon, so the webview cannot hide the window
 /// into nowhere.
 #[tauri::command]
@@ -241,6 +266,33 @@ pub fn show_from_tray(app: tauri::AppHandle) { crate::tray::show_main(&app); }
 
 #[tauri::command]
 pub fn set_restore_on_exit(on: bool) { crate::tray::set_restore_on_exit(on); }
+
+/// The page leaves the screen (tray or game): the window and its WebView2 are
+/// destroyed, or parked while `hold` («install», «call») still lives in it.
+#[tauri::command]
+pub fn unload_main_window(app: tauri::AppHandle, reason: String, hold: Option<String>, screen: Option<String>) {
+    use crate::background::{unload, Hold, Reason};
+    // Destroying the window that is running this command waits for the main thread.
+    let reason = Reason::parse(&reason);
+    let hold = Hold::parse(hold.as_deref());
+    let h = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        unload(&h, reason, hold, screen);
+    });
+}
+
+/// What a rebuilt page should come back to: the screen it left and the links that came meanwhile.
+#[tauri::command]
+pub fn take_window_resume() -> crate::background::WindowResume { crate::background::take_resume() }
+
+/// The last presence beat the page sent, for the core to repeat while the game runs without a window.
+#[tauri::command]
+pub fn remember_beat(path: String, body: serde_json::Value) -> Result<(), String> { crate::background::remember_beat(path, body) }
+
+#[tauri::command]
+pub async fn set_tray_last_build(build: String) -> Result<(), String> {
+    super::blocking(move || crate::tray::set_last_build(&build)).await?
+}
 
 /// Web storage is committed lazily and a tray quit tears the process down
 /// before it lands, so settings the user must not lose are mirrored to disk.
@@ -268,9 +320,24 @@ pub async fn update_fallback_check(app: tauri::AppHandle) -> Result<Option<engin
     engine::fallback_check(&app).await
 }
 
+/// `skip_delta` is for the retry after a patch update failed to install: the full installer then, whatever the release offers.
 #[tauri::command]
-pub async fn update_fallback_stage(app: tauri::AppHandle) -> Result<Option<engine::FallbackInstall>, String> {
-    engine::fallback_stage_latest(&app).await
+pub async fn update_fallback_stage(app: tauri::AppHandle, skip_delta: Option<bool>) -> Result<Option<engine::FallbackInstall>, String> {
+    engine::fallback_stage_latest(&app, skip_delta.unwrap_or(false)).await
+}
+
+/// The window found an update through the plugin; this asks whether a patch from the installed exe can replace the
+/// full download. `None` means no, and the plugin downloads as before.
+#[tauri::command]
+pub async fn update_delta_stage(app: tauri::AppHandle) -> Result<Option<engine::DeltaStaged>, String> {
+    engine::delta_stage_latest(&app).await
+}
+
+/// An update the core has already downloaded and verified. It lives on disk, so a rebuilt window
+/// (tray, game) does not download it again and a quit from the tray can install it.
+#[tauri::command]
+pub async fn update_staged(app: tauri::AppHandle) -> Result<Option<engine::FallbackInstall>, String> {
+    super::blocking(move || engine::staged_update(&app)).await
 }
 
 /// Notes of whatever the manifest currently publishes, newer than the running
@@ -300,8 +367,24 @@ pub async fn show_after_update() -> Result<(), String> {
 
 /// Liveness ping from the webview; without it the self-heal path kicks in.
 #[tauri::command]
-pub fn frontend_ready() {
+pub fn frontend_ready(app: tauri::AppHandle) {
     engine::mark_frontend_ready();
+    crate::background::replay(&app);
+    // Started with the system and still in the tray a minute later: the page has
+    // sent its start and checked for updates, the window is no longer needed.
+    if started_by_os() && !crate::background::reopened() {
+        let h = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            if crate::tray::available() && !crate::tray::main_visible(&h) && !crate::background::parked() {
+                let _ = h.clone().run_on_main_thread(move || {
+                    if !crate::tray::main_visible(&h) {
+                        crate::background::unload(&h, crate::background::Reason::Autostart, None, None);
+                    }
+                });
+            }
+        });
+    }
 }
 
 #[tauri::command]

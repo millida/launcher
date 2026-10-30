@@ -56,12 +56,13 @@ export async function packStepForLaunch(profile: string): Promise<PackLaunchStep
   const settings = await loadProfileSettings(profile).catch(() => null)
   const slug = catalogPackSlug(settings)
   if (!slug || !packNeedsCheck(settings)) return { kind: 'launch' }
-  if (!(await packAutoUpdateOn(profile))) return { kind: 'launch' }
-  const card: PackCard = await loadPackView(slug).then(
+  // The card is the slow part (a network round trip): it is asked for while the local switch is read.
+  const cardAsked: Promise<PackCard> = loadPackView(slug).then(
     (view) => ({ view }),
     (error: unknown) => ({ error }),
   )
-  return packLaunchStep(settings, card)
+  if (!(await packAutoUpdateOn(profile))) return { kind: 'launch' }
+  return packLaunchStep(settings, await cardAsked)
 }
 
 /**
