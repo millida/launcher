@@ -99,6 +99,18 @@ describe('ensureMsAuth', () => {
     expect(r?.id).toBe('a1')
   })
 
+  // Н3 второго ревью: лобби обновляет токен за 10 минут до конца, а «свежим» он считался за 5.
+  test('просьба обновить заранее: токен с семью минутами до конца обновляется, без просьбы — нет', async () => {
+    seed(Date.now() + 7 * 60_000)
+    refreshImpl = async () => ({ status: 'ok', nick: 'Notch', expires_in: 86400 })
+    await ensureMsAuth()
+    expect(calls.refresh, 'с обычным запасом в пять минут он ещё свежий').toBe(0)
+    const r = await ensureMsAuth(undefined, 10 * 60_000)
+    expect(calls.refresh, 'лобби просит за десять минут — обновление идёт').toBe(1)
+    expect(r?.id).toBe('a1')
+    expect(accNow().exp! - Date.now()).toBeGreaterThan(23 * HOUR)
+  })
+
   test('отозванный refresh — сессии нет, секреты стёрты (в меню «Вход слетел»)', async () => {
     seed(Date.now() - HOUR)
     refreshImpl = async () => ({ status: 'relogin' })
