@@ -131,6 +131,7 @@ import { trackFailure } from '../lib/telemetry'
 import { hasMillidaAccount, mirrorAsset } from '../lib/api'
 import { t, tx, useT } from '../i18n'
 import { LaunchHooksBlock } from '../components/build/LaunchHooksBlock'
+import { versionAtLeast } from '../lib/promoServers'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
@@ -229,6 +230,8 @@ const CONNECTOR_ITEMS = [
   { source: 'modrinth', project_id: 'connector' },
   { source: 'modrinth', project_id: 'forgified-fabric-api' },
 ]
+/** Connector has no build for older games: offering it on 1.7.10 ended in «нет версии под 1.7.10». */
+const CONNECTOR_MIN_GAME = '1.20.1'
 const fabricOnly = (m: ModFile) => {
   const ls = m.loaders?.length ? m.loaders : m.loader ? [m.loader] : []
   return ls.includes('fabric') && !ls.includes('forge') && !ls.includes('neoforge')
@@ -1177,7 +1180,8 @@ export function InstancePage() {
   const grouped = kind === 'mod' && !cq && !filter && !tagFilter
   const manualCount = items.filter((i) => i.origin === 'manual').length
   const forgeLike = !!pr && (loaderId(pr) === 'forge' || loaderId(pr) === 'neoforge')
-  const fabricOnForge = forgeLike && kind === 'mod' ? items.filter((i) => i.enabled && fabricOnly(i)) : []
+  const bridgeable = forgeLike && kind === 'mod' && !!pr && versionAtLeast(pr.version, CONNECTOR_MIN_GAME)
+  const fabricOnForge = bridgeable ? items.filter((i) => i.enabled && fabricOnly(i)) : []
   const hasConnector = items.some(isConnector)
   const libs = grouped ? shownItems.filter((i) => isLibraryMod(i)) : []
   const mains = grouped ? shownItems.filter((i) => !isLibraryMod(i)) : shownItems

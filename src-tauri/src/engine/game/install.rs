@@ -738,10 +738,8 @@ fn recorded_outputs(dir: &Path) -> Option<Vec<String>> {
 /// named `<mc>-Forge<build>-<mc>`, match nothing here and have no processors
 /// to check.
 fn installers_for_dir(loader: &str, vid: &str, dir_name: &str) -> Option<Vec<(String, String)>> {
-    let forge_prefix = format!("{}-forge-", vid);
-    let prefix = if loader == "neoforge" && !neoforge_on_forge_coords(vid) { "neoforge-" } else { &forge_prefix };
-    let build = dir_name.strip_prefix(prefix).filter(|b| check_loader_version(b).is_ok())?;
-    let installers = if loader == "neoforge" { vec![neoforge_installer(vid, build)] } else { forge_installers(vid, build) };
+    let build = dir_build(loader, vid, dir_name)?;
+    let installers = if loader == "neoforge" { vec![neoforge_installer(vid, &build)] } else { forge_installers(vid, &build) };
     installers.iter().all(|(_, name)| name == dir_name).then_some(installers)
 }
 
@@ -913,6 +911,41 @@ fn resolve_loader_dir(vdir: &Path, loader: &str, ver_dir_name: &str, vid: &str) 
         .collect();
     cands.sort_by_key(|(t, _)| *t);
     cands.pop().map(|(_, p)| p)
+}
+
+const UNPINNED_LIST_TTL: Duration = Duration::from_secs(6 * 3600);
+
+/// The build an installed loader dir holds, read from the name its installer gave it.
+fn dir_build(loader: &str, vid: &str, dir_name: &str) -> Option<String> {
+    let forge_prefix = format!("{}-forge-", vid);
+    let prefix = if loader == "neoforge" && !neoforge_on_forge_coords(vid) { "neoforge-" } else { &forge_prefix };
+    dir_name.strip_prefix(prefix).filter(|b| check_loader_version(b).is_ok()).map(String::from)
+}
+
+/// The build an unpinned profile runs, picked the way the installer picks it: the newest stable
+/// NeoForge, the recommended (else latest) Forge. None when no list was ever fetched.
+async fn unpinned_target(loader: &str, vid: &str, lcache: &Path) -> Option<String> {
+    if loader == "neoforge" {
+        let list = get_json_fresh(&neoforge_versions_url(vid), &lcache.join(neoforge_versions_cache(vid)), UNPINNED_LIST_TTL).await.ok()?;
+        let all = neoforge_candidates(&list, vid);
+        return all.iter().find(|v| !neoforge_prerelease(v)).or(all.first()).cloned();
+    }
+    let promos = get_json_fresh(
+        "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
+        &lcache.join("forge-promos.json"),
+        UNPINNED_LIST_TTL,
+    )
+    .await
+    .ok()?;
+    [format!("{}-recommended", vid), format!("{}-latest", vid)]
+        .iter()
+        .find_map(|key| promos["promos"][key].as_str().map(String::from))
+}
+
+/// An unpinned profile is promised the current loader, and mods are picked for it: a dir left
+/// from an older install is not that loader, and NeoForge refuses mods that ask for newer.
+fn behind_target(loader: &str, vid: &str, dir_name: &str, target: &str) -> bool {
+    dir_build(loader, vid, dir_name).is_some_and(|have| num_key(&have) < num_key(target))
 }
 
 /// Carries the loader's launch arguments into the merged json. MC 1.13+ loaders
@@ -1183,6 +1216,17 @@ pub async fn install_loader_with_java(
             None if legacy_neo => None,
             None => resolve_loader_dir(&vdir, loader, "", &vid),
         };
+        let mut outdated: Option<PathBuf> = None;
+        if loader_version.is_none() && !legacy_neo {
+            let name = found.as_ref().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().to_string());
+            if let Some(name) = name {
+                if let Some(target) = unpinned_target(loader, &vid, &lcache).await {
+                    if behind_target(loader, &vid, &name, &target) {
+                        outdated = found.take();
+                    }
+                }
+            }
+        }
         let mut suspect: Option<(PathBuf, Vec<String>)> = None;
         let mut unverified: Option<PathBuf> = None;
         if let Some(dir) = found.clone() {
@@ -1278,7 +1322,7 @@ pub async fn install_loader_with_java(
                 .ok_or_else(|| format!("{} для этой версии не найден", loader))?;
             found = match loader_version {
                 _ if suspect.is_some() => None,
-                _ if legacy_neo => exact_loader_dir(&vdir, &ver_dir_name),
+                _ if legacy_neo || outdated.is_some() => exact_loader_dir(&vdir, &ver_dir_name),
                 // A pinned build must not resolve to a neighbouring one, but the
                 // legacy Forge installer names its dir "<mc>-Forge<build>-<mc>",
                 // so the exact name is a hint rather than the only answer.
@@ -1433,7 +1477,8 @@ pub async fn install_loader_with_java(
                     );
                 }
                 if found.is_none() {
-                    found = unverified.filter(|_| !profile_read);
+                    // Offline or a refused installer: the older loader still starts the game.
+                    found = unverified.filter(|_| !profile_read).or(outdated);
                 }
                 if found.is_none() {
                     let reason = installer_giveup(loader, &last_err, &absent);
@@ -2233,6 +2278,22 @@ e";
         ];
         for (coord, rel, why) in cases {
             assert_eq!(maven_path(coord), rel, "{}", why);
+        }
+    }
+
+    #[test]
+    fn unpinned_profile_leaves_a_loader_older_than_the_current_one() {
+        let cases: [(&str, &str, &str, &str, bool, &str); 7] = [
+            ("neoforge", "1.21.1", "neoforge-21.1.217", "21.1.251", true, "старая NeoForge от прошлых установок не годится: моды просят 21.1.218+"),
+            ("neoforge", "1.21.1", "neoforge-21.1.251", "21.1.251", false, "текущая сборка — ставить нечего"),
+            ("neoforge", "1.21.1", "neoforge-21.1.99", "21.1.251", true, "номера сравниваются числами, а не строкой"),
+            ("neoforge", "1.21.1", "neoforge-21.1.260", "21.1.251", false, "более новая, чем в списке, не откатывается"),
+            ("forge", "1.20.1", "1.20.1-forge-47.2.0", "47.4.0", true, "Forge старее рекомендованной тоже обновляется"),
+            ("forge", "1.20.1", "1.20.1-forge-47.4.10", "47.4.0", false, "Forge новее рекомендованной оставляем"),
+            ("forge", "1.7.10", "1.7.10-Forge10.13.4.1614-1.7.10", "10.13.4.1614", false, "легаси-имя не читается — сборку не трогаем"),
+        ];
+        for (loader, vid, dir, target, behind, why) in cases {
+            assert_eq!(behind_target(loader, vid, dir, target), behind, "{} {} -> {}: {}", loader, dir, target, why);
         }
     }
 

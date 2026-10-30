@@ -346,13 +346,25 @@ async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt>
         .map_err(|e| Attempt::Retry(format!("неожиданный ответ: {} — {}", e, url)))
 }
 
+fn status_message(url: &str, status: reqwest::StatusCode) -> String {
+    format!("{} от {}", status, url)
+}
+
 fn status_attempt(url: &str, status: reqwest::StatusCode) -> Attempt {
-    let msg = format!("{} от {}", status, url);
+    let msg = status_message(url, status);
     if retryable(status) {
         Attempt::Retry(msg)
     } else {
         Attempt::Fatal(msg)
     }
+}
+
+/// The server answered that the address names nothing. Unlike a request the
+/// network cut short, asking again gets the same answer.
+pub(crate) fn is_absent_answer(err: &str) -> bool {
+    [reqwest::StatusCode::NOT_FOUND, reqwest::StatusCode::GONE]
+        .into_iter()
+        .any(|status| err.starts_with(&status_message("", status)))
 }
 
 /// Marker of a download whose bytes arrived whole but hash to something else.
@@ -2146,6 +2158,22 @@ PK"),
         }
         assert!(is_transient("x: нет связи (reset)"), "a dropped line is worth another round");
         assert!(!is_transient(&format!("x: {}", SUM_MISMATCH)), "a wrong checksum will not fix itself");
+    }
+
+    /// Failed lookup -> whether the catalogue already gave its final answer.
+    #[test]
+    fn only_an_absent_address_is_a_final_answer() {
+        let url = "https://api.millida.net/v2/launcher/mr/v2/project/Thaumcraft/version";
+        let cases: [(String, bool, &str); 5] = [
+            (status_message(url, reqwest::StatusCode::NOT_FOUND), true, "30.10: a mod id guessed as a Modrinth slug kept a «Поставить» that ended in this 404"),
+            (status_message(url, reqwest::StatusCode::GONE), true, "a removed project is just as absent"),
+            (status_message(url, reqwest::StatusCode::BAD_GATEWAY), false, "a mirror outage is worth another click"),
+            (status_message(url, reqwest::StatusCode::TOO_MANY_REQUESTS), false, "a throttle passes"),
+            (format!("нет связи (reset) — {}", url), false, "a dropped line says nothing about the project"),
+        ];
+        for (err, absent, why) in cases {
+            assert_eq!(is_absent_answer(&err), absent, "{}: {}", why, err);
+        }
     }
 
     /// The backend tells launcher releases apart by this header in its logs; a fixed

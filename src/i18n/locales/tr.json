@@ -5340,6 +5340,8 @@
   "Мод собран под другой загрузчик — отключи его": "Mod başka bir yükleyici için yapılmış — onu devre dışı bırak",
   "Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры": "Mod paketinin yükleyicisi bu oyun sürümü için zaten en yenisi — modun başka bir oyun sürümüne ihtiyacı var",
   "Загрузчик {0} обновится при запуске (был {1})": "{0} yükleyicisi başlatmada güncellenecek (önceki: {1})",
+  "Загрузчик {0} обновится до {1} при запуске": "{0} yükleyicisi başlatmada {1} sürümüne güncellenecek",
+  "Не получили список версий загрузчика — проверь интернет и попробуй ещё раз": "Yükleyici sürüm listesi alınamadı — internet bağlantını kontrol edip tekrar dene",
   "Некорректный объём памяти": "Geçersiz bellek miktarı",
   "Такой объём памяти лаунчер не выставит": "Başlatıcı bu bellek miktarını ayarlayamaz",
   "Сборке выделено {0} ГБ": "Mod paketine {0} GB ayrıldı",
