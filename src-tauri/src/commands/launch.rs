@@ -11,13 +11,24 @@ pub async fn launch_game(
     fabric: bool,
     ram_mb: u32,
     auth: Option<engine::AuthArgs>,
+    prep_ms: Option<u64>,
 ) -> Result<String, String> {
+    // A running build only needs its window raised: no sign-in round trip for that.
+    if let Some(outcome) = engine::bring_running_forward("default", false) {
+        return Ok(outcome);
+    }
+    engine::note_launch_prep("default", prep_ms);
     engine::begin_launch()
-        .run(async move {
-            let r = engine::resolve_launch_auth(&app, auth).await;
-            engine::install_and_launch(app, version, r.nick.unwrap_or(nick), fabric, ram_mb, r.auth).await
-        })
+        .run(engine::launch_with_account(app, version, nick, fabric, ram_mb, "default".into(), auth))
         .await
+}
+
+/// Play on a build that is already running: the page asks this before any preparation (update,
+/// graphics care, sign-in). `Some(outcome)` means the running game's window came forward and
+/// there is nothing to prepare; `None` means no such game is in memory, so Play goes the usual way.
+#[tauri::command(async)]
+pub fn raise_running(profile: String) -> Option<String> {
+    engine::bring_running_forward(&profile, false)
 }
 
 #[tauri::command(async)]
@@ -116,6 +127,7 @@ pub fn pin_server_dat(profile: String, name: String, ip: String) -> Result<(), S
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn quick_play(
     app: tauri::AppHandle,
     profile: String,
@@ -124,12 +136,14 @@ pub async fn quick_play(
     world: Option<String>,
     server: Option<String>,
     auth: Option<engine::AuthArgs>,
+    prep_ms: Option<u64>,
 ) -> Result<String, String> {
+    if let Some(outcome) = engine::bring_running_forward(&profile, false) {
+        return Ok(outcome);
+    }
+    engine::note_launch_prep(&profile, prep_ms);
     engine::begin_launch()
-        .run(async move {
-            let r = engine::resolve_launch_auth(&app, auth).await;
-            engine::quick_play(app, profile, r.nick.unwrap_or(nick), ram_mb, world, server, r.auth).await
-        })
+        .run(engine::quick_play(app, profile, nick, ram_mb, world, server, auth))
         .await
 }
 

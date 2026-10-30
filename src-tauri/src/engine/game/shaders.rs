@@ -24,6 +24,11 @@ const FORGE_KITS: &[Kit] = &[Kit { renderer: "embeddium", shaders: "oculus" }, K
 /// not a benchmark. Complementary is the fallback when MakeUp has no file.
 const SHADER_PACKS: &[&str] = &["makeup-ultra-fast-shaders", "complementary-reimagined"];
 
+/// The "Epic" graphics preset asks for the full-looking packs instead, and only
+/// on a discrete card (see `presets.rs`). Both are in the Millida catalogue
+/// with a stated licence and are downloaded from Modrinth, never re-hosted.
+pub(super) const EPIC_SHADER_PACKS: &[&str] = &["complementary-reimagined", "bsl-shaders"];
+
 fn kits(loader: &str) -> &'static [Kit] {
     match loader {
         "fabric" | "quilt" => FABRIC_KITS,
@@ -102,7 +107,7 @@ pub async fn set_shaders(app: AppHandle, profile: String, on: bool) -> Result<Sh
         return Err("Сборка не найдена".into());
     }
     if on {
-        enable(&app, &profile).await
+        enable(&app, &profile, SHADER_PACKS).await
     } else {
         disable(&profile)
     }
@@ -115,9 +120,9 @@ async fn latest_fit(slug: &str, version: &str, loaders: &[String]) -> Option<Val
 
 /// A shader pack runs on far more game versions than its listing names, so a
 /// pack without a file for this exact version still takes the newest release.
-async fn pick_pack(version: &str) -> Option<(&'static str, Value)> {
+async fn pick_pack(version: &str, packs: &'static [&'static str]) -> Option<(&'static str, Value)> {
     let loaders = vec!["iris".to_string()];
-    for slug in SHADER_PACKS {
+    for slug in packs {
         let Ok(all) = project_versions(slug).await else { continue };
         if let Some(v) = stable_pick(&all, version, &loaders).or_else(|| stable_pick(&all, "", &loaders)) {
             return Some((*slug, v));
@@ -126,7 +131,7 @@ async fn pick_pack(version: &str) -> Option<(&'static str, Value)> {
     None
 }
 
-async fn enable(app: &AppHandle, profile: &str) -> Result<ShadersState, String> {
+async fn enable(app: &AppHandle, profile: &str, packs: &'static [&'static str]) -> Result<ShadersState, String> {
     if !fps_boost_applicable(profile) {
         return Err("Графику этой сборки подобрал автор — шейдеры в ней включаются в настройках игры".into());
     }
@@ -209,7 +214,7 @@ async fn enable(app: &AppHandle, profile: &str) -> Result<ShadersState, String> 
     }
 
     emit(app, "shaders", 75.0, "Скачиваем шейдеры…");
-    let Some((pack_slug, pack_ver)) = pick_pack(&version).await else {
+    let Some((pack_slug, pack_ver)) = pick_pack(&version, packs).await else {
         undo(&installed);
         return Err("Не нашли лёгкий шейдерпак на Modrinth — проверь интернет и попробуй ещё раз".into());
     };
@@ -269,6 +274,15 @@ fn disable(profile: &str) -> Result<ShadersState, String> {
         ],
     );
     Ok(shaders_state(profile))
+}
+
+/// Shaders for the "Epic" graphics preset: the same kit, the full-looking packs.
+pub(super) async fn shaders_on_for_preset(app: &AppHandle, profile: &str) -> Result<ShadersState, String> {
+    enable(app, profile, EPIC_SHADER_PACKS).await
+}
+
+pub(super) fn shaders_off_for_preset(profile: &str) -> Result<ShadersState, String> {
+    disable(profile)
 }
 
 #[cfg(test)]

@@ -465,10 +465,20 @@ fn verdict_for(err: &str) -> RefreshVerdict {
     if err == "http 401" { RefreshVerdict::SessionOver } else { RefreshVerdict::TryLater }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum Refreshed {
     Token(String),
     Dead,
+    SignedOut,
     Unavailable,
+}
+
+/// With no refresh token left, an access token alone is a session that has ended, while no
+/// tokens at all is a player who never signed in (offline nick or licence only). Only the first
+/// is reported as `unauthorized`: the webview reads that as "session expired" and sends the
+/// player to the sign-in screen, which would otherwise happen on every sign-in-only request.
+fn without_refresh_token(has_access: bool) -> Refreshed {
+    if has_access { Refreshed::Dead } else { Refreshed::SignedOut }
 }
 
 /// Serialized behind a mutex: concurrent callers hitting 401 at once would
@@ -486,7 +496,7 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
     if current.is_some() && current != used {
         return Refreshed::Token(current.unwrap_or_default());
     }
-    let Some(rt) = stored_refresh else { return Refreshed::Dead };
+    let Some(rt) = stored_refresh else { return without_refresh_token(current.is_some()) };
     if refresh_on_cooldown() {
         return Refreshed::Unavailable;
     }
@@ -515,6 +525,29 @@ async fn refresh_session(used: Option<String>) -> Refreshed {
     }
 }
 
+/// When an access token ends: its `exp` claim, read without checking the signature (the server
+/// checks it; this only decides whether to renew early).
+pub(crate) fn token_expiry(jwt: &str) -> Option<u64> {
+    use base64::Engine as _;
+    let payload = jwt.split('.').nth(1)?;
+    let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: Value = serde_json::from_slice(&raw).ok()?;
+    claims["exp"].as_u64()
+}
+
+/// Renews the account's token ahead of Play when it ends within `window`. Otherwise the first
+/// request of the launch is refused, renews on the way and asks again: two more round trips
+/// while the player waits. One renewal per token lifetime; a renewal on cooldown is not forced.
+pub(crate) async fn refresh_millida_if_expiring(window: std::time::Duration) {
+    let Some(token) = millida_token() else { return };
+    let Some(exp) = token_expiry(&token) else { return };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if exp > now + window.as_secs() || refresh_on_cooldown() {
+        return;
+    }
+    let _ = refresh_session(Some(token)).await;
+}
+
 /// The only way the launcher talks to the Millida API as the signed-in user:
 /// the token is read from the vault here and never leaves the core.
 pub async fn millida_api_auth(path: String, method: String, body: Option<Value>) -> Result<Value, String> {
@@ -537,7 +570,7 @@ pub async fn millida_api_auth_in(
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market, lang).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -630,7 +663,7 @@ pub async fn millida_upload_raw_auth(
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_upload_raw_in(&path, &method, body, Some(fresh), progress).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -720,7 +753,7 @@ pub async fn millida_post_bytes_auth(path: String, bytes: Vec<u8>) -> Result<Val
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_post_bytes(path, bytes, Some(fresh)).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -748,7 +781,7 @@ pub async fn millida_upload_auth(
     match refresh_session(token).await {
         Refreshed::Token(fresh) => millida_upload(path, filename, mime, bytes, fields, Some(fresh)).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
-        Refreshed::Unavailable => Err(e),
+        Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
 }
 
@@ -893,7 +926,7 @@ mod tests {
 
     use super::{
         api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
-        upload_route_allowed, verdict_for, RefreshVerdict, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
+        upload_route_allowed, verdict_for, without_refresh_token, RefreshVerdict, Refreshed, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
     };
     use std::collections::BTreeMap;
 
@@ -1077,6 +1110,22 @@ mod tests {
                 expected,
                 "refresh answer {answer:?} judged wrong. Reason this case is pinned: {why}",
             );
+        }
+    }
+
+    #[test]
+    fn missing_refresh_token_verdicts() {
+        // (access token stored, outcome, why this case is pinned)
+        let cases: &[(bool, Refreshed, &str)] = &[
+            (true, Refreshed::Dead, "an access token whose refresh token is gone cannot be renewed: the session is over"),
+            (
+                false,
+                Refreshed::SignedOut,
+                "an offline-only player has no session to expire; reporting it as expired logged them out on every start",
+            ),
+        ];
+        for (has_access, expected, why) in cases {
+            assert_eq!(&without_refresh_token(*has_access), expected, "access token stored: {has_access}. {why}");
         }
     }
 

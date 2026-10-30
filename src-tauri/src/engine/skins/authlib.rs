@@ -2,7 +2,10 @@
 // Downloaded from the project's GitHub release (pinned version and sha256) and put into agents/ in the launcher data. It is loaded only after the sha256 check.
 use crate::engine::game::ansi_readable_as_is;
 use crate::engine::*;
+use serde_json::Value;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// The agent runs inside the game as -javaagent, so its build is pinned in the
 /// code: address and sha256 are ours, never taken from a third-party feed.
@@ -377,5 +380,150 @@ mod pin_tests {
         assert!(AUTHLIB_PINNED_SHA256.chars().all(|c| c.is_ascii_hexdigit()));
         assert!(AUTHLIB_PINNED_URL.starts_with("https://github.com/yushijinhun/authlib-injector/releases/download/"));
         assert!(AUTHLIB_PINNED_URL.contains("1.2.8") && AUTHLIB_STAMP.contains("1.2.8"));
+    }
+}
+
+/// The skin server's description is reused this long without asking the server at all.
+const YGG_FRESH: Duration = Duration::from_secs(10 * 60);
+/// With an older copy on disk a launch waits this long for the live answer (it used to be 30 s
+/// times three tries, on every launch with a Millida account).
+const YGG_WAIT: Duration = Duration::from_secs(3);
+
+fn yggdrasil_copy_path(url: &str) -> PathBuf {
+    let tag = sha256_hex(url.as_bytes());
+    data_dir().join("agents").join(format!("yggdrasil-{}.json", &tag[..16]))
+}
+
+/// What the Millida skin server says about itself (public key, skin domains), which the launcher
+/// hands to the agent so the game does not fetch it at start. One GET to the server given in
+/// `url`; no token and no account data. A copy on disk makes the launch independent of how the
+/// server feels today: a fresh copy is used as is, an older one gives the server three seconds.
+pub(crate) async fn yggdrasil_meta(url: &str) -> Result<Value, String> {
+    let target = url.to_string();
+    meta_with_copy(&yggdrasil_copy_path(url), YGG_FRESH, YGG_WAIT, move || async move { get_json(&target).await }).await
+}
+
+async fn meta_with_copy<F, Fut>(copy: &Path, fresh: Duration, wait: Duration, fetch: F) -> Result<Value, String>
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: Future<Output = Result<Value, String>> + Send + 'static,
+{
+    let cached = std::fs::read(copy)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .filter(Value::is_object);
+    let age = std::fs::metadata(copy).ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok());
+    let Some(known) = cached else {
+        // Nothing to fall back on: the request runs the way it always did.
+        let live = fetch().await?;
+        if live.is_object() {
+            write_json_quiet(copy, &live);
+        }
+        return Ok(live);
+    };
+    if age.is_some_and(|a| a < fresh) {
+        return Ok(known);
+    }
+    let path = copy.to_path_buf();
+    let job = tokio::spawn(async move {
+        let live = fetch().await;
+        match &live {
+            Ok(v) if v.is_object() => write_json_quiet(&path, v),
+            // A server that does not answer is asked again after `fresh`, not on every launch.
+            _ => {
+                if let Ok(f) = std::fs::File::options().write(true).open(&path) {
+                    let _ = f.set_modified(std::time::SystemTime::now());
+                }
+            }
+        }
+        live
+    });
+    match tokio::time::timeout(wait, job).await {
+        Ok(Ok(Ok(live))) if live.is_object() => Ok(live),
+        _ => Ok(known),
+    }
+}
+
+#[cfg(test)]
+mod meta_tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    fn copy_in(name: &str, body: Option<&str>, age: Duration) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("millida-ygg-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("meta.json");
+        if let Some(body) = body {
+            std::fs::write(&path, body).unwrap();
+            let f = std::fs::File::options().write(true).open(&path).unwrap();
+            f.set_modified(std::time::SystemTime::now() - age).unwrap();
+        }
+        path
+    }
+
+    #[tokio::test]
+    async fn a_fresh_copy_is_used_without_asking_the_server() {
+        let copy = copy_in("fresh", Some(r#"{"meta":{"serverName":"cached"}}"#), Duration::from_secs(60));
+        let asked = Arc::new(AtomicUsize::new(0));
+        let a = asked.clone();
+        let got = meta_with_copy(&copy, YGG_FRESH, YGG_WAIT, move || async move {
+            a.fetch_add(1, Ordering::Relaxed);
+            Ok(json!({"meta": {"serverName": "live"}}))
+        })
+        .await
+        .unwrap();
+        assert_eq!(got["meta"]["serverName"], "cached");
+        assert_eq!(asked.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn an_old_copy_gives_the_server_a_short_wait_then_wins_the_launch() {
+        let copy = copy_in("slow", Some(r#"{"meta":{"serverName":"cached"}}"#), Duration::from_secs(3600));
+        let started = std::time::Instant::now();
+        let got = meta_with_copy(&copy, YGG_FRESH, Duration::from_millis(150), || async {
+            tokio::time::sleep(Duration::from_secs(20)).await;
+            Ok(json!({"meta": {"serverName": "live"}}))
+        })
+        .await
+        .unwrap();
+        assert_eq!(got["meta"]["serverName"], "cached", "a hung server does not hold the launch for 30 s");
+        assert!(started.elapsed() < Duration::from_secs(3));
+
+        let got = meta_with_copy(&copy, YGG_FRESH, Duration::from_secs(2), || async { Ok(json!({"meta": {"serverName": "live"}})) })
+            .await
+            .unwrap();
+        assert_eq!(got["meta"]["serverName"], "live", "an answer that arrives in time is the one used");
+        let kept: Value = serde_json::from_slice(&std::fs::read(&copy).unwrap()).unwrap();
+        assert_eq!(kept["meta"]["serverName"], "live", "and it replaces the copy");
+    }
+
+    #[tokio::test]
+    async fn a_failing_server_with_a_copy_is_not_a_failed_launch_and_is_left_alone_for_a_while() {
+        let copy = copy_in("down", Some(r#"{"meta":{"serverName":"cached"}}"#), Duration::from_secs(3600));
+        let got = meta_with_copy(&copy, YGG_FRESH, Duration::from_secs(2), || async { Err("http 502".to_string()) })
+            .await
+            .unwrap();
+        assert_eq!(got["meta"]["serverName"], "cached");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let age = std::fs::metadata(&copy).unwrap().modified().unwrap().elapsed().unwrap();
+        assert!(age < Duration::from_secs(60), "the copy's age restarts, so the next launches skip the dead server");
+    }
+
+    #[tokio::test]
+    async fn without_a_copy_the_old_behaviour_stays_and_its_error_is_reported() {
+        let copy = copy_in("none", None, Duration::ZERO);
+        let err = meta_with_copy(&copy, YGG_FRESH, YGG_WAIT, || async { Err("http 502".to_string()) }).await.unwrap_err();
+        assert_eq!(err, "http 502", "the launch then falls back to offline mode with the real reason");
+        let ok = meta_with_copy(&copy, YGG_FRESH, YGG_WAIT, || async { Ok(json!({"meta": {}})) }).await.unwrap();
+        assert!(ok.is_object());
+        assert!(copy.exists(), "the first good answer becomes the copy");
+    }
+
+    #[test]
+    fn each_server_address_has_its_own_copy() {
+        assert_ne!(yggdrasil_copy_path("https://a.example/yggdrasil"), yggdrasil_copy_path("https://b.example/yggdrasil"));
     }
 }

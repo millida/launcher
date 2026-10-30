@@ -41,6 +41,11 @@ fn remember_install_id_at(file: &Path, id: &str) -> Result<(), String> {
     std::fs::write(file, id).map_err(|e| format!("Идентификатор установки не сохранился: {}", e))
 }
 
+/// The id the UI mirrored here; the core's own telemetry (process samples) uses it.
+pub fn stored_install_id_value() -> Option<String> {
+    stored_install_id(&install_id_file())
+}
+
 fn stored_install_id(file: &Path) -> Option<String> {
     let id = std::fs::read_to_string(file).ok()?;
     let id = id.trim();

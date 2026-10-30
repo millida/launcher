@@ -1,6 +1,8 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import { liteOn, useLiteMode } from '../../lib/liteMode'
 import { useT } from '../../i18n'
-import { ARCANIA_POSTER, ARCANIA_VERSION, ART } from './content'
+import { ARCANIA_POSTER, ARCANIA_VERSION, artClip } from './content'
+import { ensureMedia, mediaUrl, useMedia } from '../../lib/media'
 import './arcania.css'
 
 export function ArcaniaName() {
@@ -11,7 +13,7 @@ export function ArcaniaName() {
   )
 }
 
-const COVER_VIDEO = ART + 'cover.mp4'
+const COVER_VIDEO = artClip('cover.mp4')
 
 // Held at module level: a detached video nobody references is collected and its download stops.
 let warmCover: HTMLVideoElement | null = null
@@ -26,15 +28,24 @@ export function warmArcaniaCover(): void {
   poster.href = ARCANIA_POSTER
   poster.setAttribute('fetchpriority', 'high')
   document.head.appendChild(poster)
-  warmCover = document.createElement('video')
-  warmCover.preload = 'auto'
-  warmCover.muted = true
-  warmCover.src = COVER_VIDEO
-  warmCover.load()
+  // Слабое железо живой ролик не показывает (лёгкий режим): 3 МБ видео ему не нужны.
+  if (liteOn()) return
+  void ensureMedia([COVER_VIDEO]).then(() => {
+    const url = mediaUrl(COVER_VIDEO)
+    if (warmCover || !url) return
+    warmCover = document.createElement('video')
+    warmCover.preload = 'auto'
+    warmCover.muted = true
+    warmCover.src = url
+    warmCover.load()
+  })
 }
 
 export function ArcaniaCover({ className = '' }: { className?: string }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const lite = useLiteMode()
+  // The live cover comes from the media cache; until it lands the poster is the picture. Weak machines never fetch it.
+  const clip = useMedia(lite ? null : COVER_VIDEO)
 
   // The tilt follows the pointer over the whole card, not only over the video.
   useEffect(() => {
@@ -59,11 +70,15 @@ export function ArcaniaCover({ className = '' }: { className?: string }) {
     }
   }, [])
 
+  if (lite) {
+    // Лёгкий режим: тот же кадр, что был постером ролика, без декодирования видео.
+    return <img ref={ref as unknown as RefObject<HTMLImageElement>} className={'arc2-video ' + className} src={ARCANIA_POSTER} alt="" aria-hidden="true" />
+  }
   return (
     <video
       ref={ref}
       className={'arc2-video ' + className}
-      src={COVER_VIDEO}
+      src={clip ?? undefined}
       poster={ARCANIA_POSTER}
       autoPlay
       muted

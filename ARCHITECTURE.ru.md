@@ -273,22 +273,31 @@ macOS его не играет), выбор файла пользователе�
 
 ## Путь запуска игры
 
-Точка входа — `install_and_launch_in`
-([launch.rs](src-tauri/src/engine/game/launch.rs)), её вызывает команда
-`launch_game` / `launch_profile`.
+Точка входа — `install_and_launch_into`
+([launch.rs](src-tauri/src/engine/game/launch.rs)), её вызывают команды
+`launch_game` / `launch_profile` / `quick_play`. Она идёт по конвейеру
+[pipeline/mod.rs](src-tauri/src/engine/game/pipeline/mod.rs): **План** (чистые функции
+`pipeline/plan.rs`: что нужно версии, итоговый version json, classpath и вся команда Java),
+**Подготовка** (граф задач `pipeline/graph.rs`: сессия аккаунта, Java, клиент, библиотеки,
+нативы, ассеты, метаданные загрузчика и сетевые проверки идут разом; инсталлер Forge/NeoForge
+ждёт Java, клиент и библиотеки; недостающие зависимости модов сборки ставятся до старта),
+**Старт** (`start_game`) и **Наблюдение** (`watch_game`). Лобби может подготовить сборку
+заранее (`pipeline/warm.rs`) — тогда «Играть» файлы не трогает. Команда Java 20 эталонных
+сборок закреплена снапшот-тестами ([launch_snap.rs](src-tauri/src/engine/game/launch_snap.rs),
+`src-tauri/tests/data/launch`).
 
 1. **Профиль.** Из `profiles.json` берутся версия игры, загрузчик и его версия;
    из `millida-settings.json` в папке сборки — аргументы JVM, размер окна и
    выбранная Java. Настройки читаются до установки, чтобы свой путь к Java
    отменил скачивание JRE, а не отменил его задним числом.
-2. **Версия и загрузчик.** `install_loader_with_java` докачивает манифест,
+2. **Версия и загрузчик.** `prepare_version` (`install.rs`) докачивает манифест,
    version json, клиент, библиотеки и ассеты (параллельно, с проверкой хешей),
    затем ставит загрузчик: Fabric и Quilt — из их meta-API, Forge и NeoForge —
    через официальный установщик из maven. На выходе — итоговый version json,
    главный класс и classpath в порядке из version json.
 3. **Java.** `ensure_java` берёт мажор из version json, ищет уже скачанный JRE,
    проверяет его целостность и при необходимости качает Temurin.
-4. **Аргументы.** `build_args` подставляет подстановки Mojang (пути, ассеты,
+4. **Аргументы.** `plan::jvm_args` поверх `build_args_on` подставляет подстановки Mojang (пути, ассеты,
    нативы, сессия). Сверху добавляются `-Xmx`, мера против Log4Shell
    (`-Dlog4j2.formatMsgNoLookups=true`, а для 1.7–1.11.2 — заменяющий конфиг
    логгера), пользовательские аргументы JVM, профиль GC режима «Буст FPS»

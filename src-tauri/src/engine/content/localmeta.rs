@@ -18,7 +18,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 9;
+const META_REV: u32 = 10;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -73,12 +73,16 @@ pub struct LocalMeta {
     #[serde(default)] pub breaks: Vec<BreakRule>,
     #[serde(default)] pub relations: Vec<LoaderRelations>,
     #[serde(default)] pub meta_rev: u32,
+    /// SHA-1 of the file, filled in by the content scan for files no catalog installed. Valid
+    /// while `size` and `mtime` stay what they were: a changed file is read again and this empties.
+    #[serde(default)] pub sha1: String,
 }
 
 /// Ids the loader itself answers for: asking the user to install "minecraft" or
 /// "fabricloader" as a missing dependency would be noise, not a finding.
 const ENV_IDS: &[&str] = &[
     "minecraft", "java", "mcp", "forge", "neoforge", "fml", "javafml", "lowcodefml",
+    "mod_minecraftforge", "forgemodloader",
     "fabricloader", "fabric-loader", "quilt_loader", "quilt_base", "quilt_loader_api",
 ];
 
@@ -488,12 +492,29 @@ fn loader_relations(jar: &mut Jar) -> Vec<LoaderRelations> {
     out
 }
 
-/// Old Forge lists dependencies as "jei@[1.0,)"; only the id part is an id.
+/// Old Forge lists dependencies as "jei@[1.0,)", and the @Mod spelling puts the
+/// load order in front: "required-after:Thaumcraft" demands Thaumcraft, while
+/// "after:NotEnoughItems" only orders loading when that mod happens to be there.
+/// Cutting at the colon reported «required-after» itself as a missing mod.
+fn mcmod_dep_id(spec: &str) -> Option<&str> {
+    let id = match spec.split_once(':') {
+        Some((order, rest)) if order.trim().to_ascii_lowercase().starts_with("required") => rest,
+        Some(_) => return None,
+        None => spec,
+    };
+    id.split(['@', '[', '(']).next().map(str::trim).filter(|s| !s.is_empty() && *s != "*")
+}
+
 fn mcmod_ids(v: &Value) -> Vec<String> {
+    let specs: Vec<&str> = match v.as_str() {
+        Some(s) => vec![s],
+        None => v.as_array().into_iter().flatten().filter_map(Value::as_str).collect(),
+    };
     let mut out = vec![];
-    for x in v.as_array().into_iter().flatten() {
-        let Some(s) = x.as_str() else { continue };
-        push_id(&mut out, s.split(['@', '[', '(', ':']).next().unwrap_or(s));
+    for spec in specs.into_iter().flat_map(|s| s.split(';')) {
+        if let Some(id) = mcmod_dep_id(spec) {
+            push_id(&mut out, id);
+        }
     }
     out
 }
@@ -548,7 +569,30 @@ fn declared_loaders(jar: &mut Jar) -> Vec<String> {
     if entry_text(jar, "mcmod.info").is_some() {
         add("forge", &mut out);
     }
+    // A mod that hooks the loader instead of registering with it (I18nUpdateMod)
+    // has no Forge manifest at all: launchwrapper finds it by the TweakClass or
+    // FMLCorePlugin of the jar manifest, ModLauncher by its transformation service.
+    if entry_text(jar, "META-INF/MANIFEST.MF").is_some_and(|m| launchwrapper_entry(&m)) {
+        add("forge", &mut out);
+    }
+    if entry_text(jar, MODLAUNCHER_SERVICE).is_some() {
+        add("forge", &mut out);
+        add("neoforge", &mut out);
+    }
     out
+}
+
+const MODLAUNCHER_SERVICE: &str = "META-INF/services/cpw.mods.modlauncher.api.ITransformationService";
+
+/// Mixin's own tweaker is shipped by Fabric jars too, so it says nothing about Forge.
+const MIXIN_TWEAKER: &str = "org.spongepowered.asm.launch.MixinTweaker";
+
+fn launchwrapper_entry(manifest: &str) -> bool {
+    manifest.lines().filter_map(|l| l.split_once(':')).any(|(key, value)| match key.trim() {
+        "FMLCorePlugin" => !value.trim().is_empty(),
+        "TweakClass" => !value.trim().is_empty() && value.trim() != MIXIN_TWEAKER,
+        _ => false,
+    })
 }
 
 fn from_fabric(jar: &mut Jar, meta: &mut LocalMeta, quilt: bool) -> bool {
@@ -775,31 +819,93 @@ fn content_files(profile: &str, kind: &str) -> Vec<(String, PathBuf)> {
     out
 }
 
-/// Results are cached per file until its size or mtime changes.
-pub fn scan_local_meta(profile: &str, kind: &str, force: bool) -> Vec<LocalMeta> {
-    let cached = load_local_meta(profile);
-    let files = content_files(profile, kind);
+/// Size and modification time (whole seconds) of a file: what the cache of its metadata and hash is keyed by.
+pub(crate) fn file_stamp(path: &Path) -> (u64, u64) {
+    let md = std::fs::metadata(path).ok();
+    let size = md.as_ref().map(|m| m.len()).unwrap_or(0);
+    let mtime = md
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    (size, mtime)
+}
+
+/// What a pass over a folder found. `changed`: the stored file differs from `all` and must be written.
+struct MetaScan {
+    fresh: Vec<LocalMeta>,
+    all: Vec<LocalMeta>,
+    changed: bool,
+}
+
+/// An entry survives while its file keeps size and mtime; only new and changed files are opened.
+/// `force` opens every file again.
+fn rescan(cached: Vec<LocalMeta>, files: &[(String, PathBuf)], kind: &str, force: bool) -> MetaScan {
     let mut fresh: Vec<LocalMeta> = vec![];
-    for (name, path) in &files {
-        let md = std::fs::metadata(path).ok();
-        let size = md.as_ref().map(|m| m.len()).unwrap_or(0);
-        let mtime = md
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+    let mut changed = false;
+    for (name, path) in files {
+        let (size, mtime) = file_stamp(path);
         let hit = cached.iter().find(|c| {
             c.kind == kind && &c.file_name == name && c.size == size && c.mtime == mtime && c.meta_rev == META_REV
         });
         match hit {
             Some(c) if !force => fresh.push(c.clone()),
-            _ => fresh.push(read_file_meta(path, kind, name)),
+            _ => {
+                changed = true;
+                fresh.push(read_file_meta(path, kind, name));
+            }
         }
+    }
+    // A file that left the folder, or a duplicate entry, is also a change.
+    if cached.iter().filter(|c| c.kind == kind).count() != fresh.len() {
+        changed = true;
     }
     let mut all: Vec<LocalMeta> = cached.into_iter().filter(|c| c.kind != kind).collect();
     all.extend(fresh.iter().cloned());
-    save_local_meta(profile, &all);
-    fresh
+    MetaScan { fresh, all, changed }
+}
+
+/// Results are cached per file until its size or mtime changes. The stored file is rewritten only
+/// when something in it changed: a scan of an unchanged folder writes nothing.
+pub fn scan_local_meta(profile: &str, kind: &str, force: bool) -> Vec<LocalMeta> {
+    let scan = rescan(load_local_meta(profile), &content_files(profile, kind), kind, force);
+    if scan.changed {
+        save_local_meta(profile, &scan.all);
+    }
+    scan.fresh
+}
+
+/// A hash computed for a file in the state `(size, mtime)`.
+pub(crate) struct HashedFile {
+    pub file_name: String,
+    pub size: u64,
+    pub mtime: u64,
+    pub sha1: String,
+}
+
+/// Puts hashes into the entries they belong to. An entry whose file changed since the hash was
+/// taken (other size or mtime) is left alone. True when anything was set.
+fn apply_hashes(all: &mut [LocalMeta], kind: &str, hashed: &[HashedFile]) -> bool {
+    let mut touched = false;
+    for m in all.iter_mut().filter(|m| m.kind == kind) {
+        let Some(h) = hashed.iter().find(|h| h.file_name == m.file_name && h.size == m.size && h.mtime == m.mtime) else { continue };
+        if m.sha1 != h.sha1 {
+            m.sha1 = h.sha1.clone();
+            touched = true;
+        }
+    }
+    touched
+}
+
+/// Stores the hashes next to the metadata, so the next scan reads only files that changed.
+pub(crate) fn remember_hashes(profile: &str, kind: &str, hashed: &[HashedFile]) {
+    if hashed.is_empty() {
+        return;
+    }
+    let mut all = load_local_meta(profile);
+    if apply_hashes(&mut all, kind, hashed) {
+        save_local_meta(profile, &all);
+    }
 }
 
 pub fn local_meta_map(profile: &str, kind: &str) -> HashMap<String, LocalMeta> {
@@ -1275,6 +1381,66 @@ type="incompatible"
         assert_eq!(m.requires, vec!["cofhcore".to_string()]);
     }
 
+    /// mcmod.info dependency spec -> required id, if any.
+    #[test]
+    fn mcmod_dependency_specs_keep_only_hard_requirements() {
+        let cases: [(&str, Option<&str>, &str); 8] = [
+            ("required-after:Thaumcraft", Some("Thaumcraft"), "28.10: TC4 Tweak was fine, but the prefix itself was reported as a missing mod"),
+            ("required-after:Forge@[10.13.4,)", Some("Forge"), "the version range after the id is not part of it"),
+            ("required-before:CoFHCore", Some("CoFHCore"), "the other hard ordering"),
+            ("after:NotEnoughItems", None, "a soft ordering is not a requirement"),
+            ("before:Waila", None, "neither is the other soft ordering"),
+            ("required-after:*", None, "a wildcard names no mod"),
+            ("jei@[1.0,)", Some("jei"), "the plain mcmod.info spelling still works"),
+            ("  ", None, "blank entries are skipped"),
+        ];
+        for (spec, want, why) in cases {
+            assert_eq!(mcmod_dep_id(spec), want, "{spec}: {why}");
+        }
+    }
+
+    #[test]
+    fn legacy_forge_ids_are_not_missing_mods() {
+        let jar = tmp("inventorypets-1.7.10.jar");
+        make_jar(
+            &jar,
+            &[(
+                "mcmod.info",
+                br#"[{"modid":"inventorypets","name":"Inventory Pets","dependencies":["mod_MinecraftForge","required-after:Forge;required-after:FML;after:Baubles"]}]"#,
+            )],
+        );
+        let m = read_file_meta(&jar, "mod", "inventorypets-1.7.10.jar");
+        assert!(m.requires.is_empty(), "28.10: Forge's own ids were offered as mods to install, got {:?}", m.requires);
+    }
+
+    /// Jar manifest of a loader hook -> loaders it runs on.
+    #[test]
+    fn loader_hooks_without_a_mod_manifest_count_for_forge() {
+        let fabric: &[u8] = br#"{"id":"i18nupdatemod","name":"I18nUpdateMod"}"#;
+        let tweaker: &[u8] = b"Manifest-Version: 1.0\r\nTweakClass: i18nupdatemod.launchwrapper.LaunchWrapperTweaker\r\n";
+        let coremod: &[u8] = b"Manifest-Version: 1.0\nFMLCorePlugin: x.Core\n";
+        let mixin: &[u8] = b"Manifest-Version: 1.0\nTweakClass: org.spongepowered.asm.launch.MixinTweaker\n";
+        let service: &[u8] = b"i18nupdatemod.modlauncher.Service\n";
+        type Case<'a> = (&'a str, Vec<(&'a str, &'a [u8])>, &'a [&'a str], &'a str);
+        let cases: [Case; 4] = [
+            (
+                "hook-i18n.jar",
+                vec![("fabric.mod.json", fabric), ("META-INF/MANIFEST.MF", tweaker), (MODLAUNCHER_SERVICE, service)],
+                &["fabric", "forge", "neoforge"],
+                "28.10: I18nUpdateMod was called a Fabric mod on Forge 1.7.10 and Connector was offered for a version it has no build for",
+            ),
+            ("hook-core.jar", vec![("META-INF/MANIFEST.MF", coremod)], &["forge"], "a coremod is loaded by FML"),
+            ("hook-mixin.jar", vec![("fabric.mod.json", fabric), ("META-INF/MANIFEST.MF", mixin)], &["fabric"], "Mixin's tweaker is no sign of Forge"),
+            ("hook-plain.jar", vec![("fabric.mod.json", fabric)], &["fabric"], "a plain Fabric mod stays Fabric"),
+        ];
+        for (name, entries, want, why) in cases {
+            let jar = tmp(name);
+            make_jar(&jar, &entries);
+            let m = read_file_meta(&jar, "mod", name);
+            assert_eq!(m.loaders, want.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{name}: {why}");
+        }
+    }
+
     /// mcmod.info -> (own id, what else the jar registers). FML registers every
     /// entry, so a module inside a composite jar is as installed as a standalone
     /// jar of the same id.
@@ -1354,5 +1520,105 @@ modId=\"second\"
         let m = read_file_meta(&jar, "mod", "CustomSkinLoader_Fabric-14.22.jar");
         assert_eq!(m.title, "CustomSkinLoader Fabric");
         assert!(m.description.is_empty());
+    }
+
+    fn scan_dir(name: &str, files: &[(&str, &[u8])]) -> (PathBuf, Vec<(String, PathBuf)>) {
+        let dir = std::env::temp_dir().join(format!("millida-rescan-{}-{}", std::process::id(), name));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let list = files
+            .iter()
+            .map(|(n, body)| {
+                std::fs::write(dir.join(n), body).unwrap();
+                (n.to_string(), dir.join(n))
+            })
+            .collect();
+        (dir, list)
+    }
+
+    /// Вход (папка, прошлый кэш) → что перечитано и надо ли писать файл. Повторный скан нетронутой
+    /// папки не должен ни открывать моды, ни переписывать millida-local-meta.json.
+    #[test]
+    fn an_unchanged_folder_is_not_read_or_written_again() {
+        let (dir, files) = scan_dir("unchanged", &[("a.jar", b"aaaa"), ("b.jar", b"bbbbbb")]);
+        let first = rescan(vec![], &files, "mod", false);
+        assert!(first.changed, "новые файлы — файл метаданных пишется");
+        assert_eq!(first.fresh.len(), 2);
+
+        let mut cached = first.all.clone();
+        cached[0].sha1 = "planted".into();
+        cached[1].sha1 = "planted2".into();
+        let second = rescan(cached.clone(), &files, "mod", false);
+        assert!(!second.changed, "ничего не изменилось — писать нечего");
+        assert!(second.fresh.iter().all(|m| m.sha1.starts_with("planted")), "кэш не перечитывался, хеш на месте");
+
+        let forced = rescan(cached, &files, "mod", true);
+        assert!(forced.changed, "force читает всё заново");
+        assert!(forced.fresh.iter().all(|m| m.sha1.is_empty()));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn only_the_changed_and_new_files_are_read_again() {
+        let (dir, files) = scan_dir("changed", &[("a.jar", b"aaaa"), ("b.jar", b"bbbbbb")]);
+        let mut cached = rescan(vec![], &files, "mod", false).all;
+        for m in &mut cached {
+            m.sha1 = format!("sha-{}", m.file_name);
+        }
+        // Другой размер — файл другой; новый файл рядом.
+        std::fs::write(dir.join("a.jar"), b"aaaaaaaa").unwrap();
+        std::fs::write(dir.join("c.jar"), b"cc").unwrap();
+        let mut files = files;
+        files.push(("c.jar".into(), dir.join("c.jar")));
+        let scan = rescan(cached, &files, "mod", false);
+        assert!(scan.changed);
+        let sha = |n: &str| scan.fresh.iter().find(|m| m.file_name == n).unwrap().sha1.clone();
+        assert_eq!(sha("a.jar"), "", "изменённый файл: старый хеш недействителен");
+        assert_eq!(sha("b.jar"), "sha-b.jar", "нетронутый файл остался с хешем");
+        assert_eq!(sha("c.jar"), "");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_new_mtime_alone_invalidates_the_entry() {
+        let (dir, files) = scan_dir("mtime", &[("a.jar", b"aaaa")]);
+        let mut cached = rescan(vec![], &files, "mod", false).all;
+        cached[0].sha1 = "old".into();
+        let f = std::fs::OpenOptions::new().write(true).open(dir.join("a.jar")).unwrap();
+        f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(3600)).unwrap();
+        drop(f);
+        let scan = rescan(cached, &files, "mod", false);
+        assert!(scan.changed);
+        assert_eq!(scan.fresh[0].sha1, "");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_removed_file_is_a_change_and_other_kinds_are_kept() {
+        let (dir, files) = scan_dir("removed", &[("a.jar", b"aaaa"), ("b.jar", b"bbbbbb")]);
+        let mut cached = rescan(vec![], &files, "mod", false).all;
+        cached.push(LocalMeta { kind: "shader".into(), file_name: "s.zip".into(), ..Default::default() });
+        std::fs::remove_file(dir.join("b.jar")).unwrap();
+        let scan = rescan(cached, &files[..1], "mod", false);
+        assert!(scan.changed, "файла нет в папке — запись о нём надо убрать");
+        assert_eq!(scan.all.len(), 2, "запись шейдера осталась, мод b.jar ушёл");
+        assert!(scan.all.iter().any(|m| m.kind == "shader"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_hash_belongs_only_to_the_file_it_was_taken_from() {
+        let a = LocalMeta { kind: "mod".into(), file_name: "a.jar".into(), size: 10, mtime: 100, ..Default::default() };
+        let b = LocalMeta { kind: "mod".into(), file_name: "b.jar".into(), size: 20, mtime: 200, ..Default::default() };
+        let mut all = vec![a, b];
+        let hashed = [
+            HashedFile { file_name: "a.jar".into(), size: 10, mtime: 100, sha1: "good".into() },
+            HashedFile { file_name: "b.jar".into(), size: 20, mtime: 999, sha1: "stale".into() },
+        ];
+        assert!(apply_hashes(&mut all, "mod", &hashed));
+        assert_eq!(all[0].sha1, "good");
+        assert_eq!(all[1].sha1, "", "файл изменился, пока считался хеш, — хеш не запоминаем");
+        assert!(!apply_hashes(&mut all, "mod", &hashed[..1]), "то же значение — писать нечего");
+        assert!(!apply_hashes(&mut all, "shader", &hashed), "другой вид содержимого не задет");
     }
 }

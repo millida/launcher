@@ -52,6 +52,8 @@ fn set(identifier: &str, description: &str, cmds: &[String]) -> String {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=MILLIDA_MS_CLIENT_ID");
+    // media.rs reads it with option_env!: a release build with MEDIA_REMOTE=1 must not reuse an object built without it.
+    println!("cargo:rerun-if-env-changed=MEDIA_REMOTE");
     println!("cargo:rerun-if-changed=src/lib.rs");
 
     let src = fs::read_to_string("src/lib.rs").expect("src/lib.rs");

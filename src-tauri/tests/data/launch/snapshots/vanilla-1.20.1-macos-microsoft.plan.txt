@@ -1,0 +1,12 @@
+# vanilla-1.20.1-macos-microsoft
+route: version 1.20.1 + vanilla, java 17
+files: client 1, libraries 58, natives 0, log4j no, loader libraries 0
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: false, skin_server: None, kill_switch: false }
+graph (first launch):
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  assets [assets] <- meta
+  mods [mods]
