@@ -10,6 +10,8 @@ mod discord;
 mod secrets;
 mod commands;
 pub mod tray;
+mod background;
+mod notify;
 mod overlay;
 mod mic;
 mod packdrop;
@@ -18,6 +20,7 @@ mod webview_health;
 mod uiwatch;
 mod navguard;
 mod cli;
+mod update_start;
 
 /// Directories the webview may read through `asset://`: the media files it
 /// plays and shows, nothing else. The token
@@ -29,7 +32,7 @@ mod cli;
 /// for the list (see `commands::profiles::list_screenshots`).
 pub fn asset_dirs() -> Vec<std::path::PathBuf> {
     let data = engine::data_dir();
-    vec![data.join("wallpaper"), data.join("music"), data.join("sounds-v2")]
+    vec![data.join("wallpaper"), data.join("music"), data.join("sounds-v2"), data.join("media")]
 }
 
 /// Выход начат: цикл событий вот-вот закроется. После этого ни одно окно не
@@ -49,18 +52,35 @@ pub(crate) fn mark_exiting() {
 
 fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
     match event {
+        // The last window went away because the launcher unloaded it into the
+        // tray (background.rs): the core keeps running without one.
+        tauri::RunEvent::ExitRequested { code: None, api, .. } if background::unloaded() && !exiting() => {
+            api.prevent_exit();
+        }
         tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => mark_exiting(),
         // macOS never starts a second copy on a Dock or Finder click: it only
         // tells the running one to reopen. has_visible_windows is not checked
         // because the overlay counts as visible while the launcher is in the tray.
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => tray::show_main(app),
+        // On macOS a millida:// link arrives as an Apple event to the running copy, not as a second
+        // start (cli.rs sees only that). The deep-link plugin hands it to the windows, and an
+        // unloaded launcher has none: the link is kept for the page that comes back, and the
+        // window is built.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => {
+            let links: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
+            if background::unloaded() && links.iter().any(|l| l.starts_with("millida:")) {
+                background::keep_links(&links);
+                tray::show_main(app);
+            }
+        }
         // Главное окно закрыто, а скрытый оверлей ещё жив: Tauri не считает это
         // «все окна закрыты», и процесс оставался висеть без окна. Значок в трее
         // и второй запуск (single-instance) звали show_main у окна, которого нет,
         // — лаунчер «не открывался» до перезагрузки.
         tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. }
-            if label == "main" && !exiting() =>
+            if label == "main" && !exiting() && !background::unloaded() =>
         {
             mark_exiting();
             app.exit(0);
@@ -69,10 +89,19 @@ fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
     }
 }
 
+/// Everything that hangs on the main window itself; runs for the first one and
+/// for every window rebuilt after an unload.
+pub(crate) fn attach_main(app: &tauri::AppHandle, w: &tauri::WebviewWindow) {
+    mic::allow_microphone(w);
+    webview_health::watch(w);
+    packdrop::watch(app);
+    display::watch(app);
+}
+
 pub fn allow_assets(app: &tauri::AppHandle) {
     let scope = app.asset_protocol_scope();
     for dir in asset_dirs() {
-        // The window may read only the wallpaper, music and sound folders. The token store (secrets.bin, device.key) is not in the list.
+        // The window may read only the wallpaper, music, sound and downloaded-media folders. The token store (secrets.bin, device.key) is not in the list.
         std::fs::create_dir_all(&dir).ok();
         let _ = scope.allow_directory(&dir, true);
     }
@@ -168,6 +197,10 @@ pub fn run() {
         engine::report_uninstall();
         return;
     }
+    // A copy started by a patch update waits for the old launcher to end, so the single-instance guard below does not
+    // mistake it for a second start. The old exe it left beside itself stays until this copy's page has reported
+    // ready (engine::mark_frontend_ready): a new exe that cannot even open leaves the old one to go back to.
+    engine::wait_for_parent();
     cli::remember_startup_args();
     #[cfg(target_os = "linux")]
     {
@@ -220,14 +253,14 @@ pub fn run() {
             if commands::system::started_by_os() && !shown_after_update && tray::available() {
                 tray::hide_main(app.handle());
             }
+            // An update that was downloaded and checked earlier goes in now, before the window is shown (update_start.rs).
+            update_start::run(app.handle(), shown_after_update);
             engine::arm_selfheal(app.handle());
             engine::arm_dialogs(app.handle());
+            background::mark_started();
             if let Some(w) = app.get_webview_window("main") {
-                mic::allow_microphone(&w);
-                webview_health::watch(&w);
+                attach_main(app.handle(), &w);
             }
-            packdrop::watch(app.handle());
-            display::watch(app.handle());
             uiwatch::watch(app.handle());
             overlay::rebind_hotkey(app.handle());
             // Автотест — только в отладочной сборке (аудит 24.09.2026, S-04).
@@ -270,6 +303,7 @@ pub fn run() {
             commands::system::set_ui_texts,
             app_icon::set_app_icon,
             commands::system::device_specs,
+            commands::system::disk_kind,
             webview_health::take_webview_failure,
             webview_health::set_webview_low_memory,
             commands::system::read_crashes,
@@ -290,6 +324,8 @@ pub fn run() {
             commands::profiles::list_profiles,
             commands::profiles::create_profile,
             commands::profiles::launch_profile,
+            commands::profiles::warm_launch,
+            commands::launch::raise_running,
             commands::profiles::install_modpack,
             commands::profiles::install_modpack_version,
             commands::profiles::migrate_plan,
@@ -331,6 +367,9 @@ pub fn run() {
             commands::system::pick_texture,
             commands::system::copy_picture,
             commands::system::save_picture_as,
+            commands::system::update_delta_stage,
+            commands::system::media_ready,
+            commands::system::media_fetch,
             commands::system::music_tracks,
             commands::system::open_music_folder,
             commands::system::music_add,
@@ -366,6 +405,10 @@ pub fn run() {
             commands::profiles::save_profile_settings,
             commands::profiles::set_profile_java_major,
             commands::profiles::set_profile_java_vendor,
+            commands::profiles::horizon_state,
+            commands::profiles::horizon_state_for,
+            commands::profiles::set_horizon,
+            commands::profiles::horizon_java_once,
             commands::profiles::linux_tools_state,
             commands::profiles::set_linux_tools,
             commands::profiles::list_build_templates,
@@ -396,6 +439,12 @@ pub fn run() {
             commands::profiles::set_fps_boost,
             commands::profiles::shaders_state,
             commands::profiles::set_shaders,
+            commands::profiles::gfx_preset_state,
+            commands::profiles::apply_gfx_preset,
+            commands::profiles::revert_gfx_preset,
+            commands::profiles::choose_gfx_preset,
+            commands::profiles::gfx_unchosen_builds,
+            commands::profiles::gpu_driver_issue,
             commands::profiles::shared_pack_sync,
             commands::profiles::create_build_shortcut,
             commands::profiles::shortcut_trusted,
@@ -520,6 +569,7 @@ pub fn run() {
             commands::system::update_fallback_check,
             commands::system::update_notes,
             commands::system::update_fallback_stage,
+            commands::system::update_staged,
             commands::system::update_fallback_run,
             commands::system::show_after_update,
             commands::system::frontend_ready,
@@ -528,6 +578,10 @@ pub fn run() {
             commands::system::main_window_visible,
             commands::system::show_from_tray,
             commands::system::set_restore_on_exit,
+            commands::system::unload_main_window,
+            commands::system::take_window_resume,
+            commands::system::remember_beat,
+            commands::system::set_tray_last_build,
             commands::system::ui_prefs,
             commands::system::set_ui_pref,
             commands::overlay::overlay_state,
@@ -554,6 +608,7 @@ pub fn run() {
             commands::system::dedupe_run,
             commands::system::dedupe_gc,
             commands::content::scan_mod_safety,
+            commands::content::scan_picked_files,
             commands::content::quarantine_mods,
             commands::launch::world_details,
             commands::launch::rename_world,

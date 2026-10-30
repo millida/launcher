@@ -19,6 +19,8 @@ use serde::Serialize;
 
 use crate::engine::*;
 
+use super::defender::{self, AvVerdict};
+
 const BLOCKLIST_PATH: &str = "/launcher/mod-blocklist";
 const BLOCKLIST_TTL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 /// Bigger jars exist (kitchen-sink packs, shader libraries), they are simply
@@ -320,24 +322,126 @@ pub async fn scan_safety(profile: String) -> Result<SafetyReport, String> {
             .or_else(|| metas.get(&jar.file).map(|m| m.title.clone()).filter(|t| !t.is_empty()))
             .unwrap_or_else(|| jar.file.clone());
         let v = verdict_for(jar, sha1.clone(), blocked.get(&sha1), catalog, title, inspected);
-        match v.verdict.as_str() {
-            "blocked" => report.blocked += 1,
-            "suspicious" => report.suspicious += 1,
-            "unknown" => report.unknown += 1,
-            _ => report.ok += 1,
-        }
-        report.checked += 1;
-        report.items.push(v);
+        report.add(v);
     }
-    // Worst first: a report opens on what needs a decision.
-    let rank = |v: &str| match v {
-        "blocked" => 0,
-        "suspicious" => 1,
-        "unknown" => 2,
-        _ => 3,
-    };
-    report.items.sort_by_key(|i| (rank(&i.verdict), i.title.to_lowercase()));
+    report.worst_first();
     Ok(report)
+}
+
+impl SafetyReport {
+    fn add(&mut self, v: ModVerdict) {
+        match v.verdict.as_str() {
+            "blocked" => self.blocked += 1,
+            "suspicious" => self.suspicious += 1,
+            "unknown" => self.unknown += 1,
+            _ => self.ok += 1,
+        }
+        self.checked += 1;
+        self.items.push(v);
+    }
+
+    /// Worst first: a report opens on what needs a decision.
+    fn worst_first(&mut self) {
+        let rank = |v: &str| match v {
+            "blocked" => 0,
+            "suspicious" => 1,
+            "unknown" => 2,
+            _ => 3,
+        };
+        self.items.sort_by_key(|i| (rank(&i.verdict), i.title.to_lowercase()));
+    }
+}
+
+const MAX_PICKED_FILES: usize = 50;
+
+/// sha1, CurseForge fingerprint, jar findings and the system antivirus, per picked file.
+type PickedScan = (Option<String>, Option<u32>, Inspection, AvVerdict);
+
+/// The system antivirus outranks every other source: a hit is "blocked" even
+/// for a catalogue file, because a catalogue only proves where the bytes came from.
+fn with_antivirus(mut v: ModVerdict, av: &AvVerdict) -> ModVerdict {
+    if let AvVerdict::Threat(name) = av {
+        v.verdict = "blocked".into();
+        v.reasons.insert(0, format!("Антивирус Windows нашёл угрозу: {name}"));
+    }
+    v
+}
+
+/// Checks files the player picks in the system dialog, outside any build: the
+/// block list, Modrinth and CurseForge, the jar itself and, on Windows, Defender.
+/// The paths come from the dialog the core opened, never from the webview.
+pub async fn scan_picked_files() -> Result<Option<SafetyReport>, String> {
+    let picked = pick_files(
+        dialog()
+            .add_filter(crate::engine::ui("Моды и архивы"), &["jar", "zip", "litemod"])
+            .set_title(crate::engine::ui("Какие файлы проверить")),
+    )
+    .await;
+    let Some(paths) = picked.filter(|p| !p.is_empty()) else { return Ok(None) };
+    if paths.len() > MAX_PICKED_FILES {
+        return Err(format!("За раз можно проверить до {MAX_PICKED_FILES} файлов"));
+    }
+    let jars: Vec<Jar> = paths
+        .into_iter()
+        .filter_map(|path| {
+            let meta = std::fs::metadata(&path).ok().filter(|m| m.is_file())?;
+            let file = path.file_name()?.to_string_lossy().to_string();
+            Some(Jar { file, path, enabled: true, size: meta.len() })
+        })
+        .collect();
+
+    let paths: Vec<std::path::PathBuf> = jars.iter().map(|j| j.path.clone()).collect();
+    let scanned: Vec<PickedScan> = tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|p| (file_sha1(p), fingerprint_file(p), inspect_jar(p), defender::scan_file(p)))
+            .collect()
+    })
+    .await
+    .map_err(|e| format!("фоновая задача прервалась: {e}"))?;
+
+    let hashes: Vec<String> = scanned.iter().filter_map(|(h, ..)| h.as_ref().map(|h| h.to_ascii_lowercase())).collect();
+    let prints: Vec<u32> = scanned.iter().filter_map(|(_, p, ..)| *p).collect();
+    let mut notes: Vec<String> = vec![];
+    let modrinth = match versions_by_hash_checked(&hashes).await {
+        Ok(found) => found,
+        Err(e) => {
+            notes.push(format!("Modrinth не ответил ({e}) — файлы оттуда могли попасть в неизвестные"));
+            HashMap::new()
+        }
+    };
+    let curseforge: std::collections::HashSet<u32> = cf_by_fingerprint(&prints)
+        .await
+        .iter()
+        .filter_map(|m| m["file"]["fileFingerprint"].as_u64().map(|v| v as u32))
+        .collect();
+    let blocked = match blocklist().await {
+        Ok(map) => map,
+        Err(e) => {
+            notes.push(format!("Список вредоносных файлов недоступен ({e})"));
+            HashMap::new()
+        }
+    };
+    if let Some(AvVerdict::Unavailable(why)) = scanned.iter().map(|(.., av)| av).find(|av| matches!(av, AvVerdict::Unavailable(_))) {
+        notes.push(why.clone());
+    }
+
+    let mut report = SafetyReport { checked_at: now_secs(), note: notes.join("
+"), ..Default::default() };
+    for (jar, (sha1, print, inspected, av)) in jars.iter().zip(scanned) {
+        let sha1 = sha1.unwrap_or_default().to_ascii_lowercase();
+        let catalog = if modrinth.contains_key(&sha1) {
+            Some("modrinth")
+        } else if print.is_some_and(|p| curseforge.contains(&p)) {
+            Some("curseforge")
+        } else {
+            None
+        };
+        let v = verdict_for(jar, sha1.clone(), blocked.get(&sha1), catalog, jar.file.clone(), inspected);
+        report.add(with_antivirus(v, &av));
+    }
+    report.worst_first();
+    Ok(Some(report))
 }
 
 /// Turns off every file the scan refused to vouch for. Blocked and suspicious
@@ -365,6 +469,35 @@ mod tests {
 
     fn jar(file: &str) -> Jar {
         Jar { file: file.into(), path: std::path::PathBuf::from(file), enabled: true, size: 1024 }
+    }
+
+    #[test]
+    fn the_system_antivirus_outranks_the_catalogues() {
+        let cases: [(&str, Option<&str>, AvVerdict, &str, &str); 4] = [
+            ("sodium.jar", Some("modrinth"), AvVerdict::Clean, "ok", "a clean scan does not change a catalogue verdict"),
+            (
+                "sodium.jar",
+                Some("modrinth"),
+                AvVerdict::Threat("Trojan:Java/Fractureiser.A".into()),
+                "blocked",
+                "a catalogue only proves where the bytes came from: an infected upload is still infected",
+            ),
+            ("custom.jar", None, AvVerdict::Threat("X".into()), "blocked", "an unknown file with a hit is dangerous, not merely unknown"),
+            (
+                "custom.jar",
+                None,
+                AvVerdict::Unavailable("off".into()),
+                "unknown",
+                "a missing antivirus is not evidence either way and must not read as clean",
+            ),
+        ];
+        for (file, catalog, av, want, why) in cases {
+            let v = with_antivirus(verdict_for(&jar(file), "aa".into(), None, catalog, file.into(), (vec![], 0)), &av);
+            assert_eq!(v.verdict, want, "{why}");
+            if want == "blocked" {
+                assert!(v.reasons[0].starts_with("Антивирус Windows нашёл угрозу"), "the player must see why: {:?}", v.reasons);
+            }
+        }
     }
 
     /// input -> verdict. The whole point of the report is that a player can act

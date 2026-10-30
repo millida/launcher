@@ -1,0 +1,13 @@
+# vanilla-1.16.5-offline-server-4gb
+route: version 1.16.5 + vanilla, java 8
+files: client 1, libraries 41, natives 8, log4j no, loader libraries 0
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: false, skin_server: None, kill_switch: false }
+graph (first launch):
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  natives [natives] <- meta
+  assets [assets] <- meta
+  mods [mods]

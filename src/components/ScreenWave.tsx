@@ -4,20 +4,20 @@ import type { ScreenId } from '../state/ui'
 import { ACCENT_EVENT, accentBase, shade, type AccentChange } from '../lib/accent'
 import { gpuLite } from '../lib/gpuLite'
 import { currentDeviceTier, maxCanvasPixelRatio } from '../lib/deviceTier'
-import { tabTransitionMs } from '../state/viewPrefs'
+import { TAB_WAVE_FLASH_MS, tabTransitionMs, waveFrontMs } from '../state/viewPrefs'
 
 /**
  * Переход между экранами — пиксельное растворение, как у заставки «С
  * возвращением», в цвет экрана, куда идёшь (правка владельца 23.09.2026).
  * Экран уже сменился под слоем; слой из клеток 36 px гаснет волной от
- * центра, на фронте клетка вспыхивает светлее. ~380 мс, клики не держит.
+ * центра, на фронте клетка вспыхивает светлее. Всё вместе — не дольше 100 мс по умолчанию (viewPrefs), клики не держит.
  */
 
 const CELL = 36
 
 /** Событие «сыграй волну»: detail { tone, flash } (по умолчанию — золото премиума). */
 const WAVE_EVENT = 'millida:wave'
-const FLASH_MS = 60
+const FLASH_MS = TAB_WAVE_FLASH_MS
 
 /** Цвет экрана: плотный тон и вспышка фронта. */
 const TONE: Record<ScreenId, [string, string]> = {
@@ -49,7 +49,7 @@ export function ScreenWave() {
     stop.current?.()
     const cv = canvas.current
     const ctx = cv?.getContext('2d')
-    const dissolveMs = tabTransitionMs()
+    const dissolveMs = waveFrontMs(tabTransitionMs())
     if (!cv || !ctx || dissolveMs <= 0 || gpuLite() || matchMedia('(prefers-reduced-motion: reduce)').matches) return
     // Full-screen transition canvas: weak devices cap dpr, high-end unchanged.
     const dpr = Math.min(window.devicePixelRatio || 1, maxCanvasPixelRatio(currentDeviceTier()))

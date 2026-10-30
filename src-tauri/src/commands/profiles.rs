@@ -89,6 +89,45 @@ pub async fn set_fps_boost(
     engine::set_fps_boost(app, profile, on, keep_options.unwrap_or(false), video, vulkan).await
 }
 
+/// Graphics preset of a build: which one, whether it can be undone, the FPS of
+/// the last sessions (counted by the core while the game ran).
+#[tauri::command(async)]
+pub fn gfx_preset_state(profile: String) -> engine::GfxPresetState { engine::gfx_preset_state(&profile) }
+
+/// `preset` is one of potato/low/standard/high/epic; `video` the graphics keys
+/// for this PC from src/lib/gfxPresets.ts, filtered by the core like the FPS
+/// boost's; `source` "global" when the launcher-wide choice is being applied.
+#[tauri::command]
+pub async fn apply_gfx_preset(
+    app: tauri::AppHandle,
+    profile: String,
+    preset: String,
+    video: Option<Vec<(String, String)>>,
+    source: Option<String>,
+    battery: Option<bool>,
+    auto: Option<bool>,
+) -> Result<engine::GfxPresetState, String> {
+    engine::apply_gfx_preset(app, profile, preset, video, source, battery, auto).await
+}
+
+/// A video driver Sodium does not start on, for Settings and onboarding: the "Update driver" button.
+#[tauri::command(async)]
+pub fn gpu_driver_issue() -> Option<engine::DriverIssue> { engine::driver_issue() }
+
+#[tauri::command(async)]
+pub fn revert_gfx_preset(profile: String) -> Result<engine::GfxPresetState, String> { engine::revert_gfx_preset(&profile) }
+
+/// Played builds without a graphics choice: the "Optimise my builds (N)" button in Settings.
+#[tauri::command(async)]
+pub fn gfx_unchosen_builds() -> Vec<String> { engine::gfx_unchosen_builds() }
+
+/// The build page's pick: saved at once, applied before the next start. `preset`
+/// null follows the launcher-wide choice, "none" keeps the files as they are.
+#[tauri::command(async)]
+pub fn choose_gfx_preset(profile: String, preset: Option<String>) -> Result<engine::GfxPresetState, String> {
+    engine::choose_gfx_preset(&profile, preset)
+}
+
 /// Brings a friend's build up to its author's last publication; `apply` off
 /// only reports whether one is waiting.
 #[tauri::command]
@@ -348,18 +387,34 @@ pub async fn launch_profile(
     nick: String,
     ram_mb: u32,
     auth: Option<engine::AuthArgs>,
+    prep_ms: Option<u64>,
 ) -> Result<String, String> {
+    // A running build only needs its window raised: no sign-in round trip for that.
+    if let Some(outcome) = engine::bring_running_forward(&profile, false) {
+        return Ok(outcome);
+    }
+    engine::note_launch_prep(&profile, prep_ms);
+    // Tauri moves a command's future across the main thread's 1 MB stack before it reaches a worker; the launch
+    // pipeline's future is big enough that a few of those copies overflowed it (0xc00000fd on «Играть»).
     engine::begin_launch()
-        .run(async move {
+        .run(Box::pin(async move {
             let mut p = engine::load_profiles()
                 .into_iter()
                 .find(|x| x.name == profile)
                 .unwrap_or(engine::Profile { name: "default".into(), version: "latest".into(), fabric: false, loader: Some("vanilla".into()), loader_version: None, icon: None });
             engine::mend_profile_version(&mut p)?;
-            let r = engine::resolve_launch_auth(&app, auth).await;
-            engine::install_and_launch_in(app, p.version, r.nick.unwrap_or(nick), p.fabric, ram_mb, p.name, r.auth).await
-        })
+            // The account becomes a session next to the install, not before it.
+            engine::launch_with_account(app, p.version, nick, p.fabric, ram_mb, p.name, auth).await
+        }))
         .await
+}
+
+/// The lobby shows this build and the player has left the window alone: prepare it for Play
+/// without starting it (engine/game/pipeline/warm.rs). Downloads nothing; at most once in ten
+/// minutes per build; never during a launch, a download or on a low battery.
+#[tauri::command]
+pub async fn warm_launch(app: tauri::AppHandle, profile: String, auth: Option<engine::AuthArgs>) -> engine::WarmOutcome {
+    Box::pin(engine::warm_launch(app, profile, auth)).await
 }
 
 #[tauri::command]
@@ -624,6 +679,26 @@ pub async fn set_profile_java_vendor(app: tauri::AppHandle, profile: String, ven
     patch.insert("javaVendor".into(), serde_json::json!(v.id()));
     engine::merge_settings(&profile, patch);
     Ok(engine::java_version_of(&bin).unwrap_or_default())
+}
+
+#[tauri::command(async)]
+pub fn horizon_state(profile: String) -> engine::HorizonState {
+    engine::horizon_state(&profile)
+}
+
+#[tauri::command(async)]
+pub fn horizon_state_for(version: String, loader: String) -> engine::HorizonState {
+    engine::horizon_state_for(&version, &loader)
+}
+
+#[tauri::command(async)]
+pub fn set_horizon(profile: String, on: bool) -> Result<engine::HorizonState, String> {
+    engine::set_horizon(&profile, on)
+}
+
+#[tauri::command]
+pub fn horizon_java_once(profile: String) {
+    engine::horizon_java_once(&profile)
 }
 
 #[tauri::command(async)]

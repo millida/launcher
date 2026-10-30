@@ -7,6 +7,7 @@ import { convertFileSrc, mainWindowVisible, musicAdd, musicRemove, musicTracks, 
 import { MAX_LINKS, SERVICE_NAME, parseMusicLink, restoreLinks, type MusicLink } from '../lib/musicLinks'
 import { embedKey, embedPause, embedPlay, embedRestart, embedStep, embedStop, type EmbedHooks, type EmbedNow } from '../lib/musicEmbed'
 import { t } from '../i18n'
+import { ensureMedia, mediaUrl } from '../lib/media'
 
 const DEFAULT_LEVEL = 5
 
@@ -17,6 +18,15 @@ function storedLevel(): number {
 
 const storedMuted = () => readPref('m-mus-muted', '0') === '1'
 
+/// Музыка начинает играть сама только по выбору игрока: включил «Музыку при запуске» или сам запускал радио
+/// и не ставил на паузу. Без выбора лаунчер молчит до первого нажатия «играть».
+export function autostartChosen(auto: string, play: string): boolean {
+  return auto === '1' || (auto !== '0' && play === '1')
+}
+
+export const musicAutostartOn = () => autostartChosen(readPref('m-mus-auto', ''), readPref('m-mus-play', ''))
+
+/// Выбранный автозапуск уступает паузе, которую игрок нажал сам.
 const storedPlaying = () => readPref('m-mus-play', '1') !== '0'
 
 const storedRadio = () => readPref('m-mus-radio', '1') !== '0'
@@ -38,6 +48,8 @@ export interface Track {
   url?: string
   /** Имя файла в папке music — есть только у своих треков игрока. */
   file?: string
+  /** Имя в media/manifest.json: трек радио качается ядром при первом обращении (src — только его опознавательный знак). */
+  media?: string
   /** Плейлист по ссылке: играет встроенный плеер сервиса, а не наш audio. */
   link?: MusicLink
 }
@@ -49,21 +61,22 @@ const ZANE = 'https://opengameart.org/content/starlight-city-loop-included'
 
 /**
  * Радио Millida: чиптюн 115–160 BPM, мажор, громкость выровнена до −18 LUFS.
- * Первым всегда идёт «Starlight City» — с него лаунчер звучит при первом
- * запуске. Откуда треки и почему они — docs/MUSIC.md.
+ * Первым всегда идёт «Starlight City» — с него радио начинает, когда игрок
+ * его включил (само оно не стартует). Откуда треки и почему они — docs/MUSIC.md.
  */
 export const RADIO: Track[] = [
-  { src: '/music/01-starlight-city.mp3', title: 'Starlight City', author: 'Zane Little', license: 'CC0 1.0', url: ZANE },
-  { src: '/music/02-chibi-ninja.mp3', title: 'Chibi Ninja', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
-  { src: '/music/03-secret-base.mp3', title: 'Secret Base', author: 'PPEAK', license: 'CC BY 4.0', url: PPEAK },
-  { src: '/music/04-jumpshot.mp3', title: 'Jumpshot', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
-  { src: '/music/05-level-2.mp3', title: 'Level 2', author: 'Juhani Junkala', license: 'CC0 1.0', url: JUNKALA },
-  { src: '/music/06-hhavok.mp3', title: 'HHavok', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
-  { src: '/music/07-dizzy-spells.mp3', title: 'A Night Of Dizzy Spells', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/01-starlight-city.mp3', media: 'music/01-starlight-city.mp3', title: 'Starlight City', author: 'Zane Little', license: 'CC0 1.0', url: ZANE },
+  { src: '/music/02-chibi-ninja.mp3', media: 'music/02-chibi-ninja.mp3', title: 'Chibi Ninja', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/03-secret-base.mp3', media: 'music/03-secret-base.mp3', title: 'Secret Base', author: 'PPEAK', license: 'CC BY 4.0', url: PPEAK },
+  { src: '/music/04-jumpshot.mp3', media: 'music/04-jumpshot.mp3', title: 'Jumpshot', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/05-level-2.mp3', media: 'music/05-level-2.mp3', title: 'Level 2', author: 'Juhani Junkala', license: 'CC0 1.0', url: JUNKALA },
+  { src: '/music/06-hhavok.mp3', media: 'music/06-hhavok.mp3', title: 'HHavok', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
+  { src: '/music/07-dizzy-spells.mp3', media: 'music/07-dizzy-spells.mp3', title: 'A Night Of Dizzy Spells', author: 'Eric Skiff', license: 'CC BY 4.0', url: SKIFF },
 ]
 
-// Файлы лежат в public/music; сборка без медиа (чистый checkout) должна
-// собираться — флаг ставит vite.config.ts по тому, что реально лежит на диске.
+// Файлы лежат в media/music: внутри сборки или (MEDIA_REMOTE=1) на CDN, откуда их качает ядро при первом
+// обращении (media/manifest.json, src/lib/media.ts); сборка без медиа (чистый checkout) должна собираться —
+// флаг ставит vite.config.ts.
 const BUNDLED: Track[] = __HAS_BUNDLED_MUSIC__ ? RADIO : []
 
 /**
@@ -188,6 +201,28 @@ function applyLink(link: MusicLink) {
   else embedPause()
 }
 
+let wroteWaiting = false
+
+function waitForTrack(cur: Track, want: boolean) {
+  if (!cur.media || !want) return
+  if (!wroteWaiting) {
+    wroteWaiting = true
+    showToast(t('Радио ещё загружается'))
+  }
+  void ensureMedia([cur.media]).then(() => {
+    const s = useMusic.getState()
+    const now = s.tracks[s.index]
+    if (now && now.src === cur.src && mediaUrl(cur.media as string)) apply(FADE_MS)
+  })
+}
+
+/// Следующий трек качается заранее, пока играет этот: к его началу он уже в кэше.
+function prefetchNext() {
+  const { tracks, index } = useMusic.getState()
+  const next = tracks[(index + 1) % Math.max(tracks.length, 1)]
+  if (next && next.media && next !== tracks[index]) void ensureMedia([next.media])
+}
+
 function apply(fadeMs = 0) {
   const s = useMusic.getState()
   const a = getAudio()
@@ -204,13 +239,22 @@ function apply(fadeMs = 0) {
     return
   }
   dropEmbed()
-  const changed = a.src !== new URL(cur.src, location.href).href
+  const want = s.playing && !s.muted && s.level > 0
+  // Трек радио ещё не скачан: ядро качает, пока играть нечем; как только файл лёг — доигрываем с этого места.
+  const playSrc = cur.media ? mediaUrl(cur.media) : cur.src
+  if (!playSrc) {
+    clearFade()
+    if (!a.paused) a.pause()
+    waitForTrack(cur, want)
+    return
+  }
+  const changed = a.src !== new URL(playSrc, location.href).href
   if (changed) {
     clearFade()
-    a.src = cur.src
+    a.src = playSrc
     a.currentTime = 0
+    prefetchNext()
   }
-  const want = s.playing && !s.muted && s.level > 0
   if (!want) {
     if (a.paused) {
       clearFade()
@@ -531,7 +575,7 @@ function autostart() {
   if (!useUi.getState().logged) return
   const s = useMusic.getState()
   if (!s.tracks.length || s.muted || s.level === 0) return
-  if (localStorage.getItem('m-mus-auto') === '0') return
+  if (!musicAutostartOn()) return
   // A pause the user asked for outlives the restart, so autostart stays quiet.
   if (!storedPlaying()) return
   if (windowHidden) {

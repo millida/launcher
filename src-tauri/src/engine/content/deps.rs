@@ -43,7 +43,25 @@ pub(crate) fn version_satisfies(version: &str, range: &str) -> bool {
     if range.is_empty() || range == "*" {
         return true;
     }
+    if range.starts_with(['[', '(']) {
+        return maven_ranges(range).into_iter().any(|r| version_satisfies(version, &maven_range(r)));
+    }
     range.split_whitespace().all(|clause| clause_satisfies(version, clause))
+}
+
+/// Forge and NeoForge write ranges the Maven way, `(,1.13.3]` or `[1.0,2.0),[3.0,)`; a comma
+/// separates both the bounds and the alternatives, so the split is after a closing bracket.
+fn maven_ranges(spec: &str) -> Vec<&str> {
+    let mut out = vec![];
+    let mut start = 0;
+    for (i, c) in spec.char_indices() {
+        if matches!(c, ']' | ')') {
+            out.push(spec[start..=i].trim().trim_start_matches(',').trim());
+            start = i + 1;
+        }
+    }
+    out.retain(|r| !r.is_empty());
+    out
 }
 
 fn clause_satisfies(version: &str, clause: &str) -> bool {
@@ -868,6 +886,17 @@ async fn install_dep_items_job(
     Ok(report)
 }
 
+/// Version ids only of the mods that came from Modrinth. A Millida catalogue
+/// file id in the batch makes Modrinth refuse all fifty with 400, and the audit
+/// then saw no Modrinth dependency of the whole build.
+fn modrinth_version_ids(manifest: &[ContentEntry]) -> Vec<String> {
+    manifest
+        .iter()
+        .filter(|e| !e.version_id.is_empty() && !e.project_id.starts_with("cf:") && !super::versions::is_catalog_project(&e.project_id))
+        .map(|e| e.version_id.clone())
+        .collect()
+}
+
 /// `/v2/versions?ids=` answers for a whole build at once, which is what makes
 /// auditing an installed set cheap enough to run on a button press.
 async fn bulk_versions(ids: &[String]) -> HashMap<String, Value> {
@@ -1107,11 +1136,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
         }
     }
 
-    let version_ids: Vec<String> = manifest
-        .iter()
-        .filter(|e| !e.version_id.is_empty() && !e.project_id.starts_with("cf:"))
-        .map(|e| e.version_id.clone())
-        .collect();
+    let version_ids = modrinth_version_ids(&manifest);
     let versions = bulk_versions(&version_ids).await;
     for e in &manifest {
         let Some(v) = versions.get(&e.version_id) else { continue };
@@ -1137,9 +1162,10 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
             if installed.has(&dep.project_id, &title) {
                 continue;
             }
-            let fix = pick_modrinth(&ctx, &dep.project_id, &dep.version_id).await.ok().map(|p| p.node);
+            let picked = pick_modrinth(&ctx, &dep.project_id, &dep.version_id).await.map(|p| p.node);
+            let retry = retry_dep(&picked, &dep.project_id);
             let named = if title.is_empty() { dep.project_id.clone() } else { title };
-            push_missing(&mut audit, e.title.clone(), named, fix, dep.project_id);
+            push_missing(&mut audit, e.title.clone(), named, picked.ok(), retry);
         }
     }
 
@@ -1147,7 +1173,10 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
         if audit.issues.iter().any(|i| i.kind == "missing" && i.detail.contains(&id)) {
             continue;
         }
-        let fix = pick_modrinth(&ctx, catalog_slug(&id), "").await.ok().map(|p| p.node);
+        let slug = catalog_slug(&id);
+        let picked = pick_modrinth(&ctx, slug, "").await.map(|p| p.node);
+        let retry = retry_dep(&picked, slug);
+        let fix = picked.ok();
         if fix.as_ref().is_some_and(|f| installed.has(&f.project_id, &f.title)) {
             continue;
         }
@@ -1158,10 +1187,217 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
             detail: format!("нужен мод «{}», в сборке его нет", named),
             file_name: String::new(),
             fix,
-            dep: catalog_slug(&id).to_string(),
+            dep: retry,
         });
     }
     Ok(audit)
+}
+
+/// The project a click on an unresolved missing dependency looks up again. A
+/// mod id from a jar is only a guess at a Modrinth slug, and once Modrinth has
+/// answered that it has nothing for this build the button would only repeat
+/// that answer, so the issue stays a notice.
+fn retry_dep(picked: &Result<DepNode, String>, project: &str) -> String {
+    match picked {
+        Err(e) if lookup_settled(e) => String::new(),
+        _ => project.to_string(),
+    }
+}
+
+/// Mod ids the enabled mods of a build require and nothing enabled answers for, with the title
+/// of the first mod that asks for each. Read from the jars alone: no catalogue, no network.
+pub(crate) fn launch_missing(locals: &[LocalMeta], runs: &[String], loader_id: &str, loader_version: Option<&str>) -> Vec<(String, String)> {
+    let have: HashSet<&str> = locals
+        .iter()
+        .flat_map(|m| std::iter::once(m.mod_id.as_str()).chain(m.provides.iter().map(String::as_str)))
+        .filter(|id| !id.is_empty())
+        .collect();
+    let mut out: Vec<(String, String)> = vec![];
+    for m in locals {
+        let Some((requires, _)) = relations_on(m, runs) else { continue };
+        for id in requires {
+            if have.contains(id.as_str()) || is_env_mod_id(id) || loader_provides(loader_id, loader_version, id) || out.iter().any(|(o, _)| o == id) {
+                continue;
+            }
+            out.push((id.clone(), if m.title.is_empty() { m.file_name.clone() } else { m.title.clone() }));
+        }
+    }
+    out
+}
+
+/// Fewest-first cap on what one launch looks for: a build that misses more than this is broken in
+/// a way a launch should not try to repair on its own.
+const LAUNCH_DEPS_MAX: usize = 6;
+/// A dependency nothing could be found for is not asked about again for this long, as long as the
+/// mods of the build stay the same.
+const LAUNCH_DEPS_MISS_TTL: u64 = 24 * 3600;
+const LAUNCH_DEPS_MISS_FILE: &str = "millida-deps-miss.json";
+
+/// What the launch did about missing dependencies.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct LaunchDeps {
+    /// Titles of the mods it put in.
+    pub installed: Vec<String>,
+    /// Mod ids it put nothing in for: no file for this build, or the mod is in the build in a form
+    /// the jars do not show (another name, switched off).
+    pub unresolved: Vec<String>,
+}
+
+/// The enabled mods of the build: their files without `.disabled`.
+fn enabled_mod_files(profile: &str) -> HashSet<String> {
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    std::fs::read_dir(dir)
+        .map(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| !n.to_ascii_lowercase().ends_with(".disabled")).collect())
+        .unwrap_or_default()
+}
+
+/// What the build's mods folder looks like (names, sizes, times) and which game it is for, as a key:
+/// a build found complete is not read again until this changes, and a dependency that could not be
+/// found is not looked for again.
+fn folder_key(profile: &str) -> String {
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    let mut parts: Vec<String> = std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| {
+                    let m = e.metadata().ok()?;
+                    let t = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+                    Some(format!("{}:{}:{}", e.file_name().to_string_lossy(), m.len(), t))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    parts.sort();
+    if let Some(p) = load_profiles().into_iter().find(|p| p.name == profile) {
+        parts.push(format!("{}|{}|{}", p.version, p.loader_id(), p.loader_version.unwrap_or_default()));
+    }
+    sha256_hex(parts.join("\n").as_bytes())
+}
+
+/// Builds whose enabled mods were found complete (or missing only what was looked for in vain), by
+/// their folder key then: a launch with the same folder reads no jar descriptions at all.
+fn complete_builds() -> &'static std::sync::Mutex<HashMap<String, String>> {
+    static DONE: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> = std::sync::OnceLock::new();
+    DONE.get_or_init(Default::default)
+}
+
+fn known_complete(profile: &str, key: &str) -> bool {
+    complete_builds().lock().map(|m| m.get(profile).is_some_and(|k| k == key)).unwrap_or(false)
+}
+
+fn mark_complete(profile: &str, key: String) {
+    if let Ok(mut m) = complete_builds().lock() {
+        m.insert(profile.to_string(), key);
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Ids looked for in vain for these same mods within the last day.
+pub(crate) fn known_misses(record: &Value, key: &str, now: u64) -> HashSet<String> {
+    if record["key"].as_str() != Some(key) || now.saturating_sub(record["at"].as_u64().unwrap_or(0)) > LAUNCH_DEPS_MISS_TTL {
+        return HashSet::new();
+    }
+    record["ids"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default()
+}
+
+/// The build's enabled mods and what they require that nothing answers for. None for a build that
+/// is not ours to complete (a catalogue build) or loads no mods.
+async fn launch_requirements(profile: &str) -> Option<(Ctx, Vec<(String, String)>)> {
+    if is_catalog_pack(profile) {
+        return None;
+    }
+    let ctx = ctx_of(profile, "mod");
+    if !matches!(ctx.loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
+        return None;
+    }
+    let loader_version = load_profiles().into_iter().find(|p| p.name == profile).and_then(|p| p.loader_version);
+    let runs: Vec<String> = std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect();
+    let enabled = enabled_mod_files(profile);
+    let locals: Vec<LocalMeta> = scan_mods(profile).await.into_iter().filter(|m| enabled.contains(&m.file_name)).collect();
+    let missing = launch_missing(&locals, &runs, &ctx.loader_id, loader_version.as_deref());
+    Some((ctx, missing))
+}
+
+/// How many requirements of the build's mods are missing, from the jars alone (no network): the
+/// lobby reads them ahead of Play, which also brings the cache of the jars' descriptions up to date.
+pub(crate) async fn missing_launch_deps(profile: &str) -> u32 {
+    let key = folder_key(profile);
+    if known_complete(profile, &key) {
+        return 0;
+    }
+    let missing = launch_requirements(profile).await.map(|(_, m)| m.len() as u32).unwrap_or(0);
+    if missing == 0 {
+        mark_complete(profile, key);
+    }
+    missing
+}
+
+/// Missing dependencies of the build's mods, put in before the game starts: a mod requiring one the
+/// build does not have stops the loader before the window, and that is 17.5 % of all crashes. Only
+/// when something is missing does this go to Modrinth; a catalogue build is its author's and is
+/// left as shipped.
+pub(crate) async fn settle_launch_deps(app: &AppHandle, profile: &str) -> LaunchDeps {
+    let mut out = LaunchDeps::default();
+    let key = folder_key(profile);
+    if known_complete(profile, &key) {
+        return out;
+    }
+    let Some((ctx, missing)) = launch_requirements(profile).await else { return out };
+    if missing.is_empty() {
+        mark_complete(profile, key);
+        return out;
+    }
+    let miss_path = profile_dir(profile).join(LAUNCH_DEPS_MISS_FILE);
+    let record: Value = std::fs::read(&miss_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+    let known = known_misses(&record, &key, now_secs());
+    let todo: Vec<(String, String)> = missing.into_iter().filter(|(id, _)| !known.contains(id)).take(LAUNCH_DEPS_MAX).collect();
+    if todo.is_empty() {
+        // Everything missing was looked for in vain lately: nothing to do for this folder.
+        mark_complete(profile, key);
+        return out;
+    }
+    // Written before the network is asked, as if nothing will be found: a launch that runs out of
+    // its time while Modrinth hangs must not make the next one wait the same again.
+    let record_misses = |ids: &mut Vec<String>| {
+        ids.sort();
+        ids.dedup();
+        let _ = write_json_atomic(&miss_path, &serde_json::json!({ "key": folder_key(profile), "at": now_secs(), "ids": ids }));
+    };
+    let mut pessimistic: Vec<String> = known.iter().cloned().chain(todo.iter().map(|(id, _)| id.clone())).collect();
+    record_misses(&mut pessimistic);
+    let installed = installed_index(profile);
+    let picks: Vec<_> = todo.iter().map(|(id, _)| pick_modrinth(&ctx, catalog_slug(id), "")).collect();
+    let picked: Vec<Result<Pick, String>> = futures::stream::iter(picks).buffered(PARALLEL).collect().await;
+    for ((id, _needed_by), pick) in todo.iter().zip(picked) {
+        let Ok(p) = pick else {
+            out.unresolved.push(id.clone());
+            continue;
+        };
+        // Already in the build under another name, or switched off by the player: theirs to decide,
+        // and not looked for again while the mods stay the same.
+        if installed.has(&p.node.project_id, &p.node.title) {
+            out.unresolved.push(id.clone());
+            continue;
+        }
+        emit(app, "mod", 50.0, &format!("Ставим {}…", p.node.title));
+        if install_pick(&ctx, &p).await.is_ok() {
+            out.installed.push(p.node.title.clone());
+            install_required(&ctx, p.deps).await;
+        } else {
+            out.unresolved.push(id.clone());
+        }
+    }
+    if out.unresolved.is_empty() && known.is_empty() {
+        let _ = std::fs::remove_file(&miss_path);
+    } else {
+        // Keyed by the folder as this launch leaves it: what was put in is part of it.
+        let mut ids: Vec<String> = known.into_iter().chain(out.unresolved.iter().cloned()).collect();
+        record_misses(&mut ids);
+    }
+    out
 }
 
 /// A catalogue pack is judged by its author, not by the files in `mods/`: a
@@ -1199,7 +1435,47 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, BreakRule, LocalMeta};
+    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, retry_dep, BreakRule, DepNode, LocalMeta};
+
+    /// Lookup of a missing dependency -> what «Поставить» retries, if anything.
+    #[test]
+    fn a_retry_is_offered_only_while_the_catalogue_may_still_answer() {
+        let found: Result<DepNode, String> = Ok(DepNode { project_id: "baubles".into(), ..Default::default() });
+        let cases: [(Result<DepNode, String>, &str, &str); 4] = [
+            (
+                Err("404 Not Found от https://api.millida.net/v2/launcher/mr/v2/project/Thaumcraft/version".into()),
+                "",
+                "30.10: Thaumcraft is no Modrinth project, the button ended in this 404",
+            ),
+            (Err("нет версии под 1.7.10 · forge (есть под 1.20.1)".into()), "", "the project ships nothing for this build"),
+            (Err("нет связи (timeout) — https://api.modrinth.com/v2/project/baubles/version".into()), "Baubles", "the catalogue was unreachable, a later click may work"),
+            (found, "Baubles", "a resolved fix keeps its project"),
+        ];
+        for (picked, want, why) in cases {
+            assert_eq!(retry_dep(&picked, "Baubles"), want, "{}", why);
+        }
+    }
+
+    #[test]
+    fn the_modrinth_batch_carries_only_modrinth_versions() {
+        let entry = |project: &str, version: &str| crate::engine::ContentEntry {
+            kind: "mod".into(),
+            project_id: project.into(),
+            version_id: version.into(),
+            ..Default::default()
+        };
+        let manifest = vec![
+            entry("AANobbMI", "uXe0pIaz"),
+            entry("millida:sodium", "kk9nyy8do41454zngiz8u1vm"),
+            entry("cf:238222", "4712866"),
+            entry("P7dR8mSH", ""),
+        ];
+        assert_eq!(
+            modrinth_version_ids(&manifest),
+            vec!["uXe0pIaz".to_string()],
+            "a catalogue file id or a CurseForge file id in the batch makes Modrinth refuse all fifty ids with 400, and the audit loses every Modrinth dependency of the build"
+        );
+    }
 
     fn declared_jar(file: &str, id: &str, version: &str, requires: &[&str], breaks: &[(&str, &str)]) -> LocalMeta {
         LocalMeta {
@@ -1245,6 +1521,37 @@ mod tests {
             assert_eq!(got.missing, missing, "{}: missing requirements. Why pinned: {why}", incoming.file_name);
             assert_eq!(got.clashes.len(), clashes, "{}: clashes {:?}. Why pinned: {why}", incoming.file_name, got.clashes);
         }
+    }
+
+    /// The launch looks for exactly what the enabled mods require and nothing in the build answers
+    /// for: a library bundled inside another jar, the loader itself and Fabric Loader's own
+    /// MixinExtras are not missing, and a requirement asked for twice is looked for once.
+    #[test]
+    fn a_launch_looks_only_for_what_nothing_in_the_build_answers_for() {
+        let runs = vec!["fabric".to_string()];
+        let culling = declared_jar("moreculling.jar", "moreculling", "1.0", &["cloth-config", "fabric-api", "minecraft", "mixinextras"], &[]);
+        let lithium = declared_jar("lithium.jar", "lithium", "0.15", &["fabric-api", "mixinextras"], &[]);
+        let mut api = declared_jar("fabric-api.jar", "fabric-api", "0.92", &[], &[]);
+        api.provides = vec!["fabric-rendering-v1".into()];
+        let needs_module = declared_jar("x.jar", "x", "1", &["fabric-rendering-v1"], &[]);
+        let missing = |locals: &[LocalMeta], lv: Option<&str>| -> Vec<String> {
+            launch_missing(locals, &runs, "fabric", lv).into_iter().map(|(id, _)| id).collect()
+        };
+        assert_eq!(missing(&[culling.clone(), lithium.clone()], Some("0.16.10")), vec!["cloth-config", "fabric-api"], "each id once, the game and the loader left out");
+        assert_eq!(missing(&[culling.clone(), lithium.clone()], Some("0.14.21")), vec!["cloth-config", "fabric-api", "mixinextras"], "Fabric Loader older than 0.15 does not bundle MixinExtras");
+        assert_eq!(missing(&[culling.clone(), lithium, api.clone(), needs_module], Some("0.16.10")), vec!["cloth-config"], "a module inside Fabric API answers for itself");
+        let (id, by) = launch_missing(&[culling], &runs, "fabric", None).remove(0);
+        assert_eq!((id.as_str(), by.as_str()), ("cloth-config", "moreculling"), "the player hears which mod asked for it");
+        assert!(missing(&[api], None).is_empty(), "a complete build costs no lookup at all");
+    }
+
+    #[test]
+    fn a_dependency_not_found_is_not_looked_for_again_until_the_mods_change() {
+        let record = serde_json::json!({"key": "k1", "at": 1000, "ids": ["ghostlib"]});
+        assert!(known_misses(&record, "k1", 1000 + 3600).contains("ghostlib"), "same mods, within the day: skipped");
+        assert!(known_misses(&record, "k2", 1000 + 3600).is_empty(), "the mods changed: asked again");
+        assert!(known_misses(&record, "k1", 1000 + 25 * 3600).is_empty(), "a day later: asked again");
+        assert!(known_misses(&serde_json::Value::Null, "k1", 0).is_empty());
     }
 
     #[test]
@@ -1315,6 +1622,23 @@ mod tests {
         assert!(version_satisfies("1.5.0", ">=1.0.0 <2.0.0"), "space-separated clauses AND together");
         assert!(!version_satisfies("2.0.0", ">=1.0.0 <2.0.0"));
         assert!(version_satisfies("1.2.3", "^1.0.0"), "an unparsed operator is treated as still matching");
+    }
+
+    /// Installed version, NeoForge `incompatible` range -> whether the guard trips.
+    #[test]
+    fn maven_incompatibility_ranges_flag_only_the_versions_inside() {
+        let cases: [(&str, &str, bool, &str); 7] = [
+            ("1.13.11", "(,1.13.3]", false, "30.10: Cristel Lib only bars old Towns and Towers, 1.13.11 was refused at install"),
+            ("1.13.3", "(,1.13.3]", true, "the upper bound is inclusive"),
+            ("0.8.13", "[, 0.8.0)", false, "30.10: More Culling only bars Sodium before 0.8, the space in the range must not matter"),
+            ("0.7.9", "[, 0.8.0)", true, "an old Sodium still trips the guard"),
+            ("2.5", "[1.0,2.0),[3.0,)", false, "between two barred ranges"),
+            ("3.1", "[1.0,2.0),[3.0,)", true, "the second alternative counts too"),
+            ("1.0", "[0,)", true, "an open range bars every version"),
+        ];
+        for (version, range, trips, why) in cases {
+            assert_eq!(version_satisfies(version, range), trips, "{} in {}: {}", version, range, why);
+        }
     }
 
     /// вход -> вердикт. A mod id read out of a jar has to reach the right catalog

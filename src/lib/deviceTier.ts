@@ -1,4 +1,4 @@
-import { gpuClass } from './perfTier'
+import { gpuClass, type GpuClass } from './perfTier'
 
 export type DeviceTier = 'low' | 'mid' | 'high'
 
@@ -94,6 +94,108 @@ export function sceneFpsCap(tier: DeviceTier, gpu: string, forced: DeviceTier | 
 }
 
 export const currentSceneFpsCap = (): number => sceneFpsCap(currentDeviceTier(), webviewGpu(), perfOverride())
+
+/**
+ * Границы слабого ПК по точным данным ядра (WEAK-06, измерено на 75 218 установках Windows за неделю:
+ * так лёгкий режим берёт 13,3% парка, а не 6,6% по подсказкам вебвью).
+ * Физические ядра, не потоки: 2 ядра / 4 потока тянут стекло и анимации не лучше двух потоков.
+ */
+const LITE_CORES = 2
+/** «6 ГБ» ядро видит как 6144 МиБ и меньше (часть памяти уходит встроенной видеокарте): «8 ГБ» показывает ≈7,8 ГБ и сюда не попадает. */
+export const LITE_RAM_MB = 6144
+const WIN10_RAM_MB = 8448
+
+/** Железо по данным ядра (device_specs): видеокарты, память, ядра, потоки, система. Приходит по IPC, помнится между запусками. */
+export interface HardwareHint {
+  gpus: string[]
+  ramMb: number
+  /** Физические ядра; 0 — неизвестно (ядро не сказало, или сведения записаны старой версией). */
+  cores: number
+  threads: number
+  os: string
+  osVersion: string
+}
+
+export interface LiteInput extends DeviceProfile {
+  // deviceMemory / hardwareConcurrency — подсказки вебвью, только пока ядро не ответило (первый запуск на ПК):
+  // «6 ГБ» они округляют до 4 или 8, а 2 ядра / 4 потока считают четырьмя ядрами.
+  /** Ручной выбор в настройках («Слабый ПК» / «Полное»); null — «Авто». */
+  forced: DeviceTier | null
+  /** Графика окна уже упала дважды (lib/gpuLite): сам WebGL выключен, стекло и видео тоже не нужны. */
+  gpuLite: boolean
+  /** Имя видеокарты окна из первого контекста WebGL (lib/deviceTier.webviewGpu); программная отрисовка рисует всё на процессоре. */
+  gpu?: string
+  /** Сведения ядра; пока их нет (первый запуск), решают только подсказки вебвью. */
+  hw?: HardwareHint | null
+}
+
+/**
+ * Видеокарта, на которой рисует окно лаунчера, слабая (встроенная Intel/AMD, старая дискретная).
+ * Имя от самого вебвью (WebGL) — точнее всего. Иначе список карт ядра: слабая, если среди них
+ * нет ни одной средней и мощной; гибридный ноутбук (встройка + дискретная) без вестей от вебвью
+ * считаем способным — какая из двух рисует окно, ядро не говорит.
+ */
+export function weakWindowGpu(webviewGpu: string | undefined, cards: readonly string[] | undefined): boolean {
+  const weak = (c: GpuClass) => c === 'igpu' || c === 'weak'
+  if (webviewGpu) {
+    const c = gpuClass(webviewGpu)
+    if (c !== 'unknown') return weak(c)
+  }
+  const classes = (cards ?? []).map((n) => gpuClass(n))
+  if (!classes.length) return false
+  return classes.some(weak) && !classes.some((c) => c === 'mid' || c === 'high')
+}
+
+/**
+ * Слабый ПК в узком смысле — тянуть на нём трёхмерную сцену (three.js, WebGL) не стоит:
+ * ≤6 ГБ памяти, ≤2 физических ядра, программная отрисовка, упавший WebGL или выбор «Слабый ПК».
+ * Встроенная видеокарта сюда не входит: 3D-персонаж остаётся (после простоя), а вот стекло
+ * и украшательские анимации ей режет liteVerdict.
+ */
+export function weakVerdict(p: LiteInput): boolean {
+  if (p.forced === 'low') return true
+  if (p.forced === 'high') return false
+  if (p.gpuLite || SOFTWARE_GPU.test(p.gpu || '') || (p.hw?.gpus ?? []).some((g) => SOFTWARE_GPU.test(g))) return true
+  return weakHardware(p)
+}
+
+/**
+ * Память и ядра слабые. Решает ядро, если оно ответило: точная память, физические ядра (нет
+ * числа ядер — потоки). Подсказки вебвью берутся только без ответа ядра, по каждой величине отдельно.
+ * На Windows пустой список видеокарт ядра — нет ни одной аппаратной (виртуалка, сбой драйвера): рисует процессор.
+ */
+export function weakHardware(p: Pick<LiteInput, 'deviceMemory' | 'hardwareConcurrency' | 'hw'>): boolean {
+  const hw = p.hw
+  const ram = hw?.ramMb || 0
+  const weakMemory = ram > 0 ? ram <= LITE_RAM_MB : typeof p.deviceMemory === 'number' && p.deviceMemory <= LOW_MEMORY_GB
+  const cores = hw?.cores || 0
+  const threads = hw?.threads || 0
+  const weakCores =
+    cores > 0
+      ? cores <= LITE_CORES
+      : threads > 0
+        ? threads <= LITE_CORES
+        : typeof p.hardwareConcurrency === 'number' && p.hardwareConcurrency <= LITE_CORES
+  const noHardwareGpu = !!hw && hw.os === 'windows' && ram > 0 && hw.gpus.length === 0
+  return weakMemory || weakCores || noHardwareGpu
+}
+
+/**
+ * Включать ли «лёгкий режим» интерфейса: без стекла (backdrop-filter), без бесконечных
+ * украшательских анимаций, без видеофонов. Заранее по железу, а не после первых тормозов.
+ * Главное — видеокарта окна (телеметрия: встроенная Intel — 27% парка, дорогое стекло и
+ * анимации съедают её кадры), затем Windows 10 с ≤8 ГБ и всё из weakVerdict. Ручной выбор бьёт
+ * авто: «Слабый ПК» включает режим всегда, «Полное» — выключает (сам WebGL при этом остаётся
+ * выключенным в lib/gpuLite).
+ */
+export function liteVerdict(p: LiteInput): boolean {
+  if (p.forced === 'low') return true
+  if (p.forced === 'high') return false
+  if (weakVerdict(p)) return true
+  if (weakWindowGpu(p.gpu, p.hw?.gpus)) return true
+  const ram = p.hw?.ramMb || 0
+  return p.hw?.os === 'windows' && /^10\b/.test(p.hw.osVersion) && ram > 0 && ram <= WIN10_RAM_MB
+}
 
 let cached: DeviceTier | null = null
 

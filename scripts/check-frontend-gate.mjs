@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 // The core reinstalls the launcher until the frontend calls `frontend_ready`,
@@ -66,4 +66,26 @@ if (htmlBroken.length > 0) {
   )
 }
 
-console.log(`Отметка ${MARKER} на месте: ${hits.join(', ')}; синтаксиса новее Safari 13 в чанках нет`)
+// Откуда берутся музыка, ролики-обои и страница Arcania, решает одна переключалка, MEDIA_REMOTE (docs/MEDIA.md).
+// Сборка, которая с ней не согласна, либо тащит в установщик лишние ~34 МиБ, либо оставляет игрока без медиа:
+// ядро (media.rs) читает ту же переменную и в такой сборке файлов не качает.
+const remote = process.env.MEDIA_REMOTE === '1'
+const mediaDist = join(root, 'media')
+const manifestFile = join(process.cwd(), 'media', 'manifest.json')
+if (remote && existsSync(mediaDist)) {
+  throw new Error('MEDIA_REMOTE=1, а в dist/media лежат файлы: установщик не станет легче, а ядро их всё равно будет качать')
+}
+if (!remote && existsSync(manifestFile)) {
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
+  const lacking = Object.entries(manifest.files ?? {})
+    .filter(([name, f]) => !existsSync(join(mediaDist, name)) || statSync(join(mediaDist, name)).size !== f.size)
+    .map(([name]) => name)
+  if (lacking.length > 0) {
+    throw new Error(
+      `без MEDIA_REMOTE медиа должно ехать внутри сборки, а в dist/media нет (или не тот размер): ${lacking.slice(0, 5).join(', ')}` +
+        `${lacking.length > 5 ? ` и ещё ${lacking.length - 5}` : ''}. Файлы берутся из media/ (vite.config.ts, bundledMedia)`,
+    )
+  }
+}
+
+console.log(`Отметка ${MARKER} на месте: ${hits.join(', ')}; синтаксиса новее Safari 13 в чанках нет; медиа: ${remote ? 'качает ядро (MEDIA_REMOTE=1)' : 'внутри сборки'}`)

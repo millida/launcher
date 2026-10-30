@@ -72,6 +72,9 @@ pub fn watch(_window: &tauri::WebviewWindow) {}
 #[cfg(not(target_os = "windows"))]
 pub fn set_low_memory(_window: &tauri::WebviewWindow, _on: bool) {}
 
+#[cfg(not(target_os = "windows"))]
+pub fn set_suspended(_window: &tauri::WebviewWindow, _on: bool) {}
+
 #[cfg(target_os = "windows")]
 fn kind_name(kind: webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PROCESS_FAILED_KIND) -> &'static str {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
@@ -168,6 +171,35 @@ pub fn set_low_memory(window: &tauri::WebviewWindow, on: bool) {
             COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
         };
         let _ = core.SetMemoryUsageTargetLevel(level);
+    });
+}
+
+/// A window parked in the tray while an install finishes: WebView2 stops its
+/// timers and animations and hands the renderer's memory back (TrySuspend needs
+/// IsVisible=false first). Microsoft advises against combining it with the LOW
+/// memory level, so the level goes back to normal here.
+#[cfg(target_os = "windows")]
+pub fn set_suspended(window: &tauri::WebviewWindow, on: bool) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2_19, ICoreWebView2_3, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL};
+    use webview2_com::TrySuspendCompletedHandler;
+    use windows::core::Interface;
+
+    let _ = window.with_webview(move |webview| unsafe {
+        let controller = webview.controller();
+        let Ok(core) = controller.CoreWebView2() else { return };
+        if let Ok(c19) = core.cast::<ICoreWebView2_19>() {
+            let _ = c19.SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL);
+        }
+        let Ok(core3) = core.cast::<ICoreWebView2_3>() else { return };
+        if on {
+            let _ = controller.SetIsVisible(false);
+            let handler = TrySuspendCompletedHandler::create(Box::new(|_, _| Ok(())));
+            let _ = core3.TrySuspend(&handler);
+        } else {
+            // Becoming visible resumes it as well; Resume covers a show that skipped that.
+            let _ = core3.Resume();
+            let _ = controller.SetIsVisible(true);
+        }
     });
 }
 

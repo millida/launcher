@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 
-const PATTERNS = ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.mjs']
+const PATTERNS = ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.mjs', '.github/scripts/*.test.mjs']
 const CONCURRENCY = Math.max(1, Math.min(4, navigator.hardwareConcurrency ?? 4))
 
 const filters = process.argv.slice(2)
@@ -8,7 +8,7 @@ const filters = process.argv.slice(2)
 const collect = async () => {
   const found = new Set()
   for (const pattern of PATTERNS) {
-    for await (const file of new Bun.Glob(pattern).scan('.')) found.add(file.replaceAll('\\', '/'))
+    for await (const file of new Bun.Glob(pattern).scan({ cwd: '.', dot: pattern.startsWith('.') })) found.add(file.replaceAll('\\', '/'))
   }
   const all = [...found].sort()
   return filters.length ? all.filter((f) => filters.some((needle) => f.includes(needle))) : all
@@ -16,7 +16,7 @@ const collect = async () => {
 
 const runFile = (file) =>
   new Promise((resolve) => {
-    const child = spawn(process.execPath, ['test', file], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(process.execPath, ['test', './' + file], { stdio: ['ignore', 'pipe', 'pipe'] })
     let out = ''
     child.stdout.on('data', (d) => void (out += d))
     child.stderr.on('data', (d) => void (out += d))

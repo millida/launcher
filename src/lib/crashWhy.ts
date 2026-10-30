@@ -15,10 +15,14 @@ export function modTitle(file: string): string {
   return (cut > 0 ? base.slice(0, cut) : base) || base
 }
 
+export function isModCrash(kind: string | null | undefined): boolean {
+  return MOD_KINDS.includes(kind ?? '')
+}
+
 export function crashWhy(info: Pick<CrashInfo, 'kind' | 'culprits'>): string | null {
   const kind = info.kind ?? ''
   const mod = info.culprits?.[0]
-  if (MOD_KINDS.includes(kind))
+  if (isModCrash(kind))
     return mod
       ? t('Мод «{mod}» не работает с этой сборкой. Это проблема мода, а не лаунчера.', { mod: modTitle(mod) })
       : t('Один из модов не работает с этой сборкой. Это проблема модов, а не лаунчера.')

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from 'react'
-import { renderLive } from '../../lib/renderGate'
 import { Icon } from '../Icon'
 import { anarchyOnlineShown } from '../playhub/AnarchyTile'
 import { ANARCHY_HERO, LAVA_STRIP, OBSIDIAN_TILE } from '../playhub/anarchyArt'
@@ -31,6 +30,7 @@ import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
 import { arcaniaLead, isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { ArcaniaCover, ArcaniaFx, ArcaniaName } from '../arcania/ArcaniaCard'
 import { enterArcania } from '../arcania/transition'
+import { liveInterval } from '../../lib/liveInterval'
 
 type PackFace = PrisonFace
 
@@ -63,12 +63,11 @@ export function Recommend({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (!on || !shown || !slides) return
-    const id = window.setInterval(() => {
-      if (hovered.current || !renderLive()) return
+    return liveInterval(() => {
+      if (hovered.current) return
       setDir(1)
       setStep((s) => s + 1)
     }, PROMO_ROTATE_MS)
-    return () => window.clearInterval(id)
   }, [on, shown, !!slides, touch])
 
   useEffect(() => {

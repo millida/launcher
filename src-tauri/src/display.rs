@@ -23,7 +23,7 @@ pub use win::watch;
 
 #[cfg(target_os = "windows")]
 mod win {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
     use std::sync::OnceLock;
     use std::time::Duration;
     use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
@@ -56,13 +56,21 @@ mod win {
     /// when it comes back instead of being applied to nothing.
     static MINIMIZED: AtomicBool = AtomicBool::new(false);
     static DEFERRED: AtomicBool = AtomicBool::new(false);
+    static WANT_VISIBLE: AtomicBool = AtomicBool::new(true);
+    static MEMORY_DUE: AtomicBool = AtomicBool::new(false);
+    static APPLY_QUEUED: AtomicBool = AtomicBool::new(false);
+    /// What the webview was last told: 0 nothing yet, 1 hidden, 2 visible.
+    static APPLIED: AtomicU8 = AtomicU8::new(0);
 
     pub fn watch(app: &AppHandle) {
         let Some(window) = app.get_webview_window("main") else { return };
         let Ok(hwnd) = window.hwnd() else { return };
-        if APP.set(app.clone()).is_err() {
-            return;
-        }
+        // A rebuilt main window (background.rs) is a new HWND and needs the
+        // subclass again; the app handle stays the same.
+        let _ = APP.set(app.clone());
+        MINIMIZED.store(false, Ordering::Relaxed);
+        DEFERRED.store(false, Ordering::SeqCst);
+        APPLIED.store(0, Ordering::SeqCst);
         // unsafe: attach a message handler to the main window (WinAPI SetWindowSubclass).
         unsafe {
             SetWindowSubclass(hwnd.0 as HWND, Some(proc), SUBCLASS_ID, 0);
@@ -90,12 +98,12 @@ mod win {
         // Убранное в трей окно (hide) не шлёт WM_SIZE: WebView2 считал себя
         // видимым и рисовал лобби каждый кадр прямо поверх идущей игры.
         if msg == WM_SHOWWINDOW {
-            set_webview_visible(wparam != 0 && !MINIMIZED.load(Ordering::Relaxed));
+            set_webview_visible(wparam != 0 && !MINIMIZED.load(Ordering::Relaxed), false);
         }
         if msg == WM_SIZE {
             let away = wparam == SIZE_MINIMIZED;
-            MINIMIZED.store(away, Ordering::Relaxed);
-            set_webview_visible(!away);
+            let was = MINIMIZED.swap(away, Ordering::Relaxed);
+            set_webview_visible(!away, was != away);
             if !away && DEFERRED.swap(false, Ordering::SeqCst) {
                 schedule();
             }
@@ -110,19 +118,53 @@ mod win {
     /// screen; nothing in Tauri does it, so the message loop does. It is also
     /// what stops the wallpaper from being rendered while nobody looks at it —
     /// in the tray (WM_SHOWWINDOW) as well as minimized (WM_SIZE).
-    fn set_webview_visible(visible: bool) {
+    /// `memory`: a minimize or restore also moves the WebView2 memory target
+    /// (LOW while minimized, NORMAL back) without waiting for the page.
+    fn set_webview_visible(visible: bool, memory: bool) {
         // Окно разрушается на выходе и шлёт WM_SIZE; событие в главный поток
         // после разрушения цикла роняет tao («cannot move state from Destroyed»).
         if crate::exiting() {
             return;
         }
-        let Some(app) = APP.get().cloned() else { return };
-        let _ = app.clone().run_on_main_thread(move || {
-            let Some(window) = app.get_webview_window("main") else { return };
-            let _ = window.with_webview(move |webview| unsafe {
-                let _ = webview.controller().SetIsVisible(visible);
-            });
+        WANT_VISIBLE.store(visible, Ordering::SeqCst);
+        if memory {
+            MEMORY_DUE.store(true, Ordering::SeqCst);
+        }
+        if APPLY_QUEUED.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let Some(app) = APP.get().cloned() else {
+            APPLY_QUEUED.store(false, Ordering::SeqCst);
+            return;
+        };
+        // This runs inside the window procedure, and Tauri runs a main-thread task inline when it is
+        // asked from the main thread: calling WebView2 here let the messages it sends back to this
+        // window re-enter the procedure until the main thread's stack ran out (2.0.284, 0xc00000fd
+        // on «Играть»). Posted from another thread, the task runs after this message returns.
+        tauri::async_runtime::spawn(async move {
+            let _ = app.clone().run_on_main_thread(move || apply_webview_visible(&app));
         });
+    }
+
+    fn apply_webview_visible(app: &AppHandle) {
+        APPLY_QUEUED.store(false, Ordering::SeqCst);
+        if crate::exiting() {
+            return;
+        }
+        let visible = WANT_VISIBLE.load(Ordering::SeqCst);
+        let memory = MEMORY_DUE.swap(false, Ordering::SeqCst);
+        let state = if visible { 2 } else { 1 };
+        if APPLIED.load(Ordering::SeqCst) == state && !memory {
+            return;
+        }
+        let Some(window) = app.get_webview_window("main") else { return };
+        APPLIED.store(state, Ordering::SeqCst);
+        let _ = window.with_webview(move |webview| unsafe {
+            let _ = webview.controller().SetIsVisible(visible);
+        });
+        if memory {
+            crate::webview_health::set_low_memory(&window, !visible);
+        }
     }
 
     fn schedule() {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
 import { importInstance, importPackFile, scanImports, tlauncherNick } from '../ipc/commands'
@@ -10,7 +10,7 @@ import { TOUR_STEPS } from '../state/tour'
 import { getAccount, isOfflineNick, useAccounts } from '../state/accounts'
 import { foundKey } from '../lib/imports'
 import { setSoundMode, soundMode } from '../lib/sound'
-import { setMusicAutostart, useMusic } from '../state/music'
+import { musicAutostartOn, setMusicAutostart, useMusic } from '../state/music'
 import { track } from '../lib/telemetry'
 import { trackImportFailure } from '../lib/importTrack'
 import { MovePanel } from './MoveBuilds'
@@ -23,6 +23,9 @@ import { INVITEE_GIFTS } from '../lib/inviteGifts'
 import { t, useT } from '../i18n'
 import { isPickCancelled } from '../lib/coreErrors'
 import { OnboardingSurvey } from '../components/OnboardingSurvey'
+import { PcStep } from '../components/GfxPresets'
+import { globalChoice, setGlobalChoice, type GfxChoice } from '../lib/gfxPresets'
+import { GRAPHICS_PRESETS_PUBLIC } from '../lib/graphicsRelease'
 
 function Welcome({ nick }: { nick: string }) {
   const t = useT()
@@ -316,9 +319,32 @@ function keepNick(nick: string) {
   showToast(t('Ник из TLauncher сохранён: {nick}', { nick }))
 }
 
+/** Шаг «Какой у тебя компьютер?». */
+const GFX_STEP = GRAPHICS_PRESETS_PUBLIC ? 3 : -1
+const LOOK_STEP = GRAPHICS_PRESETS_PUBLIC ? 4 : 3
+
+/** Выбор на шаге: по умолчанию «Авто — под мой ПК». Общим он становится по «Далее». */
+let pendingGfx: GfxChoice | null = null
+
+function GraphicsStep() {
+  const [value, setValue] = useState<GfxChoice>(() => pendingGfx ?? globalChoice() ?? 'auto')
+  const pick = useCallback((c: GfxChoice) => {
+    pendingGfx = c
+    setValue(c)
+  }, [])
+  return <PcStep value={value} onPick={pick} />
+}
+
+/** «Далее» на шаге графики: выбор встаёт во все сборки перед их запуском (шаг не последний, поэтому не «Готово»). */
+function commitGfx() {
+  const choice = pendingGfx ?? globalChoice() ?? 'auto'
+  setGlobalChoice(choice)
+  track('screen_view', { screen: 'onboarding-gfx', preset: choice })
+}
+
 function LookStep() {
   const t = useT()
-  const [music, setMusic] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
+  const [music, setMusic] = useState(musicAutostartOn)
   const [sound, setSound] = useState(() => soundMode() !== 'off')
 
   return (
@@ -416,7 +442,7 @@ export function OnboardingModal() {
 
   return (
     <div className="modal-bg open vis" id="onbModal">
-      <div className="modal onb-modal">
+      <div className={'modal onb-modal' + (step === GFX_STEP ? ' onb-gfx' : '')}>
         <div className="onb-bar">
           {Array.from({ length: ONBOARDING_STEPS }, (_, i) => (
             <span key={i} className={'onb-bar-seg' + (i <= step ? ' on' : '')}></span>
@@ -426,9 +452,10 @@ export function OnboardingModal() {
         {step === 0 ? <Welcome nick={acc ? acc.nick : ''} /> : null}
         {step === INVITER_STEP ? <InviterStep /> : null}
         {step === 2 ? <ImportStep /> : null}
-        {step === 3 ? <LookStep /> : null}
-        {step === 4 ? <OnboardingSurvey /> : null}
-        {step === 5 ? <ReadyStep /> : null}
+        {step === GFX_STEP ? <GraphicsStep /> : null}
+        {step === LOOK_STEP ? <LookStep /> : null}
+        {step === LOOK_STEP + 1 ? <OnboardingSurvey /> : null}
+        {step === LOOK_STEP + 2 ? <ReadyStep /> : null}
 
         <div className="onb-actions">
           {step > 0 ? (
@@ -454,7 +481,11 @@ export function OnboardingModal() {
             <button
               className={'btn md ' + (step === INVITER_STEP ? 'secondary' : 'primary')}
               data-track={step === INVITER_STEP ? 'onb_ref_skip' : undefined}
-              onClick={() => onboardingNext(!hasMillidaAccount())}
+              data-gfx-done={step === GFX_STEP ? '' : undefined}
+              onClick={() => {
+                if (step === GFX_STEP) commitGfx()
+                onboardingNext(!hasMillidaAccount())
+              }}
             >
               {step === 0 ? t('Поехали') : step === INVITER_STEP ? t('Пропустить') : t('Далее')}
             </button>

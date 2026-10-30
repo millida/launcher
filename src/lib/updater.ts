@@ -7,9 +7,11 @@ import {
   appVersion,
   isFlatpak,
   showAfterUpdate,
+  updateDeltaStage,
   updateFallbackCheck,
   updateFallbackRun,
   updateFallbackStage,
+  updateStaged,
   type FallbackUpdate,
 } from '../ipc/commands'
 import { readPref } from './prefs'
@@ -17,7 +19,9 @@ import { showToast } from '../state/ui'
 import { useUpdate } from '../state/update'
 import { openExt } from './api'
 import { reportError } from './crash'
-import { cancelAppExit, trackAppExit, trackFailure } from './telemetry'
+import { cancelAppExit, track, trackAppExit, trackFailure } from './telemetry'
+import { classifyError } from './errorKind'
+import { CheckBackoff, FailureSeries, isCriticalRelease } from './updatePolicy'
 import { t, tx } from '../i18n'
 
 export interface UpdateInfo {
@@ -29,6 +33,8 @@ export interface UpdateInfo {
 export const DOWNLOAD_PAGE = 'https://millida.net/launcher'
 
 const FAILED_KEY = 'm-upd-failed'
+/// The version whose patch update did not install: the full installer is taken for it from then on, in every session.
+const DELTA_BAD_KEY = 'm-upd-delta-bad'
 const BOOT_KEY = 'm-upd-boot'
 const BOOT_TRIES = 2
 const PROBE_EVERY = 1800000
@@ -40,18 +46,116 @@ let downloaded = false
 let installing = false
 let fallback: FallbackUpdate | null = null
 let fallbackFile: string | null = null
+/// Для какой версии скачан fallbackFile: файл прошлого выпуска не ответ на более новый.
+let fallbackFileVersion: string | null = null
 let fallbackStaging: Promise<string | null> | null = null
 let lastProbe = 0
+/// Versions a patch update was already tried for in this session (found or not).
+const deltaTried = new Set<string>()
+
+/// Failed checks in a row push the next automatic check back (30 min, 1 h, 2 h ... up to 6 h).
+const backoff = new CheckBackoff()
+/// A failure is told once per series, until something works again.
+const series = new FailureSeries()
+let lastCheckMs = 0
 
 export const pendingUpdate = () => pending
+
+/** Только для тестов: состояние модуля между прогонами. */
+export function __resetUpdaterForTests() {
+  pending = null
+  current = null
+  downloading = null
+  downloaded = false
+  installing = false
+  fallback = null
+  fallbackFile = null
+  fallbackFileVersion = null
+  fallbackStaging = null
+  lastProbe = 0
+  managedOutside = null
+  deltaTried.clear()
+}
 export const updateReady = () => (downloaded && !!current) || !!fallbackFile
 
+/// The staged file is a new exe built from a patch (not an installer): the core swaps it in place.
+const stagedByPatch = () => !!fallbackFile && /\.delta\.exe$/i.test(fallbackFile)
+
+const deltaBad = (version: string): boolean => {
+  try {
+    return localStorage.getItem(DELTA_BAD_KEY) === version
+  } catch {
+    return false
+  }
+}
+
+function markDeltaBad(version: string) {
+  try {
+    localStorage.setItem(DELTA_BAD_KEY, version)
+  } catch (e) {
+    console.warn('[updater] the failed patch was not remembered', e)
+  }
+}
+
+/// The patch did not install: forget the staged exe, remember the version, and let the full installer take its place.
+function dropDelta(e: unknown) {
+  const version = fallback?.version || useUpdate.getState().version || ''
+  if (version) markDeltaBad(version)
+  fallbackFile = null
+  fallbackStaging = null
+  track('perf', { what: 'update_download', where: 'delta', step: 'install', kind: classifyError(String(e)) }, { durationMs: 0, ok: false })
+}
+
 /// Сбой обновления: отчёт в /errors и событие телеметрии; если выход уже
-/// записан перед установкой — он не случился.
+/// записан перед установкой — он не случился. Повторный сбой той же серии (сеть
+/// не отвечает, проверка падает каждые полчаса) не шлётся: 66% всех сетевых
+/// ошибок за неделю 19–26.10.2026 были именно этим.
 function updateFailed(where: string, e: unknown) {
   cancelAppExit()
+  backoff.failed()
+  if (!series.first()) return
+  track('perf', { what: 'update_check', where: 'page', step: where, kind: classifyError(String(e)) }, { durationMs: lastCheckMs, ok: false })
   void reportError(where, e)
   trackFailure('updater', e, { step: where })
+}
+
+/// A check that came back, with or without an update: the series of failures is over.
+function checkWorked(via: 'plugin' | 'core', ms: number, found: boolean, critical: boolean) {
+  backoff.worked()
+  series.ended()
+  track('perf', { what: 'update_check', where: via, found, ...(critical ? { critical: true } : {}) }, { durationMs: Math.round(ms), ok: true })
+}
+
+/// The plugin's check, timed. A failure is left for the caller to report with its own step name.
+async function timedCheck(): Promise<Update | null> {
+  const t0 = performance.now()
+  try {
+    const upd = await check()
+    lastCheckMs = Math.round(performance.now() - t0)
+    checkWorked('plugin', lastCheckMs, !!upd, !!upd && isCriticalRelease(upd.rawJson))
+    return upd
+  } catch (e) {
+    lastCheckMs = Math.round(performance.now() - t0)
+    throw e
+  }
+}
+
+/// Download and install work stays out of the way of a launch and of installs: it starts when
+/// nothing of the kind is running (the page registers what "running" means).
+let busyProbe: () => boolean = () => false
+export function setUpdateBusyProbe(fn: () => boolean) {
+  busyProbe = fn
+}
+
+const QUIET_FIRST_MS = 15_000
+const QUIET_POLL_MS = 10_000
+
+function afterQuiet(run: () => void) {
+  const attempt = () => {
+    if (busyProbe()) setTimeout(attempt, QUIET_POLL_MS)
+    else run()
+  }
+  setTimeout(attempt, QUIET_FIRST_MS)
 }
 
 const updatesAllowed = () => hasTauri() && !import.meta.env.DEV
@@ -108,15 +212,56 @@ function remember(upd: Update) {
   pending = { version: upd.version, notes: upd.body || '', install: async () => applyUpdate() }
 }
 
+/// Patch update (Windows): the core builds the new exe from the installed one and a small patch and checks the
+/// signature of the finished file. True = staged, no full download needed. Any failure is quiet: the usual road follows.
+async function tryDelta(version: string): Promise<boolean> {
+  if (deltaTried.has(version) || deltaBad(version) || !(await updatesReady())) return false
+  deltaTried.add(version)
+  const t0 = performance.now()
+  try {
+    const d = await updateDeltaStage()
+    if (!d) return false
+    fallback = { version: d.version, notes: current?.body || '', url: '', file: '', signature: '', source: '' } as FallbackUpdate
+    fallbackFile = d.path
+    useUpdate.getState().set({ version: d.version, staged: true, manual: true, failed: false })
+    pending = { version: d.version, notes: current?.body || '', install: async () => applyFallback() }
+    track(
+      'perf',
+      { what: 'update_download', where: 'delta', kb: Math.round(d.patchBytes / 1024), fullKb: Math.round(d.fullBytes / 1024) },
+      { durationMs: Math.round(performance.now() - t0), ok: true },
+    )
+    return true
+  } catch (e) {
+    track('perf', { what: 'update_download', where: 'delta', step: 'stage', kind: classifyError(String(e)) }, { durationMs: Math.round(performance.now() - t0), ok: false })
+    return false
+  }
+}
+
+/// The background download of a found update: a patch when there is one, the plugin's full download otherwise.
+async function stageOrDownload(version: string): Promise<void> {
+  if (await tryDelta(version)) return
+  // Без патча — обычный путь: ядро качает и держит файл на диске, плагин только запасной. Патч уже пробовали (или
+  // отказались от него) в этом проходе: ядру велено сразу взять установщик, а не сверять манифест и хеш exe второй раз
+  // и не качать тот же битый патч дважды (С3 второго ревью).
+  await stageRegular(version, true)
+}
+
 function ensureDownloaded(): Promise<Update> {
   if (!current) return Promise.reject(new Error(t('нет обновления')))
   const upd = current
   if (downloaded) return Promise.resolve(upd)
   if (!downloading) {
-    downloading = upd.download().then(() => {
-      downloaded = true
-      useUpdate.getState().set({ staged: true })
-    })
+    const t0 = performance.now()
+    let bytes = 0
+    downloading = upd
+      .download((e) => {
+        if (e.event === 'Progress') bytes += e.data.chunkLength || 0
+      })
+      .then(() => {
+        downloaded = true
+        useUpdate.getState().set({ staged: true })
+        track('perf', { what: 'update_download', where: 'plugin', kb: Math.round(bytes / 1024) }, { durationMs: Math.round(performance.now() - t0), ok: true })
+      })
   }
   return downloading.then(() => upd)
 }
@@ -184,30 +329,41 @@ async function pluginGaveUp(): Promise<boolean> {
 async function probeFallback(): Promise<FallbackUpdate | null> {
   if (!(await updatesReady())) return null
   lastProbe = Date.now()
+  const t0 = performance.now()
   try {
     const upd = await updateFallbackCheck()
+    lastCheckMs = Math.round(performance.now() - t0)
+    checkWorked('core', lastCheckMs, !!upd, !!upd?.critical)
     if (!upd) return null
     if (!fallback || fallback.version !== upd.version) {
       fallback = upd
-      fallbackFile = null
-      fallbackStaging = null
+      if (fallbackFileVersion !== upd.version) {
+        fallbackFile = null
+        fallbackFileVersion = null
+        fallbackStaging = null
+      }
     }
     pending = { version: upd.version, notes: upd.notes || '', install: async () => applyFallback() }
     useUpdate.getState().set({ version: upd.version, staged: !!fallbackFile, manual: true, failed: false })
-    void stageFallback().catch(() => {})
+    // Downloaded in the background once nothing else is going on; a critical release is staged by bootUpdate itself.
+    if (!upd.critical) afterQuiet(() => void stageFallback().catch((e) => console.warn('[updater] background staging failed', e)))
     return upd
   } catch (e) {
+    lastCheckMs = Math.round(performance.now() - t0)
     updateFailed('updater-fallback', e)
     return null
   }
 }
 
-function stageFallback(): Promise<string | null> {
+function stageFallback(skipDelta = false): Promise<string | null> {
   if (fallbackFile) return Promise.resolve(fallbackFile)
   if (!fallbackStaging) {
-    fallbackStaging = updateFallbackStage()
+    const t0 = performance.now()
+    fallbackStaging = updateFallbackStage(skipDelta || deltaBad(fallback?.version || ''))
       .then((res) => {
+        if (res) track('perf', { what: 'update_download', where: 'core' }, { durationMs: Math.round(performance.now() - t0), ok: true })
         fallbackFile = res ? res.path : null
+        fallbackFileVersion = res ? res.version : null
         if (res) useUpdate.getState().set({ version: res.version, staged: true, manual: true })
         return fallbackFile
       })
@@ -218,6 +374,45 @@ function stageFallback(): Promise<string | null> {
       })
   }
   return fallbackStaging
+}
+
+/// Скачанное ядром лежит на диске и переживает окно (трей, игра): новая страница берёт его, а не качает
+/// ~55 МиБ заново, и «Выход» из трея ставит его. Тихо возвращает null, если скачанного нет.
+export async function adoptStaged(): Promise<string | null> {
+  if (fallbackFile) return fallbackFileVersion
+  try {
+    const staged = await updateStaged()
+    if (!staged || fallbackFile) return fallbackFileVersion
+    fallbackFile = staged.path
+    fallbackFileVersion = staged.version
+    fallbackStaging = Promise.resolve(staged.path)
+    pending = { version: staged.version, notes: pending?.version === staged.version ? pending.notes : '', install: async () => applyFallback() }
+    useUpdate.getState().set({ version: staged.version, staged: true, manual: true, failed: false })
+    return staged.version
+  } catch (e) {
+    console.warn('[updater] the core did not report a staged update', e)
+    return null
+  }
+}
+
+/// Обычный выпуск качает ядро: на диск, с проверкой подписи, один раз на версию. Скачанное окном
+/// (плагином) жило в памяти страницы и пропадало вместе с ней. Плагин остаётся запасным путём.
+async function stageRegular(version: string, skipDelta = false): Promise<void> {
+  if (fallbackFile && fallbackFileVersion === version) {
+    useUpdate.getState().set({ staged: true, manual: true })
+    return
+  }
+  if (fallbackFileVersion !== version) {
+    fallbackFile = null
+    fallbackFileVersion = null
+    fallbackStaging = null
+  }
+  try {
+    if (await stageFallback(skipDelta)) return
+  } catch (e) {
+    console.warn('[updater] the core could not stage the update; the plugin downloads it instead', e)
+  }
+  await ensureDownloaded()
 }
 
 const BOOT_CHECK_TIMEOUT = 5000
@@ -274,8 +469,11 @@ function bootEscape(quietMs: number): { left: Promise<BootLeave>; alive: () => v
   }
 }
 
-/// Applied at startup, before the launcher UI opens: on Windows the installer terminates the
-/// running process, so it cannot be applied mid-session. Returns true when the install started.
+/// Looked at on startup, but only a release the manifest calls critical holds the start (the old
+/// way: download and install before the launcher opens, on Windows the installer ends the running
+/// process). Every other release is found and downloaded in the background after the launcher is
+/// up and nothing else is going on, and goes in when the launcher is closed (the banner says so)
+/// or when the player presses it. Returns true when the install started.
 export async function bootUpdate(): Promise<boolean> {
   if (await managedOutsideOnly()) {
     void noticeManagedUpdate()
@@ -284,10 +482,13 @@ export async function bootUpdate(): Promise<boolean> {
   if (!(await updatesReady())) return false
   const st = useUpdate.getState()
   st.set({ bootPhase: 'checking', bootPct: 0 })
+  // What an earlier window (or the core in the tray) already downloaded is on disk: take it first.
+  await adoptStaged()
   try {
     if (await pluginGaveUp()) {
       const f = await withTimeout(probeFallback(), BOOT_CHECK_TIMEOUT)
-      if (!f) {
+      if (!f || !f.critical) {
+        // Not urgent: probeFallback has put it to download in the background.
         st.set({ bootPhase: 'idle' })
         return false
       }
@@ -302,7 +503,7 @@ export async function bootUpdate(): Promise<boolean> {
       const staged = await Promise.race([staging, esc.left]).finally(esc.done)
       if (staged === 'skipped' || staged === 'stalled') {
         // Staging goes on in the background and the update installs on exit.
-        staging.catch(() => {})
+        staging.catch((e) => console.warn('[updater] staging after leaving the boot screen failed', e))
         if (staged === 'stalled') noteBootTry('fallback:' + f.version)
         st.set({ bootPhase: 'idle' })
         return false
@@ -317,12 +518,22 @@ export async function bootUpdate(): Promise<boolean> {
       return true
     }
 
-    const upd = await withTimeout(check(), BOOT_CHECK_TIMEOUT)
+    const upd = await withTimeout(timedCheck(), BOOT_CHECK_TIMEOUT)
     if (!upd) {
       st.set({ bootPhase: 'idle' })
       return false
     }
     remember(upd)
+    if (!isCriticalRelease(upd.rawJson)) {
+      st.set({ bootPhase: 'idle' })
+      afterQuiet(() =>
+        void stageOrDownload(upd.version).catch((e) => {
+          downloading = null
+          updateFailed('updater-boot', e)
+        }),
+      )
+      return false
+    }
     if (bootTriesSpent(upd.version)) {
       markPluginFailed(upd.version)
       st.set({ bootPhase: 'idle' })
@@ -378,6 +589,13 @@ export async function bootUpdate(): Promise<boolean> {
   }
 }
 
+/// The periodic check: skipped while an update is ready and while the last checks failed (the
+/// gap grows from half an hour to six, see CheckBackoff).
+export function pollUpdate(): void {
+  if (updateReady() || !backoff.allowed()) return
+  void autoUpdate()
+}
+
 /// Otherwise installed on exit: a background install would kill the running process.
 export async function autoUpdate(): Promise<{ version: string } | null> {
   if (await managedOutsideOnly()) {
@@ -390,7 +608,7 @@ export async function autoUpdate(): Promise<{ version: string } | null> {
     return f ? { version: f.version } : null
   }
   try {
-    const upd = await check()
+    const upd = await timedCheck()
     if (!upd) {
       if (Date.now() - lastProbe > PROBE_EVERY) {
         const f = await probeFallback()
@@ -399,7 +617,7 @@ export async function autoUpdate(): Promise<{ version: string } | null> {
       return null
     }
     remember(upd)
-    await ensureDownloaded()
+    await stageOrDownload(upd.version)
     return { version: upd.version }
   } catch (e) {
     downloading = null
@@ -411,6 +629,8 @@ export async function autoUpdate(): Promise<{ version: string } | null> {
 
 export async function installUpdateOnExit(): Promise<boolean> {
   if (installing) return false
+  // A window opened a moment ago has not met the core's staged file yet.
+  if (!fallbackFile && !downloaded) await adoptStaged()
   if (fallbackFile) {
     installing = true
     useUpdate.getState().set({ busy: true })
@@ -418,7 +638,9 @@ export async function installUpdateOnExit(): Promise<boolean> {
     try {
       await updateFallbackRun(fallbackFile, false)
     } catch (e) {
-      updateFailed('updater-fallback', e)
+      // A patch that did not install is remembered, so the next start takes the full installer; there is no time to fetch it now.
+      if (stagedByPatch()) dropDelta(e)
+      else updateFailed('updater-fallback', e)
     }
     await quit()
     return true
@@ -443,9 +665,22 @@ export async function applyFallback(): Promise<void> {
   st.set({ busy: true, manual: true })
   if (!fallbackFile) showToast(t('Качаем обновление {version}…', { version: st.version || '' }))
   try {
-    const file = await stageFallback()
+    let file = await stageFallback()
     if (!file) throw new Error(t('нет файла обновления'))
-    const res = await updateFallbackRun(file)
+    // The relaunched build opens its window even if this one was started at login (`--autostart`).
+    await showAfterUpdate().catch((e) => void reportError('updater-show-after-update', e))
+    let res
+    try {
+      res = await updateFallbackRun(file)
+    } catch (e) {
+      if (!stagedByPatch()) throw e
+      // The patched exe would not go in: the full installer, once, instead of an error the player can do nothing about.
+      dropDelta(e)
+      showToast(t('Качаем обновление {version}…', { version: st.version || '' }))
+      file = await stageFallback(true)
+      if (!file) throw new Error(t('нет файла обновления'))
+      res = await updateFallbackRun(file)
+    }
     if (res.started) {
       await quit()
       return
@@ -482,7 +717,7 @@ export async function applyUpdate(): Promise<void> {
     return
   }
   if (!current || st.manual) {
-    if (!fallback && !(await probeFallback())) {
+    if (!fallbackFile && !fallback && !(await probeFallback())) {
       showToast(t('Обновление недоступно — скачай лаунчер с сайта'), 'error')
       st.set({ failed: true })
       return
@@ -530,14 +765,14 @@ export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
       if (!f && loud) showToast(t('Установлена последняя версия'))
       return pending
     }
-    const upd = await check()
+    const upd = await timedCheck()
     if (!upd) {
       const f = await probeFallback()
       if (!f && loud) showToast(t('Установлена последняя версия'))
       return f ? pending : null
     }
     if (!current || current.version !== upd.version) remember(upd)
-    void ensureDownloaded().catch((err) => {
+    void stageOrDownload(upd.version).catch((err) => {
       downloading = null
       updateFailed('updater', err)
       void probeFallback()

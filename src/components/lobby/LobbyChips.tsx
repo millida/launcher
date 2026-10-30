@@ -10,6 +10,7 @@ import { showToast } from '../../state/ui'
 import { tierNick } from '../top/TierBoard'
 import { useT } from '../../i18n'
 import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
+import { liveInterval } from '../../lib/liveInterval'
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -20,8 +21,7 @@ const clock = (ms: number) => {
 function SearchClock({ since }: { since: number }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(t)
+    return liveInterval(() => setNow(Date.now()), 1000)
   }, [])
   return <span className="lchip-clock">{clock(now - since)}</span>
 }

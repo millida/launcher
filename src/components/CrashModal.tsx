@@ -15,7 +15,7 @@ import { crashAskBody, crashDisableOffers } from '../lib/crashAi'
 import { milliCrash } from '../lib/milli'
 import { useHasMillida } from '../state/auth'
 import { Milli } from './milli/Milli'
-import { crashWhy } from '../lib/crashWhy'
+import { crashWhy, isModCrash } from '../lib/crashWhy'
 import { exactCrashFix } from '../lib/liveLog'
 import { tx, useT } from '../i18n'
 
@@ -47,6 +47,15 @@ export function CrashModal() {
   const mainFix = exactCrashFix(info.actions)
   const hasMainFix = !!mainFix
   const mainFixKey = mainFix ? mainFix.kind + (mainFix.arg ?? '') : ''
+  const repairWithMilli = () => {
+    void import('../lib/milliDoctor').then((d) => {
+      d.startMilliDoctor()
+      const { text, action } = d.crashAction(info)
+      openMilli({ src: 'crash' })
+      void d.pushMilliAction(text, action, [t('Почему так?'), t('Осмотри сборку')])
+      close()
+    })
+  }
   return (
     <div
       className="modal-bg open vis"
@@ -174,11 +183,14 @@ export function CrashModal() {
                 return
               }
               // The dialog closes only on a repair that actually changed files:
-              // a clean re-check does not remove the cause of this crash.
+              // a clean re-check does not remove the cause of this crash. A mod
+              // crash without a ready fix goes on to Milli, who reads the log and
+              // the mod list; a dead-end toast there left the button doing nothing.
               runRepair(info.profile)
                 .then((r) => {
                   if (!r) return
                   if (repairChangedFiles(r)) close()
+                  else if (isModCrash(info.kind)) repairWithMilli()
                   else showToast(NOTHING_TO_REPAIR, 'error')
                 })
                 .finally(() => setRepairing(false))
@@ -190,15 +202,7 @@ export function CrashModal() {
           <button
             className="btn lg primary"
             data-track="crash_milli"
-            onClick={() => {
-              void import('../lib/milliDoctor').then((d) => {
-                d.startMilliDoctor()
-                const { text, action } = d.crashAction(info)
-                openMilli({ src: 'crash' })
-                void d.pushMilliAction(text, action, [t('Почему так?'), t('Осмотри сборку')])
-                close()
-              })
-            }}
+            onClick={repairWithMilli}
           >
             <Icon id="i-sparkle" /> {t('Починить с Милли')}
           </button>
@@ -241,7 +245,7 @@ export function CrashModal() {
               data-track="crash_live_log"
               onClick={() => {
                 close()
-                void import('./LiveLog').then((m) => m.openLiveLog())
+                void import('./liveLogStore').then((m) => m.openLiveLog())
               }}
             >
               <Icon id="i-list" /> {t('Лог')}

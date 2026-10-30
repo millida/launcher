@@ -4,7 +4,7 @@ import { tx, useMarketOffers, useT } from '../i18n'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { Installs } from '../components/Installs'
 import { RunningGames } from '../components/lobby/RunningGames'
-import { LobbyCharacter } from '../components/lobby/LobbyCharacter'
+import { LobbyFigure } from '../components/lobby/LobbyFigure'
 import { EmoteBubble } from '../components/lobby/EmoteBubble'
 import { PartyBar } from '../components/lobby/PartyBar'
 import { PartyPanel } from '../components/lobby/PartyPanel'
@@ -30,14 +30,13 @@ import { usePremiumBuild } from '../lib/premiumBuild'
 import { useWallpaper } from '../state/wallpaper'
 import { convertFileSrc, pickWallpaper } from '../ipc/commands'
 import { setScreen, showToast, useUi } from '../state/ui'
-import { cancelPrelaunch } from '../lib/launch'
+import { cancelPrelaunch, launchInProgress } from '../lib/launch'
+import { scheduleLaunchWarm } from '../lib/launchWarm'
 import { playButtonState } from '../lib/launchView'
-import { renderLive } from '../lib/renderGate'
 import { playHoursLabel, playTier } from '../lib/playTiers'
 import { isDayZero } from '../lib/retention'
 import { LobbyChips } from '../components/lobby/LobbyChips'
 import { PlayChest } from '../components/lobby/PlayChest'
-import { RecentPlayButton } from '../components/lobby/RecentPlayButton'
 import { DailyPassModal } from '../components/daily/DailyPassModal'
 import { useDailyModalHost } from '../components/daily/DailyChest'
 import { useDaily } from '../state/daily'
@@ -54,6 +53,7 @@ import '../styles/pixel/lobby.css'
 import '../styles/pixel/retention.css'
 import '../styles/pixel/party.css'
 import { TIERS_SECTION_PUBLIC } from '../lib/tiersSection'
+import { liveInterval } from '../lib/liveInterval'
 
 /* Разделы на лобби, как в Brawl Stars: у каждого ровно один вход (владелец
    23.09.2026: «всё дублируется»). Режимы и каталог открывает плашка «Что
@@ -79,8 +79,7 @@ function ModeReel() {
   useEffect(() => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
     // Игра поверх — картинки не листаются: каждая смена декодирует новую.
-    const t = setInterval(() => renderLive() && setI((n) => (n + 1) % REEL.length), 2600)
-    return () => clearInterval(t)
+    return liveInterval(() => setI((n) => (n + 1) % REEL.length), 2600)
   }, [])
   return <img key={i} className="lobby-mode-reel" src={REEL[i]} alt="" />
 }
@@ -165,6 +164,10 @@ export function Play({ on }: { on: boolean }) {
     chosen ?? (dayZero ? (anarchyPromo ? anarchyMode() : { kind: 'version', version: '1.21.11' }) : null)
   useFirstHourChest(on, playStats.total_seconds)
   const sel = mode && mode.kind === 'build' ? profiles.find((p) => p.name === mode.name) || null : null
+  // Сборку «Сегодня играем» ядро готовит, пока на неё смотрят (2 с без касаний): «Играть» потом
+  // сразу запускает игру (lib/launchWarm.ts).
+  const warmTarget = on && sel ? sel.name : null
+  useEffect(() => scheduleLaunchWarm(warmTarget, launchInProgress), [warmTarget])
   const packUpdate = usePackUpdateHint(mode, profiles, on)
   const premiumBuild = usePremiumBuild(sel ? sel.name : null, on)
   const cardKind = mode ? (premiumBuild ? 'premium' : mode.kind) : null
@@ -256,7 +259,7 @@ export function Play({ on }: { on: boolean }) {
         <LobbyAmbience on={on} />
 
       </div>
-      <LobbyCharacter on={on} />
+      <LobbyFigure on={on} />
       <PartyBar on={on} />
       <EmoteBubble />
       {/* Баннер справа виден всем, и новичкам тоже: реклама на самом видном месте (владелец 11.10.2026). */}
@@ -447,7 +450,6 @@ export function Play({ on }: { on: boolean }) {
             <PlayChest on={on} dayZero={dayZero} />
           )}
           </div>
-          {btn.kind === 'play' && !inParty ? <RecentPlayButton /> : null}
           {btn.kind === 'installing' ? (
             <button className="play-cancel" aria-label={t('Отменить запуск')} data-track="cancel_launch" onClick={cancelPrelaunch}>
               <Icon id="i-x" />

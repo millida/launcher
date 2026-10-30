@@ -1,7 +1,7 @@
 // The "Play" button: checks before launch, the core call, and what happens around the game. While the game runs, a presence pulse
 // (/friends/presence/heartbeat) is sent for friends, and the status goes to Discord. Launch statistics: telemetry.ts.
 import { hasTauri } from '../ipc/tauri'
-import { PACK_ACCESS_PREFIX, cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, runningGames, discordPresence as ipcDiscordPresence, openAntivirusSettings, openGameFolder } from '../ipc/commands'
+import { PACK_ACCESS_PREFIX, cancelLaunch, launchGame, launchProfile, loadProfileSettings, quickPlay, pinServerDat, raiseRunning, runningGames, rememberBeat, setTrayLastBuild, discordPresence as ipcDiscordPresence, openAntivirusSettings, openGameFolder } from '../ipc/commands'
 import { usePackKey } from '../state/packKey'
 import { listenLaunchProgress } from '../ipc/events'
 import type { UnlistenFn } from '../ipc/tauri'
@@ -18,12 +18,14 @@ import { setVerifiedSeconds } from '../state/playStats'
 import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
+import { setLaunchBusy, surfaceLaunchFailure } from './launchHold'
 import { liveBeat, liveBeatPayload, trackFailure, trackTimed } from './telemetry'
 import { launchAttribution } from './uiTrack'
 import { failedHost } from './userEnvError'
 import { buildTag } from './telemetryPrivacy'
 import { launchFailure } from './launchFailure'
 import { packStepForLaunch, runPackUpdateForLaunch } from './packLaunch'
+import { afterRaise, notLaunched, notLaunchedNotice, prepareLaunch } from './launchPlan'
 import { afterPackUpdate } from './packUpdate'
 import { followFriendBuild } from './friendBuild'
 import { adoptLegacyRam, pendingLegacyRamMb } from './ramPref'
@@ -37,6 +39,7 @@ import { holdLaunchForHdSkin } from './skinLock'
 import { claimJoin } from './joinClaim'
 import { t, tx } from '../i18n'
 import { CORE_LAUNCH_CANCELLED, coreErrorText, mentionsCancel } from './coreErrors'
+import { horizonReason } from './horizonError'
 
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
@@ -136,6 +139,12 @@ function gameNick(): string {
 let sentBeat: string | null = null
 let sendingBeat: string | null = null
 
+/** The tray's «Играть» starts the build launched last. */
+function rememberTrayBuild(profile: string) {
+  if (!hasTauri() || !profile) return
+  void Promise.resolve(setTrayLastBuild(profile)).catch((e) => console.warn('[launch] tray build was not remembered', e))
+}
+
 export function heartbeat(status?: string, server?: string | null) {
   const beat = beatStatus(status, !!session, hasTauri())
   if (beat === 'playing' && session && (!status || status === 'lobby'))
@@ -178,6 +187,9 @@ export function heartbeat(status?: string, server?: string | null) {
         catalogPack: (playing && catalogSlug) || null,
         discordUserId: discordUserId || null,
       }
+      // Without a window during the game the core repeats this beat (the socket
+      // that carries presence otherwise is gone with the page).
+      if (hasTauri()) void Promise.resolve(rememberBeat('/friends/presence/heartbeat', state)).catch((e) => console.warn('[launch] presence beat was not handed to the core', e))
       const key = beatKey(state)
       if (!presenceBeatDue(isPresenceTracked(), key, sentBeat, sendingBeat)) return
       sendingBeat = key
@@ -283,6 +295,7 @@ export function showLaunchError(e: unknown) {
   const msg = String(e && (e as Error).message ? (e as Error).message : e).replace(/^Error:\s*/, '')
   // A launch the user called off is not a failure and must not raise a red toast.
   if (/^Запуск отменён/.test(msg)) return
+  surfaceLaunchFailure()
   if (ANTIVIRUS_BLOCK.test(msg)) {
     void explainAntivirusBlock(msg)
     return
@@ -291,6 +304,13 @@ export function showLaunchError(e: unknown) {
 }
 
 let launching = false
+const setLaunching = (next: boolean) => {
+  launching = next
+  setLaunchBusy(next)
+}
+/// True from the moment Play is pressed until the core has answered: background work (the launcher's own
+/// update download) waits for this to be over.
+export const launchInProgress = () => launching
 /// Растёт при каждом «Отменить»: запуск, который ещё ждал входа, по нему видит отмену и не зовёт ядро.
 let cancelEpoch = 0
 const CANCELLED_TEXT = CORE_LAUNCH_CANCELLED
@@ -303,6 +323,8 @@ let updatingKey: string | null = null
  * `openCard` shows the launch progress for paths that have no card of their own.
  */
 async function freshenPack(profile: string, epoch: number, openCard: boolean): Promise<void> {
+  await followFriendBuild(profile)
+  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   const step = await packStepForLaunch(profile)
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   if (step.kind === 'launch-unchecked') {
@@ -323,8 +345,6 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   })
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: t('Готовимся…') })
-  await followFriendBuild(profile)
-  if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   const next = afterPackUpdate(u, outcome)
   if (next.toast) showToast(next.toast, 'error')
   if (!next.launch) {
@@ -374,7 +394,9 @@ export function joinWithAuth(
     showToast(t('Игра уже запускается'))
     return Promise.resolve(JOIN_SKIPPED)
   }
-  if (!opts?.confirmed && useGame.getState().list.length)
+  const running = useGame.getState().list
+  // A build that is already running is never asked about: the core raises its window.
+  if (!opts?.confirmed && running.length && !running.includes(profile))
     return confirmSecondCopy(profile).then((ok) => (ok ? doJoin(profile, world, server, serverName) : JOIN_SKIPPED))
   return doJoin(profile, world, server, serverName)
 }
@@ -386,7 +408,8 @@ function doJoin(profile: string, world: string | null, server: string | null, se
   }
   // Same reason as in doLaunch: no core means no game and no way to notice it ended.
   if (!hasTauri()) return Promise.resolve(JOIN_SKIPPED)
-  launching = true
+  setLaunching(true)
+  const before = gameSession()
   setGameSession(profile, server, serverName)
   pinJoinedServer(profile, world ? null : server, serverName)
   heartbeat('playing', serverName || server)
@@ -406,15 +429,30 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     unlisten = null
   }
   const epoch = cancelEpoch
-  return freshenPack(profile, epoch, true)
-    .then(() => resolveAuth(profile, server))
+  const clickedAt = performance.now()
+  return prepareLaunch({
+    freshen: () => freshenPack(profile, epoch, true),
+    care: () => Promise.resolve(),
+    auth: () => resolveAuth(profile, server),
+  })
     .then((a) => {
       if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
       void claimJoin(server ?? null)
-      return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth)
+      return quickPlay(profile, a.nick, ramMbFor(profile), world, server, a.auth, Math.round(performance.now() - clickedAt))
     })
     .then((res) => {
+      // The build was already running (or already starting): its window came forward, nothing new started.
+      const not = notLaunched(res)
+      if (not) {
+        useGame.getState().addRunning(profile)
+        // The session that was there is the truer one: it knows the server this game is on.
+        if (before && before.profile === profile) setGameSession(before.profile, before.server, before.serverName)
+        const say = notLaunchedNotice(not, { running: t('Игра уже запущена'), starting: t('Игра уже запускается') })
+        if (say) showToast(say)
+        return JOIN_SKIPPED
+      }
       useGame.getState().addRunning(profile)
+      rememberTrayBuild(profile)
       applyLaunchWindowMode()
       rememberPlay(profile, world, server, serverName)
       return res
@@ -444,7 +482,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
     })
     .finally(() => {
       stopProgress()
-      if (epoch === cancelEpoch) launching = false
+      if (epoch === cancelEpoch) setLaunching(false)
     })
 }
 
@@ -479,8 +517,21 @@ export function realLaunch(name: string) {
     showToast(t('Игра уже запускается'))
     return
   }
-  if (useGame.getState().list.length) {
+  const running = useGame.getState().list
+  if (running.length) {
     const prof = name || useProfiles.getState().selected || 'default'
+    // The same build is never started twice: the core raises its window, so there is nothing to confirm
+    // and nothing to prepare - no update of a pack that is in use, no graphics care, no sign-in.
+    if (running.includes(prof)) {
+      void raiseRunning(prof)
+        .then((outcome) => {
+          const after = afterRaise(outcome, { running: t('Игра уже запущена'), starting: t('Игра уже запускается') })
+          if (after.launch) doLaunch(name)
+          else if (after.notice) showToast(after.notice)
+        })
+        .catch(() => doLaunch(name))
+      return
+    }
     void confirmSecondCopy(prof).then((ok) => {
       if (ok) doLaunch(name)
     })
@@ -494,20 +545,24 @@ function doLaunch(name: string) {
     showToast(t('Игра уже запускается'))
     return
   }
-  launching = true
+  setLaunching(true)
+  const launchStartedAt = performance.now()
+  const sessionBefore = gameSession()
   const setPrelaunch = useUi.getState().setPrelaunch
   const pack = useProfiles.getState().profiles.find((p) => p.name === name)
   const ver = isNativeGame(pack) ? '' : pack ? (pack.version === 'latest' ? t('Minecraft последней версии') : 'Minecraft ' + pack.version) : t('Minecraft последней версии')
   setPrelaunch({ open: true, sub: ver ? name + ' · ' + ver : name, stage: 0, pct: 2, msg: t('Готовимся…'), mode: 'launch' })
   try {
     localStorage.setItem('m-last-' + name, String(Date.now()))
-  } catch {}
+  } catch (e) {
+    console.warn('[launch] last-played mark was not saved', e)
+  }
   // Without the core there is no game process to watch: the session flag would
   // never be cleared, and every later beat reports "playing" forever. The server
   // measures those beats itself, so one stuck flag farms hours the player never
   // played (dark_eremite, 18.08.2026: 18 h counted locally against 70 h on the site).
   if (!hasTauri()) {
-    launching = false
+    setLaunching(false)
     return
   }
   try {
@@ -535,17 +590,19 @@ function doLaunch(name: string) {
   })
   const prof = name || useProfiles.getState().selected
   const epoch = cancelEpoch
-  const inv = (prof ? freshenPack(prof, epoch, false) : Promise.resolve())
-    .then(() => (prof ? import('./prelaunchCare').then((m) => m.prelaunchCare(prof)) : undefined))
-    .then(() => resolveAuth(prof || null))
-    .then((a) => {
-      if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
-      void claimJoin(null)
-      return prof
-        ? launchProfile(prof, a.nick, ramMbFor(prof), a.auth)
-        : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth)
-    })
-  const launchStartedAt = performance.now()
+  // Sign-in runs next to the build's update and care instead of after them (launchPlan.ts).
+  const inv = prepareLaunch({
+    freshen: () => (prof ? freshenPack(prof, epoch, false) : Promise.resolve()),
+    care: () => (prof ? import('./prelaunchCare').then((m) => m.prelaunchCare(prof)) : Promise.resolve()),
+    auth: () => resolveAuth(prof || null),
+  }).then((a) => {
+    if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
+    void claimJoin(null)
+    const prepMs = Math.round(performance.now() - launchStartedAt)
+    return prof
+      ? launchProfile(prof, a.nick, ramMbFor(prof), a.auth, prepMs)
+      : launchGame('latest', a.nick, false, ramMbFor('default'), a.auth, prepMs)
+  })
   const launched = prof ? useProfiles.getState().profiles.find((p) => p.name === prof) : null
   // Имя своей сборки — личное (аудит 24.09.2026): в событие идёт слаг каталога
   // или отпечаток имени.
@@ -570,9 +627,24 @@ function doLaunch(name: string) {
         .catch(() => ({}))
     : Promise.resolve({})
   inv
-    .then(() => {
+    .then((res) => {
+      // The build was already running (or already starting): its window came forward, nothing new
+      // started, so no launch is counted and no "game started" is announced.
+      const not = notLaunched(res)
+      if (not) {
+        stopProgress()
+        setPrelaunch({ open: false })
+        if (not !== 'starting') useGame.getState().addRunning(prof || 'default')
+        // The session that was there is the truer one: it knows the server this game is on.
+        if (sessionBefore && sessionBefore.profile === name)
+          setGameSession(sessionBefore.profile, sessionBefore.server, sessionBefore.serverName)
+        const say = notLaunchedNotice(not, { running: t('Игра уже запущена'), starting: t('Игра уже запускается') })
+        if (say) showToast(say)
+        return
+      }
       void packInfo().then((pack) => trackTimed('game_launch', launchStartedAt, { ...launchInfo, ...pack }))
       useGame.getState().addRunning(prof || 'default')
+      if (prof) rememberTrayBuild(prof)
       window.dispatchEvent(new Event('millida-game-started'))
       setTimeout(() => {
         setPrelaunch({ open: false })
@@ -617,10 +689,18 @@ function doLaunch(name: string) {
         })
         return
       }
+      const horizon = prof ? horizonReason(err) : null
+      if (horizon && prof) {
+        surfaceLaunchFailure()
+        void import('./horizon')
+          .then((m) => m.offerJavaStart(prof, horizon, () => realLaunch(prof)))
+          .catch(() => showLaunchError(err))
+        return
+      }
       showLaunchError(err)
     })
     .finally(() => {
-      if (epoch === cancelEpoch) launching = false
+      if (epoch === cancelEpoch) setLaunching(false)
     })
 }
 
@@ -664,13 +744,13 @@ export function cancelPrelaunch() {
   // A repair reports its own outcome once the core unwinds; announcing anything
   // here would race it with a second toast.
   const repair = ui.prelaunch.mode === 'repair'
-  if (hasTauri()) cancelLaunch().catch(() => {})
+  if (hasTauri()) cancelLaunch().catch((e) => console.warn('[launch] the core did not confirm the cancel', e))
   if (updatingKey) stopInstall(updatingKey)
   if (repair) {
     ui.setPrelaunch({ msg: t('Отменяем…') })
     return
   }
   ui.setPrelaunch({ open: false })
-  launching = false
+  setLaunching(false)
   showToast(t('Запуск отменён'))
 }

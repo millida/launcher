@@ -14,6 +14,9 @@ interface InstanceState {
   /// Open the share window immediately: the quick action leads to the code
   /// itself, not to "the tab that has the button".
   share: boolean
+  /// Scroll the Parameters tab to the graphics presets: the "Graphics" button
+  /// on the build card and the build page header lead straight there.
+  focusGfx: boolean
   setProfile: (p: string | null) => void
   set: (patch: Partial<InstanceState>) => void
 }
@@ -23,12 +26,19 @@ export const useInstance = create<InstanceState>((set) => ({
   tab: 'content',
   focusRename: false,
   share: false,
+  focusGfx: false,
   setProfile: (p) => set({ profile: p }),
   set: (patch) => set(patch),
 }))
 
 export function openBuildSettings(profile: string, tab: InstanceTab = 'content', focusRename = false) {
   useInstance.getState().set({ profile, tab, focusRename, share: false })
+  openModal('bsModal')
+}
+
+/** Build page on the Parameters tab, scrolled to the graphics presets. */
+export function openBuildGraphics(profile: string) {
+  useInstance.getState().set({ profile, tab: 'opts', focusRename: false, share: false, focusGfx: true })
   openModal('bsModal')
 }
 

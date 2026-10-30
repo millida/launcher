@@ -49,6 +49,9 @@ const DURABLE = [
   'm-lag-off',
   'm-lag-pending',
   'm-live-log',
+  'm-gfx-preset',
+  // Отказ от статистики: потерянная запись молча включает отправку снова.
+  'm-telemetry-off',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]

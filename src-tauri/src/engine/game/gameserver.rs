@@ -1,7 +1,7 @@
 // Finds out from the game log which server the player joined and tells the launcher UI (for status and play time).
 // Reads only log lines, sends nothing out.
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 const DEFAULT_PORT: u16 = 25565;
 
@@ -85,7 +85,9 @@ pub(crate) fn track_server_hop(line: &str, slot: &ServerSlot, app: &AppHandle) {
         Err(_) => false,
     };
     if changed {
-        let _ = app.emit("game-server", next.unwrap_or_default());
+        // The presence beat the core repeats without a window names this server from now on.
+        crate::background::follow_server(next.as_deref().unwrap_or_default());
+        crate::background::emit_main(app, "game-server", next.unwrap_or_default());
     }
 }
 
