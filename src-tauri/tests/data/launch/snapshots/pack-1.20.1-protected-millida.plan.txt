@@ -1,0 +1,12 @@
+# pack-1.20.1-protected-millida
+route: pack arcania, java 17, heap 6144-10240 MB
+checks: Plan { gate: None, token: Some("arcania"), pack_mod: Some("arcania"), mod_token: false, skin_server: Some("https://api.millida.net/v2/yggdrasil"), kill_switch: false }
+graph (first launch):
+  auth [net]
+  skin-server [net] <- auth
+  java-pick [java]
+  pack-token [pack]
+  pack-files [pack]
+  java [java] <- java-pick
+  assets [assets]
+  mods [mods] <- skin-server

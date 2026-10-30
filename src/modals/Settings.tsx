@@ -45,6 +45,9 @@ import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
 import { AudioSettings } from '../components/AudioSettings'
 import { RewindClips } from '../components/RewindClips'
+import { GlobalPresetPicker } from '../components/GfxPresets'
+import { globalChoice, setGlobalChoice, type GfxChoice } from '../lib/gfxPresets'
+import { GRAPHICS_PRESETS_PUBLIC } from '../lib/graphicsRelease'
 import { MusicPlayer, RadioCredits } from '../components/radio'
 import { betaChannel, checkForUpdate, pendingUpdate } from '../lib/updater'
 import { useUpdate } from '../state/update'
@@ -62,7 +65,7 @@ import { Select } from '../components/Select'
 import { type MarketFeature, marketOffers, t, useMarket, useT } from '../i18n'
 import { LangPicker } from '../components/LangPicker'
 import { writePref } from '../lib/prefs'
-import { setMusicAutostart } from '../state/music'
+import { musicAutostartOn, setMusicAutostart } from '../state/music'
 import { setTelemetryEnabled, telemetryEnabled, track, trackFailure } from '../lib/telemetry'
 import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
 import { balanceText, openTopup, useMoney } from '../lib/useMoney'
@@ -165,10 +168,11 @@ function initialAccent(): string {
   return 'green'
 }
 
-type SecId = 'look' | 'sound' | 'game' | 'clips' | 'files' | 'account' | 'about'
+type SecId = 'look' | 'graphics' | 'sound' | 'game' | 'clips' | 'files' | 'account' | 'about'
 
 const sections = (): { id: SecId; label: string }[] => [
   { id: 'look', label: t('Вид') },
+  ...(GRAPHICS_PRESETS_PUBLIC ? [{ id: 'graphics' as const, label: t('Графика') }] : []),
   { id: 'sound', label: t('Звук') },
   { id: 'game', label: t('Игра') },
   { id: 'clips', label: t('Клипы') },
@@ -229,6 +233,8 @@ export function Settings({ on }: { on: boolean }) {
   const memPicked = useLobby((s) => s.picked)
   const wantTab = useUi((s) => s.settingsTab)
   const takeSettingsTab = useUi((s) => s.takeSettingsTab)
+  const [gfx, setGfx] = useState<GfxChoice>(() => globalChoice() ?? 'auto')
+  // «Авто — под мой ПК» по умолчанию; просмотр вкладки ничего не сохраняет.
   const [accent, setAccent] = useState(initialAccent)
   const [customHex, setCustomHex] = useState(initialCustomHex)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -251,7 +257,7 @@ export function Settings({ on }: { on: boolean }) {
   const [autostart, setAutostartOn] = useState(false)
   const [streakRemind, setStreakRemindOn] = useState(streakRemindOn)
   const [discord, setDiscord] = useState(() => localStorage.getItem('m-discord') !== '0')
-  const [musicAuto, setMusicAuto] = useState(() => localStorage.getItem('m-mus-auto') !== '0')
+  const [musicAuto, setMusicAuto] = useState(musicAutostartOn)
   const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
   const [soundVol, setSoundVol] = useState(soundVolume)
   const [soundBusy, setSoundBusy] = useState(false)
@@ -563,8 +569,8 @@ export function Settings({ on }: { on: boolean }) {
               value={tabMs}
               options={[
                 [0, t('Выкл')],
-                [190, t('Быстро')],
-                [TAB_MS_DEFAULT, t('Обычно')],
+                [TAB_MS_DEFAULT, t('Быстро')],
+                [280, t('Обычно')],
                 [640, t('Медленно')],
               ]}
               onPick={(v) => useViewPrefs.getState().setTabMs(v)}
@@ -756,6 +762,21 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
       </Block>
     </>
+  )
+
+  // Общий пресет: выбор мгновенный, ставится в каждую сборку без своего перед её запуском.
+  const graphics = (
+    <Block keys="графика пресет fps фпс картошка низкие стандарт высокие эпические шейдеры дальность прорисовки лаги видеокарта">
+      <Group title={t('Для всех сборок')}>
+        <GlobalPresetPicker
+          value={gfx}
+          onPick={(c) => {
+            setGfx(c)
+            setGlobalChoice(c)
+          }}
+        />
+      </Group>
+    </Block>
   )
 
   const game = (
@@ -1279,7 +1300,7 @@ export function Settings({ on }: { on: boolean }) {
     </>
   )
 
-  const views: Record<SecId, ReactNode> = { look, sound, game, clips: <RewindClips />, files, account, about }
+  const views: Record<SecId, ReactNode> = { look, graphics, sound, game, clips: <RewindClips />, files, account, about }
   const q = query.trim()
 
   return (

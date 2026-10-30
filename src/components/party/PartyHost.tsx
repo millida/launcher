@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, lazy, useEffect, useRef } from 'react'
 import { initParty, acceptPartyInvite, usePartyStore } from '../../state/party'
 import { maybeRunLaunch } from '../../lib/partyPlay'
 import { initPartyFlow } from '../../state/partyFlow'
@@ -6,10 +6,11 @@ import { holdToTalk, leaveRoomVoice, useCall } from '../../state/call'
 import { useHasMillida } from '../../state/auth'
 import { setScreen, showToast, useUi } from '../../state/ui'
 import { PTT_KEY_CODE } from '../lobby/PartyBar'
-import { PartyRoomsMenu } from './PartyRoomsMenu'
-import { LfgModal } from './LfgModal'
-import { PackConfirmModal } from './PackConfirmModal'
-import { ReportModal } from './ReportModal'
+// Окна пати открываются не в каждом сеансе: код каждого — отдельный чанк, а не часть стартового бандла.
+const PartyRoomsMenu = lazy(() => import('./PartyRoomsMenu').then((m) => ({ default: m.PartyRoomsMenu })))
+const LfgModal = lazy(() => import('./LfgModal').then((m) => ({ default: m.LfgModal })))
+const PackConfirmModal = lazy(() => import('./PackConfirmModal').then((m) => ({ default: m.PackConfirmModal })))
+const ReportModal = lazy(() => import('./ReportModal').then((m) => ({ default: m.ReportModal })))
 import '../../styles/pixel/party.css'
 import { useT } from '../../i18n'
 
@@ -88,7 +89,7 @@ export function PartyHost() {
 
   const set = usePartyStore.getState().set
   return (
-    <>
+    <Suspense fallback={null}>
       {inviteOpen || roomsOpen ? <PartyRoomsMenu key={inviteOpen ? 'f' : 'j'} start={inviteOpen ? 'friends' : 'join'} close={() => set({ inviteOpen: false, roomsOpen: false })} /> : null}
       {lfgOpen ? <LfgModal close={() => set({ lfgOpen: false })} /> : null}
       {packAsk ? (
@@ -101,6 +102,6 @@ export function PartyHost() {
         />
       ) : null}
       {reportAsk ? <ReportModal ask={reportAsk} close={() => set({ reportAsk: null })} /> : null}
-    </>
+    </Suspense>
   )
 }

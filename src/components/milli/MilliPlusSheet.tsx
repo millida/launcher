@@ -16,6 +16,7 @@ import { plusPrice, useMoney } from '../../lib/useMoney'
 import '../../styles/pixel/plus.css'
 import '../../styles/pixel/milli-plus.css'
 import { intlTag, t, useT } from '../../i18n'
+import { liveInterval } from '../../lib/liveInterval'
 
 /*
  * PLUS прямо в чате Милли (владелец 05.10.2026). Своего «стиля» нет: те же детали, что на экране
@@ -90,7 +91,7 @@ function useShowcase(loot: Loot[]): (Loot | null)[] {
   useEffect(() => {
     if (loot.length <= 4) return
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    const t = window.setInterval(() => {
+    return liveInterval(() => {
       setSlots((cur) => {
         const out = [...cur]
         let n = next.current % loot.length
@@ -100,7 +101,6 @@ function useShowcase(loot: Loot[]): (Loot | null)[] {
         return out
       })
     }, 2100)
-    return () => window.clearInterval(t)
   }, [loot.length])
   return slots.map((i) => loot[i] ?? null)
 }
