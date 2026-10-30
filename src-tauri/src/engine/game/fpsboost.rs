@@ -1,5 +1,6 @@
 // "More FPS" mode: picks JVM flags, installs a known set of performance mods (Sodium and similar) from Modrinth
 // and, if the user wants, edits options.txt of the modpack. All of it can be undone: turning it off brings the old settings back.
+use super::presets::GRAPHICS_PRESETS_PUBLIC;
 use crate::engine::*;
 use serde_json::Value;
 use tauri::AppHandle;
@@ -15,8 +16,12 @@ pub fn boost_flags() -> Vec<&'static str> {
 /// Bumped whenever `boost_mods` or the way its files are checked changes: builds
 /// that enabled the mode under an older revision are brought up to date on their
 /// next launch instead of never. Revision 4 re-checks files already installed
-/// against their own jars.
-pub const BOOST_SET_REV: u64 = 4;
+/// against their own jars; revision 5 moves to the pin table and takes back
+/// Entity Culling and More Culling the mode used to install itself. While the
+/// graphics presets are hidden the slot list stays and so does revision 4.
+pub const BOOST_SET_REV: u64 = if GRAPHICS_PRESETS_PUBLIC { PINNED_SET_REV } else { SLOT_SET_REV };
+const SLOT_SET_REV: u64 = 4;
+const PINNED_SET_REV: u64 = 5;
 
 /// Mods a version had no stable file for are asked about again after this long:
 /// performance mods reach a fresh game version weeks after it ships.
@@ -293,7 +298,11 @@ pub fn fps_boost_state(profile: &str) -> FpsBoostState {
         skipped: str_list(&s["fpsBoostSkipped"]),
         flags: boost_flags().iter().map(|f| f.to_string()).collect(),
         video: s["fpsBoostVideo"].is_object(),
-        vanilla: boost_mods(&loader, &profile_version(profile)).is_empty(),
+        vanilla: if GRAPHICS_PRESETS_PUBLIC {
+            !super::perfpins::pins_exist(&loader, &profile_version(profile))
+        } else {
+            boost_mods(&loader, &profile_version(profile)).is_empty()
+        },
         applicable: fps_boost_applicable(profile),
         vulkan: s["fpsBoostVulkan"].as_bool().unwrap_or(false),
         vulkan_available: vulkan_fits(&loader, &profile_version(profile)),
@@ -308,7 +317,7 @@ pub fn fps_boost_state(profile: &str) -> FpsBoostState {
     }
 }
 
-fn options_path(profile: &str) -> std::path::PathBuf {
+pub(super) fn options_path(profile: &str) -> std::path::PathBuf {
     profile_dir(profile).join("options.txt")
 }
 
@@ -344,7 +353,7 @@ pub(super) fn encode_options(opts: &Options) -> Vec<u8> {
     }
 }
 
-fn read_options(profile: &str) -> Result<Options, String> {
+pub(super) fn read_options(profile: &str) -> Result<Options, String> {
     match std::fs::read(options_path(profile)) {
         Ok(bytes) => Ok(decode_options(&bytes)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Options { rows: vec![], bytewise: false }),
@@ -352,7 +361,7 @@ fn read_options(profile: &str) -> Result<Options, String> {
     }
 }
 
-fn write_options(profile: &str, opts: &Options) -> Result<(), String> {
+pub(super) fn write_options(profile: &str, opts: &Options) -> Result<(), String> {
     let dir = profile_dir(profile);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     write_bytes_atomic(&options_path(profile), &encode_options(opts))
@@ -360,7 +369,7 @@ fn write_options(profile: &str, opts: &Options) -> Result<(), String> {
 
 /// Правит только известные ключи и запоминает их прежние значения: выключение
 /// режима возвращает ровно их, а не затирает всё, что игрок настроил после.
-fn apply_tuning(rows: &mut Vec<(String, String)>, table: &[(String, String)]) -> serde_json::Map<String, Value> {
+pub(super) fn apply_tuning(rows: &mut Vec<(String, String)>, table: &[(String, String)]) -> serde_json::Map<String, Value> {
     let mut previous = serde_json::Map::new();
     for (key, val) in table {
         match rows.iter_mut().find(|(k, _)| k == key) {
@@ -377,7 +386,7 @@ fn apply_tuning(rows: &mut Vec<(String, String)>, table: &[(String, String)]) ->
     previous
 }
 
-fn undo_tuning(rows: &mut Vec<(String, String)>, previous: &Value) {
+pub(super) fn undo_tuning(rows: &mut Vec<(String, String)>, previous: &Value) {
     let Some(map) = previous.as_object() else { return };
     for (key, was) in map {
         match was.as_str() {
@@ -476,7 +485,7 @@ pub async fn set_fps_boost(app: AppHandle, profile: String, on: bool, keep_optio
 
 /// `(major, minor)` of a game version; year-numbered releases (26.x) read as
 /// newer than any 1.x.
-fn release_line(version: &str) -> (u32, u32) {
+pub(super) fn release_line(version: &str) -> (u32, u32) {
     let mut nums = version.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).filter_map(|p| p.parse::<u32>().ok());
     match (nums.next(), nums.next()) {
         (Some(1), Some(minor)) => (1, minor),
@@ -485,15 +494,38 @@ fn release_line(version: &str) -> (u32, u32) {
     }
 }
 
-/// Keys a version does not know are dropped from a fresh file: simulation
-/// distance came in 1.18 and the three-way graphics mode in 1.16.
-fn rows_for_version(rows: Vec<(String, String)>, version: &str) -> Vec<(String, String)> {
-    let line = release_line(version);
+/// `(major, minor, patch)` of a game version, None when it carries no number
+/// (an unknown version keeps every key). "26.4-snapshot-5" reads as 26.4.5.
+pub(super) fn version_key(version: &str) -> Option<(u32, u32, u32)> {
+    let mut nums = version.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).filter_map(|p| p.parse::<u32>().ok());
+    let major = nums.next()?;
+    Some((major, nums.next().unwrap_or(0), nums.next().unwrap_or(0)))
+}
+
+/// Keys a version does not know are dropped: simulation distance came in
+/// 1.18, the three-way graphics mode in 1.16 (replacing `fancyGraphics`) and
+/// gave way to the vanilla preset `graphicsPreset` in 26.1; clouds range,
+/// weather radius, cutout leaves, improved transparency and texture filtering
+/// arrived in 1.21.6. Before 1.13 the cloud setting is a bare word: a quoted
+/// value there reads as garbage and the game falls back to its own default.
+pub(super) fn rows_for_version(rows: Vec<(String, String)>, version: &str) -> Vec<(String, String)> {
+    let Some(v) = version_key(version) else { return rows };
     rows.into_iter()
         .filter(|(k, _)| match k.as_str() {
-            "simulationDistance" => line >= (1, 18),
-            "graphicsMode" => line >= (1, 16),
+            "simulationDistance" => v >= (1, 18, 0),
+            "fancyGraphics" => v < (1, 16, 0),
+            "graphicsMode" => ((1, 16, 0)..(26, 0, 0)).contains(&v),
+            "graphicsPreset" => v >= (26, 0, 0),
+            "cloudRange" | "weatherRadius" | "cutoutLeaves" | "improvedTransparency" | "textureFiltering" => v >= (1, 21, 6),
             _ => true,
+        })
+        .map(|(k, val)| {
+            if k == "renderClouds" && v < (1, 13, 0) {
+                let bare = val.trim_matches('"').to_string();
+                (k, bare)
+            } else {
+                (k, val)
+            }
         })
         .collect()
 }
@@ -540,7 +572,12 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
     let before_choice = settings_of(profile);
     let vulkan = before_choice["fpsBoostVulkan"].as_bool().unwrap_or(false)
         && !before_choice["shaders"].as_bool().unwrap_or(false);
-    let wanted = boost_mods_for(&loader, &version, vulkan);
+    // The usual set comes from the pin table (perfpins.rs): exact versions per
+    // loader and game version, nothing for a version without a row. The old
+    // slot list stays only for the player's own VulkanMod choice.
+    let use_pins = GRAPHICS_PRESETS_PUBLIC && !vulkan;
+    let pinned = if use_pins { super::perfpins::pins_for(&super::perfpins::current().await, &loader, &version) } else { None };
+    let wanted: &[Slot] = if use_pins { &[] } else { boost_mods_for(&loader, &version, vulkan) };
     let loaders = modrinth_loaders(&loader, "mod");
     let bridge = bridge_loaders(profile, &loader, "mod");
     let known: Vec<String> = load_content_manifest(profile)
@@ -602,6 +639,75 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
                 warn(app, &format!("Мод {} не поставился: {}", slug, e));
                 skipped.push(slug.to_string());
             }
+        }
+    }
+
+    if let Some(pins) = &pinned {
+        let bad_driver = super::gpu::driver_issue();
+        let total = pins.len().max(1);
+        for (i, pin) in pins.iter().enumerate() {
+            emit(app, "fpsboost", 10.0 + 70.0 * (i as f32 / total as f32), &format!("Ставим {}…", pin.slug));
+            if optifine && pin.optifine_clash {
+                warn(app, &format!("{}: не ставим рядом с OptiFine — вместе они роняют игру", pin.slug));
+                continue;
+            }
+            // Sodium does not start on these drivers (Sodium wiki): the build
+            // stays without it and the interface offers the vendor's driver page.
+            if pin.slot == "renderer" && bad_driver.is_some() {
+                skipped.push(format!("{} — старый драйвер видеокарты", pin.slug));
+                continue;
+            }
+            let counts: Vec<&str> = if pin.slot == "renderer" {
+                RENDERERS.iter().copied().chain([VULKAN_MOD, "nothirium", "vintagium", "celeritas"]).collect()
+            } else {
+                vec![pin.slug.as_str()]
+            };
+            let mut have = false;
+            for slug in counts {
+                let id = fetch_project_meta(slug).await.0;
+                if already_installed(&known, slug, &id) || jar_present(&jars, slug) {
+                    have = true;
+                    break;
+                }
+            }
+            if have {
+                continue;
+            }
+            let picked = project_versions(&pin.slug)
+                .await
+                .ok()
+                .and_then(|all| all.into_iter().find(|v| v["id"].as_str() == Some(pin.version.as_str())));
+            let Some(ver) = picked else {
+                skipped.push(pin.slug.clone());
+                continue;
+            };
+            match install_project_version(profile, "mod", &pin.slug, &ver).await {
+                Ok(file) => {
+                    for miss in resolve_deps(profile, &version, &loaders, &bridge, &ver["dependencies"]).await {
+                        warn(app, &format!("{}: нет зависимости {} под {}", pin.slug, miss, version));
+                    }
+                    slug_of.insert(file.clone(), pin.slug.clone());
+                    if !installed.contains(&file) {
+                        installed.push(file);
+                    }
+                }
+                Err(e) => {
+                    warn(app, &format!("Мод {} не поставился: {}", pin.slug, e));
+                    skipped.push(pin.slug.clone());
+                }
+            }
+        }
+        // Earlier sets installed Entity Culling and More Culling by themselves;
+        // they are the player's own choice now, so the mode takes back its copies.
+        if was_on {
+            let doc = super::perfpins::bundled();
+            installed.retain(|file| {
+                let unwanted = doc.manual_only.iter().chain(&doc.never).any(|slug| jar_present(std::slice::from_ref(file), slug));
+                if unwanted {
+                    let _ = delete_content(profile, "mod", file);
+                }
+                !unwanted
+            });
         }
     }
 
@@ -677,6 +783,17 @@ fn disable(profile: &str) -> Result<FpsBoostState, String> {
     Ok(fps_boost_state(profile))
 }
 
+/// The graphics presets (`presets.rs`) turn the mode on and off for the player.
+/// The options.txt the preset writes itself, so the mode only fills a file the
+/// game has not written yet.
+pub(super) async fn boost_on_for_preset(app: &AppHandle, profile: &str, video: Vec<(String, String)>) -> Result<FpsBoostState, String> {
+    enable(app, profile, true, video).await
+}
+
+pub(super) fn boost_off_for_preset(profile: &str) -> Result<FpsBoostState, String> {
+    disable(profile)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -703,15 +820,21 @@ mod tests {
     #[test]
     fn seeded_options_fit_the_game_version() {
         let row = |k: &str| (k.to_string(), "1".to_string());
-        let rows = vec![row("renderDistance"), row("simulationDistance"), row("graphicsMode"), row("fancyGraphics")];
-        let cases: [(&str, &str, bool, &str); 8] = [
+        let rows = vec![row("renderDistance"), row("simulationDistance"), row("graphicsMode"), row("fancyGraphics"), row("graphicsPreset"), row("textureFiltering")];
+        let cases: [(&str, &str, bool, &str); 14] = [
             ("1.21.1", "simulationDistance", true, "modern versions have simulation distance"),
             ("1.17.1", "simulationDistance", false, "simulation distance arrived in 1.18"),
             ("1.16.5", "graphicsMode", true, "three-way graphics arrived in 1.16"),
+            ("1.16.5", "fancyGraphics", false, "1.16 replaced the old switch"),
             ("1.12.2", "graphicsMode", false, "1.12 has only fancyGraphics"),
             ("1.12.2", "fancyGraphics", true, "the old graphics switch stays for old versions"),
             ("1.7.10", "renderDistance", true, "every version has render distance"),
             ("26.2", "simulationDistance", true, "year-numbered versions are newer than any 1.x"),
+            ("26.3", "graphicsPreset", true, "26.x speaks in vanilla presets"),
+            ("26.3", "graphicsMode", false, "26.x dropped the three-way switch"),
+            ("1.21.11", "graphicsPreset", false, "the preset key is 26.x only"),
+            ("1.21.11", "textureFiltering", true, "texture filtering arrived in 1.21.6"),
+            ("1.21.4", "textureFiltering", false, "not yet in 1.21.4"),
             ("", "simulationDistance", true, "an unknown version keeps the whole set"),
         ];
         for (version, key, want, why) in cases {
@@ -884,7 +1007,52 @@ mod tests {
         for (loader, want, why) in cases {
             assert_eq!(installs(loader), want, "boost set for {loader} changed without a pin update: {why}");
         }
-        assert_eq!(BOOST_SET_REV, 4, "the set above is revision 4 (rev 4 re-checks installed files by their jars); a new set needs a new revision");
+    }
+
+    /// FNV-1a over everything a slot says: what it installs, what it counts as
+    /// present and whether it clashes with OptiFine, for every loader and a spread
+    /// of game versions (the Forge and NeoForge sets depend on the version), plus
+    /// the VulkanMod variant.
+    fn set_fingerprint() -> u64 {
+        let mut text = String::new();
+        for loader in ["fabric", "quilt", "forge", "neoforge", "vanilla"] {
+            for version in ["1.12.2", "1.16.5", "1.20.1", "1.21.1", "1.21.11"] {
+                text.push_str(&format!("{loader}@{version}:"));
+                for slot in boost_mods(loader, version) {
+                    text.push_str(&format!("{:?}/{:?}/{};", slot.install, slot.counts, slot.optifine_clash));
+                }
+                text.push('\n');
+            }
+        }
+        for slot in FABRIC_VULKAN_SET {
+            text.push_str(&format!("vk:{:?}/{:?}/{};", slot.install, slot.counts, slot.optifine_clash));
+        }
+        text.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3))
+    }
+
+    /// Every revision that was ever shipped, with the fingerprint of the set it
+    /// carried (0: not recorded, the fingerprint only exists since revision 5).
+    /// Revision 4 re-checks installed files against their own jars; revision 5
+    /// moved the install to the pin table. Changing a slot without adding a line
+    /// here (with a bigger revision) fails the fingerprint check below: builds
+    /// that already have the mode only receive a new set when `BOOST_SET_REV` grows.
+    const REV_HISTORY: &[(u64, u64)] = &[(4, 0), (5, 0x32f003dcb45e9ea9)];
+
+    #[test]
+    fn a_changed_boost_set_comes_with_a_bigger_revision() {
+        let revs: Vec<u64> = REV_HISTORY.iter().map(|(r, _)| *r).collect();
+        assert!(revs.windows(2).all(|w| w[0] < w[1]), "revisions in the history only grow: {revs:?}");
+        let (latest, fingerprint) = *REV_HISTORY.last().unwrap();
+        assert_eq!(PINNED_SET_REV, latest, "PINNED_SET_REV and the last line of REV_HISTORY name the same revision");
+        assert!(revs.contains(&BOOST_SET_REV), "BOOST_SET_REV {BOOST_SET_REV} must be a revision that was shipped: {revs:?}");
+        assert_eq!(
+            set_fingerprint(),
+            fingerprint,
+            "the boost set changed: add `({}, {:#x})` to REV_HISTORY and bump PINNED_SET_REV to {}",
+            PINNED_SET_REV + 1,
+            set_fingerprint(),
+            PINNED_SET_REV + 1,
+        );
     }
 
     #[test]

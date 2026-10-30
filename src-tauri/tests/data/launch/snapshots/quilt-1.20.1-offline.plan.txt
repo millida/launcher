@@ -1,0 +1,16 @@
+# quilt-1.20.1-offline
+route: version 1.20.1 + quilt, java 17
+files: client 1, libraries 64, natives 0, log4j no, loader libraries 11
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: true, skin_server: None, kill_switch: true }
+graph (first launch):
+  kill-switch [net]
+  mod-token [net]
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  assets [assets] <- meta
+  loader [loader] <- meta
+  mods [mods] <- kill-switch
+  deps [mods] <- mods

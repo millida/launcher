@@ -214,10 +214,13 @@ function withinRenewWait<T>(work: Promise<T>): Promise<T | 'late'> {
 
 // A present token is not enough: MC tokens last a day while the launcher can sit
 // in the tray for longer, and the game would then fail joinServer with 401.
-export async function ensureMsAuth(acc?: Account | null): Promise<MsAuth | null> {
+//
+// `ahead`: renew a token that ends within this many ms, not only within the usual five minutes. The lobby asks for ten:
+// asked with the usual margin, a token with seven minutes left counted as fresh and the renewal did nothing (Н3).
+export async function ensureMsAuth(acc?: Account | null, ahead = 0): Promise<MsAuth | null> {
   const a = acc || getAccount()
   if (!a || a.kind !== 'microsoft' || !hasTauri()) return null
-  if (msTokenFresh(a)) return authOf(a)
+  if (msTokenFresh(a, ahead)) return authOf(a)
   // The renewal is not cancelled: it keeps going and saves the new token for
   // the next launch.
   const renewed = await withinRenewWait(renewMsAuth(a))

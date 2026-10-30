@@ -491,7 +491,8 @@ const V3_PACKS = [
   { code: 'vault', title: 'Сокровищница', rubies: 14000, kopecks: 150000 },
   { code: 'dragon', title: 'Драконий клад', rubies: 30000, kopecks: 300000 },
 ]
-const economy = demoEconomy({
+// /* @__PURE__ */: демо живёт только в dev; без метки вызов считается побочным эффектом и тянет в релиз ≈50 КБ данных.
+const economy = /* @__PURE__ */ demoEconomy({
   catalog: catalogItems,
   wallet: RUBY_BALANCE,
   // Модель v3: 7 рубинов за рубль — прод ещё на старом курсе, демо показывает новый.
@@ -499,7 +500,7 @@ const economy = demoEconomy({
 })
 
 /** Наборы и кейсы (02.10.2026): тот же кошелёк, покупки видны в /cosmetics/owned. */
-const setsDemo = demoSets({
+const setsDemo = /* @__PURE__ */ demoSets({
   catalog: async () => (await catalogItems()) as DemoCatalogItem[],
   wallet: RUBY_BALANCE,
   ownedBases: ownedCodes,
@@ -635,6 +636,36 @@ const DEMO_CHESTS: { id: string; tier: string; source: string; title: string; cr
   typeof location !== 'undefined' && location.search.includes('chests')
     ? ['EPIC', 'RARE', 'COMMON'].map((tier, i) => ({ id: 'demo-ch-' + i, tier, source: 'playtime:hours10', title: 'За часы игры', createdAt: new Date().toISOString() }))
     : []
+
+/** Задания магазина в демо: состояние живёт до перезагрузки вкладки. */
+const TASKS_MODE = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('tasks') || '' : ''
+const taskState: Record<'telegram' | 'discord', { linked: boolean; tries: number; claimed: boolean }> = {
+  telegram: { linked: TASKS_MODE === 'join' || TASKS_MODE === 'fail', tries: 0, claimed: false },
+  discord: { linked: TASKS_MODE === 'join' || TASKS_MODE === 'fail', tries: 0, claimed: false },
+}
+function demoTask(kind: 'telegram' | 'discord') {
+  const st = taskState[kind]
+  const view = () => ({
+    available: TASKS_MODE !== 'none',
+    amount: 300,
+    claimed: st.claimed,
+    linked: st.linked,
+    ...(kind === 'telegram'
+      ? { botUrl: 'https://t.me/MillidaServiceBot?start=demo', channelUrl: 'https://t.me/millida' }
+      : { inviteUrl: 'https://discord.gg/ec8xAhDSH7' }),
+  })
+  const claim = async () => {
+    await new Promise((r) => setTimeout(r, 1400))
+    if (!st.linked) return Promise.reject(new Error('http 400'))
+    st.tries += 1
+    if (TASKS_MODE === 'fail') return Promise.reject(new Error('http 503'))
+    if (st.tries < 2) return Promise.reject(new Error('http 400'))
+    st.claimed = true
+    RUBY_BALANCE.balance += 300
+    return { ...view(), granted: true, balance: RUBY_BALANCE.balance }
+  }
+  return { view, claim }
+}
 
 /** Забранный бонус меняет кошелёк демо: рубины и осколки видны в шапке магазина. */
 async function dailyCredit(res: DailyClaim): Promise<DailyClaim> {
@@ -1259,6 +1290,13 @@ const ROUTES: [RegExp, Handler][] = [
     DEMO_CHESTS.push({ id: chestId, tier: 'COMMON', source: 'play', title: 'За игру', createdAt: new Date().toISOString() })
     return { ...playChests(), chestId }
   }],
+  // Задания «Подпишись на Telegram» и «Вступи в Discord» (магазин). `&tasks=join` — оба
+  // аккаунта привязаны, `&tasks=none` — задания выключены (бот не админ канала).
+  // Первое «Проверить» у каждого отвечает «подписки не видно», второе платит: так
+  // видны оба исхода. `&tasks=fail` — «Проверить» всегда отвечает «Telegram не ответил».
+  [/^\/rubies\/(telegram|discord)$/, (p) => demoTask(p.includes('/telegram') ? 'telegram' : 'discord').view()],
+  [/^\/rubies\/(telegram|discord)\/claim$/, (p) => demoTask(p.includes('/telegram') ? 'telegram' : 'discord').claim()],
+  [/^\/users\/me\/discord\/link-url$/, () => ({ url: 'https://discord.com/oauth2/authorize?demo=1' })],
   [/^\/rubies\/progress\/hours1\/claim$/, () => ({ code: 'hours1', title: 'Первый час', hours: 1, hoursDone: 1, chest: 'Обычный сундук', rubies: 0, done: true, claimed: true })],
 
   // Друзья, заявки, группы, переписка
