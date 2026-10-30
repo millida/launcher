@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { mediaUrl } from './media'
 export const W = 320
 export const H = 104
 
@@ -224,8 +225,9 @@ export interface VideoWp {
   poster: string
 }
 
-// `src` is empty when the clip was not fetched from the CDN (see assets.json): the poster
-// stays in the repo, so such a wallpaper degrades to a still frame instead of a black box.
+// `src` is empty while the clip is not on disk (the core downloads it on first use, see lib/media.ts) or
+// when the checkout has no clips: the poster stays in the installer, so such a wallpaper is a still frame
+// instead of a black box.
 const VIDEO_NAMES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['bg1', 'Вишнёвая роща'],
   ['bg2', 'Уютная пещера'],
@@ -238,9 +240,14 @@ export const VIDEOS: VideoWp[] = VIDEO_NAMES.map(([id, name]) => ({
   get name() {
     return t(name)
   },
-  src: __BUNDLED_VIDEOS__.includes(id) ? '/bg/' + id + '.mp4' : '',
+  get src() {
+    return __BUNDLED_VIDEOS__.includes(id) ? (mediaUrl('bg/' + id + '.mp4') ?? '') : ''
+  },
   poster: '/bg/' + id + '.jpg',
 }))
+
+/// Имя клипа в кэше медиа или null, если у обоев нет клипа в этой сборке.
+export const videoMediaOf = (id: string): string | null => (__BUNDLED_VIDEOS__.includes(id) ? 'bg/' + id + '.mp4' : null)
 
 export const isVideoWp = (id: string) => VIDEOS.some((v) => v.id === id)
 

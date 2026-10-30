@@ -1,6 +1,6 @@
 [package]
 name = "millida-launcher"
-version = "2.0.286"
+version = "2.0.291"
 description = "Millida Launcher — безопасный лаунчер Minecraft"
 authors = ["Millida"]
 edition = "2021"
@@ -60,6 +60,8 @@ hkdf = "0.12"
 # the fallback updater verifies artifacts with the same key and algorithm as the
 # updater plugin
 minisign-verify = "0.2"
+# patch updates of the launcher (zstd --patch-from): only the decoder is used, with the installed exe as the reference
+zstd = { version = "0.13", default-features = false }
 semver = "1"
 base64 = "0.22"
 url = "2"
@@ -75,17 +77,19 @@ millida-voice = { path = "voice" }
 [target.'cfg(windows)'.dependencies]
 # DPAPI for device.key: the file is useless outside the Windows account.
 # Shell/Registry: opening links without the shell's own error dialog, and
-# finding a browser when the https association is broken
-windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Registry"] }
+# finding a browser when the https association is broken; Power: a nearly
+# empty battery holds back the background preparation of a build
+windows-sys = { version = "0.61", features = ["Win32_System_Threading", "Win32_Security_Cryptography", "Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Registry", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_Power"] }
 # The microphone prompt is WebView2's own dialog. The launcher already asked the
 # user in its settings, so the request is answered for our window instead of
 # being bounced back at them on every recording.
 webview2-com = "0.38"
 # Ярлыки «Рабочий стол»/«Пуск» с выбранной иконкой (IShellLinkW), см. src/app_icon.rs
+# Toasts from the tray without a window (src/notify.rs): UI_Notifications, Data_Xml_Dom.
 # Rewind (src/engine/rewind/win): Windows Graphics Capture of the game window,
 # GPU scaling to NV12, the hardware H.264 encoder and AAC through Media
 # Foundation, WASAPI process loopback. All in-box, so nothing extra ships.
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Foundation", "Media_Control", "Storage_Streams", "Graphics", "Graphics_Capture", "Graphics_DirectX", "Graphics_DirectX_Direct3D11", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Media_MediaFoundation", "Win32_Media_Audio", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Ole", "Win32_System_WinRT", "Win32_System_WinRT_Direct3D11", "Win32_System_WinRT_Graphics", "Win32_System_WinRT_Graphics_Capture", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Performance", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Foundation", "Media_Control", "Storage_Streams", "Graphics", "Graphics_Capture", "Graphics_DirectX", "Graphics_DirectX_Direct3D11", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Media_MediaFoundation", "Win32_Media_Audio", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Ole", "Win32_System_WinRT", "Win32_System_WinRT_Direct3D11", "Win32_System_WinRT_Graphics", "Win32_System_WinRT_Graphics_Capture", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Performance", "Win32_UI_WindowsAndMessaging", "UI_Notifications", "Data_Xml_Dom"] }
 # VPN clients in "system proxy" mode (v2rayN, Hiddify, Clash) only set the
 # WinINet proxy. Without this feature the core went straight past it into the
 # resets the player turned the VPN on to avoid, while the browser worked.
@@ -105,7 +109,7 @@ libc = "0.2"
 # Dock icon switching (NSApplication.setApplicationIconImage) and the bundle's own icon
 # (NSWorkspace.setIcon:forFile:), see src/app_icon.rs
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder", "NSWorkspace"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder", "NSWorkspace", "NSRunningApplication", "libc"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSBundle", "NSString", "NSError", "NSAppleEventManager", "NSAppleEventDescriptor", "objc2-core-services"] }
 # Login item without a LaunchAgent: SMAppService.mainApp, see src/autostart_mac.rs
 objc2-service-management = { version = "0.3", default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation", "block2"] }

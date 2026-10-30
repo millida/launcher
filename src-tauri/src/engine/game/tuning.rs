@@ -163,6 +163,24 @@ fn fit_to_machine_with(want: u32, total_mb: u64, available_mb: u64) -> (u32, Opt
     (want.min(MAX_HEAP_MB), None)
 }
 
+/// The most any launch may take, however the number was chosen (slider, crash fix, a pack's own
+/// memory): the machine minus what the system keeps. Past it Windows swaps and the game and the
+/// launcher stutter far worse than with a smaller heap. Unknown machine size: no limit.
+pub fn os_reserve_ceiling_mb(total_mb: u64) -> Option<u32> {
+    if total_mb == 0 {
+        return None;
+    }
+    Some(total_mb.saturating_sub(reserved_mb(total_mb)).clamp(1024, 65536) as u32)
+}
+
+/// `ram` cut to what the machine can give without swapping.
+pub fn clamp_to_os_reserve(ram: u32, total_mb: u64) -> u32 {
+    match os_reserve_ceiling_mb(total_mb) {
+        Some(ceiling) => ram.min(ceiling),
+        None => ram,
+    }
+}
+
 fn manual_ram_mb(profile: &str) -> u32 {
     let s: serde_json::Value = std::fs::read(profile_dir(profile).join("millida-settings.json"))
         .ok()
@@ -248,7 +266,12 @@ pub fn set_auto_tune(profile: &str, on: bool) {
 /// occurrence of a flag wins, so a duplicate would silently override the
 /// player's own value.
 pub fn tuned_flags(profile: &str, own_args: &str, boost_on: bool) -> Vec<String> {
-    if !auto_tune_on(profile) || boost_on {
+    tuned_flags_for(auto_tune_on(profile), own_args, boost_on)
+}
+
+/// `tuned_flags` with the build's auto-tuning switch already read.
+pub(crate) fn tuned_flags_for(auto_tune: bool, own_args: &str, boost_on: bool) -> Vec<String> {
+    if !auto_tune || boost_on {
         return vec![];
     }
     let taken: Vec<&str> = own_args.split_whitespace().collect();
@@ -312,6 +335,10 @@ const LAUNCHER_OPTIONS_SINCE: &[(&str, u32)] = &[
     ("--enable-native-access", 17),
 ];
 
+/// Не для Java 8: резервирование всей кучи на её старте там делается одним потоком и держит
+/// запуск минуту на больших кучах, а выигрыша в кадрах старая JVM не даёт.
+const NOT_ON_JAVA_8: &[&str] = &[PRETOUCH_FLAG];
+
 /// Последняя правка аргументов JVM перед запуском. Флаги собираются из
 /// четырёх мест (описание версии, автоподбор, буст, свои аргументы игрока), и
 /// каждое по отдельности верно, а вместе они роняли JVM до окна:
@@ -328,6 +355,9 @@ pub fn fit_jvm_args(args: &mut Vec<String>, java_major: Option<u32>) {
             let name = a.split('=').next().unwrap_or(a);
             !LAUNCHER_OPTIONS_SINCE.iter().any(|(opt, since)| name == *opt && major < *since)
         });
+        if major <= 8 {
+            args.retain(|a| !NOT_ON_JAVA_8.contains(&a.as_str()));
+        }
     }
     let gcs: Vec<usize> = (0..args.len()).filter(|&i| gc_choice(&args[i])).collect();
     if let Some((&keep, rest)) = gcs.split_last() {
@@ -385,7 +415,7 @@ pub fn ram_check(profile: &str, requested: u32) -> RamCheck {
     let shaders = count_files(profile, "shader") > 0;
     let tuning = tune_profile(profile);
     RamCheck {
-        heap_mb: tuned_ram_mb(profile, requested),
+        heap_mb: clamp_to_os_reserve(tuned_ram_mb(profile, requested), tuning.total_ram_mb),
         need_mb: wanted_mb(mods, shaders),
         fit_mb: tuning.ram_mb,
         total_mb: tuning.total_ram_mb,
@@ -398,17 +428,60 @@ pub fn ram_check(profile: &str, requested: u32) -> RamCheck {
 
 /// Memory for a launch: an explicit request wins, otherwise the tuned value.
 pub fn tuned_ram_mb(profile: &str, requested: u32) -> u32 {
-    if requested > 0 {
-        return requested.clamp(512, 65536);
+    heap_for(&HeapAsk::of(profile, requested), &Machine::now())
+}
+
+/// What a build asks of memory: an explicit request for this launch, the build's own pinned value,
+/// whether auto-tuning is on, and what the build holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct HeapAsk {
+    pub requested: u32,
+    pub manual: u32,
+    pub auto_tune: bool,
+    pub mods: u32,
+    pub shaders: bool,
+}
+
+/// The memory of the machine at the moment of the launch, in MB.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Machine {
+    pub total_mb: u64,
+    pub available_mb: u64,
+}
+
+impl Machine {
+    pub(crate) fn now() -> Machine {
+        Machine { total_mb: total_ram_mb(), available_mb: available_ram_mb() }
     }
-    let manual = manual_ram_mb(profile);
-    if manual > 0 {
-        return manual.clamp(512, 65536);
+}
+
+impl HeapAsk {
+    /// The build's own side of the question, read from its folder.
+    pub(crate) fn of(profile: &str, requested: u32) -> HeapAsk {
+        HeapAsk {
+            requested,
+            manual: manual_ram_mb(profile),
+            auto_tune: auto_tune_on(profile),
+            mods: count_files(profile, "mod"),
+            shaders: count_files(profile, "shader") > 0,
+        }
     }
-    if !auto_tune_on(profile) {
-        return default_half_ram();
+}
+
+/// `tuned_ram_mb` as a calculation: the same answer from the same facts, without reading the disk
+/// or the system. An explicit request wins, then the build's own value, then half the machine
+/// with auto-tuning off, then auto-tuning.
+pub(crate) fn heap_for(ask: &HeapAsk, machine: &Machine) -> u32 {
+    if ask.requested > 0 {
+        return ask.requested.clamp(512, 65536);
     }
-    tune_profile(profile).ram_mb
+    if ask.manual > 0 {
+        return ask.manual.clamp(512, 65536);
+    }
+    if !ask.auto_tune {
+        return half_ram_of(machine.total_mb);
+    }
+    fit_to_machine_with(wanted_mb(ask.mods, ask.shaders), machine.total_mb, machine.available_mb).0
 }
 
 /// Heap to offer after the game ran out of the `used_mb` it had. The tuned value
@@ -429,8 +502,7 @@ const OOM_STEP_MB: u32 = 2048;
 
 /// What auto-tuning is measured against: half the machine, the rule launchers
 /// used before anyone looked at the pack.
-pub(crate) fn default_half_ram() -> u32 {
-    let total = total_ram_mb();
+fn half_ram_of(total: u64) -> u32 {
     if total == 0 {
         return 4096;
     }
@@ -449,6 +521,21 @@ pub fn profile_content_bytes(profile: &str) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    /// Вход (память системы) → потолок кучи. Резерв системы — четверть, но не меньше 2 ГБ.
+    #[test]
+    fn a_launch_never_takes_the_memory_the_system_needs() {
+        let gb = 1024u64;
+        assert_eq!(super::os_reserve_ceiling_mb(4 * gb), Some(2048), "на 4 ГБ системе остаются 2");
+        assert_eq!(super::os_reserve_ceiling_mb(8 * gb), Some(6144));
+        assert_eq!(super::os_reserve_ceiling_mb(16 * gb), Some(12 * 1024));
+        assert_eq!(super::os_reserve_ceiling_mb(0), None, "размер памяти неизвестен — не режем");
+        assert_eq!(super::os_reserve_ceiling_mb(2 * gb), Some(1024), "даже на 2 ГБ игре остаётся минимум, чтобы запуститься");
+        // Игрок или автор сборки просит 6 ГБ на 4-гигабайтном ПК: своп вместо игры.
+        assert_eq!(super::clamp_to_os_reserve(6144, 4 * gb), 2048);
+        assert_eq!(super::clamp_to_os_reserve(1536, 4 * gb), 1536, "меньше потолка — не трогаем");
+        assert_eq!(super::clamp_to_os_reserve(6144, 0), 6144);
+    }
+
     #[test]
     fn a_16gb_laptop_never_gives_the_heap_more_than_half() {
         assert_eq!(super::safe_ceiling_mb(16 * 1024, 12 * 1024), 6 * 1024);
@@ -635,6 +722,20 @@ mod tests {
         assert!(a.iter().any(|x| x.starts_with("--enable-native-access")), "с Java 17 она есть");
         assert!(a.contains(&"-XX:+IgnoreUnrecognizedVMOptions".to_string()));
         assert_eq!(a[0], "-Xmx4G", "память остаётся первой");
+    }
+
+    #[test]
+    fn heap_pretouch_stays_off_java_8() {
+        let boost = v(&["-Xmx6G", "-XX:+UseG1GC", PRETOUCH_FLAG, "Main"]);
+        let mut old = boost.clone();
+        fit_jvm_args(&mut old, Some(8));
+        assert!(!old.contains(&PRETOUCH_FLAG.to_string()), "на Java 8 запуск с предзаполнением кучи тянется минуту: {old:?}");
+        assert!(old.contains(&"-XX:+UseG1GC".to_string()), "остальные флаги буста остаются");
+        for major in [Some(11), Some(17), Some(21), Some(25), None] {
+            let mut a = boost.clone();
+            fit_jvm_args(&mut a, major);
+            assert!(a.contains(&PRETOUCH_FLAG.to_string()), "на Java {major:?} предзаполнение — выбор буста: {a:?}");
+        }
     }
 
     #[test]

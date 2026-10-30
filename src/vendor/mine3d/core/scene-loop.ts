@@ -324,6 +324,9 @@ export class SkinViewEngine {
   /** Наименьший шаг между кадрами, мс; 0 — рисовать с частотой экрана. */
   private _minFrameMs = 0;
   private _nextFrameAt = 0;
+  private _shadersStale = true;
+  private _compiling = false;
+  private _frameOwed = false;
   private _resizeObserver: ResizeObserver | null = null;
   private _zoom: number;
   private _fov: number;
@@ -710,6 +713,7 @@ export class SkinViewEngine {
     enableShadows(this.playerObject.skin);
 
     this.playerObject.skin.visible = true;
+    this._shadersStale = true;
     // setSkin не должен возвращать ноги в bust-режиме
     if (this._debugEnabled) this._syncDebugOverlays();
     else this._applyPresentationVisibility();
@@ -753,6 +757,7 @@ export class SkinViewEngine {
     loadCapeToCanvas(this.capeCanvas, resolved);
     this.recreateCapeTexture();
     this.playerObject.backEquipment = "cape";
+    this._shadersStale = true;
   }
 
   /** Скрыть плащ и освободить cape-текстуру */
@@ -777,6 +782,7 @@ export class SkinViewEngine {
     // Listeners skin3d сбрасывают scale рук — пересобираем 3D outer
     this._rebuildOuterVoxels();
     this._syncIdleModelSlim();
+    this._shadersStale = true;
   }
 
   get modelType(): SkinModelType {
@@ -862,6 +868,7 @@ export class SkinViewEngine {
    * его дело — держать объект там, куда его повесили.
    */
   attachCosmetic(anchor: CosmeticAnchorName, object: Object3D): void {
+    this._shadersStale = true;
     const part = this.cosmeticAnchor(anchor);
     if (anchor === "cape") {
       // Плащ игрока и плащ-вещь занимают одно место: показывать оба - значит
@@ -1494,6 +1501,21 @@ export class SkinViewEngine {
     await this.renderer.compileAsync(this.scene, this.camera);
   }
 
+  private _compileInBackground(): void {
+    this._shadersStale = false;
+    this._compiling = true;
+    this.renderer
+      .compileAsync(this.scene, this.camera)
+      .catch(() => undefined)
+      .finally(() => {
+        this._compiling = false;
+        this.clock.getDelta();
+        if (!this._frameOwed || this._running || this._disposed) return;
+        this.start();
+        this.stop();
+      });
+  }
+
   /** Один кадр без запуска loop — для статичных мини-превью */
   renderFrame(): void {
     if (this._disposed) return;
@@ -1733,6 +1755,14 @@ export class SkinViewEngine {
 
   private _tick = (frameTime?: number): void => {
     if (!this._running || this._disposed) return;
+
+    if (this._shadersStale && !this._compiling) this._compileInBackground();
+    if (this._compiling) {
+      this._frameOwed = true;
+      this._rafId = requestAnimationFrame(this._tick);
+      return;
+    }
+    this._frameOwed = false;
 
     if (this._minFrameMs > 0) {
       // Время кадра от браузера привязано к развёртке и не дрожит, как

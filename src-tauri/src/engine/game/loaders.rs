@@ -14,7 +14,7 @@ pub struct LoaderBuild {
     pub recommended: bool,
 }
 
-fn num_key(v: &str) -> Vec<u64> {
+pub(crate) fn num_key(v: &str) -> Vec<u64> {
     v.split(['.', '-', '+'])
         .map(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>())
         .map(|p| p.parse::<u64>().unwrap_or(0))

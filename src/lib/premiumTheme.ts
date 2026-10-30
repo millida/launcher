@@ -5,6 +5,7 @@ import { computeAccent, paintAccent, saveAccent, withColorFade, type AccentVars 
 import { hydratePrefs, readPref, writePref, type PrefKey } from './prefs'
 import type { ShopTier } from './rubies'
 import { loadPlus, type PlusTier } from './gameProfile'
+import { hasMillidaAccount } from './api'
 import { t } from '../i18n'
 
 /**
@@ -274,7 +275,9 @@ export function initPremiumTheme() {
     writePref(AUTO_KEY, u.auto)
   }
   const confirmEnded = async () => {
-    if (checking) return
+    // Гость без входа: подписки нет и спрашивать некого, а 401 от /launcher/plus
+    // ядро читает как конец сессии и выкидывало гостя на экран входа.
+    if (checking || !hasMillidaAccount()) return
     checking = true
     const st = await loadPlus().catch(() => null)
     checking = false

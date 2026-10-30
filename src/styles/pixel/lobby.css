@@ -844,3 +844,8 @@
 
 /* Плашка-уведомление на главной не должна лежать на «Играть» и сундуке: у лобби она сверху справа. */
 body:has(#s-play.on) #toast { bottom: auto; top: 72px; }
+
+/* Заглушка персонажа (components/lobby/LobbyFigure): снимок прошлой сцены лежит ровно там же,
+   где потом встанет 3D, и сменяется им без скачка. Не перехватывает мышь у настоящей сцены. */
+.lobby-char-still { cursor: pointer; touch-action: auto; }
+.lobby-char-still img { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }

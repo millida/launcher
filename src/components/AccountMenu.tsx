@@ -4,13 +4,13 @@ import type { RefObject } from 'react'
 import { Icon } from './Icon'
 import { Head } from './Head'
 import { accKindLabel } from '../lib/format'
-import { hasLicenseSession, msTokenExpired, useAccounts } from '../state/accounts'
+import { getMillidaAccount, hasLicenseSession, msTokenExpired, useAccounts } from '../state/accounts'
 import type { Account } from '../state/accounts'
 import { SECRETS_CHANGED_EVENT } from '../lib/secure'
 import { refreshMsAccounts, startMsLogin } from '../state/msLogin'
 import { openModal, setScreen, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
-import { forgetMillidaIfGone, logoutToLogin } from '../lib/session'
+import { logoutToLogin } from '../lib/session'
 import { useT } from '../i18n'
 
 /** Ширина меню (.acc-menu): по ней меню прижимается к правому краю окна. */
@@ -130,8 +130,9 @@ export function AccountMenu({
                   // отдельной «Выйти из Millida» больше нет).
                   if (await uiConfirm(t('Выйти из аккаунта «{nick}»?', { nick: a.nick }), { confirmLabel: t('Выйти') })) {
                     remove(a.id)
-                    forgetMillidaIfGone()
-                    if (!useAccounts.getState().list.length) logoutToLogin()
+                    // Без аккаунта Millida лаунчер не работает (владелец 27.10.2026):
+                    // вышел из него — на экран входа, игровые аккаунты остаются в списке.
+                    if (!getMillidaAccount()) logoutToLogin()
                   }
                 }}
               >
