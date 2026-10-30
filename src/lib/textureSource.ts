@@ -13,7 +13,10 @@ export function textureSource(url: string): Promise<string> {
   if (!url || !isRemote(url) || !hasTauri()) return Promise.resolve(url)
   const hit = resolved.get(url)
   if (hit) return hit
-  const task = fetchTexture(url).catch(() => url)
+  const task = fetchTexture(url).catch(() => {
+    resolved.delete(url)
+    return url
+  })
   resolved.set(url, task)
   return task
 }
