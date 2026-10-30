@@ -5213,6 +5213,8 @@
   "Мод собран под другой загрузчик — отключи его": "Mod dibuat untuk loader lain — nonaktifkan",
   "Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры": "Loader modpack sudah yang terbaru untuk versi game ini — mod butuh versi game lain",
   "Загрузчик {0} обновится при запуске (был {1})": "Loader {0} akan diperbarui saat dijalankan (sebelumnya {1})",
+  "Загрузчик {0} обновится до {1} при запуске": "Loader {0} akan diperbarui ke {1} saat dijalankan",
+  "Не получили список версий загрузчика — проверь интернет и попробуй ещё раз": "Daftar versi loader tidak didapat — periksa koneksi internet dan coba lagi",
   "Некорректный объём памяти": "Jumlah memori tidak valid",
   "Такой объём памяти лаунчер не выставит": "Launcher tidak bisa mengatur jumlah memori seperti ini",
   "Сборке выделено {0} ГБ": "Modpack dialokasikan {0} GB",

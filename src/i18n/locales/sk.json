@@ -1577,6 +1577,8 @@
   "Загрузчик": "Loader",
   "Загрузчик {0} лаунчер не ставит": "Launcher neinštaluje loader {0}",
   "Загрузчик {0} обновится при запуске (был {1})": "Loader {0} sa aktualizuje pri spustení (bol {1})",
+  "Загрузчик {0} обновится до {1} при запуске": "Loader {0} sa pri spustení aktualizuje na {1}",
+  "Не получили список версий загрузчика — проверь интернет и попробуй ещё раз": "Zoznam verzií loadera sa nepodarilo získať — skontroluj internet a skús to znova",
   "Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры": "Loader modpacku je pre túto verziu hry už najnovší — mod potrebuje inú verziu hry",
   "Загрузчик сменили на {loader}. Проверь моды ({n} шт.) — часть может не подойти.": "Loader zmenený na {loader}. Skontroluj mody ({n}), niektoré nemusia sedieť.",
   "Загрузчик: {from} → {to}": "Loader: {from} → {to}",

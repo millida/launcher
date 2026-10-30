@@ -5340,6 +5340,8 @@
   "Мод собран под другой загрузчик — отключи его": "Mod zbudowano pod inny loader — wyłącz go",
   "Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры": "Loader modpacka jest już najnowszy dla tej wersji gry — mod wymaga innej wersji gry",
   "Загрузчик {0} обновится при запуске (был {1})": "Loader {0} zaktualizuje się przy uruchomieniu (był {1})",
+  "Загрузчик {0} обновится до {1} при запуске": "Loader {0} zaktualizuje się do {1} przy uruchomieniu",
+  "Не получили список версий загрузчика — проверь интернет и попробуй ещё раз": "Nie udało się pobrać listy wersji loadera — sprawdź internet i spróbuj ponownie",
   "Некорректный объём памяти": "Nieprawidłowa ilość pamięci",
   "Такой объём памяти лаунчер не выставит": "Launcher nie ustawi takiej ilości pamięci",
   "Сборке выделено {0} ГБ": "Modpackowi przydzielono {0} GB",
