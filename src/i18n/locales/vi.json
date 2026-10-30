@@ -5341,6 +5341,8 @@
   "Мод собран под другой загрузчик — отключи его": "Mod được dựng cho trình tải khác — hãy tắt nó",
   "Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры": "Trình tải của gói mod đã là bản mới nhất cho phiên bản game này — mod cần phiên bản game khác",
   "Загрузчик {0} обновится при запуске (был {1})": "Trình tải {0} sẽ cập nhật khi khởi chạy (trước là {1})",
+  "Загрузчик {0} обновится до {1} при запуске": "Trình tải {0} sẽ cập nhật lên {1} khi khởi chạy",
+  "Не получили список версий загрузчика — проверь интернет и попробуй ещё раз": "Không lấy được danh sách phiên bản trình tải — hãy kiểm tra internet rồi thử lại",
   "Некорректный объём памяти": "Dung lượng bộ nhớ không hợp lệ",
   "Такой объём памяти лаунчер не выставит": "Launcher không thể đặt dung lượng bộ nhớ này",
   "Сборке выделено {0} ГБ": "Đã cấp {0} GB cho gói mod",

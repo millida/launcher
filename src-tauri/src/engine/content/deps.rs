@@ -43,7 +43,25 @@ pub(crate) fn version_satisfies(version: &str, range: &str) -> bool {
     if range.is_empty() || range == "*" {
         return true;
     }
+    if range.starts_with(['[', '(']) {
+        return maven_ranges(range).into_iter().any(|r| version_satisfies(version, &maven_range(r)));
+    }
     range.split_whitespace().all(|clause| clause_satisfies(version, clause))
+}
+
+/// Forge and NeoForge write ranges the Maven way, `(,1.13.3]` or `[1.0,2.0),[3.0,)`; a comma
+/// separates both the bounds and the alternatives, so the split is after a closing bracket.
+fn maven_ranges(spec: &str) -> Vec<&str> {
+    let mut out = vec![];
+    let mut start = 0;
+    for (i, c) in spec.char_indices() {
+        if matches!(c, ']' | ')') {
+            out.push(spec[start..=i].trim().trim_start_matches(',').trim());
+            start = i + 1;
+        }
+    }
+    out.retain(|r| !r.is_empty());
+    out
 }
 
 fn clause_satisfies(version: &str, clause: &str) -> bool {
@@ -868,6 +886,17 @@ async fn install_dep_items_job(
     Ok(report)
 }
 
+/// Version ids only of the mods that came from Modrinth. A Millida catalogue
+/// file id in the batch makes Modrinth refuse all fifty with 400, and the audit
+/// then saw no Modrinth dependency of the whole build.
+fn modrinth_version_ids(manifest: &[ContentEntry]) -> Vec<String> {
+    manifest
+        .iter()
+        .filter(|e| !e.version_id.is_empty() && !e.project_id.starts_with("cf:") && !super::versions::is_catalog_project(&e.project_id))
+        .map(|e| e.version_id.clone())
+        .collect()
+}
+
 /// `/v2/versions?ids=` answers for a whole build at once, which is what makes
 /// auditing an installed set cheap enough to run on a button press.
 async fn bulk_versions(ids: &[String]) -> HashMap<String, Value> {
@@ -1107,11 +1136,7 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
         }
     }
 
-    let version_ids: Vec<String> = manifest
-        .iter()
-        .filter(|e| !e.version_id.is_empty() && !e.project_id.starts_with("cf:"))
-        .map(|e| e.version_id.clone())
-        .collect();
+    let version_ids = modrinth_version_ids(&manifest);
     let versions = bulk_versions(&version_ids).await;
     for e in &manifest {
         let Some(v) = versions.get(&e.version_id) else { continue };
@@ -1137,9 +1162,10 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
             if installed.has(&dep.project_id, &title) {
                 continue;
             }
-            let fix = pick_modrinth(&ctx, &dep.project_id, &dep.version_id).await.ok().map(|p| p.node);
+            let picked = pick_modrinth(&ctx, &dep.project_id, &dep.version_id).await.map(|p| p.node);
+            let retry = retry_dep(&picked, &dep.project_id);
             let named = if title.is_empty() { dep.project_id.clone() } else { title };
-            push_missing(&mut audit, e.title.clone(), named, fix, dep.project_id);
+            push_missing(&mut audit, e.title.clone(), named, picked.ok(), retry);
         }
     }
 
@@ -1147,7 +1173,10 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
         if audit.issues.iter().any(|i| i.kind == "missing" && i.detail.contains(&id)) {
             continue;
         }
-        let fix = pick_modrinth(&ctx, catalog_slug(&id), "").await.ok().map(|p| p.node);
+        let slug = catalog_slug(&id);
+        let picked = pick_modrinth(&ctx, slug, "").await.map(|p| p.node);
+        let retry = retry_dep(&picked, slug);
+        let fix = picked.ok();
         if fix.as_ref().is_some_and(|f| installed.has(&f.project_id, &f.title)) {
             continue;
         }
@@ -1158,10 +1187,21 @@ pub async fn audit_deps(profile: String) -> Result<DepAudit, String> {
             detail: format!("нужен мод «{}», в сборке его нет", named),
             file_name: String::new(),
             fix,
-            dep: catalog_slug(&id).to_string(),
+            dep: retry,
         });
     }
     Ok(audit)
+}
+
+/// The project a click on an unresolved missing dependency looks up again. A
+/// mod id from a jar is only a guess at a Modrinth slug, and once Modrinth has
+/// answered that it has nothing for this build the button would only repeat
+/// that answer, so the issue stays a notice.
+fn retry_dep(picked: &Result<DepNode, String>, project: &str) -> String {
+    match picked {
+        Err(e) if lookup_settled(e) => String::new(),
+        _ => project.to_string(),
+    }
 }
 
 /// A catalogue pack is judged by its author, not by the files in `mods/`: a
@@ -1199,7 +1239,47 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, BreakRule, LocalMeta};
+    use super::{jar_blockers, modrinth_version_ids, retry_dep, BreakRule, DepNode, LocalMeta};
+
+    /// Lookup of a missing dependency -> what «Поставить» retries, if anything.
+    #[test]
+    fn a_retry_is_offered_only_while_the_catalogue_may_still_answer() {
+        let found: Result<DepNode, String> = Ok(DepNode { project_id: "baubles".into(), ..Default::default() });
+        let cases: [(Result<DepNode, String>, &str, &str); 4] = [
+            (
+                Err("404 Not Found от https://api.millida.net/v2/launcher/mr/v2/project/Thaumcraft/version".into()),
+                "",
+                "30.10: Thaumcraft is no Modrinth project, the button ended in this 404",
+            ),
+            (Err("нет версии под 1.7.10 · forge (есть под 1.20.1)".into()), "", "the project ships nothing for this build"),
+            (Err("нет связи (timeout) — https://api.modrinth.com/v2/project/baubles/version".into()), "Baubles", "the catalogue was unreachable, a later click may work"),
+            (found, "Baubles", "a resolved fix keeps its project"),
+        ];
+        for (picked, want, why) in cases {
+            assert_eq!(retry_dep(&picked, "Baubles"), want, "{}", why);
+        }
+    }
+
+    #[test]
+    fn the_modrinth_batch_carries_only_modrinth_versions() {
+        let entry = |project: &str, version: &str| crate::engine::ContentEntry {
+            kind: "mod".into(),
+            project_id: project.into(),
+            version_id: version.into(),
+            ..Default::default()
+        };
+        let manifest = vec![
+            entry("AANobbMI", "uXe0pIaz"),
+            entry("millida:sodium", "kk9nyy8do41454zngiz8u1vm"),
+            entry("cf:238222", "4712866"),
+            entry("P7dR8mSH", ""),
+        ];
+        assert_eq!(
+            modrinth_version_ids(&manifest),
+            vec!["uXe0pIaz".to_string()],
+            "a catalogue file id or a CurseForge file id in the batch makes Modrinth refuse all fifty ids with 400, and the audit loses every Modrinth dependency of the build"
+        );
+    }
 
     fn declared_jar(file: &str, id: &str, version: &str, requires: &[&str], breaks: &[(&str, &str)]) -> LocalMeta {
         LocalMeta {
@@ -1315,6 +1395,23 @@ mod tests {
         assert!(version_satisfies("1.5.0", ">=1.0.0 <2.0.0"), "space-separated clauses AND together");
         assert!(!version_satisfies("2.0.0", ">=1.0.0 <2.0.0"));
         assert!(version_satisfies("1.2.3", "^1.0.0"), "an unparsed operator is treated as still matching");
+    }
+
+    /// Installed version, NeoForge `incompatible` range -> whether the guard trips.
+    #[test]
+    fn maven_incompatibility_ranges_flag_only_the_versions_inside() {
+        let cases: [(&str, &str, bool, &str); 7] = [
+            ("1.13.11", "(,1.13.3]", false, "30.10: Cristel Lib only bars old Towns and Towers, 1.13.11 was refused at install"),
+            ("1.13.3", "(,1.13.3]", true, "the upper bound is inclusive"),
+            ("0.8.13", "[, 0.8.0)", false, "30.10: More Culling only bars Sodium before 0.8, the space in the range must not matter"),
+            ("0.7.9", "[, 0.8.0)", true, "an old Sodium still trips the guard"),
+            ("2.5", "[1.0,2.0),[3.0,)", false, "between two barred ranges"),
+            ("3.1", "[1.0,2.0),[3.0,)", true, "the second alternative counts too"),
+            ("1.0", "[0,)", true, "an open range bars every version"),
+        ];
+        for (version, range, trips, why) in cases {
+            assert_eq!(version_satisfies(version, range), trips, "{} in {}: {}", version, range, why);
+        }
     }
 
     /// вход -> вердикт. A mod id read out of a jar has to reach the right catalog

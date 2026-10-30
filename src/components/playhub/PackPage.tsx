@@ -52,7 +52,7 @@ import { ArcaniaLegacy } from '../arcania/ArcaniaLegacy'
 import { HEAD as ARCANIA_HEAD } from '../arcania/content'
 import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { arcaniaOffer, heroAction } from '../arcania/offer'
-import { sellsPaidPacks } from '../../lib/paidPacks'
+import { ARCANIA_PARTNER, sellsPartnerPacks } from '../../lib/paidPacks'
 import { useHasMillida } from '../../state/auth'
 import { openAccountAdd } from '../../state/accountAdd'
 
@@ -609,7 +609,7 @@ export function PackPage({
       signedIn,
       access: hasAccess(full, sub) || hasAccess(full, liveSubscription(detail)),
       detail: detail ? 'ready' : detailFailed ? 'failed' : 'loading',
-      sells: sellsPaidPacks(),
+      sells: sellsPartnerPacks(full.partner?.slug ?? ARCANIA_PARTNER),
     })
     let arcMain: ReactNode = null
     if (offer === 'play') arcMain = cta

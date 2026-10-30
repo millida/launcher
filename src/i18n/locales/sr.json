@@ -5340,6 +5340,8 @@
   "Мод собран под другой загрузчик — отключи его": "Mod je sastavljen za drugi loader — isključi ga",
   "Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры": "Loader modpaka je već najnoviji za ovu verziju igre — modu je potrebna druga verzija igre",
   "Загрузчик {0} обновится при запуске (был {1})": "Loader {0} će se ažurirati pri pokretanju (bio je {1})",
+  "Загрузчик {0} обновится до {1} при запуске": "Loader {0} će se pri pokretanju ažurirati na {1}",
+  "Не получили список версий загрузчика — проверь интернет и попробуй ещё раз": "Lista verzija loadera nije stigla — proveri internet i pokušaj ponovo",
   "Некорректный объём памяти": "Neispravna količina memorije",
   "Такой объём памяти лаунчер не выставит": "Takvu količinu memorije launcher neće postaviti",
   "Сборке выделено {0} ГБ": "Modpaku je dodeljeno {0} GB",

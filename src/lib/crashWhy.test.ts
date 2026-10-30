@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { crashWhy, modTitle } from './crashWhy'
+import { crashWhy, isModCrash, modTitle } from './crashWhy'
 
 describe('crashWhy: чья поломка', () => {
   test('конфликт мода называет мод и снимает вину с лаунчера', () => {
@@ -29,4 +29,15 @@ describe('modTitle', () => {
     ['journeymap.jar.disabled', 'journeymap'],
   ]
   for (const [file, want] of cases) test(file, () => expect(modTitle(file)).toBe(want))
+})
+
+describe('isModCrash: «Починить сборку» передаёт разбор Милли вместо тупика', () => {
+  const cases: [string | undefined, boolean, string][] = [
+    ['conflict', true, 'конфликт без готового фикса: сверка файлов его не уберёт, нужен разбор лога'],
+    ['mixin', true, 'миксин — тоже поломка мода'],
+    ['oom', false, 'память лечится настройкой, а не разбором модов'],
+    ['gpu_driver', false, 'драйвер — не моды, Милли тут не поможет'],
+    [undefined, false, 'вылет без вида не уводим в Милли вслепую'],
+  ]
+  for (const [kind, want, why] of cases) test(String(kind), () => expect(isModCrash(kind), why).toBe(want))
 })
