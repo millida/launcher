@@ -116,10 +116,13 @@ jobs:
         with:
           components: clippy
 
+      # Restores only: three debug caches of over a gigabyte each pushed the release
+      # caches out of the 10 GB repository limit, and nothing waits on this CI.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.os }}
+          save-if: false
 
       - name: Clippy
         working-directory: src-tauri
