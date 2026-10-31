@@ -5,7 +5,7 @@
 use crate::engine::*;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 /// A catalogue pack that brings its own game.
 ///
@@ -31,6 +31,7 @@ const NATIVE_EXTENSIONS: &[&str] = &["dll", "so", "dylib", "jnilib"];
 /// between modules already loaded; the module path itself is never one of them.
 const PACK_MODULE_FLAGS: &[&str] = &["--add-modules", "--add-opens", "--add-exports", "--add-reads"];
 
+#[derive(Clone)]
 pub struct PackLaunch {
     /// Catalogue address — the pack asks the API for its launch token by it.
     pub slug: String,
@@ -646,6 +647,31 @@ pub async fn pack_access(slug: &str) -> Result<Option<PackAccess>, String> {
 
 const LAUNCH_GATE_WAIT_SECS: u64 = 6;
 
+/// An explicit "yes" from the access check stands for this long: a player who presses Play on the
+/// same build twice in a few minutes is not asked again. A refusal is never kept, and only a
+/// real answer of our API counts, not a silence. (A key-protected pack is also watched while it
+/// runs, see `watch_pack_access`; this gate is for ordinary profiles installed from a pack.)
+const GATE_ALLOWED_FOR: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+static GATE_ALLOWED: std::sync::Mutex<Vec<(String, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
+
+fn allowed_within(list: &[(String, std::time::Instant)], slug: &str, now: std::time::Instant, ttl: std::time::Duration) -> bool {
+    list.iter().any(|(s, at)| s == slug && now.saturating_duration_since(*at) < ttl)
+}
+
+/// True when the access check said yes for this pack in the last few minutes.
+pub(crate) fn gate_recently_allowed(slug: &str) -> bool {
+    let list = GATE_ALLOWED.lock().unwrap_or_else(|e| e.into_inner());
+    allowed_within(&list, slug, std::time::Instant::now(), GATE_ALLOWED_FOR)
+}
+
+fn remember_gate_allowed(slug: &str) {
+    let mut list = GATE_ALLOWED.lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    list.retain(|(s, at)| s != slug && now.saturating_duration_since(*at) < GATE_ALLOWED_FOR);
+    list.push((slug.to_string(), now));
+}
+
 /// The catalogue slug a profile was installed from, if it still has the shape
 /// our API gives out. The settings file is on the player's disk, and whatever
 /// is written there goes into a request path.
@@ -672,11 +698,20 @@ pub async fn pack_launch_gate(slug: &str) -> Result<(), String> {
                 "{}Войди в аккаунт Millida — эта сборка открывается по подписке",
                 PACK_ACCESS_PREFIX
             )),
+            // The card answered and does not ask for a subscription: that is a "yes" worth keeping.
+            Ok(Ok(v)) if v["accessRequired"].as_bool() == Some(false) => {
+                remember_gate_allowed(slug);
+                Ok(())
+            }
             _ => Ok(()),
         };
     }
     match tokio::time::timeout(wait, pack_access(slug)).await {
         Ok(Ok(Some(PackAccess::Lost(reason)))) => Err(format!("{}{}", PACK_ACCESS_PREFIX, reason)),
+        Ok(Ok(Some(PackAccess::Allowed { .. }))) => {
+            remember_gate_allowed(slug);
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
@@ -766,7 +801,8 @@ pub async fn forfeit_pack(app: &AppHandle, profile: &str, slug: &str, reason: &s
         ),
         Err(e) => format!("{}. Сборку не удалось убрать: {}", reason, e),
     };
-    let _ = app.emit(
+    crate::background::emit_main(
+        app,
         "pack-access-lost",
         json!({ "profile": profile, "message": message, "removed": removed.is_ok() }),
     );
@@ -1411,5 +1447,20 @@ mod tests {
             .map(|x| x.as_str().unwrap().to_string())
             .collect();
         assert!(game.contains(&"--versionType".to_string()), "без своего списка — прежний набор, Arcania не меняется");
+    }
+
+    #[test]
+    fn an_explicit_yes_of_the_access_check_is_kept_for_five_minutes_and_only_for_its_pack() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let list = vec![("oneblock".to_string(), t0)];
+        let ttl = Duration::from_secs(300);
+        assert!(allowed_within(&list, "oneblock", t0 + Duration::from_secs(299), ttl));
+        assert!(!allowed_within(&list, "oneblock", t0 + Duration::from_secs(300), ttl), "five minutes, not a minute more");
+        assert!(!allowed_within(&list, "other-pack", t0, ttl), "a yes for one pack says nothing about another");
+        assert!(!allowed_within(&[], "oneblock", t0, ttl), "no answer on record, no shortcut");
+        remember_gate_allowed("perf-test-pack");
+        assert!(gate_recently_allowed("perf-test-pack"));
+        assert!(!gate_recently_allowed("perf-test-never-asked"));
     }
 }
