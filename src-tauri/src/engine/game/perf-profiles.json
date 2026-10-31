@@ -1,0 +1,1837 @@
+{
+ "rev": 2,
+ "updated": "2026-10-27",
+ "source": "Fabulously Optimized INCLUDED-MODS + PERF-research 27.10.2026; pins are Modrinth version ids",
+ "never": [
+  "lazydfu",
+  "starlight",
+  "krypton",
+  "rubidium",
+  "canary",
+  "vulkanmod",
+  "noisium",
+  "smooth-boot"
+ ],
+ "manualOnly": [
+  "entityculling",
+  "moreculling"
+ ],
+ "profiles": [
+  {
+   "loader": "fabric",
+   "game": "1.16.5",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "YAGZ1cCS",
+     "number": "mc1.16.5-0.2.0",
+     "sha1": "bf03460f1f82f355d1fe23a27ee81c3ed24e54dc",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "rvsW1zhb",
+     "number": "mc1.16.5-0.6.6",
+     "sha1": "ff9416b228333b481cdc98ec50c5f9944225d16b",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "3UkWIj4a",
+     "number": "2.1.1-fabric",
+     "sha1": "d099bf16b03666705173120d933facd0c0f33e44",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "mYMcM6vv",
+     "number": "3.11.4",
+     "sha1": "aab43c33e73a4ff3cc2f2854b4d42ed56e5f0c6a",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "Fk7XLSFc",
+     "number": "4.6.10+1.16.5-fabric",
+     "sha1": "491aa04e2d2a473eafc3fc0f366f2eb6dd4cb26e",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.19.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "rAfhHfow",
+     "number": "mc1.19.2-0.4.4",
+     "sha1": "227648dc4f6a8604bafc282612a6de47eff70cd8",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "m6sVgAi6",
+     "number": "mc1.19.2-0.11.1",
+     "sha1": "072a8bad252765e0f21a6f939cf2056fe437228e",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "kwjHqfz7",
+     "number": "5.0.3-fabric",
+     "sha1": "4a124f8205e39b84a156db2d1e435c5708328d7b",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "gPV1o5PO",
+     "number": "1.4.0+1.19.2-fabric",
+     "sha1": "fff898b8aaa217bac83ffcc4cae5ef8f4f28aa84",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "Q8DU8d07",
+     "number": "3.11.4",
+     "sha1": "524b24af2f2fca504e955a80694a7c1649a00917",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "AmPdNCPb",
+     "number": "1.6.1+1.19.2",
+     "sha1": "87e1a58f10486c8ea93ee758feb9c6538fbb825e",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "VJxJiPUb",
+     "number": "4.6.10+1.19.2-fabric",
+     "sha1": "8366e32ca88f0a464099a1933a27561cacdf1d65",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.20",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "vgceLbdH",
+     "number": "mc1.20-0.4.10",
+     "sha1": "b11e18bb09f06c3f8028fa2c090072976fa326d0",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "2KMrj5c1",
+     "number": "mc1.20-0.11.2",
+     "sha1": "c19b1fb8ffda09f5bd22cbef8691aa6fed181d90",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "unerR5MN",
+     "number": "6.0.1",
+     "sha1": "8fa3b84fc5860dbc30fdf8cced02af68dffcf3fa",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "iwYUrQJO",
+     "number": "1.5.5+1.20.4-fabric",
+     "sha1": "9f0110b60dc752ca093f2fc10a72d221b6dc8ac3",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "WENf7fmL",
+     "number": "5.0.2+mc1.20",
+     "sha1": "64b2d6d0425107bac9ec34d5fb58ca1dcdac12b9",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "QwPQBhiQ",
+     "number": "3.11.4",
+     "sha1": "38196ee5bcfb3605f9bb9e52a45916b250216313",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "tNgyOUMr",
+     "number": "3.0.0+1.20+",
+     "sha1": "68f080925502a49027e231c63d3b94128ed6499b",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "UmzbPud1",
+     "number": "1.7.5+1.20.1",
+     "sha1": "d825fcd495bcf53ab9ed3974a57f87b4d56d6a26",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "mUEFIKRd",
+     "number": "4.6.10+1.20.1-fabric",
+     "sha1": "45babe59382734771403c3b94ed941a13009a7f8",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.20.1",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "OihdIimA",
+     "number": "mc1.20.1-0.5.13-fabric",
+     "sha1": "bcdbf37d9494e405cba210d7a80ed58e756297b5",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "iEcXOkz4",
+     "number": "mc1.20.1-0.11.4-fabric",
+     "sha1": "048227ed60a3005cf9fa55880dfe0cf20b0ba680",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "unerR5MN",
+     "number": "6.0.1",
+     "sha1": "8fa3b84fc5860dbc30fdf8cced02af68dffcf3fa",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "iwYUrQJO",
+     "number": "1.5.5+1.20.4-fabric",
+     "sha1": "9f0110b60dc752ca093f2fc10a72d221b6dc8ac3",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "rPmgLeZC",
+     "number": "5.25.2+mc1.20.1",
+     "sha1": "be03b9eb570c1e9df7593e68623f0fecbd039460",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "QwPQBhiQ",
+     "number": "3.11.4",
+     "sha1": "38196ee5bcfb3605f9bb9e52a45916b250216313",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "tNgyOUMr",
+     "number": "3.0.0+1.20+",
+     "sha1": "68f080925502a49027e231c63d3b94128ed6499b",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "UmzbPud1",
+     "number": "1.7.5+1.20.1",
+     "sha1": "d825fcd495bcf53ab9ed3974a57f87b4d56d6a26",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "mUEFIKRd",
+     "number": "4.6.10+1.20.1-fabric",
+     "sha1": "45babe59382734771403c3b94ed941a13009a7f8",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.20.4",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "4GyXKCLd",
+     "number": "mc1.20.4-0.5.8",
+     "sha1": "4c38d7b01660a27a98406767c613b3f28b6c9dfe",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "nMhjKWVE",
+     "number": "mc1.20.4-0.12.1",
+     "sha1": "4a0744beb2246d93cb475d21a5a53faa556956e0",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "pguEMpy9",
+     "number": "6.0.3-fabric",
+     "sha1": "f2bbb773f4213d36201b76820f206e2a6f213c0c",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "iwYUrQJO",
+     "number": "1.5.5+1.20.4-fabric",
+     "sha1": "9f0110b60dc752ca093f2fc10a72d221b6dc8ac3",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "CV2Vtn5m",
+     "number": "5.17.0+mc1.20.4",
+     "sha1": "cf5f1f0db74b0385c2738c6fbf8347e7e68100d6",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "TBg9M5dN",
+     "number": "3.11.4",
+     "sha1": "343a82a585d26612ee31da3a9dae80edfa53a9ed",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "vOAKK0JB",
+     "number": "3.0.0+1.20.4",
+     "sha1": "c1340863cc8d61219785c16163156dc748a70763",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "kylH7OlH",
+     "number": "1.7.5+1.20.4",
+     "sha1": "3669f51d0da17d023dfdbbce719781b57cef9d92",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "f9UP16c8",
+     "number": "4.6.10+1.20.4-fabric",
+     "sha1": "d0eb568fe716119c3bd85bd2119ed2e68c95e1d2",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "u1OEbNKx",
+     "number": "mc1.21.1-0.6.13-fabric",
+     "sha1": "928a2598178c3a58b0638bab842f467d2e49251a",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "Yu6L8EnD",
+     "number": "mc1.21.1-0.15.2-fabric",
+     "sha1": "72d9c51e9ece62018f290bfbbf7bbb87190cc7ed",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "wmIZ4wP4",
+     "number": "7.0.0-fabric",
+     "sha1": "95b18b0f1673bbbe328812c3052cc1a921591f0f",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "aLnBqxFW",
+     "number": "1.6.15+1.21.1-fabric",
+     "sha1": "5067bdff1d5cc6d2dd89986f98bd8bd7ae62fb98",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "GBH14HiF",
+     "number": "3.11.4",
+     "sha1": "c0ee92c6d8a48e077aa9b02f3470619eab17d59c",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "dIGKewCo",
+     "number": "3.0.0+1.20.6",
+     "sha1": "9c4bf4fc3292d627fe0eff85a96672a15f27338c",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "lLMGPiZe",
+     "number": "1.7.6+1.21.1",
+     "sha1": "95c1266f43e330d4848dcf2e11a6be98a8990ce5",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "j3X1nxNK",
+     "number": "4.6.10+1.21.1-fabric",
+     "sha1": "f790481f85221c74176e7660ea48e4fe514869ab",
+     "stable": true,
+     "os": "windows"
+    },
+    {
+     "slot": "scale",
+     "slug": "renderscale",
+     "version": "yU2mpYMp",
+     "number": "1.2",
+     "sha1": "507f9d68619252d5b008af8a16e54e72ed7002b3",
+     "stable": true,
+     "levels": [
+      "potato",
+      "low"
+     ],
+     "conflicts": [
+      "optifine",
+      "optifabric",
+      "iris",
+      "oculus",
+      "distanthorizons"
+     ]
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21.1",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "SMxNOGZ6",
+     "number": "mc1.21.1-0.8.13-fabric",
+     "sha1": "003c114c85ca88ef3362e018deb6aca0c682d6a1",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "N08Z8wog",
+     "number": "mc1.21.1-0.15.4-fabric",
+     "sha1": "7d82a004403b7780d4443d8e40361a55cfd0ae63",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "sOzRw3CG",
+     "number": "7.0.3-fabric",
+     "sha1": "a8a6a34fcda177da2828cedef44e0e538cf78aad",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "aLnBqxFW",
+     "number": "1.6.15+1.21.1-fabric",
+     "sha1": "5067bdff1d5cc6d2dd89986f98bd8bd7ae62fb98",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "NnNX8LBn",
+     "number": "5.25.1+mc1.21.1",
+     "sha1": "4ab39e9c736e7204146792c545ec5b29fc0a3872",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "GBH14HiF",
+     "number": "3.11.4",
+     "sha1": "c0ee92c6d8a48e077aa9b02f3470619eab17d59c",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "dIGKewCo",
+     "number": "3.0.0+1.20.6",
+     "sha1": "9c4bf4fc3292d627fe0eff85a96672a15f27338c",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "lLMGPiZe",
+     "number": "1.7.6+1.21.1",
+     "sha1": "95c1266f43e330d4848dcf2e11a6be98a8990ce5",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "j3X1nxNK",
+     "number": "4.6.10+1.21.1-fabric",
+     "sha1": "f790481f85221c74176e7660ea48e4fe514869ab",
+     "stable": true,
+     "os": "windows"
+    },
+    {
+     "slot": "scale",
+     "slug": "renderscale",
+     "version": "yU2mpYMp",
+     "number": "1.2",
+     "sha1": "507f9d68619252d5b008af8a16e54e72ed7002b3",
+     "stable": true,
+     "levels": [
+      "potato",
+      "low"
+     ],
+     "conflicts": [
+      "optifine",
+      "optifabric",
+      "iris",
+      "oculus",
+      "distanthorizons"
+     ]
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21.4",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "c3YkZvne",
+     "number": "mc1.21.4-0.6.13-fabric",
+     "sha1": "c881d2db971207c396b5629632437f1520c0c478",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "u8pHPXJl",
+     "number": "mc1.21.4-0.15.3-fabric",
+     "sha1": "b7100505d1178b0f9a1dac4a24472ad1293b890c",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "7KqeXPRS",
+     "number": "7.1.3-fabric",
+     "sha1": "7b08d3c7242b18c9e15c11d365d368dde6955a9c",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "gF6yVXr9",
+     "number": "1.8.7+1.21.4-fabric",
+     "sha1": "209dc1c476438f4d613e4d9d697971cef32f042a",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "ZGxQddYr",
+     "number": "5.20.3+mc1.21.4",
+     "sha1": "46dabb966c9772daf5d3af20fbadc8f2fbcbeb18",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "HdbAWjaF",
+     "number": "3.0.0+1.21.4",
+     "sha1": "44e32d51d5ee75d9aaf5947394714af0640d798d",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "vxcPpG8h",
+     "number": "1.7.6+1.21.4",
+     "sha1": "599952d8018d6e1d89410f72033c162600e3cdea",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "oOJ4K1kx",
+     "number": "4.6.10+1.21.8-fabric",
+     "sha1": "33c2fbc46f6195f5a8b831d940dc88a5b2bf8c8b",
+     "stable": true,
+     "os": "windows"
+    },
+    {
+     "slot": "scale",
+     "slug": "renderscale",
+     "version": "9Ka6PhI5",
+     "number": "1.1",
+     "sha1": "ac51c621850c471859519c482dec993efa39ebe2",
+     "stable": true,
+     "levels": [
+      "potato",
+      "low"
+     ],
+     "conflicts": [
+      "optifine",
+      "optifabric",
+      "iris",
+      "oculus",
+      "distanthorizons"
+     ]
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21.5",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "DA250htH",
+     "number": "mc1.21.5-0.6.13-fabric",
+     "sha1": "6a7132ea86653541fa53ef88c764c8ac0cde81cc",
+     "stable": false,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "xcELvp6R",
+     "number": "mc1.21.5-0.16.3-fabric",
+     "sha1": "eaa7ef4e1dba9006dd216bb310eb8ec3dccd84bc",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "LdlksamY",
+     "number": "8.0.4-fabric",
+     "sha1": "974662c047d5eaa34d372be09409b8b754c223f4",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "AJh4ziDx",
+     "number": "1.9.7+1.21.5-fabric",
+     "sha1": "7bc7380cbae85467d3f264d6a88dee77473bcdf5",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "HdbAWjaF",
+     "number": "3.0.0+1.21.4",
+     "sha1": "44e32d51d5ee75d9aaf5947394714af0640d798d",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "kyqQHNLB",
+     "number": "1.7.6+1.21.5",
+     "sha1": "03b2cb9c415fe2d1c143f8cc2b9d3d2d38609f27",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "oOJ4K1kx",
+     "number": "4.6.10+1.21.8-fabric",
+     "sha1": "33c2fbc46f6195f5a8b831d940dc88a5b2bf8c8b",
+     "stable": true,
+     "os": "windows"
+    },
+    {
+     "slot": "scale",
+     "slug": "renderscale",
+     "version": "pjFOUjkm",
+     "number": "1.3.1",
+     "sha1": "67431ab02ef186237b066be848fdae9bd077bcc4",
+     "stable": true,
+     "levels": [
+      "potato",
+      "low"
+     ],
+     "conflicts": [
+      "optifine",
+      "optifabric",
+      "iris",
+      "oculus",
+      "distanthorizons"
+     ]
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21.8",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "7pwil2dy",
+     "number": "mc1.21.8-0.7.3-fabric",
+     "sha1": "c9ed2b00385ea191e81ea4da51c008755fe90a26",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "qxIL7Kb8",
+     "number": "mc1.21.8-0.18.1-fabric",
+     "sha1": "4d7e594b4f4af78c0591eaecde298e3eb046eb05",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "LdlksamY",
+     "number": "8.0.4-fabric",
+     "sha1": "974662c047d5eaa34d372be09409b8b754c223f4",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "zihthChu",
+     "number": "1.12.6+1.21.8-fabric",
+     "sha1": "300295b237fa1fcc0cb93ef07cf12ee86baf367e",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ah71vPRw",
+     "number": "3.1.1+mc1.21.6",
+     "sha1": "c44081dadc343918b3623dc69ef2d395fceed99c",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "tmnjNpE6",
+     "number": "1.7.6+1.21.8",
+     "sha1": "8cb11b5b79df96197b7a9bf84b1eb7f945a03207",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "oOJ4K1kx",
+     "number": "4.6.10+1.21.8-fabric",
+     "sha1": "33c2fbc46f6195f5a8b831d940dc88a5b2bf8c8b",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21.10",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "sFfidWgd",
+     "number": "mc1.21.10-0.7.3-fabric",
+     "sha1": "1c3ffa862d9fa4479abf67a88527907d60237248",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "NsswKiwi",
+     "number": "mc1.21.10-0.20.1-fabric",
+     "sha1": "7d44f5da9c690bbf1bd6d65c1acc81db5cf7f8c6",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "bPLllEgi",
+     "number": "8.1.0-fabric",
+     "sha1": "fbc854f0a30657a0f8b4a5c79ce6580f3f8fbea9",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "9hztj0xA",
+     "number": "1.13.6+1.21.10-fabric",
+     "sha1": "582290ea96fb51c7a3e21d11f5c5701d798c1341",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ZgHqClek",
+     "number": "3.1.2+mc1.21.10",
+     "sha1": "d173dc167ca729dbb6cd0de3d6c1435c7f665039",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "KeQdftoX",
+     "number": "1.7.6+1.21.10",
+     "sha1": "56bb8175b6a9ef01180c694ac94b9213841217e5",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "8rVRHBcq",
+     "number": "4.6.10+1.21.11-fabric",
+     "sha1": "c4311d4149e47285f80d351fc48d4499a76eb85c",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "1.21.11",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "rkdTcxoT",
+     "number": "mc1.21.11-0.8.14-fabric",
+     "sha1": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "Ow7wA0kG",
+     "number": "mc1.21.11-0.21.4-fabric",
+     "sha1": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "Ii0gP3D8",
+     "number": "8.2.0-fabric",
+     "sha1": "c2e2f5e008f5bc9f401dfad8ca94909917006b65",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "4EwhsTu7",
+     "number": "1.14.3+1.21.11-fabric",
+     "sha1": "43e451464f979bdf9ff4ac288b358a2f91b79ed8",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix-mvus",
+     "version": "QrRIY2rV",
+     "number": "5.26.3-build.2",
+     "sha1": "5a51d1a9768bbf9943e6eef83abf43d2b82baa30",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ip2tVKLp",
+     "number": "3.1.3+mc1.21.11",
+     "sha1": "9ba127357e1fc9ff800496250fb510f70f394714",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "rJRsdV10",
+     "number": "1.7.7+1.21.11",
+     "sha1": "eb4bca721845c31d76e5105f3161ccad2d7ec57e",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "8rVRHBcq",
+     "number": "4.6.10+1.21.11-fabric",
+     "sha1": "c4311d4149e47285f80d351fc48d4499a76eb85c",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "26.1",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "uGvVQBnw",
+     "number": "mc26.1.1-0.8.9-fabric",
+     "sha1": "48b949ec71365788dfd4e89d489f7abd504aa709",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "Oqq8TOAV",
+     "number": "mc26.1.2-0.24.7-fabric",
+     "sha1": "7959f418969ee8bfe50c0f21f352ed08b382f133",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "d5ddUdiB",
+     "number": "9.0.0-fabric",
+     "sha1": "eac76ff0f3753422c61b2c44487d0d195d88d4bc",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "xOA9hbpf",
+     "number": "1.15.3+26.1-fabric",
+     "sha1": "0bc5865bcb7f2f09d85559a58fccddcfd335f44d",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix-mvus",
+     "version": "cTKaCklf",
+     "number": "5.27.19-build.1",
+     "sha1": "9f68fd82da95582bd27fb97b90015ce268296132",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ly8rADfr",
+     "number": "3.1.4+mc26.1.x",
+     "sha1": "51efa22cfe15e4068167cc96da430496afa3ab7e",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "czZ5NaSe",
+     "number": "1.7.8+26.1.2",
+     "sha1": "72ab4262d080f844351fd495ed1246b0973dffb1",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "HLlGJnQJ",
+     "number": "4.6.10+26.1.2-fabric",
+     "sha1": "a727be360f2db91296464eb67b838aa841bb55d5",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "26.1.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "tZQ3jqnf",
+     "number": "mc26.1.2-0.9.2-fabric",
+     "sha1": "d107b02081262e243e80559192a2de86007155d6",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "Oqq8TOAV",
+     "number": "mc26.1.2-0.24.7-fabric",
+     "sha1": "7959f418969ee8bfe50c0f21f352ed08b382f133",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "d5ddUdiB",
+     "number": "9.0.0-fabric",
+     "sha1": "eac76ff0f3753422c61b2c44487d0d195d88d4bc",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "xOA9hbpf",
+     "number": "1.15.3+26.1-fabric",
+     "sha1": "0bc5865bcb7f2f09d85559a58fccddcfd335f44d",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix-mvus",
+     "version": "cTKaCklf",
+     "number": "5.27.19-build.1",
+     "sha1": "9f68fd82da95582bd27fb97b90015ce268296132",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ly8rADfr",
+     "number": "3.1.4+mc26.1.x",
+     "sha1": "51efa22cfe15e4068167cc96da430496afa3ab7e",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "czZ5NaSe",
+     "number": "1.7.8+26.1.2",
+     "sha1": "72ab4262d080f844351fd495ed1246b0973dffb1",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "HLlGJnQJ",
+     "number": "4.6.10+26.1.2-fabric",
+     "sha1": "a727be360f2db91296464eb67b838aa841bb55d5",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "26.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "xJZxADzI",
+     "number": "mc26.2-0.9.2-fabric",
+     "sha1": "62a70961a5b3e06938e06ab5f2dc4c5a51cf3323",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "f7vZ0VWU",
+     "number": "mc26.2-0.25.3-fabric",
+     "sha1": "435ad0289209bb72195e7a423756a03f5dfa5a9a",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "d5ddUdiB",
+     "number": "9.0.0-fabric",
+     "sha1": "eac76ff0f3753422c61b2c44487d0d195d88d4bc",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "pMWERcSu",
+     "number": "1.16.5+26.2-fabric",
+     "sha1": "0286260261591fe77ba0d332d5d5a2d2e868c2c6",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix-mvus",
+     "version": "50uUra83",
+     "number": "5.27.19-build.2",
+     "sha1": "a14d2ba0fd0d56d12d48bb9f1c44fd3d345bf5e2",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ZZ5dfboC",
+     "number": "3.1.5+mc26.2",
+     "sha1": "0977eb0a35e1a1602bc9306ddbbb9177734131f0",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "doGx6rSt",
+     "number": "1.7.8+26.2",
+     "sha1": "3d5a85a0804aef395d3dffb0ee69acf634f4464c",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "80IWIuWt",
+     "number": "4.6.10+26.2-fabric",
+     "sha1": "70d94fecbaa85f3ad358eccb4c87ecd3839712a9",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "fabric",
+   "game": "26.3",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "bAZQdGpg",
+     "number": "mc26.3-0.9.2-fabric",
+     "sha1": "9acfe851e36f4fb27d7c5baa224e8bd4e0334283",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "xS0Q8LSi",
+     "number": "mc26.3-0.26.2-fabric",
+     "sha1": "dd5a4ec2c68d7601d8bce9076f789c55a5f8bef3",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "d5ddUdiB",
+     "number": "9.0.0-fabric",
+     "sha1": "eac76ff0f3753422c61b2c44487d0d195d88d4bc",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "3MP9UR23",
+     "number": "1.17.1+26.3-fabric",
+     "sha1": "f565bbeb201f2305e81761429d3f1f47e1c3a321",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix-mvus",
+     "version": "pa9cAfYg",
+     "number": "5.27.20-build.2",
+     "sha1": "b63337e801fbf2cb420a049d69220c56e083f514",
+     "stable": true
+    },
+    {
+     "slot": "quit",
+     "slug": "fastquit",
+     "version": "ZZ5dfboC",
+     "number": "3.1.5+mc26.2",
+     "sha1": "0977eb0a35e1a1602bc9306ddbbb9177734131f0",
+     "stable": true
+    },
+    {
+     "slot": "language",
+     "slug": "language-reload",
+     "version": "QVn4cccd",
+     "number": "1.7.8+26.3",
+     "sha1": "e6fd2df83d1d3d0f352a7e45eaf76f4551c136f2",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "sjqczBmY",
+     "number": "4.6.10+26.3-fabric",
+     "sha1": "4b1491b45a962616d7abb6bd87a5a312aead1e7e",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.12.2",
+   "mods": [
+    {
+     "slot": "memory",
+     "slug": "vintagefix",
+     "version": "CutuuVKA",
+     "number": "0.7.2",
+     "sha1": "16cab7d8e035a69733fe6c620bdd228cfe570fae",
+     "stable": true
+    },
+    {
+     "slot": "renderer",
+     "slug": "nothirium",
+     "version": "s9WsUXE1",
+     "number": "1.12.2-0.4.9-beta",
+     "sha1": "b70d60e9ebd5e84962c4ddd6abfd2bbde178cafb",
+     "stable": true,
+     "optifineClash": true
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.16.5",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "embeddium",
+     "version": "9PbX7IEh",
+     "number": "0.3.18+mc1.16.5",
+     "sha1": "e14a2beb0aec7156dd848d1590ce42daf337a4ce",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "6gwDuh90",
+     "number": "2.1.1-forge",
+     "sha1": "3ae8dbe663156a8dec621d255856356444586905",
+     "stable": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "Cc0b1kXl",
+     "number": "5.18.0+mc1.16.5",
+     "sha1": "bd020d379e36ed8a2568fa76d998aff265cb57bb",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "5VqjJ4M6",
+     "number": "3.4.3",
+     "sha1": "67c402d11982542c9c804ef9ff3dab707a6705db",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "HfeRbZeh",
+     "number": "4.6.10+1.16.5-forge",
+     "sha1": "f2aa02d05fd723853744535b5dee1c3b5debcba2",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.18.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "embeddium",
+     "version": "xuVAgh89",
+     "number": "0.3.18+mc1.18.2",
+     "sha1": "9773d8af0da3a2b49fa896395ced2393e28e857b",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "fs07zE6w",
+     "number": "4.2.2",
+     "sha1": "e9e0e711de47112dc53e24dc008da1f598834c4f",
+     "stable": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "Vlkqd178",
+     "number": "5.18.0+mc1.18.2",
+     "sha1": "56a7629faca859ae5774d29ced0bd26e6d091fc9",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "2gbUjorL",
+     "number": "3.11.4",
+     "sha1": "6b85ba26fa8c7c6685485d6c945de51548e23829",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "LPQCOMOl",
+     "number": "4.6.10+1.18.2-forge",
+     "sha1": "2f0c5f0f309a8bf0f256f21229332099c17f8911",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.19.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "embeddium",
+     "version": "AYqEbec0",
+     "number": "0.3.18.1+mc1.19.2",
+     "sha1": "e5e2884a8700251f85573bd412cacd13229045f9",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "CtXsUUz6",
+     "number": "5.0.3-forge",
+     "sha1": "59245ec84ca1e3639237f5a04fe6f7556a9ec2bb",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "OWO57F2j",
+     "number": "1.4.0+1.19.2-forge",
+     "sha1": "8e7937679a532e80cf623ddbbc6c0fbf7cb1cb8f",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "FqoRZlrr",
+     "number": "5.18.1+mc1.19.2",
+     "sha1": "532d4dcc05095d7aa2289e4758e5c8265c759c9b",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "n4lbGeR8",
+     "number": "3.11.4",
+     "sha1": "8940cb891d84b306358339a547682a0d8a8020cd",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "u2BD2Q7k",
+     "number": "4.6.10+1.19.2-forge",
+     "sha1": "83988d1873a2212b047587171f7b2039070faf24",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.20.1",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "embeddium",
+     "version": "UTbfe5d1",
+     "number": "0.3.31+mc1.20.1",
+     "sha1": "bb2fa8f3e493af16af9160d049f96c614a1faf2f",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "DG5Fn9Sz",
+     "number": "6.0.1",
+     "sha1": "417fb6ce8f52abf40bd9d0390371790f9576f8ba",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "rvsLEEZU",
+     "number": "1.5.5+1.20.4-forge",
+     "sha1": "9eacd407b7dea636d375dc47335d92f616484ea2",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "OM5gX4LT",
+     "number": "5.27.91+mc1.20.1",
+     "sha1": "195d53d299a93c418c90b672c2640b4e41623f96",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "EjdIWWqG",
+     "number": "3.11.4",
+     "sha1": "43b3e0766a9e7a30651cc01756476657b865b7a2",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "YuX4Y2t7",
+     "number": "4.6.10+1.20.1-forge",
+     "sha1": "23392a830e5fb7fcaccf9204ee854f7d91267500",
+     "stable": true,
+     "os": "windows"
+    },
+    {
+     "slot": "scale",
+     "slug": "renderscale",
+     "version": "wzrQQ6Z9",
+     "number": "1.0",
+     "sha1": "818391dd2b5ac89f5af7d16a8634df7f85837580",
+     "stable": true,
+     "levels": [
+      "potato",
+      "low"
+     ],
+     "conflicts": [
+      "optifine",
+      "optifabric",
+      "iris",
+      "oculus",
+      "distanthorizons"
+     ]
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.21.1",
+   "mods": [
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "WwLdDmNa",
+     "number": "1.6.15+1.21.1-forge",
+     "sha1": "19c95d83e9cfe834be5334bfd3fa80d48f2882d1",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "ImqRkFSf",
+     "number": "3.11.4",
+     "sha1": "8b33e8bb5b720aadf5b934ed10aee49aa5d9fde0",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "LYNEbGiS",
+     "number": "4.6.10+1.21.1-forge",
+     "sha1": "0a683a3c4fee55feb59e3981d3ec74a723856981",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "1.21.11",
+   "mods": [
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "Yh0lrcyc",
+     "number": "4.6.10+1.21.11-forge",
+     "sha1": "8a88dd3fc83415634919a3be7894ff2fcf847453",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "forge",
+   "game": "26.2",
+   "mods": []
+  },
+  {
+   "loader": "forge",
+   "game": "26.3",
+   "mods": []
+  },
+  {
+   "loader": "neoforge",
+   "game": "1.21.1",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "uMOpc5uV",
+     "number": "mc1.21.1-0.8.13-neoforge",
+     "sha1": "1757289be21ed18db5b0d90703fa3db1b2de5693",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "DDUrRVCA",
+     "number": "mc1.21.1-0.15.4-neoforge",
+     "sha1": "97212e45c963730bbfc7c44780df99317814c21b",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "x7kQWVju",
+     "number": "7.0.3-neoforge",
+     "sha1": "9563692efb708b6b568df27a01ec52f6311928ef",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "EJzmEPZV",
+     "number": "1.6.15+1.21.1-neoforge",
+     "sha1": "f991166f7c82b493481c876e3c83c9fac4159671",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "ZDZENbHH",
+     "number": "5.27.27+mc1.21.1",
+     "sha1": "52c008540c7dc2cc451f7e939a885d7462c9ae72",
+     "stable": true
+    },
+    {
+     "slot": "background",
+     "slug": "dynamic-fps",
+     "version": "T238FZpQ",
+     "number": "3.11.4",
+     "sha1": "35b17e95b2b65930116ccc83e0cc358ac1bfcf9e",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "QZHF8QKH",
+     "number": "4.6.10+1.21.1-neoforge",
+     "sha1": "0635de4635d2d5cd784eaba62a17d2544e1cf4dd",
+     "stable": true,
+     "os": "windows"
+    },
+    {
+     "slot": "scale",
+     "slug": "renderscale",
+     "version": "7OH5N3Tc",
+     "number": "1.2",
+     "sha1": "85c3ba1418b8a653840eacf32aacd106701b000e",
+     "stable": true,
+     "levels": [
+      "potato",
+      "low"
+     ],
+     "conflicts": [
+      "optifine",
+      "optifabric",
+      "iris",
+      "oculus",
+      "distanthorizons"
+     ]
+    }
+   ]
+  },
+  {
+   "loader": "neoforge",
+   "game": "1.21.11",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "sC6wj32u",
+     "number": "mc1.21.11-0.8.14-neoforge",
+     "sha1": "de0cd8d51567dc64ccce584ab43e59db6116679e",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "M93zf1Gr",
+     "number": "mc1.21.11-0.21.4-neoforge",
+     "sha1": "43a5f409c8c4b2f1dc1f894ca2bb12a16ae156fd",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "mLI5k2Gi",
+     "number": "8.2.0-neoforge",
+     "sha1": "900f0f673fef88784711ee952cbf1fe8be2480bd",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "jaBvDEKq",
+     "number": "1.14.3+1.21.11-neoforge",
+     "sha1": "a4e7fe10b619b366a7d354b829849807ad4958af",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "9RMzDv5C",
+     "number": "4.6.10+1.21.11-neoforge",
+     "sha1": "30223e88d7dc38eb95dc5b2226bdf565f3f4abe3",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "neoforge",
+   "game": "26.1.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "zg4YQ9EL",
+     "number": "mc26.1.2-0.9.2-neoforge",
+     "sha1": "e03e21bf6553fc517241d59c2c116b8e5cc882f8",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "eZ0KJiEA",
+     "number": "mc26.1.2-0.24.7-neoforge",
+     "sha1": "4771c7950131f4be684ca286656632f554f36fa5",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "LtVvw4uS",
+     "number": "9.0.0-neoforge",
+     "sha1": "b8bfb14ba6ce7068aae08c3a132ca40bda6bd143",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "adbrNJLm",
+     "number": "1.15.3+26.1-neoforge",
+     "sha1": "bb10bdde4199da3cb7a2a64f9e3274a46218c9f1",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "startup",
+     "slug": "modernfix",
+     "version": "Ys9Tnajc",
+     "number": "5.27.25+mc26.1.2",
+     "sha1": "93d9e7ce543ae34242540d7b748f50b7b2fd4966",
+     "stable": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "hUF3Rq9c",
+     "number": "4.6.10+26.1.2-neoforge",
+     "sha1": "eead5bf865d6f28ce62464cf7d7232bda97e15de",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "neoforge",
+   "game": "26.2",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "DmnNKsfS",
+     "number": "mc26.2-0.9.2-neoforge",
+     "sha1": "e0a7838c8f733fecf0f2cb729e3439f70c21809f",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "J9CowDXK",
+     "number": "mc26.2-0.25.3-neoforge",
+     "sha1": "e834dc970751b97605e2d06565b8998e22dd543a",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "LtVvw4uS",
+     "number": "9.0.0-neoforge",
+     "sha1": "b8bfb14ba6ce7068aae08c3a132ca40bda6bd143",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "4C8Vb9ab",
+     "number": "1.16.5+26.2-neoforge",
+     "sha1": "60c34a439f8ac6153b0820a23fa1004d8820025b",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "CUiz77yV",
+     "number": "4.6.10+26.2-neoforge",
+     "sha1": "3b74cd8e81a9149d223e1d0493906a5f182321b1",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  },
+  {
+   "loader": "neoforge",
+   "game": "26.3",
+   "mods": [
+    {
+     "slot": "renderer",
+     "slug": "sodium",
+     "version": "VHtnT9Q4",
+     "number": "mc26.3-0.9.2-neoforge",
+     "sha1": "9015607e5ae2c5b9692ebf05113f9caca6ec41bf",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "logic",
+     "slug": "lithium",
+     "version": "1rb9wI5K",
+     "number": "mc26.3-0.26.2-neoforge",
+     "sha1": "1d11e085f74dda6fb797dfc4296cf4086fddfdcb",
+     "stable": true
+    },
+    {
+     "slot": "memory",
+     "slug": "ferrite-core",
+     "version": "LtVvw4uS",
+     "number": "9.0.0-neoforge",
+     "sha1": "b8bfb14ba6ce7068aae08c3a132ca40bda6bd143",
+     "stable": true
+    },
+    {
+     "slot": "render2",
+     "slug": "immediatelyfast",
+     "version": "4SovUFpn",
+     "number": "1.17.1+26.3-neoforge",
+     "sha1": "a072863c3b4e7cfed81899d8d3115839a161a708",
+     "stable": true,
+     "optifineClash": true
+    },
+    {
+     "slot": "mouse",
+     "slug": "ixeris",
+     "version": "tP26bfrr",
+     "number": "4.6.10+26.3-neoforge",
+     "sha1": "16dd5add7b4f6670dd0a56ce187213631f168b2f",
+     "stable": true,
+     "os": "windows"
+    }
+   ]
+  }
+ ]
+}

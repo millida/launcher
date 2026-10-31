@@ -2,11 +2,13 @@
 // to api.millida.net/v2/launcher/telemetry. Also a "in lobby / in game" pulse to /launcher/heartbeat. What exactly is sent and how to turn it off:
 // TELEMETRY.md in the root. The switch is m-telemetry-off in localStorage. The install id (a random UUID) is stored here too.
 import { hasTauri } from '../ipc/tauri'
-import { appVersion, deviceSpecs, millidaApi, rememberInstallId, setGameTelemetry } from '../ipc/commands'
+import { appVersion, deviceSpecs, diskKind, millidaApi, rememberBeat, rememberInstallId, setGameTelemetry } from '../ipc/commands'
 import { LAUNCHER_API, apiHeaders } from './api'
 import { detectGpu } from './gpu'
 import { errorCode, scrubText } from './telemetryPrivacy'
 import { classifyError, type ErrorKind } from './errorKind'
+import { writePref } from './prefs'
+import { noted } from './noted'
 
 export type TelemetryEventType =
   | 'app_start'
@@ -156,9 +158,7 @@ function syncGame(on: boolean) {
 }
 
 export function setTelemetryEnabled(on: boolean) {
-  try {
-    localStorage.setItem(OPT_OUT_KEY, on ? '0' : '1')
-  } catch {}
+  writePref(OPT_OUT_KEY, on ? '0' : '1')
   syncGame(on)
   if (!on) {
     queue = []
@@ -348,6 +348,7 @@ export async function liveBeat(
   const payload = await liveBeatPayload(status, meta, force)
   if (!payload) return
   if (hasTauri()) {
+    void Promise.resolve(rememberBeat('/launcher/heartbeat', payload)).catch(noted('telemetry-beat'))
     try {
       await millidaApi('/launcher/heartbeat', 'POST', payload)
     } catch {}
@@ -387,6 +388,25 @@ function push(
   saveQueue()
   if (queue.length >= MAX_QUEUE) void flushTelemetry()
   return ev
+}
+
+const DISK_KEY = 'm-disk-kind'
+
+/// SSD or hard disk under the games folder, once per launcher version: slow launches on a spinning disk
+/// look the same as slow launches on a bad network until the disk is told apart. The core reads the drive
+/// itself (no admin rights); only the word goes out.
+export async function reportDiskKind(): Promise<void> {
+  if (!hasTauri() || !telemetryEnabled() || isOverlayWindow()) return
+  try {
+    const dev = await initDevice()
+    if (localStorage.getItem(DISK_KEY)?.startsWith(dev.appVersion + ':')) return
+    const kind = await diskKind()
+    localStorage.setItem(DISK_KEY, dev.appVersion + ':' + kind)
+    track('perf', { what: 'disk', kind })
+  } catch (e) {
+    // The core may not answer (a browser, an old core): the report is skipped, the reason is kept for the console.
+    console.warn('[telemetry] disk kind was not reported', e)
+  }
 }
 
 const EXIT_SURVIVED_MS = 1500
@@ -480,7 +500,16 @@ export function __resetTelemetryForTests() {
   failureSeen.clear()
 }
 
-export async function initTelemetry(bootMs: number): Promise<void> {
+/// `reopened`: the page is a rebuilt window of a launcher that kept running (tray, game), not
+/// a start of the launcher. It is counted apart, so the start dashboards and the cold-start
+/// timing are not mixed with the opening of an already warm core.
+export async function initTelemetry(bootMs: number, reopened = false): Promise<void> {
+  // Отказ, сделанный до появления файла настроек, переезжает в него один раз.
+  try {
+    if (!isOverlayWindow() && localStorage.getItem(OPT_OUT_KEY) === '1') writePref(OPT_OUT_KEY, '1')
+  } catch (e) {
+    console.warn('[telemetry] the old opt-out was not moved to the settings file', e)
+  }
   if (!isOverlayWindow()) syncGame(telemetryEnabled())
   if (!telemetryEnabled() || inited || isOverlayWindow()) return
   // Один раз на страницу: повторный вызов вешал бы ещё один слушатель выхода.
@@ -488,8 +517,10 @@ export async function initTelemetry(bootMs: number): Promise<void> {
   started = Date.now()
   ensureLoaded()
   await initDevice()
-  track('app_start', {}, { durationMs: Math.round(bootMs) })
+  if (reopened) track('perf', { what: 'window_reopen' }, { durationMs: Math.round(bootMs) })
+  else track('app_start', {}, { durationMs: Math.round(bootMs) })
   void liveBeat('idle', undefined, true)
+  void reportDiskKind()
   if (timer === null) {
     timer = window.setInterval(() => void flushTelemetry(), FLUSH_MS)
   }
