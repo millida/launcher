@@ -320,6 +320,12 @@ fn no_file_text(versions: &[Value], game_version: &str) -> String {
     }
 }
 
+/// Modrinth answered and has nothing for this build: a second click on the
+/// same lookup would only repeat the refusal.
+pub(crate) fn lookup_settled(err: &str) -> bool {
+    err.starts_with("нет файла под ") || err.starts_with("нет версии под ") || is_absent_answer(err)
+}
+
 /// Same as `best_version`, with the bridged loaders as a second choice.
 pub(crate) async fn best_version_bridged(
     project: &str,
@@ -641,6 +647,23 @@ mod tests {
         assert_eq!(ids("2026-10-05"), vec!["486", "484", "483", "482"], "newest first, no alpha, no other loader, at most four downloads");
         assert_eq!(ids("2026-08-20"), vec!["481"], "only files older than the one that did not fit");
         assert!(ids("").is_empty(), "a version without a date has no «older» to step back to");
+    }
+
+    /// Failed pick -> whether the audit may still offer «Поставить» as a retry.
+    #[test]
+    fn a_settled_lookup_leaves_nothing_to_retry() {
+        let url = "https://api.millida.net/v2/launcher/mr/v2/project/Thaumcraft/version";
+        let versions = vec![json!({ "game_versions": ["1.20.1"] })];
+        let cases: [(String, bool, &str); 5] = [
+            (format!("404 Not Found от {}", url), true, "30.10: Thaumcraft is no Modrinth project, the button only repeated this 404"),
+            (no_file_text(&versions, "1.7.10"), true, "the project exists but ships nothing for this game version"),
+            ("нет версии под 1.7.10 · forge (есть под 1.20.1)".to_string(), true, "the same answer from the strict pick"),
+            (format!("502 Bad Gateway от {}", url), false, "the mirror was down: a later click may succeed"),
+            (format!("нет связи (timeout) — {}", url), false, "the line dropped before Modrinth answered"),
+        ];
+        for (err, settled, why) in cases {
+            assert_eq!(lookup_settled(&err), settled, "{}: {}", why, err);
+        }
     }
 
     #[test]

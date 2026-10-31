@@ -83,7 +83,11 @@ fn close_when_idle(app: &AppHandle) {
             if IDLE_SEQ.load(Ordering::SeqCst) != seq || crate::exiting() {
                 return;
             }
-            if !stays_warm(!crate::engine::running_games().is_empty(), enabled()) {
+            // With the main window unloaded for the game the overlay does not stay
+            // warm either: the goal is no WebView2 at all under a running game,
+            // and the hotkey then opens it cold in about a second.
+            let game = !crate::engine::running_games().is_empty() && !crate::background::unloaded();
+            if !stays_warm(game, enabled()) {
                 break;
             }
         }
@@ -448,10 +452,22 @@ pub fn open_card(app: &AppHandle, payload: serde_json::Value, to_launcher: bool)
     if to_launcher || is_call || crate::engine::running_games().is_empty() {
         hide(app);
         crate::tray::show_main(app);
-        return app.emit_to("main", "overlay-open", payload).map_err(|e| e.to_string());
+        // An unloaded launcher is rebuilt by show_main; the card waits for its page.
+        crate::background::emit_main(app, "overlay-open", payload);
+        return Ok(());
     }
     show(app, true)?;
     app.emit_to(LABEL, "overlay-open", payload).map_err(|e| e.to_string())
+}
+
+/// The main window was unloaded: a hidden overlay starts its idle clock now
+/// instead of staying warm for the game.
+pub fn main_unloaded(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window(LABEL) {
+        if !win.is_visible().unwrap_or(true) {
+            close_when_idle(app);
+        }
+    }
 }
 
 /// Hotkey semantics: summon and focus, or dismiss if it already has the user.
