@@ -14,6 +14,7 @@ import { TIER_SERVER, kitIcon, modeTitle, tierLevel, tierRank, useTiers, type Ti
 import { Row as TierRow, TierBadge, TierBoard, linesOf, tierNick } from '../components/top/TierBoard'
 import { useTopBar } from '../state/topbar'
 import '../styles/pixel/pvp.css'
+import { liveInterval } from '../lib/liveInterval'
 
 /**
  * Раздел PvP — один экран (владелец 12.10.2026: «всё на одном экране, чтобы
@@ -76,8 +77,7 @@ export function Pvp({ on }: { on: boolean }) {
     void t.load(nick)
     void t.loadLive()
     if (nick) void t.loadMatches(nick, true)
-    const id = window.setInterval(() => void useTiers.getState().loadLive(), 30_000)
-    return () => window.clearInterval(id)
+    return liveInterval(() => void useTiers.getState().loadLive(), 30_000)
   }, [on, nick])
 
   // Подстраница — «← Назад» в верхней строке вместо «← Лобби»; каждая открывается сверху.
@@ -145,10 +145,10 @@ function useArenaState(uuid: string | null): ArenaState | null {
         })
     }
     tick()
-    const id = window.setInterval(tick, 2500)
+    const stop = liveInterval(tick, 2500)
     return () => {
       alive = false
-      window.clearInterval(id)
+      stop()
     }
   }, [uuid])
   return st
@@ -168,8 +168,7 @@ function PvpPlay({ on }: { on: boolean }) {
   const q = usePvpQueue()
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
+    return liveInterval(() => setNow(Date.now()), 1000)
   }, [])
 
   const kits: TierModeInfo[] = modes.length ? modes : Object.keys(KIT_LOOK).map((slug) => ({ slug, title: slug.toUpperCase(), first_to: 1 }))

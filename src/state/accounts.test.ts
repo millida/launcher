@@ -242,3 +242,14 @@ describe('retired Ely.by rows', () => {
     expect(JSON.parse(store.get('m-accounts') || '[]')[0].kind, 'the migration is written back so it runs once').toBe('offline')
   })
 })
+
+describe('guest rows from earlier versions', () => {
+  test('a guest row is dropped on load and the removal is written back', async () => {
+    store.set('m-accounts', JSON.stringify([{ id: 'g1', nick: 'Player6548', kind: 'guest' }, { id: 'o1', nick: 'Alex', kind: 'offline' }]))
+    store.set('m-active', 'g1')
+    const { loadState } = await import('./accounts')
+    const state = loadState()
+    expect(state.list.map((a) => a.kind), 'guest mode is gone: without a Millida sign-in nobody gets into the launcher').toEqual(['offline'])
+    expect(JSON.parse(store.get('m-accounts') || '[]').length, 'the migration is written back so it runs once').toBe(1)
+  })
+})

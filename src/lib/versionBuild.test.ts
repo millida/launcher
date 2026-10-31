@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { FPS_MODS, stableFile } from './versionBuild'
+import { FPS_MODS, fpsTopUpAllowed, stableFile } from './versionBuild'
 
 const CORE = readFileSync(new URL('../../src-tauri/src/engine/game/fpsboost.rs', import.meta.url), 'utf8')
 
@@ -51,4 +51,14 @@ describe('stableFile', () => {
     test(why, () => {
       expect(stableFile(files)?.version_number ?? null).toBe(want)
     })
+})
+
+describe('new revision of the FPS set', () => {
+  const cases: [boolean, { fresh: boolean } | null, boolean, string][] = [
+    [true, { fresh: true }, true, 'a build the game has never started takes the new set'],
+    [true, { fresh: false }, false, 'a played build is not changed silently'],
+    [true, null, false, 'no answer about the build: treated as played'],
+    [false, { fresh: true }, false, 'nothing new to bring'],
+  ]
+  for (const [stale, gfx, want, why] of cases) test(why, () => expect(fpsTopUpAllowed({ stale }, gfx)).toBe(want))
 })

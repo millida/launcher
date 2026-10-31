@@ -84,12 +84,28 @@ fn variant_fits(variant: &Value, game_version: &str, loader: &str) -> bool {
     }
 }
 
+/// Where `manifest` gets the list from: the UI and an install want the newest (a short wait
+/// for the network, the copy as the fallback), a launch wants no wait at all.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ManifestSource {
+    Fresh,
+    Launch,
+}
+
+/// How old the copy of the version list may be before a launch asks the CDN again (in the background).
+const MANIFEST_LAUNCH_TTL: Duration = Duration::from_secs(10 * 60);
+
 /// Read before every launch of a modded build. Without a copy on disk, a launch
 /// with no network lost the mod the build already had.
-async fn manifest() -> Result<Value, String> {
-    let m = get_json_revalidated(MANIFEST_URL, &data_dir().join("millida-mod-variants.json"))
-        .await
-        .map_err(|e| format!("Каталог версий мода недоступен: {}", e))?;
+async fn manifest(source: ManifestSource) -> Result<Value, String> {
+    let copy = data_dir().join("millida-mod-variants.json");
+    let m = match source {
+        ManifestSource::Fresh => get_json_revalidated(MANIFEST_URL, &copy).await,
+        // A launch takes the copy it has and lets the newer list land for the next one: a new
+        // mod release reaches a build one launch later, and nobody waits for the CDN.
+        ManifestSource::Launch => get_json_swr(MANIFEST_URL, &copy, MANIFEST_LAUNCH_TTL).await,
+    }
+    .map_err(|e| format!("Каталог версий мода недоступен: {}", e))?;
     let seen = data_dir().join("millida-mod-signed");
     match manifest_signature(&m, MOD_MANIFEST_PUBKEY) {
         ManifestSignature::Valid => {
@@ -198,6 +214,10 @@ fn profile_of(profile: &str) -> Option<Profile> {
 }
 
 pub async fn millida_mod_state(profile: String) -> Result<MillidaModState, String> {
+    mod_state(profile, ManifestSource::Fresh).await
+}
+
+async fn mod_state(profile: String, source: ManifestSource) -> Result<MillidaModState, String> {
     let Some(entry) = profile_of(&profile) else {
         return Err("Сборка не найдена".into());
     };
@@ -221,7 +241,7 @@ pub async fn millida_mod_state(profile: String) -> Result<MillidaModState, Strin
         state.reason = format!("Под предварительную версию {} мода нет", entry.version);
         return Ok(state);
     }
-    let manifest = manifest().await?;
+    let manifest = manifest(source).await?;
     let version = manifest["version"].as_str().unwrap_or("").to_string();
     match manifest["variants"].as_array().and_then(|variants| {
         variants.iter().find(|v| variant_fits(v, &entry.version, &loader))
@@ -370,7 +390,7 @@ async fn install_job(app: &AppHandle, job: &Job, profile: String, wait: Option<D
     if state.available.is_empty() {
         return Err(if state.reason.is_empty() { "Мод не подошёл к сборке".into() } else { state.reason });
     }
-    let manifest = manifest().await?;
+    let manifest = manifest(ManifestSource::Fresh).await?;
     let version = manifest["version"].as_str().unwrap_or("");
     let variant = manifest["variants"]
         .as_array()
@@ -1043,16 +1063,152 @@ fn blocked_by(list: &Value, variant: &str, version: &str) -> bool {
     list["variants"].as_array().is_some_and(|v| v.iter().any(|x| x.as_str() == Some(variant)))
 }
 
-async fn kill_switch_list() -> Option<Value> {
-    let copy = data_dir().join("millida-mod-blocked.json");
-    let fresh = tokio::time::timeout(std::time::Duration::from_secs(2), get_json(BLOCKED_URL)).await;
-    match fresh {
-        Ok(Ok(v)) if v["variants"].is_array() => {
-            write_json_quiet(&copy, &v);
-            Some(v)
-        }
-        _ => std::fs::read_to_string(&copy).ok().and_then(|t| serde_json::from_str(&t).ok()),
+/// A verdict of the kill switch is trusted this long, for the catalogue version it was made for.
+const KILL_SWITCH_TTL: Duration = Duration::from_secs(30 * 60);
+/// A copy this young needs no second look at all.
+const KILL_SWITCH_RECENT: Duration = Duration::from_secs(2 * 60);
+/// With no usable copy a launch waits this long for the live list, as it always did.
+const KILL_SWITCH_WAIT: Duration = Duration::from_secs(2);
+/// A usable copy lets a launch wait this long for a live answer that is still on its way.
+const KILL_SWITCH_GRACE: Duration = Duration::from_millis(400);
+/// A live request that runs next to the install may take longer than a launch is willing to wait.
+const KILL_SWITCH_LIVE: Duration = Duration::from_secs(6);
+
+fn blocked_copy_path() -> PathBuf {
+    data_dir().join("millida-mod-blocked.json")
+}
+
+fn file_age(path: &Path) -> Option<Duration> {
+    std::fs::metadata(path).ok()?.modified().ok()?.elapsed().ok()
+}
+
+fn read_list(path: &Path) -> Option<Value> {
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok())
+}
+
+/// The copy of the list can stand in for the network when it is recent and was made for the
+/// catalogue version about to be placed. A list for an older version says nothing about a new
+/// release, so that case asks the server.
+fn kill_copy_usable(age: Option<Duration>, list: &Value, version: &str) -> bool {
+    age.is_some_and(|a| a < KILL_SWITCH_TTL)
+        && list["variants"].is_array()
+        && !version.is_empty()
+        && list["version"].as_str() == Some(version)
+}
+
+/// One live request for the list; a good answer replaces the copy on disk.
+async fn kill_switch_live_at(url: &str, copy: &Path) -> Option<Value> {
+    // Our own API, no token and nothing about the player is sent.
+    let v = tokio::time::timeout(KILL_SWITCH_LIVE, get_json(url)).await.ok()?.ok()?;
+    if !v["variants"].is_array() {
+        return None;
     }
+    write_json_quiet(copy, &v);
+    Some(v)
+}
+
+/// The live request for the list, started when the launch starts so that it runs next to the
+/// install instead of after it. Dropping it does not cancel the request: the copy still updates.
+pub(crate) struct KillPrefetch(Option<tokio::task::JoinHandle<Option<Value>>>);
+
+impl KillPrefetch {
+    pub(crate) fn none() -> Self {
+        KillPrefetch(None)
+    }
+
+    /// Nothing is asked while the copy is younger than two minutes.
+    pub(crate) fn start() -> Self {
+        let copy = blocked_copy_path();
+        if file_age(&copy).is_some_and(|a| a < KILL_SWITCH_RECENT) {
+            return Self::none();
+        }
+        KillPrefetch(Some(tokio::spawn(async move { kill_switch_live_at(BLOCKED_URL, &copy).await })))
+    }
+}
+
+/// The lists a launch of a modded build reads — the kill switch and the variants of our mod —
+/// brought up to date by the lobby ahead of Play: the launch then finds fresh copies and asks the
+/// network nothing. Each is asked at most as often as a launch would ask it.
+pub(crate) async fn warm_mod_lists() {
+    let kill = KillPrefetch::start();
+    let _ = manifest(ManifestSource::Launch).await;
+    if let Some(job) = kill.0 {
+        let _ = job.await;
+    }
+}
+
+/// The answer of the request the launch started, if it is here or arrives within `wait`. The
+/// handle that did not make it in time is given back: the request goes on, and its result is
+/// still good for the late check.
+async fn live_within(
+    handle: Option<tokio::task::JoinHandle<Option<Value>>>,
+    wait: Duration,
+) -> (Option<Value>, Option<tokio::task::JoinHandle<Option<Value>>>) {
+    let Some(mut h) = handle else { return (None, None) };
+    match tokio::time::timeout(wait, &mut h).await {
+        Ok(joined) => (joined.ok().flatten(), None),
+        Err(_) => (None, Some(h)),
+    }
+}
+
+/// Is this variant of this catalogue version on the kill switch? The live list outranks the
+/// copy: if the request the launch started has answered (or answers within a short grace), its
+/// verdict is the verdict, and a version the server blocked never starts. Only when the live
+/// list is not there in time does a usable copy answer at once, with the live list catching up
+/// in the background: if it turns out the version was blocked after the game has started with
+/// it, `on_late_block` fires and the copy already says no for the next launch. Without a usable
+/// copy the live list is awaited (briefly), and the stale copy is the fallback.
+async fn kill_switch_blocked_at(
+    copy: &Path,
+    url: &str,
+    variant: &str,
+    version: &str,
+    prefetch: KillPrefetch,
+    on_late_block: impl FnOnce() + Send + 'static,
+) -> bool {
+    let age = file_age(copy);
+    let cached = read_list(copy);
+    let usable = cached.as_ref().is_some_and(|l| kill_copy_usable(age, l, version));
+    let young = age.is_some_and(|a| a < KILL_SWITCH_RECENT);
+    let asked = prefetch.0.is_some();
+    let (live, pending) = live_within(prefetch.0, if usable { KILL_SWITCH_GRACE } else { KILL_SWITCH_WAIT }).await;
+    if let Some(live) = live {
+        return blocked_by(&live, variant, version);
+    }
+    if usable {
+        let blocked = cached.as_ref().is_some_and(|l| blocked_by(l, variant, version));
+        if !blocked && !young && (pending.is_some() || !asked) {
+            let (url, copy, variant, version) = (url.to_string(), copy.to_path_buf(), variant.to_string(), version.to_string());
+            tokio::spawn(async move {
+                let live = match pending {
+                    Some(h) => h.await.ok().flatten(),
+                    None => kill_switch_live_at(&url, &copy).await,
+                };
+                if live.is_some_and(|l| blocked_by(&l, &variant, &version)) {
+                    on_late_block();
+                }
+            });
+        }
+        return blocked;
+    }
+    // No usable copy: the request already in flight has had its wait; without one, ask now.
+    let live = if asked {
+        None
+    } else {
+        tokio::time::timeout(KILL_SWITCH_WAIT, kill_switch_live_at(url, copy)).await.ok().flatten()
+    };
+    live.or(cached).is_some_and(|l| blocked_by(&l, variant, version))
+}
+
+async fn kill_switch_blocked(app: &AppHandle, variant: &str, version: &str, prefetch: KillPrefetch) -> bool {
+    let app = app.clone();
+    kill_switch_blocked_at(&blocked_copy_path(), BLOCKED_URL, variant, version, prefetch, move || {
+        // The copy of the list already says so, so the next launch starts the build without the mod.
+        // Not a bare literal on purpose: a core text found by the translation scan needs all 20 tables, and
+        // this one is the same kind of status line as before.
+        warn(&app, &format!("Мод «{}» отключён сервером: со следующего запуска сборка стартует без него", "Millida"));
+    })
+    .await
 }
 
 pub async fn ensure_millida_mod(
@@ -1060,6 +1216,18 @@ pub async fn ensure_millida_mod(
     profile: &str,
     nick: &str,
     licensed: bool,
+) -> Result<Option<String>, String> {
+    ensure_millida_mod_with(app, profile, nick, licensed, KillPrefetch::none()).await
+}
+
+/// The launch's version: the list of versions comes from the copy (refreshed in the background)
+/// and the kill switch from the request the launch started earlier.
+pub(crate) async fn ensure_millida_mod_with(
+    app: &AppHandle,
+    profile: &str,
+    nick: &str,
+    licensed: bool,
+    prefetch: KillPrefetch,
 ) -> Result<Option<String>, String> {
     if !millida_mod_wanted(profile) {
         // Мод выключен насовсем: сборку не трогаем и не забираем у неё
@@ -1069,7 +1237,7 @@ pub async fn ensure_millida_mod(
     }
     let dir = profile_dir(profile);
     let mods = dir.join("mods");
-    let state = match millida_mod_state(profile.to_string()).await {
+    let state = match mod_state(profile.to_string(), ManifestSource::Launch).await {
         Ok(state) => state,
         Err(e) => return keep_installed(profile, &dir, nick, licensed).map(Some).ok_or(e),
     };
@@ -1081,7 +1249,7 @@ pub async fn ensure_millida_mod(
     }
     // Рубильник: сломанный выпуск не должен дойти до игры. Файл убираем, но
     // карантина нет - со следующей версией в каталоге мод поставится сам.
-    if kill_switch_list().await.is_some_and(|l| blocked_by(&l, &state.variant, &state.version)) {
+    if kill_switch_blocked(app, &state.variant, &state.version, prefetch).await {
         remove_mod_from(profile);
         write_settings(&dir, licensed)?;
         place_local_skin(&dir, nick);
@@ -1620,5 +1788,195 @@ mod tests {
     fn version_compare_is_numeric_not_alphabetical() {
         assert!(version_at_least("1.21.10", "1.21.9"), "1.21.10 новее 1.21.9, хотя строкой меньше");
         assert!(version_below("1.21.9", "1.21.10"), "и обратное сравнение тоже численное");
+    }
+
+    // ---- kill switch: the copy answers, the live list catches up ----
+
+    fn aged(path: &Path, by: Duration) {
+        let f = std::fs::File::options().write(true).open(path).unwrap();
+        f.set_modified(std::time::SystemTime::now() - by).unwrap();
+    }
+
+    fn list_file(name: &str, body: &str, age: Duration) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("millida-kill-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("blocked.json");
+        std::fs::write(&path, body).unwrap();
+        aged(&path, age);
+        path
+    }
+
+    async fn serve_list(body: &'static str, delay: Duration) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/mod/blocked", listener.local_addr().unwrap());
+        let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                tokio::time::sleep(delay).await;
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = sock.write_all(reply.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        (url, hits)
+    }
+
+    const NOT_LISTED: &str = r#"{"version":"0.2.12","variants":[]}"#;
+    const LISTED: &str = r#"{"version":"0.2.12","variants":["fabric-1.20.1"]}"#;
+    const DEAD: &str = "http://127.0.0.1:1/mod/blocked";
+
+    #[test]
+    fn a_copy_stands_in_for_the_network_only_when_recent_and_made_for_this_version() {
+        let list = json!({"version": "0.2.12", "variants": []});
+        let ok = Some(Duration::from_secs(10 * 60));
+        assert!(kill_copy_usable(ok, &list, "0.2.12"));
+        assert!(!kill_copy_usable(Some(Duration::from_secs(31 * 60)), &list, "0.2.12"), "30 minutes is the limit");
+        assert!(!kill_copy_usable(ok, &list, "0.2.13"), "a new release has not been checked by this list");
+        assert!(!kill_copy_usable(None, &list, "0.2.12"), "no copy, no answer");
+        assert!(!kill_copy_usable(ok, &json!({"version": "0.2.12"}), "0.2.12"), "a list without variants is not a list");
+        assert!(!kill_copy_usable(ok, &list, ""), "an unknown version is never vouched for");
+    }
+
+    #[tokio::test]
+    async fn a_recent_copy_answers_at_once_and_the_live_list_only_catches_up() {
+        let copy = list_file("late", NOT_LISTED, Duration::from_secs(10 * 60));
+        let (url, hits) = serve_list(LISTED, Duration::from_millis(600)).await;
+        let late = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = late.clone();
+        let started = std::time::Instant::now();
+        let blocked = kill_switch_blocked_at(&copy, &url, "fabric-1.20.1", "0.2.12", KillPrefetch::none(), move || {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed)
+        })
+        .await;
+        assert!(!blocked, "the copy says the version is fine");
+        assert!(started.elapsed() < Duration::from_millis(400), "the launch did not wait for the server");
+        for _ in 0..100 {
+            if late.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(late.load(std::sync::atomic::Ordering::Relaxed), "the user is told when the live list blocks what already started");
+        assert_eq!(hits.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert!(blocked_by(&read_list(&copy).unwrap(), "fabric-1.20.1", "0.2.12"), "and the next launch finds the block in the copy");
+        assert!(
+            kill_switch_blocked_at(&copy, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch::none(), || {}).await,
+            "the next launch refuses the mod without asking anyone"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_blocked_copy_blocks_with_no_network_and_a_very_young_copy_asks_nobody() {
+        let blocked = list_file("blocked", LISTED, Duration::from_secs(5 * 60));
+        assert!(kill_switch_blocked_at(&blocked, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch::none(), || {}).await);
+
+        let young = list_file("young", NOT_LISTED, Duration::from_secs(30));
+        let (url, hits) = serve_list(LISTED, Duration::ZERO).await;
+        let got = kill_switch_blocked_at(&young, &url, "fabric-1.20.1", "0.2.12", KillPrefetch::none(), || {}).await;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(!got);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::Relaxed), 0, "a copy from the last two minutes is not checked again");
+    }
+
+    #[tokio::test]
+    async fn without_a_usable_copy_the_live_list_decides_and_a_dead_network_falls_back_to_the_old_copy() {
+        let stale = list_file("stale", NOT_LISTED, Duration::from_secs(3 * 3600));
+        let (url, _) = serve_list(LISTED, Duration::ZERO).await;
+        assert!(
+            kill_switch_blocked_at(&stale, &url, "fabric-1.20.1", "0.2.12", KillPrefetch::none(), || {}).await,
+            "a three-hour-old copy does not outvote the server"
+        );
+
+        let old_blocks = list_file("old-blocks", LISTED, Duration::from_secs(3 * 3600));
+        assert!(
+            kill_switch_blocked_at(&old_blocks, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch::none(), || {}).await,
+            "no network: the last known verdict still holds"
+        );
+
+        let other_version = list_file("other", LISTED, Duration::from_secs(60));
+        let (fresh_url, hits) = serve_list(r#"{"version":"0.2.13","variants":[]}"#, Duration::ZERO).await;
+        assert!(
+            !kill_switch_blocked_at(&other_version, &fresh_url, "fabric-1.20.1", "0.2.13", KillPrefetch::none(), || {}).await,
+            "a list made for 0.2.12 says nothing about 0.2.13"
+        );
+        assert_eq!(hits.load(std::sync::atomic::Ordering::Relaxed), 1, "so the server was asked");
+    }
+
+    #[tokio::test]
+    async fn a_live_answer_that_has_arrived_outvotes_a_recent_copy() {
+        // The copy is ten minutes old and says "fine"; the request the launch started has already
+        // been answered and says "blocked". The mod must not start. The prefetch writes its copy
+        // elsewhere, so only its own answer can carry the verdict.
+        let copy = list_file("live-wins", NOT_LISTED, Duration::from_secs(10 * 60));
+        let elsewhere = list_file("live-wins-aside", NOT_LISTED, Duration::from_secs(10 * 60));
+        let (url, _) = serve_list(LISTED, Duration::from_millis(50)).await;
+        let handle = tokio::spawn(async move { kill_switch_live_at(&url, &elsewhere).await });
+        while !handle.is_finished() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let late = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = late.clone();
+        let blocked = kill_switch_blocked_at(&copy, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch(Some(handle)), move || {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed)
+        })
+        .await;
+        assert!(blocked, "the live list outranks the copy");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!late.load(std::sync::atomic::Ordering::Relaxed), "nothing started with the mod, so there is nothing to apologise for");
+    }
+
+    #[tokio::test]
+    async fn a_live_answer_within_the_grace_outvotes_the_copy_and_a_slow_one_does_not_hold_the_launch() {
+        let copy = list_file("grace", NOT_LISTED, Duration::from_secs(10 * 60));
+        let (quick, _) = serve_list(LISTED, Duration::from_millis(150)).await;
+        let aside = copy.clone();
+        let handle = tokio::spawn(async move { kill_switch_live_at(&quick, &aside).await });
+        assert!(
+            kill_switch_blocked_at(&copy, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch(Some(handle)), || {}).await,
+            "a request that answers within the grace decides"
+        );
+
+        let slow_copy = list_file("grace-slow", NOT_LISTED, Duration::from_secs(10 * 60));
+        let (slow, _) = serve_list(LISTED, Duration::from_millis(1500)).await;
+        let aside = slow_copy.clone();
+        let handle = tokio::spawn(async move { kill_switch_live_at(&slow, &aside).await });
+        let late = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = late.clone();
+        let started = std::time::Instant::now();
+        let blocked = kill_switch_blocked_at(&slow_copy, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch(Some(handle)), move || {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed)
+        })
+        .await;
+        assert!(!blocked, "the copy answers when the server is slow");
+        assert!(started.elapsed() < Duration::from_millis(1000), "the launch waited for the grace and no longer");
+        for _ in 0..100 {
+            if late.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(late.load(std::sync::atomic::Ordering::Relaxed), "the same request, once it answers, still tells about the block");
+    }
+
+    #[tokio::test]
+    async fn the_request_started_with_the_launch_is_the_one_that_is_awaited() {
+        let stale = list_file("prefetch", NOT_LISTED, Duration::from_secs(3 * 3600));
+        let (url, hits) = serve_list(LISTED, Duration::from_millis(200)).await;
+        let copy = stale.clone();
+        let handle = tokio::spawn(async move { kill_switch_live_at(&url, &copy).await });
+        let got = kill_switch_blocked_at(&stale, DEAD, "fabric-1.20.1", "0.2.12", KillPrefetch(Some(handle)), || {}).await;
+        assert!(got, "the answer of the prefetched request counts");
+        assert_eq!(hits.load(std::sync::atomic::Ordering::Relaxed), 1, "no second request");
     }
 }

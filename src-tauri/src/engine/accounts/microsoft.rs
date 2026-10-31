@@ -32,8 +32,56 @@ pub async fn ms_device_start() -> Result<Value, String> {
     Ok(j)
 }
 
+#[derive(Clone)]
+struct MsGrant {
+    access: String,
+    refresh: String,
+    at: std::time::Instant,
+}
+
+const GRANT_TTL: std::time::Duration = std::time::Duration::from_secs(20 * 60);
+
+/// Microsoft accepts a device code exactly once and answers a second use with
+/// AADSTS70000. The Xbox chain after it can still fail on the network and the
+/// UI then polls the same code again, so the redeemed grant is kept and reused.
+/// The async lock also keeps two polls of one code from both redeeming it.
+fn grants() -> &'static tokio::sync::Mutex<std::collections::HashMap<String, MsGrant>> {
+    static G: std::sync::OnceLock<tokio::sync::Mutex<std::collections::HashMap<String, MsGrant>>> =
+        std::sync::OnceLock::new();
+    G.get_or_init(Default::default)
+}
+
+async fn device_login<R, RF, C, CF>(device_code: &str, redeem: R, chain: C) -> Result<Value, String>
+where
+    R: FnOnce(String) -> RF,
+    RF: std::future::Future<Output = Result<Option<(String, String)>, String>>,
+    C: FnOnce(String) -> CF,
+    CF: std::future::Future<Output = Result<Value, String>>,
+{
+    let mut map = grants().lock().await;
+    map.retain(|_, g| g.at.elapsed() < GRANT_TTL);
+    let grant = match map.get(device_code) {
+        Some(g) => g.clone(),
+        None => match redeem(device_code.to_string()).await? {
+            None => return Ok(serde_json::json!({"status":"pending"})),
+            Some((access, refresh)) => {
+                let g = MsGrant { access, refresh, at: std::time::Instant::now() };
+                map.insert(device_code.to_string(), g.clone());
+                g
+            }
+        },
+    };
+    let mut out = chain(grant.access).await?;
+    out["refresh_token"] = Value::String(grant.refresh);
+    Ok(out)
+}
+
 /// One polling step: {status:"pending"} or {status:"ok",nick,uuid,token}.
 pub async fn ms_device_poll(device_code: String) -> Result<Value, String> {
+    device_login(&device_code, redeem_device_code, |token| async move { xbox_chain(&token).await }).await
+}
+
+async fn redeem_device_code(device_code: String) -> Result<Option<(String, String)>, String> {
     let client_id = ms_client_id();
     let r = client()
         // Polls Microsoft: has the user signed in on the code page yet.
@@ -47,7 +95,7 @@ pub async fn ms_device_poll(device_code: String) -> Result<Value, String> {
     let j: Value = r.json().await.map_err(|e| e.to_string())?;
     if let Some(err) = j["error"].as_str() {
         if err == "authorization_pending" || err == "slow_down" {
-            return Ok(serde_json::json!({"status":"pending"}));
+            return Ok(None);
         }
         return Err(j["error_description"].as_str().unwrap_or(err).to_string());
     }
@@ -55,9 +103,7 @@ pub async fn ms_device_poll(device_code: String) -> Result<Value, String> {
     // refresh_token comes from the offline_access scope and is what allows the
     // ~24h Minecraft token to be renewed without user interaction
     let refresh = j["refresh_token"].as_str().unwrap_or("").to_string();
-    let mut out = xbox_chain(&ms_token).await?;
-    out["refresh_token"] = Value::String(refresh);
-    Ok(out)
+    Ok(Some((ms_token, refresh)))
 }
 
 /// Xbox Live -> XSTS -> Minecraft services -> profile, as required by the
@@ -185,5 +231,57 @@ fn xsts_error_text(code: Option<u64>) -> String {
         Some(2148916238) => "Детский аккаунт Microsoft: взрослый должен добавить его в семью на account.microsoft.com/family и разрешить онлайн-игру".into(),
         Some(c) => format!("XSTS отказал (код {})", c),
         None => "XSTS отказал (нет Xbox-профиля?)".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn device_code_is_redeemed_once_across_retries() {
+        let redeems = AtomicUsize::new(0);
+        let redeem = |_: String| {
+            redeems.fetch_add(1, Ordering::SeqCst);
+            async { Ok(Some(("ms-access".to_string(), "ms-refresh".to_string()))) }
+        };
+
+        let first = device_login("dc-retry", redeem, |_| async { Err::<Value, _>("нет связи (xboxlive)".to_string()) }).await;
+        assert!(first.is_err(), "a failed Xbox chain must reach the UI as an error");
+
+        let second = device_login("dc-retry", redeem, |token| async move {
+            assert_eq!(token, "ms-access", "the retry must reuse the token Microsoft already issued for this code");
+            Ok(serde_json::json!({"status":"ok","nick":"Steve"}))
+        })
+        .await
+        .expect("the retry after a network failure must finish the login");
+
+        assert_eq!(
+            redeems.load(Ordering::SeqCst),
+            1,
+            "Microsoft refuses a second use of a device code with AADSTS70000, so a retry must not redeem it again",
+        );
+        assert_eq!(second["status"], "ok");
+        assert_eq!(second["refresh_token"], "ms-refresh", "the refresh token must survive the retry");
+    }
+
+    #[tokio::test]
+    async fn pending_code_is_not_remembered() {
+        let pending = device_login("dc-pending", |_| async { Ok(None) }, |_| async { panic!("no chain before sign-in") }).await;
+        assert_eq!(pending.unwrap()["status"], "pending");
+
+        let redeemed = AtomicUsize::new(0);
+        let done = device_login(
+            "dc-pending",
+            |_| {
+                redeemed.fetch_add(1, Ordering::SeqCst);
+                async { Ok(Some(("a".to_string(), String::new()))) }
+            },
+            |_| async { Ok(serde_json::json!({"status":"ok"})) },
+        )
+        .await;
+        assert_eq!(done.unwrap()["status"], "ok");
+        assert_eq!(redeemed.load(Ordering::SeqCst), 1, "a pending answer must not stop the next poll from asking Microsoft");
     }
 }
