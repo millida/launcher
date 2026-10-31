@@ -1,0 +1,18 @@
+# neoforge-21.1.209-millida-mod-party-server
+route: version 1.21.1 + neoforge, java 21
+files: client 1, libraries 70, natives 0, log4j no, loader libraries 47
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: true, skin_server: Some("https://api.millida.net/v2/yggdrasil"), kill_switch: true }
+graph (first launch):
+  auth [net]
+  kill-switch [net]
+  mod-token [net]
+  skin-server [net] <- auth
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  assets [assets] <- meta
+  loader [loader] <- meta, java, client, libs
+  mods [mods] <- skin-server, kill-switch
+  deps [mods] <- mods

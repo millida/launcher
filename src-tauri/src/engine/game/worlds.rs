@@ -101,7 +101,7 @@ pub async fn quick_play(
     ram_mb: u32,
     world: Option<String>,
     server: Option<String>,
-    auth: Auth,
+    auth: Option<AuthArgs>,
 ) -> Result<String, String> {
     let p = load_profiles().into_iter().find(|x| x.name == profile)
         .ok_or("Сборка не найдена")?;
@@ -117,5 +117,5 @@ pub async fn quick_play(
         return Err("Некорректный адрес сервера".into());
     }
     let quick = QuickTarget { world, server };
-    install_and_launch_into(app, p.version.clone(), nick, p.fabric, ram_mb, profile, auth, quick).await
+    install_and_launch_into(app, p.version.clone(), nick, p.fabric, ram_mb, profile, super::pipeline::AuthSource::Account(auth), quick).await
 }
