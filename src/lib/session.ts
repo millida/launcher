@@ -75,12 +75,6 @@ function dropMillidaSession() {
     .then(() => refreshSessionState())
 }
 
-export function forgetMillidaIfGone() {
-  const has = useAccounts.getState().list.some((a) => a.kind === 'millida' || a.kind === 'tg')
-  if (has) return
-  dropMillidaSession()
-}
-
 export function logoutToLogin() {
   dropMillidaSession()
   // Убираем сам аккаунт Millida/TG из списка: иначе при следующем запуске

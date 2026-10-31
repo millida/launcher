@@ -1,9 +1,10 @@
 import { ShotImg } from './LoopShot'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LobbyCharacter } from '../lobby/LobbyCharacter'
+import { Suspense, lazy } from 'react'
+import { lobby3dAllowed, useIdle3d } from '../../lib/lazy3d'
 import { loadWardrobe } from '../../lib/gameProfile'
 import { nickSkinUrl } from '../../lib/characterStage'
-import { outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitSnapshot'
+import { outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitShotLazy'
 import { getAccount } from '../../state/accounts'
 import { useHasMillida } from '../../state/auth'
 import type { ItemRef } from '../../lib/rubies'
@@ -20,6 +21,10 @@ import { rarityRank } from './rarity'
  * (lib/outfitSnapshot). Не вышло 3D (модели не пришли, нет WebGL) — вместо
  * голого персонажа плоские превью вещей.
  */
+
+// 3D-сцена (three.js) — отдельные чанки: витрина открывается с плоскими превью вещей,
+// а живая фигура приходит после простоя; на слабом ПК — не приходит вообще.
+const LobbyCharacter = lazy(() => import('../lobby/LobbyCharacter').then((m) => ({ default: m.LobbyCharacter })))
 
 /** Скин игрока: из гардероба, иначе по нику. */
 let skinAsked: Promise<{ url: string; slim: boolean } | null> | null = null
@@ -99,12 +104,28 @@ export function ShopStage({ on, items, className = '' }: { on: boolean; items: I
   }, [])
   const key = items.map((it) => it.code).join(',')
   const dress = useMemo(() => items.map((it) => ({ code: it.code })), [key])
+  const allowed = lobby3dAllowed()
+  const want3d = useIdle3d(on && vis)
   const failed = !!items.length && dressed?.key === key && dressed.n === 0
+  // Плоские превью стоят, пока фигура не одета: до загрузки three.js, при сбое 3D и на слабом ПК насовсем.
+  const ready = dressed?.key === key && dressed.n > 0
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    setSettled(false)
+    if (!ready) return
+    const t = window.setTimeout(() => setSettled(true), 280)
+    return () => window.clearTimeout(t)
+  }, [ready, key])
+  const flat = !!items.length && (failed || !allowed || !settled)
   return (
-    <div ref={ref} className={'sv-stage ' + className + (failed ? ' is-flat' : '')}>
+    <div ref={ref} className={'sv-stage ' + className + (failed || !allowed ? ' is-flat' : '')}>
       <SceneBack feet={STAGE_FEET} />
-      <LobbyCharacter on={on && vis} shop dress={dress} onDressed={(n) => setDressed({ key, n })} />
-      {failed ? <ItemsFallback items={items} /> : null}
+      {want3d ? (
+        <Suspense fallback={null}>
+          <LobbyCharacter on={on && vis} shop dress={dress} onDressed={(n) => setDressed({ key, n })} />
+        </Suspense>
+      ) : null}
+      {flat ? <ItemsFallback items={items} /> : null}
     </div>
   )
 }

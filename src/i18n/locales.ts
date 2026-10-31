@@ -23,13 +23,14 @@ export type Locale =
   | 'sr'
   | 'sk'
 
-export type Market = 'RU' | 'INTL'
+export type Market = 'RU' | 'CIS' | 'INTL'
 
 /// Things that exist only on the Russian market: Millida Trade (server donation
 /// shops), the player market of millida.net, promos of partner servers that play
 /// in Russian, and Russian-language content such as translated packs and the
 /// Telegram channel. Paid packs (subscriptions, purchases, access keys) are sold
-/// in rubles only.
+/// in rubles. CIS players read Russian packs and pay in rubles, so they get both
+/// of those, and nothing else of the Russian market.
 export type MarketFeature = 'trade' | 'market' | 'partners' | 'ru-content' | 'paid-packs'
 
 export interface LocaleInfo {
@@ -108,8 +109,13 @@ export function localeFromSystem(tags: readonly string[]): Locale {
 
 export const availableLocale = (code: Locale): Locale => (AVAILABLE.has(code) ? code : FALLBACK_LOCALE)
 
-export const marketOf = (code: Locale): Market => (code === 'ru' ? 'RU' : 'INTL')
+const CIS_LOCALES: ReadonlySet<Locale> = new Set<Locale>(['uk'])
+
+export const marketOf = (code: Locale): Market => (code === 'ru' ? 'RU' : CIS_LOCALES.has(code) ? 'CIS' : 'INTL')
 
 const RU_ONLY: ReadonlySet<MarketFeature> = new Set(['trade', 'market', 'partners', 'ru-content', 'paid-packs'])
 
-export const marketOffers = (market: Market, feature: MarketFeature): boolean => market === 'RU' || !RU_ONLY.has(feature)
+const CIS_OFFERS: ReadonlySet<MarketFeature> = new Set(['ru-content', 'paid-packs'])
+
+export const marketOffers = (market: Market, feature: MarketFeature): boolean =>
+  market === 'RU' || !RU_ONLY.has(feature) || (market === 'CIS' && CIS_OFFERS.has(feature))
