@@ -1003,7 +1003,10 @@ mod tests {
             }
         });
         let picked = platform_natives(&v, "natives");
-        assert!(picked.starts_with("natives/"), "путь остаётся внутри сборки");
+        assert!(
+            picked == "natives" || picked.starts_with("natives/"),
+            "путь остаётся внутри сборки, а платформа без своей строки берёт общий путь",
+        );
         #[cfg(target_os = "windows")]
         assert_eq!(picked, "natives/mustdie/x86-64", "на Windows нужны именно эти нативы");
 

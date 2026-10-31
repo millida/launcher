@@ -8,4 +8,13 @@ ignore = [
   # на hickory-resolver 0.26.
   "RUSTSEC-2026-0118",
   "RUSTSEC-2026-0119",
+  # zip до 9.0: все три уязвимости — в ZipArchive::extract / ZipStreamReader::extract
+  # (симлинки и права Unix). Лаунчер extract не вызывает: записи читаются по одной
+  # и пути проверяются своим кодом. zip 4 тянет tauri-plugin-updater 2.11, ему
+  # приходят только файлы, проверенные подписью обновления, и наши обновления не
+  # zip. Исправление — tauri-plugin-updater 2.14 (zip 9), а он требует tauri 2.12.
+  # Убрать при переходе на них.
+  "RUSTSEC-2026-0367",
+  "RUSTSEC-2026-0368",
+  "RUSTSEC-2026-0369",
 ]
