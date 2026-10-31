@@ -53,8 +53,8 @@ import { trackFailure } from '../../lib/telemetry'
 import '../../styles/pixel/shop-juice.css'
 import { wearNow } from '../../state/wearIntent'
 import { questsToShow } from './packQuests'
-import { TelegramRewardBlock } from './TelegramReward'
-import { DiscordRewardBlock } from './DiscordReward'
+import { SocialTasks } from './SocialTasks'
+import { claimFailure, type TaskFailure, type TaskKind } from './taskRules'
 import { SetsSection, type SetActs } from './SetsV2'
 import { SetShot } from './ShopStage'
 import { CaseArt, CaseOpening, CasesSection, caseHex, casePriceOf, type CaseMode, type CaseRun } from './Cases'
@@ -85,6 +85,7 @@ import { craftItem, loadWorkshop, type Workshop } from '../../lib/rubies'
 import { affords, openTopup, plusPrice, refreshMoney, rubyPackPrice, rubyQuote, shortfallFor, useMoney } from '../../lib/useMoney'
 import { formatMoney, moneyShortfall, shortfallText, type MoneyShortfall } from '../../lib/money'
 import { fragmentWord } from './rarity'
+import { noted } from '../../lib/noted'
 
 /**
  * Last loaded shop per account: a return visit draws the feed at once and
@@ -196,8 +197,9 @@ export function useShop(on: boolean) {
   useEffect(() => {
     if (!on || !signedIn) return
     const reload = () => {
-      loadTelegramReward().then(setTelegram).catch(() => setTelegram(null))
-      loadDiscordReward().then(setDiscord).catch(() => setDiscord(null))
+      // Сбой сети не прячет задание посреди шага: остаётся то, что было видно.
+      loadTelegramReward().then(setTelegram).catch(noted('shop-tasks'))
+      loadDiscordReward().then(setDiscord).catch(noted('shop-tasks'))
     }
     reload()
     window.addEventListener('focus', reload)
@@ -391,53 +393,35 @@ export function useShop(on: boolean) {
     }
   }
 
-  const doDiscord = async () => {
-    setBusy('discord')
+  /**
+   * «Проверить» у задания «подпишись / вступи». Исход возвращается экрану, а не
+   * тостом: плитка сама показывает, что не так, рядом с кнопкой (26.10.2026).
+   */
+  const claimTask = async (kind: TaskKind): Promise<{ granted: boolean; amount: number } | { failure: TaskFailure }> => {
+    const tg = kind === 'telegram'
+    setBusy(kind)
     try {
-      const res = await claimDiscordReward()
-      setDiscord(res)
+      const res = await (tg ? claimTelegramReward() : claimDiscordReward())
+      if (tg) setTelegram(res as TelegramReward)
+      else setDiscord(res as DiscordReward)
       if (res.balance !== null) {
         const balance = res.balance
         setDay((d) => (d ? { ...d, balance } : d))
       }
+      // Награду показывает сама плитка («Начислено» и +300), а счёт в шапке подпрыгивает:
+      // отдельная плашка сверху повторяла бы то же самое второй раз.
       if (res.granted) {
-        showReward({
-          level: 'mid',
-          items: [{ name: t('Рубины'), rubies: res.amount }],
-          title: t('Начислено'),
-          sub: res.amount.toLocaleString(intlTag()) + ' ' + word(res.amount),
-        })
-      } else showToast(t('Награда за Discord уже забрана'), 'ok')
-    } catch (e) {
-      trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, err()), 'error')
-      loadDiscordReward().then(setDiscord).catch(() => setDiscord(null))
-    } finally {
-      setBusy('')
-    }
-  }
-
-  const doTelegram = async () => {
-    setBusy('telegram')
-    try {
-      const res = await claimTelegramReward()
-      setTelegram(res)
-      if (res.balance !== null) {
-        const balance = res.balance
-        setDay((d) => (d ? { ...d, balance } : d))
+        window.clearTimeout(bumpTimer.current)
+        setBump(true)
+        bumpTimer.current = window.setTimeout(() => setBump(false), 600)
       }
-      if (res.granted) {
-        showReward({
-          level: 'mid',
-          items: [{ name: t('Рубины'), rubies: res.amount }],
-          title: t('Начислено'),
-          sub: res.amount.toLocaleString(intlTag()) + ' ' + word(res.amount),
-        })
-      } else showToast(t('Награда за подписку уже забрана'), 'ok')
+      return { granted: res.granted, amount: res.amount }
     } catch (e) {
       trackFailure('shop', e, { step: 'action' })
-      showToast(apiErrorText(e, err()), 'error')
-      loadTelegramReward().then(setTelegram).catch(() => setTelegram(null))
+      // Сервер мог сам сказать «сначала привяжи»: свежий вид вернёт плитку на шаг привязки.
+      if (tg) void loadTelegramReward().then(setTelegram).catch(noted('shop-tasks'))
+      else void loadDiscordReward().then(setDiscord).catch(noted('shop-tasks'))
+      return { failure: claimFailure(e) }
     } finally {
       setBusy('')
     }
@@ -615,7 +599,7 @@ export function useShop(on: boolean) {
   return {
     on, signedIn, day, setDay, rules, busy, plus, tier, balance, error, bump, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, setOpening, caseResult,
     weekly, quests, telegram, discord, workshop, habit, order, dayCase, daySet, plusTile, todayActs, setActs, scrollTo, toPacks,
-    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, doTelegram, doDiscord, doPlus, doManage, doPack, doCraft,
+    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, claimTask, doPlus, doManage, doPack, doCraft,
   }
 }
 
@@ -647,7 +631,7 @@ function ShardLabel({ n }: { n: number }) {
 export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
   const t = useT()
   const { on, day, plus, busy, tier, balance, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, weekly, quests, telegram, discord, plusTile, todayActs, setActs } = s
-  const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, doTelegram, doDiscord, doPlus, doManage, doPack } = s
+  const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, claimTask, doPlus, doManage, doPack } = s
   if (!day)
     return (
       <div className="sh-flow" aria-hidden="true">
@@ -704,12 +688,8 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
           <BonusesSection on={on} />
         </Guard>
 
-        <Guard what="Telegram-канал" silent>
-          <TelegramRewardBlock view={telegram} busy={busy === 'telegram'} onClaim={() => void doTelegram()} />
-        </Guard>
-
-        <Guard what="Discord-сервер" silent>
-          <DiscordRewardBlock view={discord} busy={busy === 'discord'} onClaim={() => void doDiscord()} />
+        <Guard what="Задания Telegram и Discord" silent>
+          <SocialTasks telegram={telegram} discord={discord} busy={busy} onClaim={claimTask} />
         </Guard>
 
         <Guard what="Наборы" silent>
