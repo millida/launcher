@@ -689,7 +689,7 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             Ok(format!("Мод «{}» отключён", file))
         }
         "update-loader" => {
-            let (id, _) = dep_arg(&arg)?;
+            let (id, range) = dep_arg(&arg)?;
             let mut all = load_profiles();
             let p = all.iter_mut().find(|p| p.name == profile).ok_or("Сборка не найдена")?;
             let loader = p.loader.clone().unwrap_or_default().to_lowercase();
@@ -698,11 +698,18 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             }
             // Закреплённая версия снимается: при запуске ядро поставит последнюю
             // стабильную для этой версии игры (install.rs, без закрепления).
-            let Some(old) = p.loader_version.take().filter(|v| !v.trim().is_empty()) else {
-                return Err("Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры".into());
-            };
-            save_profiles(&all)?;
-            Ok(format!("Загрузчик {} обновится при запуске (был {})", loader, old))
+            if let Some(old) = p.loader_version.take().filter(|v| !v.trim().is_empty()) {
+                save_profiles(&all)?;
+                return Ok(format!("Загрузчик {} обновится при запуске (был {})", loader, old));
+            }
+            // Unpinned builds used to keep whatever loader an older install left behind; the
+            // launch now moves them to the current one, unless even that is too old for the mod.
+            let builds = list_loader_versions(&loader, &p.version).await.unwrap_or_default();
+            match builds.iter().find(|b| b.recommended) {
+                Some(b) if version_satisfies(&b.version, &range) => Ok(format!("Загрузчик {} обновится до {} при запуске", loader, b.version)),
+                Some(_) => Err("Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры".into()),
+                None => Err("Не получили список версий загрузчика — проверь интернет и попробуй ещё раз".into()),
+            }
         }
         "set-ram" => {
             let mb: u32 = arg.parse().map_err(|_| "Некорректный объём памяти".to_string())?;

@@ -93,9 +93,13 @@ export function retireElyby(list: Account[], active: string): { list: Account[];
   return { list: next, active: current, retired }
 }
 
+/// Guest mode is gone (owner 27.10.2026): the launcher needs a Millida sign-in. "Play as
+/// guest" rows from earlier versions are dropped, or they would linger in the account list.
+export const dropGuests = (list: Account[]): Account[] => list.filter((a) => a.kind !== 'guest')
+
 export function loadState(): { list: Account[]; active: string } {
   const stored = readAccounts()
-  const migrated = retireElyby(stored, readActive())
+  const migrated = retireElyby(dropGuests(stored), readActive())
   const state = collapseMillida(migrated.list, migrated.active)
   if (migrated.retired.length || state.list.length !== stored.length) {
     persist(state.list)
@@ -239,8 +243,10 @@ export function hasLicenseSession(a: Account): boolean {
 // Refresh ahead of real expiry: a token this close to the edge dies mid-launch.
 const MS_TOKEN_SKEW_MS = 5 * 60 * 1000
 
-export function msTokenFresh(a: Account): boolean {
-  return hasAccountSession(a.id) && !!a.exp && a.exp - Date.now() > MS_TOKEN_SKEW_MS
+/// `ahead` — renew earlier than the usual margin (the lobby renews a token that ends within ten minutes, so a
+/// token with seven left must not count as fresh there).
+export function msTokenFresh(a: Account, ahead = 0): boolean {
+  return hasAccountSession(a.id) && !!a.exp && a.exp - Date.now() > Math.max(MS_TOKEN_SKEW_MS, ahead)
 }
 
 export function msTokenExpired(a: Account): boolean {

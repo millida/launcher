@@ -35,8 +35,10 @@ export const useMsLogin = create<MsLoginState>((set) => ({
 }))
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+let flowSeq = 0
 
 function reset(hint?: string) {
+  flowSeq++
   if (pollTimer) clearTimeout(pollTimer)
   pollTimer = null
   useMsLogin.getState().set({ busy: false, userCode: '', verifyUrl: '', hint: hint || '' })
@@ -67,7 +69,10 @@ export async function copyMsCode() {
 
 const maskNick = (e: unknown, nick: string) => (nick ? String(e).split(nick).join('<nick>') : String(e))
 
-export async function startMsLogin() {
+// Microsoft refuses a device code it already redeemed or dropped; only a fresh code can finish the sign-in.
+const SPENT_DEVICE_CODE = /AADSTS70000\b/
+
+export async function startMsLogin(afterSpentCode = false) {
   const s = useMsLogin.getState()
   if (s.busy) {
     openMsVerifyPage()
@@ -78,6 +83,7 @@ export async function startMsLogin() {
     return
   }
   s.set({ busy: true, hint: t('Запрашиваем код у Microsoft…') })
+  const flow = ++flowSeq
   let init
   try {
     try {
@@ -88,16 +94,20 @@ export async function startMsLogin() {
       init = await msDeviceStart()
     }
   } catch (e) {
+    if (flow !== flowSeq) return
     trackFailure('login', e, { provider: 'microsoft', step: 'start' })
     reset(apiErrorText(e, t('Microsoft не ответила — повтори попытку')))
     showToast('Microsoft: ' + apiErrorText(e, t('нет ответа')), 'error')
     return
   }
+  if (flow !== flowSeq) return
   const url = init.verification_uri || MS_VERIFY_URL
   useMsLogin.getState().set({
     userCode: init.user_code,
     verifyUrl: url,
-    hint: t('Введи код на странице Microsoft и подтверди вход.'),
+    hint: afterSpentCode
+      ? t('Microsoft не приняла прошлый код — введи новый код на странице Microsoft.')
+      : t('Введи код на странице Microsoft и подтверди вход.'),
   })
   openMsVerifyPage()
   void copyText(init.user_code).then((copied) => {
@@ -110,6 +120,7 @@ export async function startMsLogin() {
   let netFails = 0
 
   const poll = async () => {
+    if (flow !== flowSeq) return
     if (Date.now() > deadline) {
       reset(t('Время вышло — начни вход заново.'))
       return
@@ -119,16 +130,24 @@ export async function startMsLogin() {
       r = await msDevicePoll(init.device_code)
       netFails = 0
     } catch (e) {
+      if (flow !== flowSeq) return
       // Обрыв соединения посреди ожидания не должен убивать вход: код устройства жив 15 минут.
       if (String(e).startsWith(CORE_NO_CONNECTION) && ++netFails <= MAX_POLL_NET_FAILS) {
+        trackFailure('login', e, { provider: 'microsoft', step: 'poll_retry', attempt: netFails })
         pollTimer = setTimeout(() => void poll(), intervalMs)
         return
       }
-      trackFailure('login', e, { provider: 'microsoft', step: 'poll' })
+      trackFailure('login', e, { provider: 'microsoft', step: 'poll', after_spent: afterSpentCode })
+      if (SPENT_DEVICE_CODE.test(String(e)) && !afterSpentCode) {
+        reset()
+        void startMsLogin(true)
+        return
+      }
       reset(String(e))
       showToast('Microsoft: ' + e, 'error')
       return
     }
+    if (flow !== flowSeq) return
     if (r.status === 'pending') {
       pollTimer = setTimeout(() => void poll(), intervalMs)
       return
@@ -214,10 +233,13 @@ function withinRenewWait<T>(work: Promise<T>): Promise<T | 'late'> {
 
 // A present token is not enough: MC tokens last a day while the launcher can sit
 // in the tray for longer, and the game would then fail joinServer with 401.
-export async function ensureMsAuth(acc?: Account | null): Promise<MsAuth | null> {
+//
+// `ahead`: renew a token that ends within this many ms, not only within the usual five minutes. The lobby asks for ten:
+// asked with the usual margin, a token with seven minutes left counted as fresh and the renewal did nothing (Н3).
+export async function ensureMsAuth(acc?: Account | null, ahead = 0): Promise<MsAuth | null> {
   const a = acc || getAccount()
   if (!a || a.kind !== 'microsoft' || !hasTauri()) return null
-  if (msTokenFresh(a)) return authOf(a)
+  if (msTokenFresh(a, ahead)) return authOf(a)
   // The renewal is not cancelled: it keeps going and saves the new token for
   // the next launch.
   const renewed = await withinRenewWait(renewMsAuth(a))

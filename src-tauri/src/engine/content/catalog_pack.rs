@@ -1,6 +1,6 @@
 // Installs a ready modpack from the Millida catalog: the card and the archive link come from api.millida.net, the archive is downloaded from garage.millida.net and unpacked into the modpack folder.
 // Launcher service files are dropped from the foreign archive, except the launch description that the catalog check reads.
-use super::pack_delta;
+use super::{pack_delta, pack_install};
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -275,18 +275,64 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
         }
     }
 
+    /*
+     * Первая установка идёт по оглавлению архива: файлы, что уже лежат в общем
+     * складе, не качаются, остальные приходят несколькими запросами сразу и
+     * проверяются на лету. Любая заминка отдаёт установку целому архиву. Выключатель
+     * для поддержки: настройка m-pack-index = 0.
+     */
+    let idx_staging = tmp_dir.join(format!("pack-{}.idx", slug));
+    let idx_marker = tmp_dir.join(format!("pack-{}.idx-id", slug));
+    let started = std::time::Instant::now();
+    if reuse.is_none() && !review && ui_pref("m-pack-index").as_deref() != Some("0") {
+        let archive_id = sha512.to_ascii_lowercase();
+        let source = pack_install::IndexSource {
+            file_id: &file_id,
+            url: &url,
+            archive_size: size,
+            archive_id: &archive_id,
+            staging: &idx_staging,
+            marker: &idx_marker,
+        };
+        match pack_install::install_by_index(app, job, source).await {
+            Ok(r) => {
+                eprintln!(
+                    "[pack] «{}» собрана по оглавлению: скачано {} из {} байт, {} файлов из общего склада ({} байт), {} осталось от прошлой попытки, {} скачано",
+                    slug, r.net_bytes, r.archive_bytes, r.linked, r.linked_bytes, r.resumed, r.fetched
+                );
+                report_install(app, "index", started.elapsed(), r.net_bytes, r.linked_bytes, r.files);
+                temp.0.extend([idx_staging.clone(), idx_marker.clone()]);
+                let into = idx_staging.clone();
+                tokio::task::spawn_blocking(move || strip_pack_service_files(&into)).await.map_err(|e| e.to_string())??;
+                job.check()?;
+                let meta = meta_from(&view, read_pack_manifest(&idx_staging).as_ref())?;
+                return Ok(Fetched { view, title, meta, unpacked: idx_staging, sha512: archive_id, _temp: temp });
+            }
+            Err(pack_install::IndexError::Cancelled) => return Err(CANCELLED.into()),
+            Err(pack_install::IndexError::Failed(e)) => return Err(e),
+            Err(pack_install::IndexError::Interrupted(why)) => {
+                // What came is kept in the staging folder; the next try continues from it instead of taking the archive.
+                eprintln!("[pack] «{}» по оглавлению оборвалась на сети ({}), скачанное сохранено", slug, why);
+                // Two texts that are already translated everywhere; the second try goes on from the files on disk by itself.
+                return Err(["Связь оборвалась", "попробуй ещё раз"].join("; "));
+            }
+            Err(pack_install::IndexError::Unavailable(why)) => {
+                eprintln!("[pack] «{}» по оглавлению не вышла ({}), качаем архив целиком", slug, why);
+            }
+        }
+    }
+
     job.emit(app, 12.0, "Скачиваем сборку…");
     // Скачивание занимает почти всё время установки, поэтому оно и занимает
     // почти всю полосу: от 12 до 70 процентов.
-    let seen = std::sync::atomic::AtomicU64::new(0);
+    let meter = pack_install::Meter::new();
     let report = |done: u64, total: Option<u64>| {
         let Some(total) = total.filter(|t| *t > 0) else { return };
-        let pct = 12.0 + 58.0 * (done as f64 / total as f64) as f32;
-        // Отчёт приходит на каждом куске тела: без загрубления это десятки
-        // тысяч сообщений в окно на гигабайтном архиве.
-        let step = (pct * 2.0) as u64;
-        if seen.swap(step, std::sync::atomic::Ordering::Relaxed) != step {
-            job.emit(app, pct.min(70.0), &format!("Скачиваем сборку… {}", fmt_bytes(done, total)));
+        let pct = (12.0 + 58.0 * (done as f64 / total as f64) as f32).min(70.0);
+        // Отчёт приходит на каждом куске тела: окну он нужен дважды в секунду,
+        // иначе это десятки тысяч сообщений на гигабайтном архиве.
+        if let Some(eta) = meter.tick(done, total.saturating_sub(done)) {
+            job.emit_eta(app, pct, &format!("Скачиваем сборку… {}", fmt_bytes(done, total)), eta);
         }
     };
     download_checked_progress(
@@ -305,16 +351,49 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
     let into = unpacked.clone();
     // Cleans our own temporary unpack folder before a new try.
     let _ = std::fs::remove_dir_all(&into);
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        unzip_to(&from, &into)?;
+    let (done_bytes, all_bytes) = (std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)), std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)));
+    let (d, a) = (done_bytes.clone(), all_bytes.clone());
+    let unpacking = tokio::task::spawn_blocking(move || -> Result<(), String> {
+        unzip_to_progress(&from, &into, &|done, total| {
+            d.store(done, std::sync::atomic::Ordering::Relaxed);
+            a.store(total, std::sync::atomic::Ordering::Relaxed);
+        })?;
         strip_pack_service_files(&into)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+    });
+    tokio::pin!(unpacking);
+    let unpacked_ok = loop {
+        tokio::select! {
+            res = &mut unpacking => break res,
+            _ = tokio::time::sleep(std::time::Duration::from_millis(400)) => {
+                let (done, all) = (done_bytes.load(std::sync::atomic::Ordering::Relaxed), all_bytes.load(std::sync::atomic::Ordering::Relaxed));
+                if all > 0 {
+                    job.emit(app, 70.0 + 17.0 * (done as f64 / all as f64) as f32, "Распаковываем…");
+                }
+            }
+        }
+    };
+    unpacked_ok.map_err(|e| e.to_string())??;
     job.check()?;
+    report_install(app, "archive", started.elapsed(), size, 0, 0);
 
     let meta = meta_from(&view, read_pack_manifest(&unpacked).as_ref())?;
+    // a cut first try of the file-by-file road may have left its folder: it is of no use once the archive is here
+    temp.0.extend([idx_staging, idx_marker]);
     Ok(Fetched { view, title, meta, unpacked, sha512: sha512.to_ascii_lowercase(), _temp: temp })
+}
+
+/// What an install cost, for the statistics when the player has them on: the road taken, network kilobytes, kilobytes
+/// that came from the shared store, files, time. Numbers only, no names or addresses.
+fn report_install(app: &AppHandle, via: &'static str, took: std::time::Duration, net_bytes: u64, linked_bytes: u64, files: usize) {
+    if !game_telemetry_enabled() {
+        return;
+    }
+    let event = serde_json::json!({
+        "data": { "what": "pack_install", "via": via, "kb": net_bytes / 1024, "linkedKb": linked_bytes / 1024, "files": files },
+        "durationMs": took.as_millis() as u64,
+        "ok": true,
+    });
+    crate::background::send_perf(app, vec![event]);
 }
 
 async fn install_catalog_pack_job(

@@ -13,7 +13,6 @@
 use objc2::runtime::AnyClass;
 use objc2_foundation::NSAppleEventManager;
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
-use std::ffi::CStr;
 use std::path::PathBuf;
 
 const KEY_AE_PROP_DATA: u32 = u32::from_be_bytes(*b"prdt");
@@ -21,7 +20,7 @@ const KEY_AE_LAUNCHED_AS_LOGIN_ITEM: u32 = u32::from_be_bytes(*b"lgit");
 
 /// SMAppService exists from macOS 13; on older systems the class is missing.
 pub fn available() -> bool {
-    AnyClass::get(CStr::from_bytes_with_nul(b"SMAppService\0").unwrap()).is_some()
+    AnyClass::get(c"SMAppService").is_some()
 }
 
 pub fn is_enabled() -> bool {
