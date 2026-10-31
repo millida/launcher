@@ -381,7 +381,7 @@ jobs:
           tags: macos-cross:local
           load: true
           cache-from: type=gha,scope=macos-cross
-          cache-to: type=gha,scope=macos-cross,mode=max
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=macos-cross,mode=max' || '' }}
 
       # Saved only on main, like the Rust cache of the other targets: a tag reads
       # only its own entries, and 1.5 GB per tag pushes the other targets' caches
