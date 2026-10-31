@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { api, hasMillidaAccount } from '../lib/api'
@@ -6,8 +6,6 @@ import { apiErrorText } from '../lib/apiError'
 import { showToast } from '../state/ui'
 import { showReward } from './reward/rewardBus'
 import { track } from '../lib/telemetry'
-import { FEEDBACK_WEEK_MS, rewardOpensAt, rewardReady } from '../lib/feedbackReward'
-import { getMillidaAccount } from '../state/accounts'
 import { hasTauri } from '../ipc/tauri'
 import { openUrl } from '../ipc/commands'
 import { PxIcon } from './PxIcon'
@@ -15,6 +13,11 @@ import '../styles/pixel/feedback.css'
 import { t, useT } from '../i18n'
 import { replyText, type BugAck } from '../lib/bugReplies'
 import { checkForUpdate } from '../lib/updater'
+import { BugPx } from './BugPx'
+import { FEEDBACK_SHARDS, applyStatus, useRewardReady } from './feedbackStatus'
+
+type FeedbackAnswer = { granted: boolean; shards: number; nextAt?: string }
+export { FEEDBACK_SHARDS }
 
 /**
  * Отзыв о лаунчере (владелец 24.09.2026, 16:41): зелёный «жучок» в верхней
@@ -41,100 +44,6 @@ const BUG_KINDS: [string, string][] = [
 ]
 
 const starWords = () => ['', t('Плохо'), t('Так себе'), t('Нормально'), t('Хорошо'), t('Отлично')]
-
-/** Награда за отзыв — раз в неделю, чтобы отзывы не писали ради осколков. */
-export const FEEDBACK_SHARDS = 50
-const LAST_KEY = 'm-feedback-at'
-const WEEK = FEEDBACK_WEEK_MS
-const RETRY_AFTER_FAILURE = 5 * 60_000
-
-type FeedbackStatus = { ready: boolean; nextAt?: string }
-type FeedbackAnswer = { granted: boolean; shards: number; nextAt?: string }
-
-/** Когда награда снова доступна по ответу сервера; null — ручки ещё нет, решает localStorage. */
-let serverOpensAt: number | null = null
-let askedFor = ''
-let failedAt = 0
-let inflight: Promise<void> | null = null
-
-/** Ручка ещё не выкачена: «http 404» из браузера или «Cannot GET …» от Nest через Tauri. */
-function isMissing(e: unknown): boolean {
-  const raw = String((e as { message?: string } | null)?.message ?? e ?? '').trim()
-  return /\bhttp 404\b/i.test(raw) || /^cannot (get|post) /i.test(raw) || /^not found$/i.test(raw)
-}
-
-function localReady(): boolean {
-  try {
-    return Date.now() - Number(localStorage.getItem(LAST_KEY) || 0) > WEEK
-  } catch {
-    return false
-  }
-}
-
-function markFeedback(at = Date.now()) {
-  try {
-    localStorage.setItem(LAST_KEY, String(at))
-  } catch {}
-}
-
-/** Сервер знает правду — подтягиваем под неё и localStorage-фолбэк. */
-function applyStatus(ready: boolean, nextAt?: string) {
-  serverOpensAt = rewardOpensAt(ready, nextAt, Date.now())
-  if (ready) {
-    try {
-      localStorage.removeItem(LAST_KEY)
-    } catch {}
-  } else {
-    const next = nextAt ? Date.parse(nextAt) : NaN
-    markFeedback(Number.isFinite(next) ? next - WEEK : Date.now())
-  }
-}
-
-/// The answer names when the reward opens, so after the first answer for an
-/// account readiness is a clock comparison, not another request per render.
-function loadStatus(force = false): Promise<void> {
-  if (!hasMillidaAccount()) return Promise.resolve()
-  if (inflight) return inflight
-  const who = getMillidaAccount()?.id || 'millida'
-  const known = askedFor === who && (!failedAt || Date.now() - failedAt < RETRY_AFTER_FAILURE)
-  if (!force && known) return Promise.resolve()
-  if (askedFor !== who) serverOpensAt = null
-  askedFor = who
-  inflight = api<FeedbackStatus>('/launcher/feedback')
-    .then((s) => {
-      failedAt = 0
-      applyStatus(!!s?.ready, s?.nextAt)
-    })
-    .catch((e) => {
-      failedAt = Date.now()
-      if (isMissing(e)) serverOpensAt = null
-    })
-    .finally(() => {
-      inflight = null
-    })
-  return inflight
-}
-
-/** Значок «+50»: без аккаунта награды нет; со входом — ответ сервера, иначе localStorage. */
-export function feedbackRewardReady(): boolean {
-  if (!hasMillidaAccount()) return false
-  void loadStatus()
-  return serverOpensAt === null ? localReady() : rewardReady(serverOpensAt, Date.now())
-}
-
-function useRewardReady(): boolean {
-  const [ready, setReady] = useState(feedbackRewardReady)
-  useEffect(() => {
-    let live = true
-    void loadStatus(true).then(() => {
-      if (live) setReady(feedbackRewardReady())
-    })
-    return () => {
-      live = false
-    }
-  }, [])
-  return ready
-}
 
 async function send(body: Record<string, unknown>): Promise<BugAck | null> {
   const r = await api<{ ack?: BugAck | null }>('/bug-reports', { method: 'POST', body: JSON.stringify({ service: 'launcher', ...body }) })
@@ -300,34 +209,5 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
       </div>
     </div>,
     document.body,
-  )
-}
-
-/** Пиксельный жучок 12×12. */
-export function BugPx({ size = 22, light }: { size?: number; light?: boolean }) {
-  const px = [
-    '..k......k..',
-    '...k....k...',
-    '....kkkk....',
-    '...kggggk...',
-    'k.kgwggwgk.k',
-    '.kkggggggkk.',
-    '..kgGggGgk..',
-    'kkkggggggkkk',
-    '..kgGggGgk..',
-    '.kkggggggkk.',
-    'k..kggggk..k',
-    '....kkkk....',
-  ]
-  // На зелёной кнопке жучок светлый, иначе сливается.
-  const color: Record<string, string> = light
-    ? { k: '#0b2410', g: '#ffffff', G: '#cfe9cf', w: '#0b2410' }
-    : { k: '#10240f', g: '#6fdc5a', G: '#3b9a2c', w: '#ffffff' }
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" shapeRendering="crispEdges" aria-hidden="true">
-      {px.flatMap((row, y) =>
-        [...row].map((ch, x) => (ch !== '.' ? <rect key={x + '-' + y} x={x} y={y} width="1" height="1" fill={color[ch]} /> : null)),
-      )}
-    </svg>
   )
 }
