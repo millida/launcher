@@ -15,6 +15,11 @@ on:
     # The public main moves with every stable release. Building it fills the Rust
     # caches that tag builds may read: a cache saved on a tag is visible to that tag alone.
     branches: [main]
+  # Betas move only tags, so main alone would leave the caches on the last stable
+  # dependencies and toolchain. A scheduled run belongs to main and saves what the
+  # newest tag needs, which keeps the next release build warm.
+  schedule:
+    - cron: "23 */6 * * *"
   workflow_dispatch:
     inputs:
       version:
@@ -126,7 +131,15 @@ jobs:
             gstreamer1.0-pulseaudio \
             gstreamer1.0-alsa
 
+      - name: Pick the newest release tag
+        id: source
+        if: github.event_name == 'schedule'
+        shell: bash
+        run: echo "ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.ref }}
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -334,7 +347,7 @@ jobs:
 
   macos:
     name: ${{ matrix.label }}
-    if: github.repository == 'millida/launcher' && github.event_name == 'push'
+    if: github.repository == 'millida/launcher' && (github.event_name == 'push' || github.event_name == 'schedule')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -347,7 +360,14 @@ jobs:
             target: x86_64-apple-darwin
             updater_key: darwin-x86_64
     steps:
+      - name: Pick the newest release tag
+        id: source
+        if: github.event_name == 'schedule'
+        run: echo "ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.ref }}
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -363,8 +383,12 @@ jobs:
           cache-from: type=gha,scope=macos-cross
           cache-to: type=gha,scope=macos-cross,mode=max
 
+      # Saved only on main, like the Rust cache of the other targets: a tag reads
+      # only its own entries, and 1.5 GB per tag pushes the other targets' caches
+      # out of the 10 GB limit.
       - name: Restore cargo cache
-        uses: actions/cache@v4
+        id: cargo-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             .cross-cache/cargo/registry
@@ -404,6 +428,16 @@ jobs:
               cargo build --release --manifest-path src-tauri/Cargo.toml --target "$TARGET" --features tauri/custom-protocol
               bun scripts/macos-bundle.mjs --target="$TARGET"
             '
+
+      - name: Save cargo cache
+        if: github.ref == 'refs/heads/main' && steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .cross-cache/cargo/registry
+            .cross-cache/cargo/git
+            .cross-cache/target
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
 
       - name: Collect bundles
         if: github.ref != 'refs/heads/main'
@@ -472,8 +506,13 @@ jobs:
           if grep -qx 'Channel: beta' tag-message.txt; then channel=beta; fi
           grep -vx 'Channel: beta' tag-message.txt > notes.md || true
           cp "$ATTESTATION" provenance.sigstore.json
+          # Two stable releases built side by side finish in any order; the one that
+          # finishes last must not take "latest" from a newer one.
+          current=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
           if [ "$channel" = "beta" ]; then
             flags="--prerelease"
+          elif [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$TAG" | sort -V | tail -n 1)" != "$TAG" ]; then
+            flags="--latest=false"
           else
             flags="--latest"
           fi

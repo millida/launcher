@@ -18,12 +18,19 @@ import { pathToFileURL } from 'node:url'
 
 const REPO = process.env.GITHUB_REPOSITORY || 'millida/launcher'
 const SOURCE = 'https://launcher-storage.millida.net/v2/gh/latest.json'
-const WAIT_MS = Number(process.env.MANIFEST_WAIT_MS || 45 * 60_000)
-const STEP_MS = 30_000
+const WAIT_MS = Number(process.env.MANIFEST_WAIT_MS || 15 * 60_000)
+const STEP_MS = 15_000
 const UA = { 'User-Agent': 'millida-attach-manifest (+https://github.com/millida/launcher)' }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim()
+
+export function compareVersions(a, b) {
+  const pa = String(a).split('.').map(Number)
+  const pb = String(b).split('.').map(Number)
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
+  return 0
+}
 
 export function parseSums(text) {
   const out = new Map()
@@ -60,6 +67,11 @@ async function main() {
   const tag = process.argv[2] || gh('release', 'view', '--repo', REPO, '--json', 'tagName', '--jq', '.tagName')
   const version = tag.replace(/^v/, '')
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`'${tag}' is not a launcher release`)
+  // The installer reads latest.json of the release GitHub marks latest, and a beta never is.
+  if (gh('release', 'view', tag, '--repo', REPO, '--json', 'isPrerelease', '--jq', '.isPrerelease') === 'true') {
+    console.log(`::notice::${tag} is a beta: the installer never reads its list, nothing to attach`)
+    return
+  }
   const sumsRes = await fetch(`https://github.com/${REPO}/releases/download/v${version}/SHA256SUMS`, { headers: UA })
   if (!sumsRes.ok) throw new Error(`SHA256SUMS of release v${version}: HTTP ${sumsRes.status}`)
   const sums = parseSums(await sumsRes.text())
@@ -71,12 +83,20 @@ async function main() {
     const res = await fetch(`${SOURCE}?t=${Date.now()}`, { headers: UA }).catch(() => null)
     if (res?.ok) {
       text = await res.text()
+      let listed = null
       try {
-        problems = manifestProblems(JSON.parse(text), version, sums)
+        const manifest = JSON.parse(text)
+        listed = manifest?.version
+        problems = manifestProblems(manifest, version, sums)
       } catch (e) {
         problems = [`the list could not be parsed: ${e.message}`]
       }
       if (!problems.length) break
+      // A newer release already took the list over: waiting would only burn the timeout.
+      if (listed && compareVersions(listed, version) > 0) {
+        console.log(`::notice::the list already serves ${listed}, newer than ${tag}: nothing to attach`)
+        return
+      }
     } else problems = [`the list was not served: HTTP ${res?.status ?? 'no connection'}`]
     // Файлы ещё подписываются и заливаются: версия в списке сменится через несколько минут.
     if (Date.now() > until) throw new Error(`the list does not match release v${version}: ${problems.join('; ')}`)

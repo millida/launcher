@@ -25,6 +25,7 @@ concurrency:
 jobs:
   verify:
     name: Files match the release
+    if: github.repository == 'millida/launcher'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
