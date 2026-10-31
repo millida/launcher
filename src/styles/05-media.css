@@ -2172,3 +2172,8 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
    и перетаскивает окно, поэтому верхняя половина кнопок раньше не нажималась (06.10.2026). */
 .lightbox-top{top:calc(44px + 12px)}
 :root[data-density="compact"] .lightbox-top{top:calc(38px + 12px)}
+
+/* Картинка, которая ещё качается из кэша медиа (src/lib/media.ts, MEDIA_WAIT): плоская плитка, без блеска и текста. */
+img[src^="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw"] {
+  background: var(--m-surface-2);
+}

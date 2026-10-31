@@ -1,13 +1,14 @@
 {
   "name": "millida-launcher",
   "private": true,
-  "version": "2.0.286",
+  "version": "2.0.293",
   "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:web": "tsc -b && vite build && bun scripts/check-frontend-gate.mjs",
-    "build:web:release": "vite build && bun scripts/check-frontend-gate.mjs",
+    "build:web": "tsc -b && vite build && bun scripts/check-frontend-gate.mjs && bun scripts/check-startup-budget.mjs",
+    "build:web:release": "vite build && bun scripts/check-frontend-gate.mjs && bun scripts/check-startup-budget.mjs",
+    "check:budget": "bun scripts/check-startup-budget.mjs",
     "typecheck": "tsc -b",
     "test": "bun scripts/test.mjs",
     "lint": "tsc -b",

@@ -1,0 +1,16 @@
+# fabric-1.21.1-microsoft-shaders-8gb
+route: version 1.21.1 + fabric, java 21
+files: client 1, libraries 70, natives 0, log4j no, loader libraries 8
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: true, skin_server: None, kill_switch: true }
+graph (first launch):
+  kill-switch [net]
+  mod-token [net]
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  assets [assets] <- meta
+  loader [loader] <- meta
+  mods [mods] <- kill-switch
+  deps [mods] <- mods

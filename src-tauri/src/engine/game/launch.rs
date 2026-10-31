@@ -2,6 +2,7 @@
 // Almost no network here: only the mod token and the paid modpack key from the Millida API, and the data of
 // the Millida skin server if that account is selected. Writes the launch log and crash snapshots to the modpack folder.
 use super::gameserver::track_server_hop;
+use super::pipeline::AuthSource;
 use crate::engine::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -13,6 +14,11 @@ use tauri::{AppHandle, Emitter};
 pub static RUNNING: Mutex<Vec<(String, u32)>> = Mutex::new(Vec::new());
 
 const EXIT_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+const EARLY_POLL: std::time::Duration = std::time::Duration::from_millis(200);
+const EARLY_POLL_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
+/// A game that ends sooner than this after its start did not start: the failure is shown as
+/// that, with what the JVM printed, not as a crash of a session.
+const EARLY_EXIT_SECS: u64 = 8;
 const PLAYTIME_FLUSH: std::time::Duration = std::time::Duration::from_secs(60);
 /// Сколько секунд сессии считается доказательством, что сборка открылась.
 /// Полторы минуты — это дальше загрузки модов и окна входа; всё, что короче,
@@ -260,23 +266,34 @@ fn prune_crash_snapshots(logs: &Path, keep: usize) {
     }
 }
 
-pub(crate) const ALREADY_RUNNING: &str =
-    "Эта сборка уже запущена — переключись на окно игры. Чтобы запустить её заново, сначала закрой игру";
+/// What the page is told when Play is pressed for a build that is not launched again.
+/// `focused`: its game is running and the window was brought forward. `running`: it is running
+/// but there is no window to raise yet (or the system refused). `starting`: its first start is
+/// still under way. None of them is an error.
+pub const OUTCOME_FOCUSED: &str = "focused";
+pub const OUTCOME_RUNNING: &str = "running";
+pub const OUTCOME_STARTING: &str = "starting";
 
 /// A second JVM of a running build overwrites its logs and remaps into the
 /// same folders; the crash of the first one then reads the second one's log.
-fn refuse_second_instance(running: &[String], profile: &str) -> Result<(), String> {
-    if running.iter().any(|p| p == profile) {
-        Err(ALREADY_RUNNING.into())
-    } else {
-        Ok(())
-    }
+fn running_pid(running: &[(String, u32)], profile: &str) -> Option<u32> {
+    running.iter().find(|(p, _)| p == profile).map(|(_, pid)| *pid)
+}
+
+/// Play on a build that is already running does not start another copy: the window of the
+/// running one comes forward. `look_beyond_memory` also looks for a game started before the
+/// launcher restarted, which costs a scan of the process list.
+pub fn bring_running_forward(profile: &str, look_beyond_memory: bool) -> Option<String> {
+    let known = RUNNING.lock().ok().and_then(|v| running_pid(&v, profile));
+    let pid = known.or_else(|| look_beyond_memory.then(|| game_pid_elsewhere(&profile_dir(profile))).flatten())?;
+    let raised = super::gamewin::bring_to_front(pid);
+    Some(if raised { OUTCOME_FOCUSED } else { OUTCOME_RUNNING }.to_string())
 }
 
 /// RUNNING lives in memory, so a game started before the launcher restarted is
 /// missing from it while it still holds the jars of its build open. The system
 /// process list remembers it by the command line the launcher gave it.
-fn build_open_elsewhere(game_dir: &Path) -> bool {
+fn game_pid_elsewhere(game_dir: &Path) -> Option<u32> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let mut sys = System::new();
     sys.refresh_processes_specifics(
@@ -284,12 +301,12 @@ fn build_open_elsewhere(game_dir: &Path) -> bool {
         true,
         ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
     );
-    sys.processes().values().any(|p| {
+    sys.processes().values().find_map(|p| {
         if !is_game_process_name(&p.name().to_string_lossy()) {
-            return false;
+            return None;
         }
         let args: Vec<String> = p.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect();
-        runs_in(game_dir, &args)
+        runs_in(game_dir, &args).then(|| p.pid().as_u32())
     })
 }
 
@@ -829,6 +846,18 @@ pub(super) fn spawn_log_reader(
     app: AppHandle,
     server: ServerSlot,
 ) -> Arc<std::sync::atomic::AtomicBool> {
+    spawn_log_reader_probed(reader, file, app, server, None)
+}
+
+/// The same reader, and every line it sees is also shown to `probe`, which notes the moment the
+/// game says it made its window.
+pub(super) fn spawn_log_reader_probed(
+    reader: Box<dyn std::io::Read + Send>,
+    file: Arc<Mutex<std::fs::File>>,
+    app: AppHandle,
+    server: ServerSlot,
+    probe: Option<Arc<super::launch_perf::WindowProbe>>,
+) -> Arc<std::sync::atomic::AtomicBool> {
     let batch: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let finished = done.clone();
@@ -876,8 +905,11 @@ pub(super) fn spawn_log_reader(
                         }
                     }
                     for l in &out {
+                        if let Some(probe) = &probe {
+                            probe.feed(l);
+                        }
                         if let Some(addr) = kick.feed(l) {
-                            let _ = app_hop.emit("session-kicked", addr);
+                            crate::background::emit_main(&app_hop, "session-kicked", addr);
                         }
                         track_server_hop(l, &server, &app_hop);
                     }
@@ -935,6 +967,15 @@ pub fn profile_java(profile: &str) -> Option<PathBuf> {
 pub(crate) async fn resolve_profile_java(app: &AppHandle, profile: &str) -> Result<Option<PathBuf>, String> {
     match profile_java_major(profile) {
         Some(m) => Ok(Some(ensure_java_vendor(app, m, profile_java_vendor(profile)).await?)),
+        None => Ok(profile_java(profile)),
+    }
+}
+
+/// `resolve_profile_java` without the download: the lobby prepares a build only with the Java
+/// that is already on this computer.
+pub(crate) fn profile_java_present(profile: &str) -> Result<Option<PathBuf>, String> {
+    match profile_java_major(profile) {
+        Some(m) => java_vendor_present(m, profile_java_vendor(profile)).map(Some).ok_or_else(|| NOT_READY.to_string()),
         None => Ok(profile_java(profile)),
     }
 }
@@ -1184,11 +1225,12 @@ pub(super) fn session_uuid(auth: &Auth, nick: &str) -> String {
 
 /// The same account without a usable session: the game starts offline yet stays
 /// the same player in every world.
-fn offline_keeping_uuid(auth: &Auth) -> Auth {
+pub(crate) fn offline_keeping_uuid(auth: &Auth) -> Auth {
     Auth { uuid: auth.uuid.clone(), ..Auth::default() }
 }
 
 /// Builds jvm+game arguments from the version json, expanding `${...}` placeholders.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_args(
     v: &Value,
@@ -1201,7 +1243,24 @@ pub(crate) fn build_args(
     libraries_dir: &Path,
     auth: &Auth,
 ) -> Vec<String> {
-    let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+    build_args_on(v, main_class, classpath, nick, game_dir, assets_root, natives_dir, libraries_dir, auth, &Platform::host())
+}
+
+/// `build_args` for the given system: its rules pick the arguments, its separator joins the classpath.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_args_on(
+    v: &Value,
+    main_class: &str,
+    classpath: &[PathBuf],
+    nick: &str,
+    game_dir: &Path,
+    assets_root: &Path,
+    natives_dir: &Path,
+    libraries_dir: &Path,
+    auth: &Auth,
+    platform: &Platform,
+) -> Vec<String> {
+    let sep = platform.path_sep();
     let cp = classpath
         .iter()
         .map(|p| p.to_string_lossy().to_string())
@@ -1259,7 +1318,7 @@ pub(crate) fn build_args(
             for a in arr {
                 if let Some(s) = a.as_str() {
                     args.push(subst(s));
-                } else if rules_allow(&a["rules"]) {
+                } else if rules_allow_on(&a["rules"], platform) {
                     if let Some(s) = a["value"].as_str() {
                         args.push(subst(s));
                     } else if let Some(vals) = a["value"].as_array() {
@@ -1334,7 +1393,8 @@ pub(super) fn watch_session<T>(
             Err(e) => break Err(e),
             Ok(None) => {}
         }
-        std::thread::sleep(EXIT_POLL);
+        // The first seconds are polled quickly: a game that dies at once is reported at once.
+        std::thread::sleep(if start.elapsed() < EARLY_POLL_WINDOW { EARLY_POLL } else { EXIT_POLL });
         let elapsed = start.elapsed().as_secs();
         let now_here = current_server(server_now);
         let hopped = now_here != here;
@@ -1357,7 +1417,8 @@ pub(super) fn watch_session<T>(
     if elapsed > written || new_session || server_session {
         record_playtime(pname, elapsed - written, here.as_deref(), new_session, server_session);
     }
-    let _ = app.emit("game-exit", pname.to_string());
+    // Без окна (выгружено на время игры) событие ждёт новую страницу.
+    crate::background::emit_main(app, "game-exit", pname.to_string());
     let waker = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(1500));
@@ -1387,7 +1448,21 @@ pub async fn install_and_launch_in(
     profile: String,
     auth: Auth,
 ) -> Result<String, String> {
-    install_and_launch_into(app, version_id, nick, with_fabric, ram_mb, profile, auth, QuickTarget::default()).await
+    install_and_launch_into(app, version_id, nick, with_fabric, ram_mb, profile, AuthSource::Ready(auth), QuickTarget::default()).await
+}
+
+/// Play for the account the window named: its session is issued next to the install instead of
+/// before it (the Millida session alone could take up to 12 s).
+pub async fn launch_with_account(
+    app: AppHandle,
+    version_id: String,
+    nick: String,
+    with_fabric: bool,
+    ram_mb: u32,
+    profile: String,
+    auth: Option<AuthArgs>,
+) -> Result<String, String> {
+    install_and_launch_into(app, version_id, nick, with_fabric, ram_mb, profile, AuthSource::Account(auth), QuickTarget::default()).await
 }
 
 /// World and server the game opens straight into (Quick Play).
@@ -1397,6 +1472,7 @@ pub(crate) struct QuickTarget {
     pub server: Option<String>,
 }
 
+/// Plan → Prepare → Start → Watch (pipeline/mod.rs), with the launch's timings around it.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn install_and_launch_into(
     app: AppHandle,
@@ -1405,354 +1481,52 @@ pub(crate) async fn install_and_launch_into(
     with_fabric: bool,
     ram_mb: u32,
     profile: String,
-    auth: Auth,
+    auth: AuthSource,
     quick: QuickTarget,
 ) -> Result<String, String> {
-    check_cancel()?;
-    let _slot = claim_profile_start(&profile, || emit(&app, "files", 2.0, "Останавливаем прошлый запуск этой сборки…")).await?;
-    refuse_second_instance(&running_games(), &profile)?;
-    if build_open_elsewhere(&profile_dir(&profile)) {
-        return Err(ALREADY_RUNNING.into());
+    let perf = super::launch_perf::LaunchPerf::new(super::launch_perf::take_launch_prep(&profile));
+    let reporter = app.clone();
+    let ask = super::pipeline::LaunchAsk { version_id, nick, with_fabric, ram_mb, profile, auth, quick };
+    let res = super::launch_perf::scope(perf.clone(), super::pipeline::launch(app, ask, perf.clone())).await;
+    // Only a real start or a real failure is worth a timing: raising an open window or a
+    // cancel by the player says nothing about how fast the launch is.
+    match &res {
+        Ok(done) if done == "started" => super::launch_perf::report(&reporter, &perf, true),
+        Err(e) if e != LAUNCH_CANCELLED => super::launch_perf::report(&reporter, &perf, false),
+        _ => {}
     }
-    // the nick lands on the command line and in an argfile
-    let nick = launch_nick(&nick);
-    let prof = load_profiles().into_iter().find(|p| p.name == profile);
-    // The window may still hold the loader id the build was imported with
-    // ("neoforge-21.1.233"); the stored build already has the game version.
-    let version_id = match &prof {
-        Some(p) if split_loader_version_id(&version_id).is_some() => p.version.clone(),
-        _ => version_id,
-    };
-    let loader_id = prof.as_ref().map(|p| p.loader_id())
-        .unwrap_or_else(|| if with_fabric { "fabric".into() } else { "vanilla".into() });
-    let loader_ver = prof.as_ref().and_then(|p| p.loader_version.clone());
-    // Settings are read before install so a user-provided Java path can skip the
-    // bundled JRE download instead of replacing it afterwards.
-    let settings: Value = std::fs::read(profile_dir(&profile).join("millida-settings.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(Value::Null);
-    // Ahead of the Java pick: a pinned Java would otherwise be downloaded for
-    // a game that never runs on it.
-    if let Some(native) = trusted_native_launch(&profile) {
-        return launch_native(app, profile, nick, auth, &settings, native?).await;
-    }
-    share_common_before_launch(&profile);
-    let java_pick = resolve_profile_java(&app, &profile).await?;
-    let game_dir = profile_dir(&profile);
-    /*
-     * A catalogue pack that brought its own game is launched by its own
-     * description: it ships libraries, minecraft.jar, assets and natives, and
-     * its content is loaded out of those libraries rather than out of `mods/`.
-     * Assembling such a build from parts gives a folder that starts without
-     * most of what the player paid for.
-     */
-    // the descriptor is a file in the profile folder: it is honoured only for
-    // a build the core itself installed from the catalogue
-    let pack = trusted_pack_launch_spec(&profile);
-    if !pack.as_ref().is_some_and(|spec| spec.needs_token) {
-        if let Some(slug) = launch_gate_slug(&settings) {
-            pack_launch_gate(&slug).await?;
-        }
-    }
-    let (v, main_class, classpath, java, assets_root, natives_dir, libraries_dir) = match &pack {
-        Some(spec) => {
-            emit(&app, "launch", 20.0, "Готовим сборку…");
-            let token = if spec.needs_token {
-                match pack_launch_token(&spec.slug).await {
-                    Ok(t) => t,
-                    Err(e) => {
-                        if let Ok(Some(PackAccess::Lost(reason))) = pack_access(&spec.slug).await {
-                            return Err(forfeit_pack(&app, &profile, &spec.slug, &reason).await);
-                        }
-                        return Err(e);
-                    }
-                }
-            } else {
-                Vec::new()
-            };
-            /*
-             * A pack names the Java it was built for, and a player's own Java
-             * older than that never starts it: Java 8 does not even read the
-             * argument file, so a 1.20.1 pack dies with «Could not find or load
-             * main class @…millida-args.txt». Such a pick is set aside for this
-             * pack only; a newer Java than required is still the player's call.
-             */
-            let pick = java_pick.filter(|p| match java_major_at(p) {
-                Some(m) if u64::from(m) >= spec.java_major => true,
-                found => {
-                    warn(
-                        &app,
-                        &format!(
-                            "Выбранная Java {} не подходит сборке — ей нужна Java {}. Запускаем на своей",
-                            found.map(|m| m.to_string()).unwrap_or_else(|| "неизвестной версии".into()),
-                            spec.java_major
-                        ),
-                    );
-                    false
-                }
-            });
-            let java = match pick {
-                Some(p) => p,
-                None => ensure_java(&app, spec.java_major).await?,
-            };
-            let cp = pack_classpath(&profile, spec)?;
-            let natives = game_dir.join(&spec.natives_dir);
-            let mut extra_jvm = token;
-            extra_jvm.extend(module_path_args(&pack_module_path(&profile, spec)?));
-            if let Some(arg) = lwjgl_library_path_arg(&nested_native_dirs(&natives)) {
-                extra_jvm.push(arg);
-            }
-            let mut v = pack_version_json(spec, &extra_jvm);
-            /*
-             * A pack built on a vanilla version may leave the sounds and
-             * languages out and name the version instead: the objects are the
-             * same for every pack of that version, so they live once in the
-             * shared store rather than inside each archive.
-             */
-            let assets_root = if spec.vanilla_assets.is_empty() {
-                game_dir.join(&spec.assets_dir)
-            } else {
-                let root = game_root_ready()?;
-                let (vid, vjson) = vanilla_meta(&app, &root, &spec.vanilla_assets).await?;
-                if let Some(dir) = ensure_assets(&app, &root, &vjson, &vid).await? {
-                    v["millidaGameAssets"] = Value::String(dir.to_string_lossy().to_string());
-                }
-                if spec.asset_index.is_empty() {
-                    v["assetIndex"]["id"] = vjson["assetIndex"]["id"].clone();
-                }
-                root.join("assets")
-            };
-            (v, spec.main_class.clone(), cp, java, assets_root, natives, game_dir.join("libraries"))
-        }
-        None => {
-            let (v, main_class, classpath, java) =
-                install_loader_with_java(&app, &version_id, &loader_id, loader_ver.as_deref(), java_pick).await?;
-            let root = game_root_ready()?;
-            let resolved_vid = v["id"].as_str().unwrap_or(&version_id).to_string();
-            let natives = root.join("versions").join(&resolved_vid).join("natives");
-            let libs = root.join("libraries");
-            (v, main_class, classpath, java, game_root().join("assets"), natives, libs)
-        }
-    };
-    check_cancel()?;
-    std::fs::create_dir_all(game_dir.join("mods")).ok();
-    if loader_id == "fabric" && !running_games().iter().any(|p| p == &profile) {
-        let dir = game_dir.clone();
-        let _ = tokio::task::spawn_blocking(move || drop_broken_remap_cache(&dir)).await;
-    }
+    res
+}
 
-    check_cancel()?;
-    emit(&app, "launch", 92.0, "Запускаем игру…");
-    // authlib-injector redirects Yggdrasil to a custom auth server. Without the
-    // agent the game would authenticate against Mojang with a non-Mojang token
-    // and fail session checks, so a failure here falls back to offline mode.
-    let mut auth = auth;
-    let mut agent: Option<String> = None;
-    // Метаданные сервера входа лаунчер берёт сам и отдаёт агенту готовыми:
-    // иначе authlib-injector качает их из игры при старте, и сбой DNS у игрока
-    // или 502 на выкатке роняет игру до окна (2.0.122, 25.09.2026: 13 игроков
-    // за 6 часов). Сети нет даже у лаунчера — игра идёт офлайн, а не падает.
-    let mut prefetched: Option<String> = None;
-    let mut agent_held: Option<GameAgent> = None;
-    if !auth.yggdrasil.is_empty() {
-        match ensure_authlib_injector().await.and_then(|jar| agent_for_game(&jar)) {
-            // One GET to the Millida skin server for its description. The password and the Microsoft token are not sent there.
-            Ok(jar) => match get_json(&auth.yggdrasil).await {
-                Ok(meta) => {
-                    use base64::Engine as _;
-                    prefetched = Some(format!(
-                        "-Dauthlibinjector.yggdrasil.prefetched={}",
-                        base64::engine::general_purpose::STANDARD.encode(meta.to_string())
-                    ));
-                    agent = Some(format!("-javaagent:{}={}", jar.path.to_string_lossy(), auth.yggdrasil));
-                    agent_held = Some(jar);
-                }
-                Err(e) => {
-                    warn(&app, &format!("Сервер скинов Millida не ответил ({}) — запускаем в офлайн-режиме", e));
-                    auth = offline_keeping_uuid(&auth);
-                }
-            },
-            Err(e) => {
-                warn(&app, &format!("Скины Millida недоступны ({}) — запускаем в офлайн-режиме", e));
-                auth = offline_keeping_uuid(&auth);
-            }
-        }
-    }
-    // CustomSkinLoader is a client mod, so it can only be installed on modded
-    // profiles; vanilla has no way to load custom skins without Yggdrasil.
-    // Only our server has the CustomSkinAPI next to Yggdrasil.
-    let root = if agent.is_some() && auth.yggdrasil == millida_yggdrasil() {
-        Some(format!("{}/csl/", auth.yggdrasil.trim_end_matches('/')))
-    } else { None };
-    let want_skin = want_in_game_skins(root.as_deref());
-    // Наш мод умеет всё, что умел CustomSkinLoader, и сверх того косметику,
-    // поэтому сначала пробуем его. Под связку, которой у мода ещё нет варианта,
-    // остаётся прежний путь: игроку нужен скин и на такой сборке.
-    let mut own_mod = false;
-    /*
-     * A protected pack checks its own files, and its content lives in signed
-     * libraries rather than in `mods/`. Dropping our skin mod into that folder
-     * either changes what the pack verifies or simply never loads — either way
-     * it is a change to someone else's build made behind their back.
-     */
-    // Our own cosmetics mod is the one exception, and only for a pack our card
-    // opted in: the archive cannot ask for it itself.
-    let touch_mods = pack.is_none();
-    let (pack_mod, pack_mod_before) = match &pack {
-        Some(spec) => pack_millida_mod(&profile, &spec.slug).await,
-        None => (false, false),
-    };
-    let mut own_mod_jar = String::new();
-    match own_mod_action(pack.is_some(), pack_mod, pack_mod_before, millida_mod_wanted(&profile)) {
-        OwnMod::Place if matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") => {
-            let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
-            match ensure_millida_mod(&app, &profile, &nick, licensed).await {
-                Ok(Some(jar)) => {
-                    own_mod = true;
-                    // Какой именно файл поехал в сборку: если он её и уронит, под
-                    // карантин пойдёт он, а не «мод вообще».
-                    own_mod_jar = jar;
-                }
-                Ok(None) => {}
-                Err(e) => warn(&app, &format!("Мод Millida не поставлен: {}", e)),
-            }
-        }
-        OwnMod::Remove => remove_millida_mod(&profile),
-        OwnMod::Place | OwnMod::Leave => {}
-    }
-    if touch_mods && matches!(loader_id.as_str(), "fabric" | "quilt" | "forge" | "neoforge") && !own_mod {
-        let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
-        if want_skin {
-            match ensure_custom_skin_loader(&profile, &loader_id, root.as_deref(), &nick, licensed).await {
-                Err(e) => warn(&app, &format!("Мод скинов не поставлен: {}", e)),
-                Ok(off) if !off.is_empty() => warn(
-                    &app,
-                    &format!(
-                        "Выключили мод скинов другого лаунчера ({}) — он показывал скин с его сервера. Теперь скин берётся из Millida",
-                        off.join(", ")
-                    ),
-                ),
-                Ok(_) => {}
-            }
-        }
-    } else if touch_mods && !own_mod {
-        if let Some(why) = in_game_skin_blocker(&loader_id, !auth.token.is_empty(), want_skin) {
-            warn(&app, why);
-        }
-    }
-    if loader_id == "forge" {
-        let off = resolve_legacy_duplicates(&profile, prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id)).await;
-        if !off.is_empty() {
-            warn(
-                &app,
-                &format!(
-                    "Выключили лишнюю копию мода: {}. Этот мод уже есть в сборке внутри другого файла, а с двумя копиями Forge не запускается",
-                    off.join(", ")
-                ),
-            );
-        }
-    }
-    let mut args = build_args(&v, &main_class, &classpath, &nick, &game_dir, &assets_root, &natives_dir, &libraries_dir, &auth);
-    /*
-     * A pack states the memory it was built for. The player's own choice still
-     * wins inside those bounds; outside them the pack's number is used, because
-     * «не хватило памяти» on a paid build reads as a broken build.
-     */
-    let mut ram = tuned_ram_mb(&profile, ram_mb);
-    if let Some(spec) = &pack {
-        if spec.min_ram_mb > 0 && ram < spec.min_ram_mb {
-            ram = spec.min_ram_mb;
-        }
-        if spec.max_ram_mb > 0 && ram > spec.max_ram_mb {
-            ram = spec.max_ram_mb;
-        }
-    }
-    args.insert(0, format!("-Xmx{}M", ram));
-    if let Some(a) = agent { args.insert(1, a); }
-    if let Some(p) = prefetched { args.insert(1, p); }
-    // Log4Shell mitigation for 1.7-1.18; harmless on newer versions.
-    args.insert(1, "-Dlog4j2.formatMsgNoLookups=true".into());
-    // 1.7-1.11.2 predate that property and can only be patched via Mojang's
-    // replacement logging config, downloaded during version install.
-    if let Some(l4j) = v["millidaLog4jArg"].as_str() {
-        args.insert(1, l4j.to_string());
-    }
-    if let Some(jvm) = settings["jvmArgs"].as_str() {
-        // Second line of defence: the setting may have been written by a build
-        // that stored the value unchecked.
-        if let Some(bad) = rejected_jvm_arg(jvm) {
-            warn(&app, &format!("Аргумент JVM «{}» пропущен — такие лаунчер не передаёт", bad));
-        }
-        for (i, a) in sanitize_jvm_args(jvm).into_iter().enumerate() { args.insert(1 + i, a); }
-    }
-    // Профиль GC режима «Буст FPS» встаёт левее пользовательских аргументов:
-    // у JVM выигрывает последний одноимённый флаг, поэтому свой -XX игрока
-    // остаётся сильнее нашего.
-    let boost_on = pack.is_none() && settings["fpsBoost"].as_bool().unwrap_or(false);
-    if boost_on {
-        let own = settings["jvmArgs"].as_str().unwrap_or("");
-        let taken: Vec<&str> = own.split_whitespace().collect();
-        let flags: Vec<String> = boost_flags()
-            .into_iter()
-            .filter(|f| !taken.iter().any(|a| a.eq_ignore_ascii_case(f)))
-            .map(|f| f.to_string())
-            .collect();
-        for (i, a) in flags.into_iter().enumerate() { args.insert(1 + i, a); }
-    }
-    // Ask the JVM for UTF-8 on stdout, stderr and log files. Left of the
-    // player's own arguments on purpose: this is a default, and a player who
-    // pins another encoding must still win. Without it the game writes the
-    // console code page and every non-ASCII line arrived as mojibake.
-    for (i, a) in ["-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8"]
-        .into_iter()
-        .filter(|f| {
-            let key = f.split('=').next().unwrap_or_default();
-            !settings["jvmArgs"].as_str().unwrap_or("").split_whitespace().any(|a| a.starts_with(key))
-        })
-        .enumerate()
-    {
-        args.insert(1 + i, a.to_string());
-    }
-    // Same order and for the same reason: auto-tuning goes to the left of the
-    // player's own arguments and stays quiet once the boost mode has already
-    // placed its GC profile.
-    for (i, a) in tuned_flags(&profile, settings["jvmArgs"].as_str().unwrap_or(""), boost_on)
-        .into_iter()
-        .enumerate()
-    {
-        args.insert(1 + i, a);
-    }
-    // Zero means "let the game decide": passing --width/--height 0 makes
-    // Minecraft open a minimum-size window.
-    if let (Some(w), Some(h)) = (settings["width"].as_u64(), settings["height"].as_u64()) {
-        if w > 0 && h > 0 {
-            args.push("--width".into()); args.push(w.to_string());
-            args.push("--height".into()); args.push(h.to_string());
-        }
-    }
+/// What the Start step runs: the command line the plan made and what goes around the process.
+pub(crate) struct StartSpec {
+    pub profile: String,
+    pub nick: String,
+    pub game_dir: PathBuf,
+    /// Everything after `java`, already fitted to the chosen Java.
+    pub args: Vec<String>,
+    /// What the game process finds in its environment from the launcher (plan::game_env).
+    pub env: Vec<(&'static str, String)>,
+    pub java: PathBuf,
+    pub settings: Value,
+    pub own_mod: bool,
+    pub own_mod_jar: String,
+    pub quick_server: Option<String>,
+    /// Slug of a paid pack whose access is rechecked while it runs.
+    pub pack_watch: Option<String>,
+    /// authlib-injector's jar, held open while the game runs.
+    pub agent: Option<Arc<GameAgent>>,
+}
 
+/// Start: the command line goes to Java (through an argument file when Windows would not take it
+/// whole), the process starts, and Watch follows it from there.
+pub(crate) async fn start_game(app: AppHandle, spec: StartSpec, perf: &super::launch_perf::LaunchPerf) -> Result<String, String> {
+    let StartSpec { profile, nick, game_dir, mut args, env, java, settings, own_mod, own_mod_jar, quick_server, pack_watch, agent } = spec;
     // Captured separately from the game's own log: it also covers crashes that
     // happen before the game logger is initialized.
     let logs = game_dir.join("logs");
     std::fs::create_dir_all(&logs).ok();
     let log_path = logs.join("launcher-latest.log");
-    let mut quick_server: Option<String> = None;
-    if let Some(w) = quick.world {
-        args.push("--quickPlaySingleplayer".into());
-        args.push(w);
-    }
-    if let Some(sv) = quick.server {
-        quick_server = Some(sv.clone());
-        args.extend(server_join_args(prof.as_ref().map(|p| p.version.as_str()).unwrap_or(&version_id), &sv));
-    }
-    // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
-    // Millida mod token: short, separate from the Microsoft account token, taken from the Millida API (/launcher/mod-session).
-    let mod_token = if own_mod { mod_session_token().await } else { None };
-    check_cancel()?;
-    // Флаги из четырёх источников сводятся под выбранную Java: разблокировка
-    // экспериментальных, один сборщик мусора, опции новее этой Java — прочь.
-    fit_jvm_args(&mut args, java_major_of_bin(&java));
     ansi_safe_args(&mut args, &[game_dir.clone(), game_root(), data_dir()]);
     /*
      * Сборка со своим classpath не влезает в командную строку Windows: четыреста
@@ -1803,18 +1577,9 @@ pub(crate) async fn install_and_launch_into(
             .stderr(std::process::Stdio::piped());
         // Токен мод берёт из окружения запуска: в свой файл настроек он его не
         // пишет, а файл настроек игроки пересылают вместе со сборкой. Это узкий
-        // токен мода, не токен аккаунта.
-        if let Some(token) = &mod_token {
-            // The mod token goes into the environment of the game process. It is not written to a file.
-            cmd.env("MILLIDA_TOKEN", token);
-            // The mod joins this party's voice room instead of the server's
-            // (VoiceScreen «Канал пати»), so the lobby talk carries on in game.
-            if let Some(party) = crate::engine::party_voice::bound_party() {
-                cmd.env("MILLIDA_PARTY", party);
-            }
-        }
-        if !game_telemetry_enabled() {
-            cmd.env("MILLIDA_TELEMETRY", "0");
+        // токен мода, не токен аккаунта (plan::game_env).
+        for (key, value) in &env {
+            cmd.env(key, value);
         }
         if let Some(link) = &media {
             link.apply(&mut cmd);
@@ -1826,7 +1591,7 @@ pub(crate) async fn install_and_launch_into(
     super::launch_hooks::run_pre_launch(&hooks, &game_dir, &profile).await?;
     let mut java = java;
     let mut retried = false;
-    let (mut child, start, start_wall, server_now, readers) = loop {
+    let (child, start, start_wall, server_now, readers, window_probe) = loop {
         grant_java_microphone(&java).await;
         let log_file = std::fs::File::create(&log_path).map_err(|e| io_fail("Лог запуска", &log_path, &e))?;
         let start = std::time::Instant::now();
@@ -1868,38 +1633,69 @@ pub(crate) async fn install_and_launch_into(
         let _ = app.emit("game-log-start", &profile);
         let log_file = Arc::new(Mutex::new(log_file));
         let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
+        let window_probe = super::launch_perf::WindowProbe::new();
         let mut readers = Vec::new();
         if let Some(o) = child.stdout.take() {
-            readers.push(spawn_log_reader(Box::new(o), log_file.clone(), app.clone(), server_now.clone()));
+            readers.push(spawn_log_reader_probed(Box::new(o), log_file.clone(), app.clone(), server_now.clone(), Some(window_probe.clone())));
         }
         if let Some(e) = child.stderr.take() {
-            readers.push(spawn_log_reader(Box::new(e), log_file.clone(), app.clone(), server_now.clone()));
+            readers.push(spawn_log_reader_probed(Box::new(e), log_file.clone(), app.clone(), server_now.clone(), Some(window_probe.clone())));
         }
-        // Give the JVM a moment: an immediate exit is a launch failure, not a session.
-        tokio::time::sleep(std::time::Duration::from_millis(900)).await;
-        if cancelled() {
-            let _ = child.kill();
-            return Err(LAUNCH_CANCELLED.into());
-        }
-        if let Ok(Some(status)) = child.try_wait() {
-            if !status.success() {
-                let log = read_log_file(&log_path).unwrap_or_default();
-                if !retried && broken_runtime(&log) {
-                    if let Some(fresh) = reinstall_managed_java(&app, &java).await {
-                        java = fresh?;
-                        retried = true;
-                        continue;
-                    }
-                }
-                let failure = early_exit_message(status.code(), &log);
-                // Проверочная версия узнаёт о своём падении здесь же: «не
-                // открылась вовсе» — самый важный из ответов, ради которых её ставили.
-                report_review_launch(&profile, false, &failure).await;
-                return Err(failure);
-            }
-        }
-        break (child, start, start_wall, server_now, readers);
+        // No pause here to see whether the JVM dies at once: the page hears "started" right
+        // away, and a game that exits within seconds is reported by the watcher below, the same
+        // way as any other crash (with the launcher's capture of the JVM's own output).
+        break (child, start, start_wall, server_now, readers, window_probe);
     };
+    watch_game(Watch {
+        app: app.clone(),
+        profile,
+        nick,
+        game_dir,
+        java,
+        child,
+        start,
+        start_wall,
+        server_now,
+        readers,
+        window_probe,
+        hooks,
+        own_mod_jar,
+        gpu,
+        lag_watch,
+        media,
+        agent,
+        pack_watch,
+    }, perf);
+    emit(&app, "launch", 100.0, "Игра запущена");
+    Ok("started".into())
+}
+
+/// A started game and what watches it.
+struct Watch {
+    app: AppHandle,
+    profile: String,
+    nick: String,
+    game_dir: PathBuf,
+    java: PathBuf,
+    child: std::process::Child,
+    start: std::time::Instant,
+    start_wall: std::time::SystemTime,
+    server_now: ServerSlot,
+    readers: Vec<Arc<std::sync::atomic::AtomicBool>>,
+    window_probe: Arc<super::launch_perf::WindowProbe>,
+    hooks: super::launch_hooks::LaunchHooks,
+    own_mod_jar: String,
+    gpu: GpuPref,
+    lag_watch: Option<LagWatch>,
+    media: Option<super::now_playing::MediaLink>,
+    agent: Option<Arc<GameAgent>>,
+    pack_watch: Option<String>,
+}
+
+/// Watch: the game counts as running, its window is timed, its playtime is credited, and when it
+/// exits a crash is read, explained and sent to the window.
+fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
+    let Watch { app, profile, nick, game_dir, java, mut child, start, start_wall, server_now, readers, window_probe, hooks, own_mod_jar, gpu, lag_watch, media, agent, pack_watch } = w;
     let launch_id = format!(
         "{}-{}",
         start_wall.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
@@ -1910,12 +1706,14 @@ pub(crate) async fn install_and_launch_into(
     let gdir = game_dir.clone();
     let crash_nick = nick.clone();
     let post_exit = hooks.clone();
+    let early_java = java.clone();
     let pid = child.id();
     if let Ok(mut v) = RUNNING.lock() {
         v.push((profile.clone(), pid));
     }
-    if let Some(spec) = pack.as_ref().filter(|s| s.needs_token && !s.slug.is_empty()) {
-        tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), spec.slug.clone(), pid));
+    super::launch_perf::watch_window(app.clone(), pid, window_probe, perf);
+    if let Some(slug) = pack_watch {
+        tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), slug, pid));
     }
     let rewind = crate::engine::rewind::game(&app, pid, &profile, media.as_ref().map(|m| m.notices()));
     if let Some(watch) = &lag_watch {
@@ -1925,7 +1723,7 @@ pub(crate) async fn install_and_launch_into(
         let _lag_watch = lag_watch;
         let _media = media;
         let _rewind = rewind;
-        let _agent = agent_held;
+        let _agent = agent;
         let (status, evidence, elapsed) = watch_session(&mut child, start, pid, &pname, &server_now, &app2, |status| {
             if status.is_ok() {
                 wait_log_readers(&readers, LOG_DRAIN_WAIT);
@@ -1997,12 +1795,31 @@ pub(crate) async fn install_and_launch_into(
                 reason = DISCRETE_FALLBACK_REASON.into();
                 kind = "gpu_fallback";
             }
+            // The game died within seconds of starting. The page was told "started" before this
+            // could be known, so the failure to start is told here, from the launcher's capture
+            // of the JVM's own output (it is part of `log_text`).
+            if elapsed < EARLY_EXIT_SECS && matches!(kind, "unknown" | "no_log" | "jvm_fatal") {
+                if broken_runtime(&log_text) {
+                    // Parts of the Java runtime are missing: it is put back for the next try.
+                    let (repair_app, bin) = (app2.clone(), early_java.clone());
+                    tauri::async_runtime::spawn(async move {
+                        let _ = reinstall_managed_java(&repair_app, &bin).await;
+                    });
+                    reason = "Java распаковалась не полностью — попробуй запустить ещё раз".into();
+                    kind = "java_repaired";
+                } else {
+                    let said = early_exit_message(status.as_ref().ok().and_then(|s| s.code()), &log_text);
+                    reason = said.lines().next().unwrap_or_default().to_string();
+                    kind = "early_exit";
+                }
+            }
             let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
             let cause = super::crashcause::scrub_cause(&verdict.cause, home.as_deref(), &crash_nick);
             let log_file = save_crash_snapshot(&gdir, &launch_id, &evidence)
                 .map_err(|e| eprintln!("[crash] {}", e))
                 .ok();
-            let _ = app2.emit(
+            crate::background::emit_main(
+                &app2,
                 "game-crash",
                 diagnose(&pname, &reason, &tail, &log_text).classified(kind, cause).with_log_file(log_file)
                     .with_mod_jar(&own_mod_jar)
@@ -2017,8 +1834,7 @@ pub(crate) async fn install_and_launch_into(
             }
         }
     });
-    emit(&app, "launch", 100.0, "Игра запущена");
-    Ok("started".into())
+
 }
 
 /// Quick Play appeared in 23w14a (1.20); older clients ignore the flag and open
@@ -2060,7 +1876,7 @@ fn split_server_addr(addr: &str) -> (String, u16) {
     }
 }
 
-fn server_join_args(mc_version: &str, addr: &str) -> Vec<String> {
+pub(crate) fn server_join_args(mc_version: &str, addr: &str) -> Vec<String> {
     if quick_play_supported(mc_version) {
         return vec!["--quickPlayMultiplayer".into(), addr.to_string()];
     }
@@ -2071,6 +1887,67 @@ fn server_join_args(mc_version: &str, addr: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The version's own `arguments.jvm` is the source of truth for what the game needs: 26.3 asks
+    /// for `-XX:StackShadowPages=32` (without it the game dies), 26.1 dropped
+    /// `--sun-misc-unsafe-memory-access`. Whatever the manifest lists must stand on the command
+    /// line unchanged and in order; the launcher only substitutes its placeholders, adds its own
+    /// flags next to them, and takes out what the chosen Java cannot read.
+    #[test]
+    fn the_versions_own_jvm_arguments_reach_the_command_line_intact() {
+        let manifest = |extra: Vec<Value>| {
+            let mut jvm = vec![
+                serde_json::json!("-Djava.library.path=${natives_directory}"),
+                serde_json::json!("-Dminecraft.launcher.brand=${launcher_name}"),
+                serde_json::json!("-XX:StackShadowPages=32"),
+                serde_json::json!({"rules": [{"action": "allow", "os": {"name": "osx"}}], "value": ["-XstartOnFirstThread"]}),
+                serde_json::json!({"rules": [{"action": "allow", "os": {"name": "windows"}}], "value": "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump"}),
+                serde_json::json!("-cp"),
+                serde_json::json!("${classpath}"),
+            ];
+            jvm.extend(extra);
+            serde_json::json!({
+                "id": "26.3", "type": "release",
+                "arguments": { "jvm": jvm, "game": ["--username", "${auth_player_name}", "--version", "${version_name}"] },
+            })
+        };
+        let cp = vec![PathBuf::from("/g/libraries/a.jar"), PathBuf::from("/g/versions/26.3/26.3.jar")];
+        let build = |v: &Value| {
+            build_args(v, "net.minecraft.client.main.Main", &cp, "Steve", Path::new("/g/profiles/p"), Path::new("/g/assets"), Path::new("/g/natives"), Path::new("/g/libraries"), &Auth::default())
+        };
+        let own = |args: &[String]| -> Vec<String> { args.iter().filter(|a| *a != "-XX:+IgnoreUnrecognizedVMOptions").cloned().collect() };
+
+        let args = build(&manifest(vec![]));
+        let main_at = args.iter().position(|a| a == "net.minecraft.client.main.Main").expect("the main class follows the jvm arguments");
+        let jvm = &args[..main_at];
+        assert!(jvm.contains(&"-XX:StackShadowPages=32".to_string()), "the argument 26.3 cannot start without: {jvm:?}");
+        assert!(jvm.contains(&"-Djava.library.path=/g/natives".to_string()), "placeholders are filled: {jvm:?}");
+        assert_eq!(&args[main_at + 1..], ["--username", "Steve", "--version", "26.3"], "the game arguments follow, filled");
+        let applies_here = if cfg!(target_os = "windows") {
+            "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump"
+        } else if cfg!(target_os = "macos") {
+            "-XstartOnFirstThread"
+        } else {
+            "-XX:StackShadowPages=32"
+        };
+        assert!(jvm.contains(&applies_here.to_string()), "an argument gated to this system stays: {jvm:?}");
+
+        // On the way to the process the list passes the chosen Java's filter and the path fixer.
+        let mut fitted = args.clone();
+        fit_jvm_args(&mut fitted, Some(25));
+        ansi_safe_args(&mut fitted, &[PathBuf::from("/g/profiles/p")]);
+        assert_eq!(own(&fitted), args, "on Java 25 nothing the manifest lists is lost, reordered or rewritten");
+
+        // The older line asks for the flag 26.1 removed: kept on a Java that knows it, taken out on one that does not.
+        let old = build(&manifest(vec![serde_json::json!("--sun-misc-unsafe-memory-access=allow")]));
+        let mut on25 = old.clone();
+        fit_jvm_args(&mut on25, Some(25));
+        assert!(on25.contains(&"--sun-misc-unsafe-memory-access=allow".to_string()), "Java 25 reads it");
+        let mut on21 = old.clone();
+        fit_jvm_args(&mut on21, Some(21));
+        assert!(!on21.contains(&"--sun-misc-unsafe-memory-access=allow".to_string()), "Java 21 stops on it: {on21:?}");
+        assert!(on21.contains(&"-XX:StackShadowPages=32".to_string()), "and the rest of the manifest is untouched there too");
+    }
 
     #[test]
     fn the_account_uuid_survives_a_missing_session() {
@@ -2720,28 +2597,30 @@ mod tests {
         );
     }
 
-    /// (builds already running, build being launched -> refused, why pinned)
+    /// (builds already running, build being launched -> pid of the running copy, why pinned)
     #[test]
-    fn a_running_build_is_not_started_twice() {
-        let running = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
-        let cases: [(Vec<String>, &str, bool, &str); 4] = [
-            (running(&[]), "OneBlock", false, "nothing runs: the launch goes ahead"),
-            (running(&["Other"]), "OneBlock", false, "another build running does not block this one"),
+    #[allow(clippy::type_complexity)]
+    fn a_running_build_is_found_instead_of_started_twice() {
+        let running = |names: &[(&str, u32)]| names.iter().map(|(n, p)| (n.to_string(), *p)).collect::<Vec<_>>();
+        let cases: [(Vec<(String, u32)>, &str, Option<u32>, &str); 4] = [
+            (running(&[]), "OneBlock", None, "nothing runs: the launch goes ahead"),
+            (running(&[("Other", 11)]), "OneBlock", None, "another build running does not block this one"),
             (
-                running(&["OneBlock"]),
+                running(&[("OneBlock", 42)]),
                 "OneBlock",
-                true,
-                "a second JVM overwrites the logs the first one's crash is read from",
+                Some(42),
+                "a second JVM overwrites the logs the first one's crash is read from; its window is the answer",
             ),
-            (running(&["Other", "OneBlock"]), "OneBlock", true, "the build is found anywhere in the list"),
+            (running(&[("Other", 11), ("OneBlock", 42)]), "OneBlock", Some(42), "the build is found anywhere in the list"),
         ];
-        for (list, profile, refused, why) in cases {
-            let got = refuse_second_instance(&list, profile);
-            assert_eq!(got.is_err(), refused, "{profile} with {list:?}: {why}");
-            if refused {
-                assert_eq!(got.unwrap_err(), ALREADY_RUNNING, "the player must be told the game is already open");
-            }
+        for (list, profile, want, why) in cases {
+            assert_eq!(running_pid(&list, profile), want, "{profile} with {list:?}: {why}");
         }
+    }
+
+    #[test]
+    fn a_build_that_is_not_running_is_not_brought_forward() {
+        assert_eq!(bring_running_forward("perf-test-no-such-build", false), None);
     }
 
     /// (process args -> the build's own game, why pinned)

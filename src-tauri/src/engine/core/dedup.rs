@@ -32,13 +32,13 @@ pub(crate) const SHARED_DIRS: [&str; 4] = ["mods", "resourcepacks", "shaderpacks
 
 /// Below this a hard link saves less than the directory entry costs, and tiny
 /// files are usually configs that were dropped into mods/ by hand.
-const MIN_SHARE_BYTES: u64 = 64 * 1024;
+pub(super) const MIN_SHARE_BYTES: u64 = 64 * 1024;
 
 pub(crate) fn store_dir() -> PathBuf {
     game_root().join("objects")
 }
 
-fn sha1_ok(sum: &str) -> bool {
+pub(super) fn sha1_ok(sum: &str) -> bool {
     sum.len() == 40 && sum.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
@@ -70,7 +70,7 @@ pub(crate) fn file_sha1(path: &Path) -> Option<String> {
 /// Replaces `dest` with a link to the stored object. Written next to the target
 /// and renamed over it, so a failure leaves the previous file untouched rather
 /// than a half-installed mod.
-fn link_over(object: &Path, dest: &Path) -> bool {
+pub(super) fn link_over(object: &Path, dest: &Path) -> bool {
     let Some(dir) = dest.parent() else { return false };
     if std::fs::create_dir_all(dir).is_err() {
         return false;

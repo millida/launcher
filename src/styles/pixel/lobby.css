@@ -363,7 +363,7 @@
    самой кнопке: кнопка вложенной кнопки не допускает, поэтому крестик стоит
    рядом, поверх её угла. */
 .lobby-row { position: relative; }
-.play-cancel, .play-recent {
+.play-cancel {
   position: absolute; z-index: 2; top: 14px; right: 14px;
   display: grid; place-items: center; width: 28px; height: 28px;
   color: var(--m-fg-muted); background: var(--m-surface);
@@ -371,11 +371,11 @@
   --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
   transition: color var(--m-t-fast), background-color var(--m-t-fast), transform 90ms var(--m-ease-smooth);
 }
-.play-cancel svg, .play-recent svg { width: 14px; height: 14px; }
+.play-cancel svg { width: 14px; height: 14px; }
 @media (hover: hover) and (pointer: fine) {
-  .play-cancel:hover, .play-recent:hover { color: var(--m-fg); background-color: var(--m-surface-2); }
+  .play-cancel:hover { color: var(--m-fg); background-color: var(--m-surface-2); }
 }
-.play-cancel:active, .play-recent:active { transform: translateY(1px); }
+.play-cancel:active { transform: translateY(1px); }
 
 /* Левый край столбиком, как в Brawl Stars: сундук → Магазин → Свой сервер
    (плитки — HubTile, свой стиль в hubtile.css). */
@@ -844,3 +844,8 @@
 
 /* Плашка-уведомление на главной не должна лежать на «Играть» и сундуке: у лобби она сверху справа. */
 body:has(#s-play.on) #toast { bottom: auto; top: 72px; }
+
+/* Заглушка персонажа (components/lobby/LobbyFigure): снимок прошлой сцены лежит ровно там же,
+   где потом встанет 3D, и сменяется им без скачка. Не перехватывает мышь у настоящей сцены. */
+.lobby-char-still { cursor: pointer; touch-action: auto; }
+.lobby-char-still img { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }

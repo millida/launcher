@@ -50,9 +50,18 @@ fn set(identifier: &str, description: &str, cmds: &[String]) -> String {
     )
 }
 
+const MAIN_THREAD_STACK: usize = 8 * 1024 * 1024;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=MILLIDA_MS_CLIENT_ID");
+    // media.rs reads it with option_env!: a release build with MEDIA_REMOTE=1 must not reuse an object built without it.
+    println!("cargo:rerun-if-env-changed=MEDIA_REMOTE");
     println!("cargo:rerun-if-changed=src/lib.rs");
+    // Tauri builds every async command's future on the main thread before a worker takes it, and the launch
+    // pipeline's futures put tens of KB per copy on the stack: Windows' default 1 MB main thread ran out on «Играть».
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        println!("cargo:rustc-link-arg-bins=/STACK:{}", MAIN_THREAD_STACK);
+    }
 
     let src = fs::read_to_string("src/lib.rs").expect("src/lib.rs");
     let all = registered_commands(&src);

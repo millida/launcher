@@ -5,6 +5,7 @@ import { runningMsg, stopInstall, useInstalls } from '../state/installs'
 import { useUi } from '../state/ui'
 import { tx, useT } from '../i18n'
 import { initDownloadSpeed, speedText, useDownloadSpeed } from '../lib/downloadSpeed'
+import { etaText } from '../lib/eta'
 
 export function Installs({ inLobby = false }: { inLobby?: boolean }) {
   const t = useT()
@@ -24,6 +25,7 @@ export function Installs({ inLobby = false }: { inLobby?: boolean }) {
             <div className="inst-msg">
               {task.state === 'error' ? tx(task.msg) : task.state === 'done' ? t('Готово') : runningMsg(task, tx(task.msg) || t('Готовим…'))}
               {task.state === 'run' && !task.paused && speed ? <span className="inst-speed"> · {speed}</span> : null}
+              {task.state === 'run' && !task.paused && task.eta ? <span className="inst-eta"> · {etaText(task.eta)}</span> : null}
             </div>
             {task.state === 'run' ? (
               <div className="inst-bar">

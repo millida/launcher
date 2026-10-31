@@ -273,22 +273,31 @@ five people, and it is fully off when the connection goes through the relay.
 
 ## How the game starts
 
-The entry point is `install_and_launch_in`
+The entry point is `install_and_launch_into`
 ([launch.rs](src-tauri/src/engine/game/launch.rs)). It is called by the commands
-`launch_game` / `launch_profile`.
+`launch_game` / `launch_profile` / `quick_play` and runs the pipeline of
+[pipeline/mod.rs](src-tauri/src/engine/game/pipeline/mod.rs): **Plan** (pure functions in
+`pipeline/plan.rs`: what the version needs, the merged version json, the classpath and the whole
+Java command line), **Prepare** (a graph of tasks in `pipeline/graph.rs`: the account's session,
+Java, the client, libraries, natives, assets, the loader's metadata and the network checks run side
+by side; a Forge/NeoForge installer waits for Java, the client and the libraries; missing
+dependencies of the build's mods are installed before the start), **Start** (`start_game`) and
+**Watch** (`watch_game`). The lobby may prepare a build ahead of Play (`pipeline/warm.rs`); then
+Play skips the files. The command line of 20 reference builds is pinned by snapshot tests
+([launch_snap.rs](src-tauri/src/engine/game/launch_snap.rs), `src-tauri/tests/data/launch`).
 
 1. **Profile.** The game version, the loader and its version come from `profiles.json`.
    The JVM arguments, window size and the
    chosen Java come from `millida-settings.json` in the instance folder. Settings are read before the install, so that a custom Java path
    cancels the JRE download, instead of cancelling it after the fact.
-2. **Version and loader.** `install_loader_with_java` downloads the manifest,
+2. **Version and loader.** `prepare_version` (`install.rs`) downloads the manifest,
    the version json, the client, libraries and assets (in parallel, with hash checks),
    then installs the loader: Fabric and Quilt from their meta APIs, Forge and NeoForge
    through the official installer from maven. The result is the final version json,
    the main class and the classpath in the order from the version json.
 3. **Java.** `ensure_java` takes the major version from the version json, looks for an already downloaded JRE,
    checks its integrity and downloads Temurin if needed.
-4. **Arguments.** `build_args` fills in the Mojang substitutions (paths, assets,
+4. **Arguments.** `plan::jvm_args` over `build_args_on` fills in the Mojang substitutions (paths, assets,
    natives, session). On top of that it adds `-Xmx`, a Log4Shell mitigation
    (`-Dlog4j2.formatMsgNoLookups=true`, and for 1.7–1.11.2 a replacement logger
    config), user JVM arguments, the GC profile of the "FPS Boost" mode

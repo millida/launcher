@@ -22,6 +22,7 @@ import { showToast } from '../../state/ui'
 import '../../styles/pixel/party-invite.css'
 import { t, useMarketOffers, useT } from '../../i18n'
 import { TIERS_SECTION_PUBLIC } from '../../lib/tiersSection'
+import { liveInterval } from '../../lib/liveInterval'
 
 const KIND: Record<PartyTargetKind, { label: string; icon: string; tint: string }> = {
   server: { get label() { return t('Сервер') }, icon: 'i-server', tint: '#2b63c4' },
@@ -163,12 +164,12 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
       const run = ok.find((x) => x.status === 'RUNNING') || ok[0]
       if (run) setSrv(run.id)
     })
-    const t = window.setInterval(() => void load(), 4000)
+    const stopPoll = liveInterval(() => void load(), 4000)
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && close()
     document.addEventListener('keydown', esc)
     return () => {
       alive.current = false
-      window.clearInterval(t)
+      stopPoll()
       document.removeEventListener('keydown', esc)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

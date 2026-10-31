@@ -2,6 +2,11 @@
 // Connects to Mojang (piston-meta and assets), meta.fabricmc.net, meta.quiltmc.org and the maven servers of the loaders
 // (fallback through the Millida mirror, see core/mirror.rs). Every file is checked against the hash from their own lists.
 // The Forge and NeoForge installers run under Java, so their hash is checked before they start. Writes to the game folder and to data/tmp of the launcher.
+use super::pipeline::graph::{work_begins, Graph, Node};
+use super::pipeline::plan::{fabric_plan, forge_plan, merge, version_plan, LibJob, LoaderPart, Merged, VersionPlan};
+#[cfg(test)]
+use super::pipeline::plan::maven_base;
+use super::pipeline::progress::Board;
 use crate::engine::*;
 use futures::StreamExt;
 use serde_json::Value;
@@ -19,16 +24,6 @@ const LOADER_TTL: Duration = Duration::from_secs(24 * 3600);
 /// is the limit; libraries are few and large.
 const PARALLEL_LIBS: usize = 24;
 const PARALLEL_ASSETS: usize = 64;
-
-/// A single library download. Classpath order must follow the version json, so
-/// downloads run in parallel and the classpath is assembled afterwards.
-struct LibJob {
-    rel: String,
-    url: String,
-    sha1: Option<String>,
-    size: Option<u64>,
-    path: PathBuf,
-}
 
 /// Turns an installer run into something a player can act on: its exit code
 /// says nothing, while the last lines it printed name the blocked host or the
@@ -72,12 +67,16 @@ async fn fetch_libs(jobs: &[LibJob], app: &AppHandle, from: f32, to: f32, title:
         .filter(|j| seen.insert(j.path.clone()))
         .map(|j| (j.url.clone(), j.path.clone(), j.sha1.clone(), j.size))
         .collect();
+    // The last few libraries get a second try over the other route if they hang (core/hedge.rs).
+    let tail = Tail::new(items.len());
     let results: Vec<Result<(), String>> = futures::stream::iter(items.into_iter().map(|(url, path, sha1, size)| {
         let done = done.clone();
         let app = app.clone();
         let title = title.to_string();
+        let tail = tail.clone();
         async move {
-            let r = download_verify(&url, &path, sha1.as_deref(), size).await;
+            let r = download_verify_hedged(&url, &path, sha1.as_deref(), size, &tail).await;
+            tail.finished();
             let d = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             if d.is_multiple_of(step) || d == total {
                 emit(&app, "files", from + (to - from) * (d as f32 / total as f32), &title);
@@ -684,7 +683,7 @@ type ShadowProfile = (PathBuf, std::ffi::OsString, String);
 
 /// Runs the loader installer for a client. The shadow folder is removed once
 /// the JVM exits.
-fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&ShadowProfile>) -> Result<std::process::Output, String> {
+fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&ShadowProfile>, stop: Option<&Halt>) -> Result<std::process::Output, String> {
     // Runs the Forge/NeoForge installer, already checked by hash, under the launcher's Java with the --installClient flag. It installs the loader into the game folder.
     let mut jvm = Command::new(java);
     quiet(&mut jvm).arg("-Djava.net.useSystemProxies=true");
@@ -692,12 +691,13 @@ fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&Sha
         Some((_, classpath, main)) => jvm.arg("-cp").arg(classpath).arg(main),
         None => jvm.arg("-jar").arg(installer),
     };
-    let out = jvm
-        .arg("--installClient")
-        .arg(root)
-        .current_dir(root)
-        .output()
-        .map_err(|e| format!("Инсталлер загрузчика: {}", spawn_failure(&e, java)));
+    jvm.arg("--installClient").arg(root).current_dir(root);
+    // A cancel ends the installer (and the JVMs it started) within a moment, so the build is free again at once.
+    let out = match output_unless_stopped(&mut jvm, || stop.is_some_and(|s| s.cancelled())) {
+        Ok(Ran::Done(out)) => Ok(out),
+        Ok(Ran::Stopped) => Err(LAUNCH_CANCELLED.to_string()),
+        Err(e) => Err(format!("Инсталлер загрузчика: {}", spawn_failure(&e, java))),
+    };
     if let Some((dir, ..)) = shadow {
         // Removes the temp folder with the replacement profile.
         let _ = std::fs::remove_dir_all(dir);
@@ -738,10 +738,8 @@ fn recorded_outputs(dir: &Path) -> Option<Vec<String>> {
 /// named `<mc>-Forge<build>-<mc>`, match nothing here and have no processors
 /// to check.
 fn installers_for_dir(loader: &str, vid: &str, dir_name: &str) -> Option<Vec<(String, String)>> {
-    let forge_prefix = format!("{}-forge-", vid);
-    let prefix = if loader == "neoforge" && !neoforge_on_forge_coords(vid) { "neoforge-" } else { &forge_prefix };
-    let build = dir_name.strip_prefix(prefix).filter(|b| check_loader_version(b).is_ok())?;
-    let installers = if loader == "neoforge" { vec![neoforge_installer(vid, build)] } else { forge_installers(vid, build) };
+    let build = dir_build(loader, vid, dir_name)?;
+    let installers = if loader == "neoforge" { vec![neoforge_installer(vid, &build)] } else { forge_installers(vid, &build) };
     installers.iter().all(|(_, name)| name == dir_name).then_some(installers)
 }
 
@@ -879,17 +877,6 @@ fn install_legacy_forge(installer: &Path, vdir: &Path, libs: &Path) -> Result<Op
     Ok(Some(dir))
 }
 
-/// Old Forge profiles name `files.minecraftforge.net/maven`, which stopped
-/// serving artifacts; the layout on the maven host is the same.
-fn maven_base(url: &str) -> String {
-    for dead in ["http://files.minecraftforge.net/maven/", "https://files.minecraftforge.net/maven/"] {
-        if let Some(rest) = url.strip_prefix(dead) {
-            return format!("https://maven.minecraftforge.net/{}", rest);
-        }
-    }
-    url.to_string()
-}
-
 /// Locates an installed Forge/NeoForge dir for this MC version: exact name
 /// first, then the newest loader dir whose `inheritsFrom` matches, since a
 /// NeoForge dir name does not contain the MC version at all.
@@ -915,11 +902,46 @@ fn resolve_loader_dir(vdir: &Path, loader: &str, ver_dir_name: &str, vid: &str) 
     cands.pop().map(|(_, p)| p)
 }
 
+const UNPINNED_LIST_TTL: Duration = Duration::from_secs(6 * 3600);
+
+/// The build an installed loader dir holds, read from the name its installer gave it.
+fn dir_build(loader: &str, vid: &str, dir_name: &str) -> Option<String> {
+    let forge_prefix = format!("{}-forge-", vid);
+    let prefix = if loader == "neoforge" && !neoforge_on_forge_coords(vid) { "neoforge-" } else { &forge_prefix };
+    dir_name.strip_prefix(prefix).filter(|b| check_loader_version(b).is_ok()).map(String::from)
+}
+
+/// The build an unpinned profile runs, picked the way the installer picks it: the newest stable
+/// NeoForge, the recommended (else latest) Forge. None when no list was ever fetched.
+async fn unpinned_target(loader: &str, vid: &str, lcache: &Path) -> Option<String> {
+    if loader == "neoforge" {
+        let list = get_json_fresh(&neoforge_versions_url(vid), &lcache.join(neoforge_versions_cache(vid)), UNPINNED_LIST_TTL).await.ok()?;
+        let all = neoforge_candidates(&list, vid);
+        return all.iter().find(|v| !neoforge_prerelease(v)).or(all.first()).cloned();
+    }
+    let promos = get_json_fresh(
+        "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
+        &lcache.join("forge-promos.json"),
+        UNPINNED_LIST_TTL,
+    )
+    .await
+    .ok()?;
+    [format!("{}-recommended", vid), format!("{}-latest", vid)]
+        .iter()
+        .find_map(|key| promos["promos"][key].as_str().map(String::from))
+}
+
+/// An unpinned profile is promised the current loader, and mods are picked for it: a dir left
+/// from an older install is not that loader, and NeoForge refuses mods that ask for newer.
+fn behind_target(loader: &str, vid: &str, dir_name: &str, target: &str) -> bool {
+    dir_build(loader, vid, dir_name).is_some_and(|have| num_key(&have) < num_key(target))
+}
+
 /// Carries the loader's launch arguments into the merged json. MC 1.13+ loaders
 /// ship an `arguments` object, while 1.12.2 and older ship a `minecraftArguments`
 /// string that replaces the vanilla one — dropping it loses `--tweakClass`, and
 /// LaunchWrapper then falls back to VanillaTweaker and cannot find Minecraft.
-fn apply_loader_args(merged: &mut Value, loader_json: &Value) {
+pub(crate) fn apply_loader_args(merged: &mut Value, loader_json: &Value) {
     merged["fabricArguments"] = loader_json["arguments"].clone();
     if let Some(legacy) = loader_json["minecraftArguments"].as_str() {
         merged["minecraftArguments"] = Value::String(legacy.to_string());
@@ -962,546 +984,691 @@ pub async fn install_loader_with_java(
     loader_version: Option<&str>,
     java_override: Option<PathBuf>,
 ) -> Result<(Value, String, Vec<PathBuf>, PathBuf), String> {
-    // Both values come from profiles the webview, share codes and pack indexes
-    // write, and both become folder and file names under versions/.
-    if version_id != "latest" {
-        check_version_id(version_id)?;
+    let mut graph = Graph::new(Some(launch_board(app)), None);
+    let pick = Node::ready(java_override);
+    let ask = VersionAsk { version_id: version_id.to_string(), loader: loader.to_string(), loader_version: loader_version.map(String::from), mode: Mode::Fetch };
+    let done = prepare_version(&mut graph, app, ask, pick).get().await?;
+    let m = &done.merged;
+    Ok((m.v.clone(), m.main_class.clone(), m.classpath.clone(), done.java.clone()))
+}
+
+/// How the Prepare step treats a file that is not there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// Download it (a launch, a repair).
+    Fetch,
+    /// Only look: the lobby prepares a build ahead of Play and never downloads the game for it.
+    Check,
+}
+
+/// `Mode::Check` found something to download: the build is not ready to start as it is. Never shown
+/// to the player: only the lobby's preparation sees it.
+pub(crate) const NOT_READY: &str = "not-ready: files to download";
+
+/// Which version to put in place.
+#[derive(Clone)]
+pub(crate) struct VersionAsk {
+    pub version_id: String,
+    pub loader: String,
+    pub loader_version: Option<String>,
+    pub mode: Mode,
+}
+
+/// A version with its loader, in place: what a launch starts from.
+pub(crate) struct InstalledVersion {
+    pub merged: Merged,
+    pub java: PathBuf,
+    pub natives_dir: PathBuf,
+    pub root: PathBuf,
+}
+
+/// The version description and what it lists.
+struct Meta {
+    root: PathBuf,
+    vid: String,
+    vjson: Value,
+    plan: VersionPlan,
+}
+
+/// A loader's description and its libraries on disk.
+#[derive(Clone)]
+struct LoaderOut {
+    json: Value,
+    main_class: Option<String>,
+    libs: Vec<LibJob>,
+}
+
+/// The bar of a launch or repair window: the steps of its graph share 12-90 %.
+pub(crate) fn launch_board(app: &AppHandle) -> std::sync::Arc<Board> {
+    let app = app.clone();
+    Board::new(std::sync::Arc::new(move |stage: &str, pct: f32, msg: &str| emit_progress(&app, stage, pct, msg)), 12.0, 90.0)
+}
+
+/// Present by the quick check every launch does: there, and of the size the description names.
+fn present(path: &Path, size: Option<u64>) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && size.is_none_or(|s| m.len() == s))
+}
+
+fn all_present(jobs: &[LibJob]) -> bool {
+    let mut seen: std::collections::HashSet<&Path> = std::collections::HashSet::new();
+    jobs.iter().filter(|j| seen.insert(&j.path)).all(|j| present(&j.path, j.size))
+}
+
+/// Adds the steps of a version and its loader to `graph`: the description first, then Java, the
+/// client, the libraries, the natives, the assets, the logging config and the loader side by side;
+/// a Forge/NeoForge installer waits for Java, the client and the libraries. Returns the step that
+/// has the whole version in place. `java_pick` is the Java the player chose (or none).
+pub(crate) fn prepare_version(graph: &mut Graph, app: &AppHandle, ask: VersionAsk, java_pick: Node<Option<PathBuf>>) -> Node<std::sync::Arc<InstalledVersion>> {
+    let mode = ask.mode;
+    let meta: Node<std::sync::Arc<Meta>> = {
+        let (app, ask) = (app.clone(), ask.clone());
+        graph.spawn("meta", "client", None, async move {
+            // Both values come from profiles the webview, share codes and pack indexes
+            // write, and both become folder and file names under versions/.
+            if ask.version_id != "latest" {
+                check_version_id(&ask.version_id)?;
+            }
+            if let Some(lv) = &ask.loader_version {
+                check_loader_version(lv)?;
+            }
+            let root = game_root_ready()?;
+            let (vid, vjson) = vanilla_meta(&app, &root, &ask.version_id).await?;
+            check_version_id(&vid)?;
+            let libs = vjson["libraries"].as_array().cloned().unwrap_or_default();
+            let libs = if LINUX_ARM64 { arm64_linux_libraries(libs, &vid, &root.join("libraries")).await? } else { libs };
+            let plan = version_plan(&vjson, &libs, &vid, &root, &Platform::host())?;
+            Ok(std::sync::Arc::new(Meta { root, vid, vjson, plan }))
+        })
+    };
+
+    let java: Node<PathBuf> = {
+        let (app, meta) = (app.clone(), meta.clone());
+        graph.spawn("java", "java", Some((0.0, 60.0)), async move {
+            let pick = java_pick.get().await?;
+            let m = meta.get().await?;
+            work_begins();
+            let major = m.plan.java_major;
+            if mode == Mode::Check {
+                return match pick.and_then(|j| java_fits_quietly(j, major)) {
+                    Some(j) => Ok(j),
+                    None => java_present_for(major, &m.vid).ok_or_else(|| NOT_READY.to_string()),
+                };
+            }
+            match pick.and_then(|j| java_fits(&app, j, major, &m.vid)) {
+                Some(j) => Ok(j),
+                None => ensure_java_for(&app, major, &m.vid).await,
+            }
+        })
+    };
+
+    let client: Node<()> = {
+        let (app, meta) = (app.clone(), meta.clone());
+        graph.spawn("client", "client", Some((12.0, 15.0)), async move {
+            let m = meta.get().await?;
+            work_begins();
+            let c = &m.plan.client;
+            if mode == Mode::Check {
+                return if present(&c.path, c.size) { Ok(()) } else { Err(NOT_READY.into()) };
+            }
+            emit(&app, "files", 12.0, &format!("Minecraft {} — клиент…", m.vid));
+            download_verify(&c.url, &c.path, c.sha1.as_deref(), c.size).await
+        })
+    };
+
+    let libs: Node<()> = {
+        let (app, meta) = (app.clone(), meta.clone());
+        graph.spawn("libs", "libs", Some((15.0, 45.0)), async move {
+            let m = meta.get().await?;
+            work_begins();
+            if mode == Mode::Check {
+                return if all_present(&m.plan.libs) { Ok(()) } else { Err(NOT_READY.into()) };
+            }
+            emit(&app, "files", 15.0, "Библиотеки…");
+            check_cancel()?;
+            fetch_libs(&m.plan.libs, &app, 15.0, 45.0, "Библиотеки…").await
+        })
+    };
+
+    let natives: Node<()> = {
+        let (app, meta) = (app.clone(), meta.clone());
+        graph.spawn("natives", "natives", Some((45.0, 48.0)), async move {
+            let m = meta.get().await?;
+            work_begins();
+            let plan = &m.plan;
+            if mode == Mode::Check {
+                let laid = plan.natives.is_empty() || natives_up_to_date(&plan.natives_dir, &plan.natives_stamp, false);
+                let jars: Vec<LibJob> = plan.natives.iter().map(|(j, _)| j.clone()).collect();
+                return if laid && all_present(&jars) { Ok(()) } else { Err(NOT_READY.into()) };
+            }
+            // Natives (LWJGL and friends) are extracted from classifier jars per version.
+            std::fs::create_dir_all(&plan.natives_dir).ok();
+            if plan.natives.is_empty() {
+                return Ok(());
+            }
+            let nat_libs: Vec<LibJob> = plan.natives.iter().map(|(j, _)| j.clone()).collect();
+            // A missing native jar is not survivable: the game would start and die on
+            // UnsatisfiedLinkError with nothing pointing at the network.
+            fetch_libs(&nat_libs, &app, 45.0, 48.0, "Нативные библиотеки…").await.map_err(|e| natives_fetch_failure(&e))?;
+            if !natives_up_to_date(&plan.natives_dir, &plan.natives_stamp, deep_verify()) {
+                emit(&app, "files", 48.0, "Распаковываем нативные библиотеки…");
+                let items: Vec<(PathBuf, Value)> = plan.natives.iter().map(|(j, rule)| (j.path.clone(), rule.clone())).collect();
+                let nd = plan.natives_dir.clone();
+                let stamp_c = plan.natives_stamp.clone();
+                // Tens of megabytes of inflate must not run on the async runtime.
+                let _ = spawn_blocking_held(move |_| {
+                    for (jar, rule) in items {
+                        if jar.exists() {
+                            extract_natives(&jar, &nd, &rule);
+                        }
+                    }
+                    let _ = std::fs::write(natives_stamp_path(&nd), stamp_c.as_bytes());
+                })
+                .await;
+            }
+            Ok(())
+        })
+    };
+
+    let assets: Node<Option<PathBuf>> = {
+        let (app, meta) = (app.clone(), meta.clone());
+        graph.spawn("assets", "assets", Some((55.0, 86.0)), async move {
+            let m = meta.get().await?;
+            work_begins();
+            match mode {
+                Mode::Check => assets_in_place(&m.root, &m.vjson),
+                Mode::Fetch => ensure_assets(&app, &m.root, &m.vjson, &m.vid).await,
+            }
+        })
+    };
+
+    let log4j: Node<Option<String>> = {
+        let meta = meta.clone();
+        graph.spawn("log4j", "assets", None, async move {
+            let m = meta.get().await?;
+            work_begins();
+            let Some(l) = &m.plan.log4j else { return Ok(None) };
+            if mode == Mode::Check {
+                return if present(&l.dest, l.size) { Ok(Some(l.arg.clone())) } else { Err(NOT_READY.into()) };
+            }
+            // A config that did not arrive leaves the game on its own logging, as it always did.
+            Ok(download_new(&l.url, &l.dest, l.sha1.as_deref().map(Sum::Sha1), l.size).await.ok().map(|_| l.arg.clone()))
+        })
+    };
+
+    let loader_kind = ask.loader.clone();
+    let loader: Node<Option<LoaderOut>> = match loader_kind.as_str() {
+        "fabric" | "quilt" | "legacyfabric" => {
+            let (app, meta, ask) = (app.clone(), meta.clone(), ask.clone());
+            graph.spawn("loader", "loader", Some((50.0, 60.0)), async move {
+                let m = meta.get().await?;
+                work_begins();
+                fabric_loader(&app, &m, &ask.loader, ask.loader_version.as_deref(), mode).await.map(Some)
+            })
+        }
+        "forge" | "neoforge" => {
+            let (app, meta, ask) = (app.clone(), meta.clone(), ask.clone());
+            let needs = InstallerNeeds { java: java.clone(), client: client.clone(), libs: libs.clone() };
+            graph.spawn("loader", "loader", Some((50.0, 60.0)), async move {
+                let m = meta.get().await?;
+                work_begins();
+                forge_loader(&app, &m, &ask.loader, ask.loader_version.as_deref(), mode, &needs).await.map(Some)
+            })
+        }
+        _ => Node::ready(None),
+    };
+
+    // Not a step of its own: the version is in place once every step is.
+    let all = async move {
+        let (m, java, (), (), (), game_assets, log4j_arg, loader) = futures::try_join!(
+            meta.get(),
+            java.get(),
+            client.get(),
+            libs.get(),
+            natives.get(),
+            assets.get(),
+            log4j.get(),
+            loader.get()
+        )?;
+        let part = loader.as_ref().map(|l| LoaderPart {
+            json: &l.json,
+            main_class: l.main_class.clone().unwrap_or_else(|| m.plan.main_class.clone()),
+            libs: l.libs.clone(),
+        });
+        let merged = merge(&m.vjson, &m.plan, part, game_assets.as_deref(), log4j_arg.as_deref());
+        Ok::<_, String>(std::sync::Arc::new(InstalledVersion {
+            merged,
+            java,
+            natives_dir: m.plan.natives_dir.clone(),
+            root: m.root.clone(),
+        }))
+    };
+    Node::from_future(all)
+}
+
+/// The assets of a version as they are on disk, without fetching: the index and its done-marker
+/// must be there, and the laid-out folder of an old virtual index.
+fn assets_in_place(root: &Path, vjson: &Value) -> Result<Option<PathBuf>, String> {
+    let Some(aidx_id) = vjson["assetIndex"]["id"].as_str() else { return Err(NOT_READY.into()) };
+    let idx_path = root.join("assets/indexes").join(format!("{}.json", aidx_id));
+    let done_marker = root.join("assets/indexes").join(format!("{}.done", aidx_id));
+    if !done_marker.exists() {
+        return Err(NOT_READY.into());
     }
-    if let Some(lv) = loader_version {
-        check_loader_version(lv)?;
+    let aidx: Value = std::fs::read(&idx_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or_else(|| NOT_READY.to_string())?;
+    if !assets_are_virtual(&aidx) {
+        return Ok(None);
     }
-    let root = game_root_ready()?;
+    let dir = root.join("assets").join("virtual").join(safe_file_name(aidx_id)?);
+    if dir.is_dir() { Ok(Some(dir)) } else { Err(NOT_READY.into()) }
+}
+
+/// Fabric, Quilt or Legacy Fabric for this version: the profile of the pinned build (or of the
+/// newest stable one) and its libraries.
+async fn fabric_loader(app: &AppHandle, m: &Meta, loader: &str, loader_version: Option<&str>, mode: Mode) -> Result<LoaderOut, String> {
+    let (root, vid) = (&m.root, &m.vid);
+    let meta_base = fabric_like_meta(loader);
+    let title = match loader {
+        "quilt" => "Quilt-лоадер…",
+        "legacyfabric" => "Legacy Fabric…",
+        _ => "Fabric-лоадер…",
+    };
+    if mode == Mode::Fetch {
+        emit(app, "files", 52.0, title);
+    }
+    let lcache = root.join("loader-cache");
+    let profile_cache = |v: &str| lcache.join(format!("{}-{}-{}-profile.json", loader, vid, v));
+    // A cached profile for a pinned loader build makes the version list
+    // request unnecessary.
+    let ready = loader_version.filter(|v| profile_cache(v).exists()).map(String::from);
+    let loader_v = match ready {
+        Some(v) => v,
+        None => {
+            let loaders = get_json_fresh(
+                &format!("{}/versions/loader/{}", meta_base, vid),
+                &lcache.join(format!("{}-{}-list.json", loader, vid)),
+                LOADER_TTL,
+            ).await?;
+            let arr = loaders.as_array().cloned().unwrap_or_default();
+            // The pinned build wins, but only if meta actually lists it.
+            let pinned = loader_version.filter(|v| {
+                arr.iter().any(|l| l["loader"]["version"].as_str() == Some(v))
+            }).map(String::from);
+            match pinned {
+                Some(v) => v,
+                None => arr
+                    .iter()
+                    .find(|l| l["loader"]["stable"] == true)
+                    .or(arr.first())
+                    .and_then(|l| l["loader"]["version"].as_str())
+                    .ok_or(format!("{} недоступен для этой версии", loader))?
+                    .to_string(),
+            }
+        }
+    };
+    check_loader_version(&loader_v)?;
+    // A profile for a fixed loader build is immutable, so it can be cached.
+    let profile = get_json_immutable(&format!(
+        "{}/versions/loader/{}/{}/profile/json",
+        meta_base, vid, loader_v
+    ), &profile_cache(&loader_v)).await?;
+    let (main_class, ljobs) = fabric_plan(&profile, loader, vid, &root.join("libraries"))?;
+    match mode {
+        Mode::Check if !ljobs.iter().all(|j| j.url.is_empty() || loader_lib_intact(&j.path)) => return Err(NOT_READY.into()),
+        Mode::Check => {}
+        Mode::Fetch => fetch_missing(&ljobs, true).await?,
+    }
+    Ok(LoaderOut { json: profile, main_class: Some(main_class), libs: ljobs })
+}
+
+/// What a Forge/NeoForge installer needs before it runs.
+struct InstallerNeeds {
+    java: Node<PathBuf>,
+    client: Node<()>,
+    libs: Node<()>,
+}
+
+impl InstallerNeeds {
+    async fn ready(&self) -> Result<PathBuf, String> {
+        let (java, (), ()) = futures::try_join!(self.java.get(), self.client.get(), self.libs.get())?;
+        Ok(java)
+    }
+}
+
+/// Forge/NeoForge ship a headless installer that lays out libraries and runs
+/// its own patch processors; its version json is read afterwards.
+async fn forge_loader(app: &AppHandle, m: &Meta, loader: &str, loader_version: Option<&str>, mode: Mode, needs: &InstallerNeeds) -> Result<LoaderOut, String> {
+    let (root, vid, vjson) = (&m.root, &m.vid, &m.vjson);
     let libs_root = root.join("libraries");
     // every library path in any version json is untrusted: joined only if it
     // stays inside libraries/
     let lib_path = |rel: &str| -> Result<PathBuf, String> {
         safe_join(&libs_root, rel).map_err(|e| format!("Описание версии ссылается на библиотеку вне папки: {}", e))
     };
-
-    let (vid, vjson) = vanilla_meta(app, &root, version_id).await?;
-    check_version_id(&vid)?;
-    let java_override = java_override.and_then(|j| java_fits(app, j, java_major_of(&vjson, &vid), &vid));
-
-    emit(app, "files", 12.0, &format!("Minecraft {} — клиент…", vid));
-    let client_jar = root.join("versions").join(&vid).join(format!("{}.jar", vid));
-    download_verify(
-        vjson["downloads"]["client"]["url"]
-            .as_str()
-            .ok_or_else(|| format!("В описании версии {} нет ссылки на клиент", vid))?,
-        &client_jar,
-        vjson["downloads"]["client"]["sha1"].as_str(),
-        vjson["downloads"]["client"]["size"].as_u64(),
-    ).await?;
-
-    // Natives (LWJGL and friends) are extracted from classifier jars per version.
-    let natives_dir = root.join("versions").join(&vid).join("natives");
-    std::fs::create_dir_all(&natives_dir).ok();
-
-    let mut cp: Vec<(String, PathBuf)> = vec![];
-    let libs = vjson["libraries"].as_array().cloned().unwrap_or_default();
-    let libs = if LINUX_ARM64 { arm64_linux_libraries(libs, &vid, &libs_root).await? } else { libs };
-    let mut jobs: Vec<LibJob> = vec![];
-    let mut native_jobs: Vec<(LibJob, Value)> = vec![];
-    for lib in libs.iter() {
-        if !rules_allow(&lib["rules"]) {
-            continue;
+    let lcache = root.join("loader-cache");
+    let vdir = root.join("versions");
+    // An already installed loader needs neither the NeoForge version list
+    // nor the Forge promotions file, so launching stays offline-capable.
+    let legacy_neo = loader == "neoforge" && neoforge_on_forge_coords(vid);
+    let pinned_dir_name = loader_version.map(|pin| if loader == "neoforge" {
+        neoforge_installer(vid, pin).1
+    } else {
+        format!("{}-forge-{}", vid, pin)
+    });
+    let mut found = match &pinned_dir_name {
+        // A pinned build accepts only an exact match.
+        Some(name) => Some(vdir.join(name)).filter(|d| d.join(format!("{}.json", name)).exists()),
+        // NeoForge 1.20.1 names its dir like Forge does, so a guess by name
+        // would pick up plain Forge: only an exact candidate counts there.
+        None if legacy_neo => None,
+        None => resolve_loader_dir(&vdir, loader, "", vid),
+    };
+    let mut outdated: Option<PathBuf> = None;
+    if loader_version.is_none() && !legacy_neo && mode == Mode::Fetch {
+        let name = found.as_ref().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().to_string());
+        if let Some(name) = name {
+            if let Some(target) = unpinned_target(loader, vid, &lcache).await {
+                if behind_target(loader, vid, &name, &target) {
+                    outdated = found.take();
+                }
+            }
         }
-        if let Some(art) = lib["downloads"]["artifact"].as_object() {
-            if let (Some(rel), Some(url)) = (art["path"].as_str(), art["url"].as_str()) {
-                jobs.push(LibJob {
-                    rel: rel.to_string(),
-                    url: url.to_string(),
-                    sha1: art["sha1"].as_str().map(String::from),
-                    size: art["size"].as_u64(),
-                    path: lib_path(rel)?,
+    }
+    let mut suspect: Option<(PathBuf, Vec<String>)> = None;
+    let mut unverified: Option<PathBuf> = None;
+    if let Some(dir) = found.clone() {
+        match loader_dir_state(&dir, &libs_root, loader, vid)? {
+            LoaderDir::Ready => {}
+            LoaderDir::Broken(missing) => suspect = Some((dir, missing)),
+            LoaderDir::Unverified => {
+                unverified = Some(dir.clone());
+                suspect = Some((dir, vec![]));
+            }
+        }
+    }
+    if suspect.is_some() {
+        found = None;
+    }
+    let own_installers = suspect.as_ref().and_then(|(dir, _)| {
+        installers_for_dir(loader, vid, &dir.file_name()?.to_string_lossy())
+    });
+    if found.is_none() {
+        if mode == Mode::Check {
+            return Err(NOT_READY.into());
+        }
+        emit(app, "files", 50.0, &format!("{}-инсталлер…", loader));
+        let mut installers: Vec<(String, String)> = if let Some(own) = own_installers {
+            own
+        } else if loader == "neoforge" {
+            /*
+             * Список версий нужен только чтобы выбрать сборку. Если maven и
+             * наше зеркало его не отдали, а офлайн-копии нет, сборка с
+             * закреплённой версией ставится по ней, остальные — по сборкам
+             * из встроенной таблицы. Раньше любой сбой списка обрывал
+             * установку, даже когда номер сборки был известен заранее.
+             */
+            let list = get_json_cached(
+                &neoforge_versions_url(vid),
+                &lcache.join(neoforge_versions_cache(vid)),
+            ).await;
+            let mut all = list.as_ref().map(|l| neoforge_candidates(l, vid)).unwrap_or_default();
+            if all.is_empty() {
+                all = known_builds("neoforge", vid);
+            }
+            // Releases first, but a branch that only ever shipped
+            // prereleases still has to be installable.
+            let mut cands: Vec<&String> = all.iter().filter(|v| !neoforge_prerelease(v)).collect();
+            if cands.is_empty() { cands = all.iter().collect() }
+            if cands.is_empty() && loader_version.is_none() {
+                return Err(match list {
+                    Err(e) => format!("Не получили список версий NeoForge: {}", e),
+                    Ok(_) => "NeoForge для этой версии не найден".into(),
+                });
+            }
+            cands.iter().take(3).map(|nv| neoforge_installer(vid, nv)).collect()
+        } else {
+            let promos = get_json_cached(
+                "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
+                &lcache.join("forge-promos.json"),
+            ).await;
+            let mut builds: Vec<String> = vec![];
+            if let Ok(promos) = &promos {
+                for key in [format!("{}-recommended", vid), format!("{}-latest", vid)] {
+                    if let Some(fv) = promos["promos"][&key].as_str() {
+                        if !builds.iter().any(|b| b == fv) { builds.push(fv.to_string()) }
+                    }
+                }
+            }
+            // Promotions unreachable: the builds the launcher knows
+            // checksums for are a working answer, not a guess.
+            if builds.is_empty() && promos.is_err() {
+                builds = known_builds("forge", vid);
+            }
+            if builds.is_empty() && loader_version.is_none() {
+                return Err(match promos {
+                    Err(e) => format!("Не получили список сборок Forge: {}", e),
+                    Ok(_) => "Forge для этой версии не найден".into(),
+                });
+            }
+            builds.iter().flat_map(|fv| forge_installers(vid, fv)).collect()
+        };
+        // The modpack's pinned build is tried first.
+        if let Some(pin) = loader_version {
+            let pinned = if loader == "neoforge" {
+                vec![neoforge_installer(vid, pin)]
+            } else {
+                forge_installers(vid, pin)
+            };
+            installers.retain(|(u, _)| !pinned.iter().any(|(pu, _)| pu == u));
+            for (i, entry) in pinned.into_iter().enumerate() {
+                installers.insert(i, entry);
+            }
+        }
+        // Skip the installer when the profile is already laid out: it takes
+        // up to a minute and needs network.
+        let ver_dir_name = installers
+            .first()
+            .map(|(_, name)| name.clone())
+            .ok_or_else(|| format!("{} для этой версии не найден", loader))?;
+        found = match loader_version {
+            _ if suspect.is_some() => None,
+            _ if legacy_neo || outdated.is_some() => exact_loader_dir(&vdir, &ver_dir_name),
+            // A pinned build must not resolve to a neighbouring one, but the
+            // legacy Forge installer names its dir "<mc>-Forge<build>-<mc>",
+            // so the exact name is a hint rather than the only answer.
+            Some(pin) => resolve_loader_dir(&vdir, loader, &ver_dir_name, vid)
+                .filter(|d| d.file_name().is_some_and(|n| n.to_string_lossy().contains(pin))),
+            None => resolve_loader_dir(&vdir, loader, &ver_dir_name, vid),
+        };
+        if found.is_none() {
+            // The installer refuses to run without launcher_profiles.json.
+            let lp = root.join("launcher_profiles.json");
+            // An empty launcher_profiles.json in the game folder: Forge installers refuse to work without it.
+            if !lp.exists() { let _ = std::fs::write(&lp, b"{\"profiles\":{},\"version\":3}"); }
+            let mut last_err = String::new();
+            // Имена, которых в репозитории просто нет. Их 404 — не поломка,
+            // а ответ «не это имя», и он не должен заслонять настоящую
+            // причину: последним в списке всегда стоит запасное легаси-имя,
+            // и его «maven не дал контрольную сумму» затирало отказ
+            // инсталлера, который владелец и должен был прочитать.
+            let mut absent: Vec<String> = vec![];
+            let mut profile_read = false;
+            for (inst_url, name) in &installers {
+                // Name carries the build, otherwise one installer file would
+                // be reused for every build.
+                let inst = data_dir().join("tmp").join(format!("{}-installer.jar", name));
+                // The installer is executed by a JVM, so it is only accepted
+                // with the maven-published sha1.
+                // The hash comes from the built-in table (loader_sums.rs) or from maven. Without a hash we do not run the installer.
+                let sha1 = match installer_sha1(inst_url).await {
+                    Ok(sum) => sum,
+                    Err(MavenMiss::Absent) => {
+                        absent.push(name.clone());
+                        continue;
+                    }
+                    Err(MavenMiss::Unreachable(e)) => {
+                        last_err = format!("{}: не дошли до maven за контрольной суммой инсталлера ({})", name, e);
+                        continue;
+                    }
+                };
+                if let Err(e) = download_checked(inst_url, &inst, Some(Sum::Sha1(&sha1)), None).await {
+                    let _ = std::fs::remove_file(&inst);
+                    last_err = e;
+                    continue;
+                }
+                emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
+                // A pre-1.13 profile is laid out here: its installer would
+                // only answer that it does not know `--installClient`.
+                let (ip, vd, lb, vanilla, mc) = (inst.clone(), vdir.clone(), libs_root.clone(), vjson.clone(), vid.clone());
+                let laid = spawn_blocking_held(move |_| {
+                    let legacy = install_legacy_forge(&ip, &vd, &lb)?;
+                    let (outputs, downloads, mojmaps) = match legacy {
+                        Some(_) => (vec![], vec![], None),
+                        None => {
+                            let profile = read_install_profile(&ip)?;
+                            let version = read_installer_version_json(&ip, &profile);
+                            let mojmaps = installer_main_class(&ip).zip(mojmaps_step(&profile, &vanilla, &mc));
+                            (install_outputs(&profile), installer_downloads(&profile, version.as_ref()), mojmaps)
+                        }
+                    };
+                    Ok::<_, String>((legacy, outputs, downloads, mojmaps))
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                let (outputs, downloads, mojmaps) = match laid {
+                    Ok((Some(dir), outputs, _, _)) => {
+                        let _ = std::fs::remove_file(&inst);
+                        record_outputs(&dir, &outputs)?;
+                        found = Some(dir);
+                        break;
+                    }
+                    Ok((None, outputs, downloads, mojmaps)) => (outputs, downloads, mojmaps),
+                    Err(e) => {
+                        // Deletes the downloaded installer after use.
+                        let _ = std::fs::remove_file(&inst);
+                        last_err = format!("{}: {}", name, e);
+                        continue;
+                    }
+                };
+                profile_read = true;
+                let laid_out = vdir.join(name);
+                if laid_out.join(format!("{}.json", name)).exists() && missing_outputs(&libs_root, &outputs)?.is_empty() {
+                    let _ = std::fs::remove_file(&inst);
+                    record_outputs(&laid_out, &outputs)?;
+                    found = Some(laid_out);
+                    break;
+                }
+                let prefetch: Vec<LibJob> = downloads
+                    .into_iter()
+                    .filter_map(|(rel, url, sha1, size)| {
+                        Some(LibJob { path: lib_path(&rel).ok()?, rel, url, sha1: Some(sha1), size })
+                    })
+                    .collect();
+                // Best effort: whatever did not arrive here the installer
+                // still tries itself and names in its own failure.
+                let _ = fetch_libs(&prefetch, app, 60.0, 60.0, "Библиотеки загрузчика…").await;
+                // The installer runs on the build's Java and patches the client next to the
+                // vanilla libraries: it is the one step that waits for all three.
+                let java_pre = match needs.ready().await {
+                    Ok(java) => java,
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&inst);
+                        return Err(e);
+                    }
+                };
+                let shadow = match mojmaps {
+                    Some((main, step)) => match lib_path(&step.rel) {
+                        Ok(dest) => take_over_mojmaps(&step, &dest, &inst, name).await.map(|(dir, classpath)| (dir, classpath, main)),
+                        Err(_) => None,
+                    },
+                    None => None,
+                };
+                emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
+                let (jp, ip, rp) = (java_pre.clone(), inst.clone(), root.clone());
+                // The installer's own output is the only account of why it
+                // gave up - it exits 1 for a blocked maven, a read-only
+                // directory and a corrupt profile alike.
+                // The installer's processors download libraries themselves, and
+                // Java skips the system proxy a VPN sets unless asked to use it.
+                // The slot of the build stays taken until the installer ends or is killed: a cancel of «Играть» must not
+                // free the build while this thread still writes its libraries (second review, М1).
+                let out = spawn_blocking_held(move |stop| {
+                    let taken = run_installer(&jp, &ip, &rp, shadow.as_ref(), stop.as_deref())?;
+                    // The takeover must never cost an install the published
+                    // installer would have finished, so its failure is
+                    // answered by the installer as it ships.
+                    if shadow.is_some() && !taken.status.success() && !stop.as_ref().is_some_and(|s| s.cancelled()) {
+                        return run_installer(&jp, &ip, &rp, None, stop.as_deref());
+                    }
+                    Ok(taken)
+                }).await.map_err(|e| e.to_string())??;
+                let _ = std::fs::remove_file(&inst);
+                if !out.status.success() {
+                    last_err = installer_failure(&out);
+                    continue;
+                }
+                found = if legacy_neo {
+                    exact_loader_dir(&vdir, name)
+                } else {
+                    resolve_loader_dir(&vdir, loader, name, vid)
+                };
+                let Some(dir) = found.clone() else {
+                    let tail = installer_tail(&out);
+                    last_err = if tail.is_empty() {
+                        format!("Инсталлер отработал, но профиль {} не появился", name)
+                    } else {
+                        format!("Инсталлер отработал, но профиль {} не появился: {}", name, tail)
+                    };
+                    continue;
+                };
+                let missing = missing_outputs(&libs_root, &outputs)?;
+                if missing.is_empty() {
+                    record_outputs(&dir, &outputs)?;
+                    break;
+                }
+                found = None;
+                last_err = format!(
+                    "Инсталлер {} завершился без ошибки, но не создал {} — проверь, что антивирус не удаляет файлы из папки игры, и запусти ещё раз",
+                    name,
+                    missing.join(", ")
+                );
+            }
+            if found.is_none() {
+                // Offline or a refused installer: the older loader still starts the game.
+                found = unverified.filter(|_| !profile_read).or(outdated);
+            }
+            if found.is_none() {
+                let reason = installer_giveup(loader, &last_err, &absent);
+                return Err(match suspect {
+                    Some((_, missing)) if !missing.is_empty() => format!(
+                        "{} установлен не полностью (нет {}), а переустановить не получилось: {}",
+                        loader,
+                        missing.join(", "),
+                        reason
+                    ),
+                    _ => reason,
                 });
             }
         }
-        // natives: downloads.classifiers[ natives.<os> ], extracted into natives_dir
-        if let Some(nat) = lib["natives"].as_object() {
-            if let Some(key_tmpl) = nat.get(natives_os_key()).and_then(|v| v.as_str()) {
-                let arch = if cfg!(target_pointer_width = "64") { "64" } else { "32" };
-                let key = key_tmpl.replace("${arch}", arch);
-                if let Some(cl) = lib["downloads"]["classifiers"].get(&key).and_then(|c| c.as_object()) {
-                    if let (Some(u), Some(rel)) = (cl["url"].as_str(), cl["path"].as_str()) {
-                        native_jobs.push((
-                            LibJob {
-                                rel: rel.to_string(),
-                                url: u.to_string(),
-                                sha1: cl["sha1"].as_str().map(String::from),
-                                size: cl["size"].as_u64(),
-                                path: lib_path(rel)?,
-                            },
-                            lib["extract"].clone(),
-                        ));
-                    }
-                }
-            }
+    }
+    let dir = found.ok_or("Не нашли профиль загрузчика".to_string())?;
+    let jname = format!(
+        "{}.json",
+        dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+    );
+    let lj: Value = serde_json::from_slice(&std::fs::read(dir.join(&jname)).map_err(|_| "Не нашли профиль загрузчика".to_string())?)
+        .map_err(|e| e.to_string())?;
+    // The installer already laid out most libraries; classpath order comes
+    // from its version json.
+    let (main_class, ljobs) = forge_plan(&lj, &libs_root, &Platform::host())?;
+    match mode {
+        Mode::Check if !ljobs.iter().all(|j| loader_lib_intact(&j.path)) => return Err(NOT_READY.into()),
+        Mode::Check => {}
+        Mode::Fetch => {
+            let _ = fetch_missing(&ljobs, false).await;
         }
     }
-    emit(app, "files", 15.0, "Библиотеки…");
-    check_cancel()?;
-    fetch_libs(&jobs, app, 15.0, 45.0, "Библиотеки…").await?;
-    for j in &jobs {
-        cp_put(&mut cp, &j.rel, j.path.clone());
-    }
-
-    if !native_jobs.is_empty() {
-        let stamp = native_jobs
-            .iter()
-            .map(|(j, _)| format!("{}:{}", j.rel, j.sha1.clone().unwrap_or_default()))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let nat_libs: Vec<LibJob> = native_jobs
-            .iter()
-            .map(|(j, _)| LibJob {
-                rel: j.rel.clone(),
-                url: j.url.clone(),
-                sha1: j.sha1.clone(),
-                size: j.size,
-                path: j.path.clone(),
-            })
-            .collect();
-        // A missing native jar is not survivable: the game would start and die on
-        // UnsatisfiedLinkError with nothing pointing at the network.
-        fetch_libs(&nat_libs, app, 45.0, 48.0, "Нативные библиотеки…")
-            .await
-            .map_err(|e| natives_fetch_failure(&e))?;
-        if !natives_up_to_date(&natives_dir, &stamp, deep_verify()) {
-            emit(app, "files", 48.0, "Распаковываем нативные библиотеки…");
-            let items: Vec<(PathBuf, Value)> =
-                native_jobs.iter().map(|(j, rule)| (j.path.clone(), rule.clone())).collect();
-            let nd = natives_dir.clone();
-            let stamp_c = stamp.clone();
-            // Tens of megabytes of inflate must not run on the async runtime.
-            let _ = tokio::task::spawn_blocking(move || {
-                for (jar, rule) in items {
-                    if jar.exists() {
-                        extract_natives(&jar, &nd, &rule);
-                    }
-                }
-                let _ = std::fs::write(natives_stamp_path(&nd), stamp_c.as_bytes());
-            })
-            .await;
-        }
-    }
-
-    let mut main_class = vjson["mainClass"]
-        .as_str()
-        .ok_or_else(|| format!("В описании версии {} нет главного класса", vid))?
-        .to_string();
-    let mut merged = vjson.clone();
-    if loader == "fabric" || loader == "quilt" || loader == "legacyfabric" {
-        let meta_base = fabric_like_meta(loader);
-        let title = match loader {
-            "quilt" => "Quilt-лоадер…",
-            "legacyfabric" => "Legacy Fabric…",
-            _ => "Fabric-лоадер…",
-        };
-        emit(app, "files", 52.0, title);
-        let lcache = root.join("loader-cache");
-        let profile_cache = |v: &str| lcache.join(format!("{}-{}-{}-profile.json", loader, vid, v));
-        // A cached profile for a pinned loader build makes the version list
-        // request unnecessary.
-        let ready = loader_version.filter(|v| profile_cache(v).exists()).map(String::from);
-        let loader_v = match ready {
-            Some(v) => v,
-            None => {
-                let loaders = get_json_fresh(
-                    &format!("{}/versions/loader/{}", meta_base, vid),
-                    &lcache.join(format!("{}-{}-list.json", loader, vid)),
-                    LOADER_TTL,
-                ).await?;
-                let arr = loaders.as_array().cloned().unwrap_or_default();
-                // The pinned build wins, but only if meta actually lists it.
-                let pinned = loader_version.filter(|v| {
-                    arr.iter().any(|l| l["loader"]["version"].as_str() == Some(v))
-                }).map(String::from);
-                match pinned {
-                    Some(v) => v,
-                    None => arr
-                        .iter()
-                        .find(|l| l["loader"]["stable"] == true)
-                        .or(arr.first())
-                        .and_then(|l| l["loader"]["version"].as_str())
-                        .ok_or(format!("{} недоступен для этой версии", loader))?
-                        .to_string(),
-                }
-            }
-        };
-        check_loader_version(&loader_v)?;
-        // A profile for a fixed loader build is immutable, so it can be cached.
-        let profile = get_json_immutable(&format!(
-            "{}/versions/loader/{}/{}/profile/json",
-            meta_base, vid, loader_v
-        ), &profile_cache(&loader_v)).await?;
-        main_class = profile["mainClass"]
-            .as_str()
-            .ok_or_else(|| format!("{} не отдал главный класс для {}", loader, vid))?
-            .to_string();
-        let mut ljobs: Vec<LibJob> = vec![];
-        for lib in profile["libraries"].as_array().cloned().unwrap_or_default() {
-            let Some(coord) = lib["name"].as_str() else { continue };
-            let base = lib["url"].as_str().unwrap_or(match loader {
-                "quilt" => "https://maven.quiltmc.org/repository/release/",
-                "legacyfabric" => "https://maven.legacyfabric.net/",
-                _ => "https://maven.fabricmc.net/",
-            });
-            let rel = maven_path(coord);
-            ljobs.push(LibJob {
-                url: format!("{}{}", base, rel),
-                path: lib_path(&rel)?,
-                rel,
-                sha1: lib["sha1"].as_str().map(String::from),
-                size: None,
-            });
-        }
-        fetch_missing(&ljobs, true).await?;
-        for j in &ljobs {
-            cp_put(&mut cp, &j.rel, j.path.clone());
-        }
-        apply_loader_args(&mut merged, &profile);
-    }
-    // Forge/NeoForge ship a headless installer that lays out libraries and runs
-    // its own patch processors; its version json is read afterwards.
-    if loader == "forge" || loader == "neoforge" {
-        let lcache = root.join("loader-cache");
-        let vdir = root.join("versions");
-        // An already installed loader needs neither the NeoForge version list
-        // nor the Forge promotions file, so launching stays offline-capable.
-        let legacy_neo = loader == "neoforge" && neoforge_on_forge_coords(&vid);
-        let pinned_dir_name = loader_version.map(|pin| if loader == "neoforge" {
-            neoforge_installer(&vid, pin).1
-        } else {
-            format!("{}-forge-{}", vid, pin)
-        });
-        let mut found = match &pinned_dir_name {
-            // A pinned build accepts only an exact match.
-            Some(name) => Some(vdir.join(name)).filter(|d| d.join(format!("{}.json", name)).exists()),
-            // NeoForge 1.20.1 names its dir like Forge does, so a guess by name
-            // would pick up plain Forge: only an exact candidate counts there.
-            None if legacy_neo => None,
-            None => resolve_loader_dir(&vdir, loader, "", &vid),
-        };
-        let mut suspect: Option<(PathBuf, Vec<String>)> = None;
-        let mut unverified: Option<PathBuf> = None;
-        if let Some(dir) = found.clone() {
-            match loader_dir_state(&dir, &libs_root, loader, &vid)? {
-                LoaderDir::Ready => {}
-                LoaderDir::Broken(missing) => suspect = Some((dir, missing)),
-                LoaderDir::Unverified => {
-                    unverified = Some(dir.clone());
-                    suspect = Some((dir, vec![]));
-                }
-            }
-        }
-        if suspect.is_some() {
-            found = None;
-        }
-        let own_installers = suspect.as_ref().and_then(|(dir, _)| {
-            installers_for_dir(loader, &vid, &dir.file_name()?.to_string_lossy())
-        });
-        if found.is_none() {
-            emit(app, "files", 50.0, &format!("{}-инсталлер…", loader));
-            let mut installers: Vec<(String, String)> = if let Some(own) = own_installers {
-                own
-            } else if loader == "neoforge" {
-                /*
-                 * Список версий нужен только чтобы выбрать сборку. Если maven и
-                 * наше зеркало его не отдали, а офлайн-копии нет, сборка с
-                 * закреплённой версией ставится по ней, остальные — по сборкам
-                 * из встроенной таблицы. Раньше любой сбой списка обрывал
-                 * установку, даже когда номер сборки был известен заранее.
-                 */
-                let list = get_json_cached(
-                    &neoforge_versions_url(&vid),
-                    &lcache.join(neoforge_versions_cache(&vid)),
-                ).await;
-                let mut all = list.as_ref().map(|l| neoforge_candidates(l, &vid)).unwrap_or_default();
-                if all.is_empty() {
-                    all = known_builds("neoforge", &vid);
-                }
-                // Releases first, but a branch that only ever shipped
-                // prereleases still has to be installable.
-                let mut cands: Vec<&String> = all.iter().filter(|v| !neoforge_prerelease(v)).collect();
-                if cands.is_empty() { cands = all.iter().collect() }
-                if cands.is_empty() && loader_version.is_none() {
-                    return Err(match list {
-                        Err(e) => format!("Не получили список версий NeoForge: {}", e),
-                        Ok(_) => "NeoForge для этой версии не найден".into(),
-                    });
-                }
-                cands.iter().take(3).map(|nv| neoforge_installer(&vid, nv)).collect()
-            } else {
-                let promos = get_json_cached(
-                    "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
-                    &lcache.join("forge-promos.json"),
-                ).await;
-                let mut builds: Vec<String> = vec![];
-                if let Ok(promos) = &promos {
-                    for key in [format!("{}-recommended", vid), format!("{}-latest", vid)] {
-                        if let Some(fv) = promos["promos"][&key].as_str() {
-                            if !builds.iter().any(|b| b == fv) { builds.push(fv.to_string()) }
-                        }
-                    }
-                }
-                // Promotions unreachable: the builds the launcher knows
-                // checksums for are a working answer, not a guess.
-                if builds.is_empty() && promos.is_err() {
-                    builds = known_builds("forge", &vid);
-                }
-                if builds.is_empty() && loader_version.is_none() {
-                    return Err(match promos {
-                        Err(e) => format!("Не получили список сборок Forge: {}", e),
-                        Ok(_) => "Forge для этой версии не найден".into(),
-                    });
-                }
-                builds.iter().flat_map(|fv| forge_installers(&vid, fv)).collect()
-            };
-            // The modpack's pinned build is tried first.
-            if let Some(pin) = loader_version {
-                let pinned = if loader == "neoforge" {
-                    vec![neoforge_installer(&vid, pin)]
-                } else {
-                    forge_installers(&vid, pin)
-                };
-                installers.retain(|(u, _)| !pinned.iter().any(|(pu, _)| pu == u));
-                for (i, entry) in pinned.into_iter().enumerate() {
-                    installers.insert(i, entry);
-                }
-            }
-            // Skip the installer when the profile is already laid out: it takes
-            // up to a minute and needs network.
-            let ver_dir_name = installers
-                .first()
-                .map(|(_, name)| name.clone())
-                .ok_or_else(|| format!("{} для этой версии не найден", loader))?;
-            found = match loader_version {
-                _ if suspect.is_some() => None,
-                _ if legacy_neo => exact_loader_dir(&vdir, &ver_dir_name),
-                // A pinned build must not resolve to a neighbouring one, but the
-                // legacy Forge installer names its dir "<mc>-Forge<build>-<mc>",
-                // so the exact name is a hint rather than the only answer.
-                Some(pin) => resolve_loader_dir(&vdir, loader, &ver_dir_name, &vid)
-                    .filter(|d| d.file_name().is_some_and(|n| n.to_string_lossy().contains(pin))),
-                None => resolve_loader_dir(&vdir, loader, &ver_dir_name, &vid),
-            };
-            if found.is_none() {
-                let java_pre = match java_override.clone() {
-                    Some(j) => j,
-                    None => ensure_java_for(app, java_major_of(&vjson, &vid), &vid).await?,
-                };
-                // The installer refuses to run without launcher_profiles.json.
-                let lp = root.join("launcher_profiles.json");
-                // An empty launcher_profiles.json in the game folder: Forge installers refuse to work without it.
-                if !lp.exists() { let _ = std::fs::write(&lp, b"{\"profiles\":{},\"version\":3}"); }
-                let mut last_err = String::new();
-                // Имена, которых в репозитории просто нет. Их 404 — не поломка,
-                // а ответ «не это имя», и он не должен заслонять настоящую
-                // причину: последним в списке всегда стоит запасное легаси-имя,
-                // и его «maven не дал контрольную сумму» затирало отказ
-                // инсталлера, который владелец и должен был прочитать.
-                let mut absent: Vec<String> = vec![];
-                let mut profile_read = false;
-                for (inst_url, name) in &installers {
-                    // Name carries the build, otherwise one installer file would
-                    // be reused for every build.
-                    let inst = data_dir().join("tmp").join(format!("{}-installer.jar", name));
-                    // The installer is executed by a JVM, so it is only accepted
-                    // with the maven-published sha1.
-                    // The hash comes from the built-in table (loader_sums.rs) or from maven. Without a hash we do not run the installer.
-                    let sha1 = match installer_sha1(inst_url).await {
-                        Ok(sum) => sum,
-                        Err(MavenMiss::Absent) => {
-                            absent.push(name.clone());
-                            continue;
-                        }
-                        Err(MavenMiss::Unreachable(e)) => {
-                            last_err = format!("{}: не дошли до maven за контрольной суммой инсталлера ({})", name, e);
-                            continue;
-                        }
-                    };
-                    if let Err(e) = download_checked(inst_url, &inst, Some(Sum::Sha1(&sha1)), None).await {
-                        let _ = std::fs::remove_file(&inst);
-                        last_err = e;
-                        continue;
-                    }
-                    emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
-                    // A pre-1.13 profile is laid out here: its installer would
-                    // only answer that it does not know `--installClient`.
-                    let (ip, vd, lb, vanilla, mc) = (inst.clone(), vdir.clone(), libs_root.clone(), vjson.clone(), vid.clone());
-                    let laid = tokio::task::spawn_blocking(move || {
-                        let legacy = install_legacy_forge(&ip, &vd, &lb)?;
-                        let (outputs, downloads, mojmaps) = match legacy {
-                            Some(_) => (vec![], vec![], None),
-                            None => {
-                                let profile = read_install_profile(&ip)?;
-                                let version = read_installer_version_json(&ip, &profile);
-                                let mojmaps = installer_main_class(&ip).zip(mojmaps_step(&profile, &vanilla, &mc));
-                                (install_outputs(&profile), installer_downloads(&profile, version.as_ref()), mojmaps)
-                            }
-                        };
-                        Ok::<_, String>((legacy, outputs, downloads, mojmaps))
-                    })
-                    .await
-                    .map_err(|e| e.to_string())?;
-                    let (outputs, downloads, mojmaps) = match laid {
-                        Ok((Some(dir), outputs, _, _)) => {
-                            let _ = std::fs::remove_file(&inst);
-                            record_outputs(&dir, &outputs)?;
-                            found = Some(dir);
-                            break;
-                        }
-                        Ok((None, outputs, downloads, mojmaps)) => (outputs, downloads, mojmaps),
-                        Err(e) => {
-                            // Deletes the downloaded installer after use.
-                            let _ = std::fs::remove_file(&inst);
-                            last_err = format!("{}: {}", name, e);
-                            continue;
-                        }
-                    };
-                    profile_read = true;
-                    let laid_out = vdir.join(name);
-                    if laid_out.join(format!("{}.json", name)).exists() && missing_outputs(&libs_root, &outputs)?.is_empty() {
-                        let _ = std::fs::remove_file(&inst);
-                        record_outputs(&laid_out, &outputs)?;
-                        found = Some(laid_out);
-                        break;
-                    }
-                    let prefetch: Vec<LibJob> = downloads
-                        .into_iter()
-                        .filter_map(|(rel, url, sha1, size)| {
-                            Some(LibJob { path: lib_path(&rel).ok()?, rel, url, sha1: Some(sha1), size })
-                        })
-                        .collect();
-                    // Best effort: whatever did not arrive here the installer
-                    // still tries itself and names in its own failure.
-                    let _ = fetch_libs(&prefetch, app, 60.0, 60.0, "Библиотеки загрузчика…").await;
-                    let shadow = match mojmaps {
-                        Some((main, step)) => match lib_path(&step.rel) {
-                            Ok(dest) => take_over_mojmaps(&step, &dest, &inst, name).await.map(|(dir, classpath)| (dir, classpath, main)),
-                            Err(_) => None,
-                        },
-                        None => None,
-                    };
-                    emit(app, "files", 60.0, "Ставим загрузчик (может занять минуту)…");
-                    let (jp, ip, rp) = (java_pre.clone(), inst.clone(), root.clone());
-                    // The installer's own output is the only account of why it
-                    // gave up - it exits 1 for a blocked maven, a read-only
-                    // directory and a corrupt profile alike.
-                    // The installer's processors download libraries themselves, and
-                    // Java skips the system proxy a VPN sets unless asked to use it.
-                    let out = tokio::task::spawn_blocking(move || {
-                        let taken = run_installer(&jp, &ip, &rp, shadow.as_ref())?;
-                        // The takeover must never cost an install the published
-                        // installer would have finished, so its failure is
-                        // answered by the installer as it ships.
-                        if shadow.is_some() && !taken.status.success() {
-                            return run_installer(&jp, &ip, &rp, None);
-                        }
-                        Ok(taken)
-                    }).await.map_err(|e| e.to_string())??;
-                    let _ = std::fs::remove_file(&inst);
-                    if !out.status.success() {
-                        last_err = installer_failure(&out);
-                        continue;
-                    }
-                    found = if legacy_neo {
-                        exact_loader_dir(&vdir, name)
-                    } else {
-                        resolve_loader_dir(&vdir, loader, name, &vid)
-                    };
-                    let Some(dir) = found.clone() else {
-                        let tail = installer_tail(&out);
-                        last_err = if tail.is_empty() {
-                            format!("Инсталлер отработал, но профиль {} не появился", name)
-                        } else {
-                            format!("Инсталлер отработал, но профиль {} не появился: {}", name, tail)
-                        };
-                        continue;
-                    };
-                    let missing = missing_outputs(&libs_root, &outputs)?;
-                    if missing.is_empty() {
-                        record_outputs(&dir, &outputs)?;
-                        break;
-                    }
-                    found = None;
-                    last_err = format!(
-                        "Инсталлер {} завершился без ошибки, но не создал {} — проверь, что антивирус не удаляет файлы из папки игры, и запусти ещё раз",
-                        name,
-                        missing.join(", ")
-                    );
-                }
-                if found.is_none() {
-                    found = unverified.filter(|_| !profile_read);
-                }
-                if found.is_none() {
-                    let reason = installer_giveup(loader, &last_err, &absent);
-                    return Err(match suspect {
-                        Some((_, missing)) if !missing.is_empty() => format!(
-                            "{} установлен не полностью (нет {}), а переустановить не получилось: {}",
-                            loader,
-                            missing.join(", "),
-                            reason
-                        ),
-                        _ => reason,
-                    });
-                }
-            }
-        }
-        let dir = found.ok_or("Не нашли профиль загрузчика".to_string())?;
-        let jname = format!(
-            "{}.json",
-            dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
-        );
-        let lj: Value = serde_json::from_slice(&std::fs::read(dir.join(&jname)).map_err(|_| "Не нашли профиль загрузчика".to_string())?)
-            .map_err(|e| e.to_string())?;
-        main_class = lj["mainClass"].as_str().unwrap_or(&main_class).to_string();
-        // The installer already laid out most libraries; classpath order comes
-        // from its version json.
-        let mut ljobs: Vec<LibJob> = vec![];
-        for lib in lj["libraries"].as_array().cloned().unwrap_or_default() {
-            if !rules_allow(&lib["rules"]) { continue }
-            if let Some(art) = lib["downloads"]["artifact"].as_object() {
-                let rel = art["path"].as_str().unwrap_or("").to_string();
-                if rel.is_empty() { continue }
-                let p = lib_path(&rel)?;
-                let url = art["url"].as_str().unwrap_or("").to_string();
-                let sha1 = art["sha1"].as_str().map(String::from);
-                ljobs.push(LibJob { rel, url, sha1, size: None, path: p });
-            } else if let Some(name) = lib["name"].as_str() {
-                let rel = maven_path(name);
-                let p = lib_path(&rel)?;
-                let base = maven_base(lib["url"].as_str().unwrap_or("https://libraries.minecraft.net/"));
-                ljobs.push(LibJob { url: format!("{}{}", base, rel), path: p, rel, sha1: None, size: None });
-            }
-        }
-        let _ = fetch_missing(&ljobs, false).await;
-        for j in &ljobs {
-            if j.path.exists() { cp_put(&mut cp, &j.rel, j.path.clone()); }
-        }
-        apply_loader_args(&mut merged, &lj);
-    }
-
-    let mut classpath: Vec<PathBuf> = cp.into_iter().map(|(_, p)| p).collect();
-    classpath.push(client_jar);
-
-    if let Some(dir) = ensure_assets(app, &root, &vjson, &vid).await? {
-        merged["millidaGameAssets"] = Value::String(dir.to_string_lossy().to_string());
-    }
-
-    if needs_log4j_config(vjson["id"].as_str().unwrap_or_default()) {
-        if let Some(arg) = ensure_log4j_config(&vjson, &root).await {
-            merged["millidaLog4jArg"] = Value::String(arg);
-        }
-    }
-
-    let java = match java_override {
-        Some(j) => j,
-        None => ensure_java_for(app, java_major_of(&vjson, &vid), &vid).await?,
-    };
-
-    Ok((merged, main_class, classpath, java))
+    let libs = ljobs.into_iter().filter(|j| j.path.exists()).collect();
+    Ok(LoaderOut { json: lj, main_class, libs })
 }
 
 /// Mojang's description of a vanilla version: the cached copy when there is
@@ -1585,7 +1752,7 @@ pub(crate) async fn ensure_assets(
         let deep = deep_verify();
         // Several index entries can point at one object: downloading the same
         // destination twice in parallel is a race, not extra work.
-        let missing: Vec<(String, String)> = tokio::task::spawn_blocking(move || {
+        let missing: Vec<(String, String)> = spawn_blocking_held(move |_| {
             let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
             objects
                 .into_iter()
@@ -1606,19 +1773,39 @@ pub(crate) async fn ensure_assets(
         let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let root_c = root.to_path_buf();
         let step = (need / 20).max(1);
+        // The last 5% of the objects: a file that hangs there holds the whole stage ("stuck at
+        // 55-60%"), so it gets a second try over the other route (core/hedge.rs).
+        let tail = Tail::new(need);
+        // How many objects go at once: 16 to begin with, more while the line holds, back to 16 at
+        // the first 429 or dropped connection (core/pace.rs).
+        let pace = Pace::new(PARALLEL_ASSETS);
         let failed: Vec<bool> = futures::stream::iter(missing.into_iter().map(|(pre, hash)| {
             let root = root_c.clone();
             let done = done.clone();
             let app = app.clone();
+            let tail = tail.clone();
+            let pace = pace.clone();
             async move {
                 if cancelled() {
+                    tail.finished();
+                    return true;
+                }
+                let place = pace.enter().await;
+                // A cancel that came while this file waited for its place.
+                if cancelled() {
+                    tail.finished();
                     return true;
                 }
                 let dest = root.join("assets/objects").join(&pre).join(&hash);
                 // An asset object's name is its sha1.
-                let bad = download_checked(&format!("{}/{}/{}", RESOURCES, pre, hash), &dest, Some(Sum::Sha1(&hash)), None)
-                    .await
-                    .is_err();
+                let got = download_checked_hedged(&format!("{}/{}/{}", RESOURCES, pre, hash), &dest, Some(Sum::Sha1(&hash)), None, &tail).await;
+                match &got {
+                    Ok(()) => place.good(),
+                    Err(e) if is_throttled(e) || e.contains(NO_LINK) || is_stall(e) => place.bad(),
+                    Err(_) => drop(place),
+                }
+                let bad = got.is_err();
+                tail.finished();
                 let d = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 if d.is_multiple_of(step) || d == need {
                     emit(&app, "assets", 55.0 + 30.0 * (d as f32 / need as f32),
@@ -1639,7 +1826,7 @@ pub(crate) async fn ensure_assets(
     if assets_are_virtual(&aidx) {
         emit(app, "assets", 86.0, "Раскладываем ассеты старой версии…");
         let (idx, r, id) = (aidx.clone(), root.to_path_buf(), aidx_id.to_string());
-        let dir = tokio::task::spawn_blocking(move || build_virtual_assets(&idx, &r, &id))
+        let dir = spawn_blocking_held(move |_| build_virtual_assets(&idx, &r, &id))
             .await
             .map_err(|e| e.to_string())??;
         return Ok(Some(dir));
@@ -1657,23 +1844,6 @@ pub(crate) fn needs_log4j_config(id: &str) -> bool {
         (Ok(1), Ok(m)) => m < 12,
         _ => true,
     }
-}
-
-async fn ensure_log4j_config(vjson: &Value, root: &Path) -> Option<String> {
-    let logging = vjson["logging"]["client"].as_object()?;
-    let file = logging.get("file")?;
-    let id = file["id"].as_str()?;
-    let url = file["url"].as_str()?;
-    let name = safe_file_name(id).ok()?;
-    let dest = safe_child(&root.join("assets").join("log_configs"), &name).ok()?;
-    download_new(url, &dest, file["sha1"].as_str().map(Sum::Sha1), file["size"].as_u64())
-        .await
-        .ok()?;
-    let arg = logging
-        .get("argument")
-        .and_then(|a| a.as_str())
-        .unwrap_or("-Dlog4j.configurationFile=${path}");
-    Some(arg.replace("${path}", &dest.to_string_lossy()))
 }
 
 #[cfg(test)]
@@ -2233,6 +2403,22 @@ e";
         ];
         for (coord, rel, why) in cases {
             assert_eq!(maven_path(coord), rel, "{}", why);
+        }
+    }
+
+    #[test]
+    fn unpinned_profile_leaves_a_loader_older_than_the_current_one() {
+        let cases: [(&str, &str, &str, &str, bool, &str); 7] = [
+            ("neoforge", "1.21.1", "neoforge-21.1.217", "21.1.251", true, "старая NeoForge от прошлых установок не годится: моды просят 21.1.218+"),
+            ("neoforge", "1.21.1", "neoforge-21.1.251", "21.1.251", false, "текущая сборка — ставить нечего"),
+            ("neoforge", "1.21.1", "neoforge-21.1.99", "21.1.251", true, "номера сравниваются числами, а не строкой"),
+            ("neoforge", "1.21.1", "neoforge-21.1.260", "21.1.251", false, "более новая, чем в списке, не откатывается"),
+            ("forge", "1.20.1", "1.20.1-forge-47.2.0", "47.4.0", true, "Forge старее рекомендованной тоже обновляется"),
+            ("forge", "1.20.1", "1.20.1-forge-47.4.10", "47.4.0", false, "Forge новее рекомендованной оставляем"),
+            ("forge", "1.7.10", "1.7.10-Forge10.13.4.1614-1.7.10", "10.13.4.1614", false, "легаси-имя не читается — сборку не трогаем"),
+        ];
+        for (loader, vid, dir, target, behind, why) in cases {
+            assert_eq!(behind_target(loader, vid, dir, target), behind, "{} {} -> {}: {}", loader, dir, target, why);
         }
     }
 

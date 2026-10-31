@@ -1,0 +1,18 @@
+# forge-1.7.10-offline
+route: version 1.7.10 + forge, java 8
+files: client 1, libraries 29, natives 4, log4j yes, loader libraries 18
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: true, skin_server: None, kill_switch: true }
+graph (first launch):
+  kill-switch [net]
+  mod-token [net]
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  natives [natives] <- meta
+  assets [assets] <- meta
+  log4j [assets] <- meta
+  loader [loader] <- meta, java, client, libs
+  mods [mods] <- kill-switch
+  deps [mods] <- mods

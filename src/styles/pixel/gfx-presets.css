@@ -1,0 +1,122 @@
+/* Пресеты графики: ползунок на пять ступеней, «Авто — под мой ПК», картинка
+   выбранной ступени и метки «что включено». Онбординг, «Настройки → Графика»,
+   параметры сборки. */
+
+.gp-wrap { display: grid; gap: 12px; padding: 12px; }
+.gp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.gp-head-end { display: inline-flex; align-items: center; gap: 10px; }
+.gp-build { margin: 22px 0 8px; display: grid; gap: 10px; scroll-margin-top: 12px; }
+.gp-build .gp-head .bx-opts-cap { margin: 0; width: auto; }
+
+/* Ползунок качества, как в играх: ступень крупно, «Авто» справа, большая
+   картинка выбранной ступени под ползунком. */
+.gp-ctl { display: grid; gap: 12px; }
+.gp-ctl.skel { min-height: 360px; }
+.gp-ctl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.gp-level { display: grid; gap: 4px; min-width: 0; }
+.gp-level b { font: 800 30px/1 var(--m-font); color: var(--m-fg); }
+.gp-level span { font-size: 13px; color: var(--m-fg-muted); }
+.gp-ctl.none .gp-level b { color: var(--m-fg-muted); }
+.gp-auto { display: inline-flex; align-items: center; gap: 10px; font: 700 13px/1.2 var(--m-font); color: var(--m-fg); cursor: pointer; }
+.gp-rec-line { font: 700 12px/1.2 var(--m-font); color: var(--m-accent); }
+
+.gp-slide { display: grid; gap: 8px; }
+.gp-slide .m-slider { padding: 6px 0; }
+/* Подписи стоят под своими делениями ползунка (left задаёт разметка). */
+.gp-steps { position: relative; height: 24px; }
+.gp-step {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  max-width: 22%;
+  padding: 6px 4px;
+  font: 700 12px/1.1 var(--m-font);
+  color: var(--m-fg-muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gp-step:first-child { transform: none; text-align: start; padding-inline-start: 0; }
+.gp-step:last-child { transform: translateX(-100%); text-align: end; padding-inline-end: 0; }
+.gp-step:hover { color: var(--m-fg); }
+.gp-step.on { color: var(--m-accent); }
+.gp-step.off { opacity: 0.45; }
+.gp-step:focus-visible { outline: 2px solid var(--m-accent); outline-offset: 2px; }
+
+/* Одна большая картинка выбранной ступени: меняется вместе с ползунком. */
+.gp-preview { position: relative; margin: 0; aspect-ratio: 16 / 7; overflow: hidden; background-color: var(--m-inset, #111); }
+:root:root .gp-preview { --px-n: 10px; clip-path: var(--px-10); }
+.gp-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gp-ctl.none .gp-preview img { filter: grayscale(1) brightness(0.55); }
+.gp-preview .gp-tags { position: absolute; left: 12px; bottom: 12px; }
+.gp-measured {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 10px;
+  font: 800 14px/1 var(--m-font);
+  font-variant-numeric: tabular-nums;
+  color: #06200e;
+  background-color: var(--m-accent);
+}
+:root:root .gp-measured { --px-n: 4px; clip-path: var(--px-4); }
+
+.gp-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.gp-tags span {
+  padding: 4px 8px;
+  font: 700 12px/1.1 var(--m-font);
+  color: var(--m-fg);
+  background-color: color-mix(in srgb, #000 62%, transparent);
+  white-space: nowrap;
+}
+:root:root .gp-tags span { --px-n: 4px; clip-path: var(--px-4); }
+
+/* Железо одной строкой чисел. */
+.gp-hw { display: flex; flex-wrap: wrap; gap: 6px; }
+.gp-hw span {
+  padding: 4px 8px;
+  font: 700 12px/1 var(--m-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--m-fg-muted);
+  background-color: var(--m-surface-2);
+}
+:root:root .gp-hw span { --px-n: 4px; clip-path: var(--px-4); }
+
+.gp-optimize { display: flex; justify-content: flex-start; }
+
+/* Старый драйвер: одна строка и одна кнопка к производителю. */
+.gp-driver { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background-color: var(--m-danger-soft, var(--m-surface-2)); }
+:root:root .gp-driver { --px-n: 5px; clip-path: var(--px-5); }
+.gp-driver span { display: grid; gap: 2px; min-width: 0; }
+.gp-driver b { font: 800 13px/1.2 var(--m-font); color: var(--m-fg); }
+.gp-driver small { font-size: 12px; color: var(--m-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.gp-actions:empty { display: none; }
+.gp-note { margin-inline-end: auto; font-size: 12px; color: var(--m-fg-muted); }
+.gp-note.on { color: var(--m-accent); font-weight: 700; }
+.gp-head-end .gp-note { margin: 0; }
+
+/* Шаг онбординга шире обычного: ползунок и большая картинка. */
+:root .modal.onb-modal.onb-gfx { width: min(860px, calc(100vw - 48px)); }
+#onbModal .gp-hw { margin: -4px 0 12px; }
+
+/* Кнопка «Графика» на карточке сборки — под названием, рядом с «Играть» на обложке. */
+.build-gfx {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 7px;
+  font: 700 11px/1 var(--m-font);
+  color: var(--m-fg-muted);
+  background-color: var(--m-surface-2);
+}
+.build-gfx:hover { color: var(--m-fg); }
+.build-gfx svg.icon { width: 12px; height: 12px; }
+:root:root .build-gfx { --px-n: 4px; clip-path: var(--px-4); }
+

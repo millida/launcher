@@ -19,15 +19,25 @@ Object.defineProperty(globalThis, 'window', {
 const calls = { refresh: 0, validate: 0 }
 let refreshImpl: () => Promise<unknown> = async () => ({ status: 'none' })
 let validateImpl: () => Promise<unknown> = async () => ({ status: 'expired' })
+let starts = 0
+let pollImpl: (code: string) => Promise<unknown> = async () => ({ status: 'pending' })
 
 mock.module('../ipc/tauri', () => ({ hasTauri: () => true, tauri: () => null }))
 mock.module('../lib/session', () => ({ enterApp() {} }))
 mock.module('../lib/clipboard', () => ({ copyText: async () => true }))
 mock.module('./ui', () => ({ showToast() {} }))
-mock.module('../lib/telemetry', () => ({ track() {}, trackFailure: () => null }))
+const failures: Record<string, unknown>[] = []
+mock.module('../lib/telemetry', () => ({ track() {}, trackFailure: (_: string, __: unknown, extra?: Record<string, unknown>) => {
+    failures.push(extra ?? {})
+    return null
+  },
+}))
 mock.module('../ipc/commands', () => ({
-  msDeviceStart: async () => ({}),
-  msDevicePoll: async () => ({}),
+  msDeviceStart: async () => {
+    starts += 1
+    return { device_code: 'dc' + starts, user_code: 'U' + starts, interval: 0 }
+  },
+  msDevicePoll: (code: string) => pollImpl(code),
   msSessionCommit: async () => {},
   msSessionForget: async () => void vault.delete('a1'),
   openUrl() {},
@@ -49,7 +59,7 @@ mock.module('../lib/secure', () => ({
   refreshSessionState: async () => {},
 }))
 
-const { ensureMsAuth } = await import('./msLogin')
+const { cancelMsLogin, ensureMsAuth, startMsLogin, useMsLogin } = await import('./msLogin')
 const { useAccounts } = await import('./accounts')
 
 const HOUR = 3600_000
@@ -97,6 +107,18 @@ describe('ensureMsAuth', () => {
     const r = await ensureMsAuth()
     expect(calls.refresh).toBe(1)
     expect(r?.id).toBe('a1')
+  })
+
+  // Н3 второго ревью: лобби обновляет токен за 10 минут до конца, а «свежим» он считался за 5.
+  test('просьба обновить заранее: токен с семью минутами до конца обновляется, без просьбы — нет', async () => {
+    seed(Date.now() + 7 * 60_000)
+    refreshImpl = async () => ({ status: 'ok', nick: 'Notch', expires_in: 86400 })
+    await ensureMsAuth()
+    expect(calls.refresh, 'с обычным запасом в пять минут он ещё свежий').toBe(0)
+    const r = await ensureMsAuth(undefined, 10 * 60_000)
+    expect(calls.refresh, 'лобби просит за десять минут — обновление идёт').toBe(1)
+    expect(r?.id).toBe('a1')
+    expect(accNow().exp! - Date.now()).toBeGreaterThan(23 * HOUR)
   })
 
   test('отозванный refresh — сессии нет, секреты стёрты (в меню «Вход слетел»)', async () => {
@@ -164,4 +186,46 @@ describe('ensureMsAuth', () => {
     expect(r).toBeNull()
     expect(calls.validate).toBe(0)
   })
+})
+
+const SPENT = "AADSTS70000: The provided value for the input parameter 'device_code' has already been used."
+const settle = (pred: () => boolean) =>
+  new Promise<void>((done, fail) => {
+    const until = Date.now() + 12_000
+    const check = () => (pred() ? done() : Date.now() > until ? fail(new Error('timed out')) : setTimeout(check, 20))
+    check()
+  })
+
+describe('вход по коду устройства', () => {
+  beforeEach(() => {
+    cancelMsLogin()
+    starts = 0
+    failures.length = 0
+  })
+
+  test('код, который Microsoft уже погасила, сменяется новым один раз, без петли', async () => {
+    const polled: string[] = []
+    pollImpl = async (code) => {
+      polled.push(code)
+      throw new Error(SPENT)
+    }
+    await startMsLogin()
+    await settle(() => polled.length === 2 && !useMsLogin.getState().busy)
+    expect(starts, 'после AADSTS70000 вход обязан выдать новый код, повтор старого Microsoft не примет').toBe(2)
+    expect(polled, 'второй опрос идёт уже по новому коду').toEqual(['dc1', 'dc2'])
+    expect(useMsLogin.getState().hint, 'второй отказ подряд показывается игроку, а не крутится вечно').toContain('AADSTS70000')
+  }, 15_000)
+
+  test('обрыв связи перед повтором опроса уходит в телеметрию — иначе причину видно только как AADSTS70000', async () => {
+    let n = 0
+    pollImpl = async () => {
+      n += 1
+      if (n === 1) return Promise.reject('нет связи (connection reset) — https://user.auth.xboxlive.com/user/authenticate')
+      return { status: 'pending' }
+    }
+    await startMsLogin()
+    await settle(() => n >= 2)
+    cancelMsLogin()
+    expect(failures.map((f) => f.step), 'сетевой сбой посреди входа должен быть виден в телеметрии').toContain('poll_retry')
+  }, 15_000)
 })

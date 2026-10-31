@@ -1,7 +1,8 @@
 // Live connection to the Millida server (wss://api.millida.net/v2/realtime, Centrifugo) for friends, statuses, calls and chats.
 // Opens only after Millida account login. The API gives the socket token on request at /realtime/token. Channels: friends, presence, calls,
 // inbox, hosting, account, party, rooms. The install id is sent only if statistics are on.
-import { Centrifuge, UnauthorizedError } from 'centrifuge'
+// Клиент сокета (≈60 КБ) приходит отдельным чанком: окно открывается без него, сокет поднимается следом.
+import type { Centrifuge } from 'centrifuge'
 import { hasTauri } from '../ipc/tauri'
 import { getMillidaAccount, useAccounts } from '../state/accounts'
 import { api, hasMillidaAccount } from './api'
@@ -26,6 +27,7 @@ import {
   socketPresence,
   type ServerSub,
 } from './realtimePace'
+import { noted } from './noted'
 
 export type { RealtimeTopic } from './realtimePace'
 
@@ -206,6 +208,9 @@ async function open(who: string) {
   const mine = ++generation
   opening = true
   owner = who
+  // Чанк с клиентом качается, пока идёт запрос разрешения.
+  const libLoad = import('centrifuge')
+  libLoad.catch(noted('realtime-lib'))
   let grant: RealtimeGrant
   try {
     grant = await fetchGrant()
@@ -227,6 +232,19 @@ async function open(who: string) {
     retryLater(REALTIME_OFF_RETRY_MS)
     return
   }
+  let lib: typeof import('centrifuge')
+  try {
+    lib = await libLoad
+  } catch {
+    if (mine === generation) retryLater(REALTIME_ERROR_RETRY_MS)
+    return
+  }
+  if (mine !== generation) return
+  if (wantedOwner() !== who) {
+    sync()
+    return
+  }
+  const { Centrifuge, UnauthorizedError } = lib
   const c = new Centrifuge(grant.url, {
     token: grant.token,
     name: REALTIME_CLIENT_NAME,

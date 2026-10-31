@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { liveInterval } from '../../lib/liveInterval'
 
 /**
  * Сколько миллисекунд осталось до `target`. Тикает раз в секунду и только
@@ -11,7 +12,7 @@ export function useCountdown(target: number, on: boolean, onZero?: () => void): 
     if (!on) return
     setNow(Date.now())
     let fired = false
-    const id = window.setInterval(() => {
+    return liveInterval(() => {
       const t = Date.now()
       setNow(t)
       if (!fired && t >= target) {
@@ -19,7 +20,6 @@ export function useCountdown(target: number, on: boolean, onZero?: () => void): 
         onZero?.()
       }
     }, 1000)
-    return () => window.clearInterval(id)
   }, [target, on])
   return Math.max(0, target - now)
 }
