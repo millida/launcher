@@ -23,15 +23,22 @@ permissions:
   contents: write
 
 concurrency:
-  group: manifest
+  group: manifest-${{ github.event.inputs.tag || github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
   attach:
     name: Attach latest.json to the release
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # The tag of the run that finished, not "the latest release": a cache build of
+    # main has no list to attach, and a beta never gets one.
+    if: >-
+      github.repository == 'millida/launcher'
+      && (github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && startsWith(github.event.workflow_run.head_branch, 'v')))
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +47,7 @@ jobs:
       - name: Wait for the signed manifest, check it against the release, attach
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.inputs.tag }}
+          TAG: ${{ github.event.inputs.tag || github.event.workflow_run.head_branch }}
         run: |
           if [ ! -f scripts/attach-manifest.mjs ]; then
             echo "::notice::scripts/attach-manifest.mjs is not published yet, skipping"
