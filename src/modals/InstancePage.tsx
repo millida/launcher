@@ -5,6 +5,7 @@ import { FilesTab } from '../components/build/FilesTab'
 import { normalizeGroup } from '../lib/buildGroups'
 import { ExportModal } from '../components/build/ExportModal'
 import { LinuxToolsRows } from '../components/build/LinuxToolsRows'
+import { HorizonBuildRow } from '../components/build/HorizonBeta'
 import { PackwizRow } from '../components/build/PackwizRow'
 import { DEMO_MODS } from '../lib/demoMods'
 import { DEMO_USER } from '../lib/demo'
@@ -18,12 +19,14 @@ import { SafetyModal } from '../components/SafetyModal'
 import { SharePackModal } from '../components/SharePackModal'
 import { PackUpdateRow } from '../components/PackUpdateRow'
 import { ShadersRow } from '../components/ShadersRow'
+import { BuildGfxPresets } from '../components/GfxPresets'
+import { GRAPHICS_PRESETS_PUBLIC } from '../lib/graphicsRelease'
+import { ShortcutRow } from '../components/ShortcutRow'
+import { CommonShareRows } from '../components/CommonShareRows'
 import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
 import { TunePanel } from '../components/TunePanel'
 import { buildRamGb, setBuildRamMb } from '../lib/ramPref'
 import { IconEditor } from '../components/IconEditor'
-import { ShortcutRow } from '../components/ShortcutRow'
-import { CommonShareRows } from '../components/CommonShareRows'
 import { recallIconRecipe, rememberIconRecipe } from '../lib/iconArt'
 import { uiConfirm } from '../state/confirm'
 import { isOwnModFile, keepAfterOwnModConfirm, skinModOff } from '../lib/millidaModGuard'
@@ -131,6 +134,8 @@ import { trackFailure } from '../lib/telemetry'
 import { hasMillidaAccount, mirrorAsset } from '../lib/api'
 import { t, tx, useT } from '../i18n'
 import { LaunchHooksBlock } from '../components/build/LaunchHooksBlock'
+import { noted } from '../lib/noted'
+import { versionAtLeast } from '../lib/promoServers'
 
 /// Имя сборки в тексте ошибки — личное.
 const maskBuild = (e: unknown, name: string | null | undefined) =>
@@ -176,6 +181,15 @@ const acceptsFile = (kind: string, p: string) => {
 const CATALOG_PACK_PAGE = 'https://millida.net/modpacks/'
 
 /** A protected build is shared by its catalogue page: its own files are the author's to show. */
+/** Пресеты графики рисуются, когда ядро ответило: ждём блок до полутора секунд и прокручиваем к нему. */
+function scrollToGfx(triesLeft = 30) {
+  requestAnimationFrame(() => {
+    const block = document.getElementById('bsGfx')
+    if (block) block.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    else if (triesLeft > 0) setTimeout(() => scrollToGfx(triesLeft - 1), 50)
+  })
+}
+
 function shareCatalogLink(profile: string) {
   loadProfileSettings(profile)
     .then((s) => {
@@ -229,6 +243,8 @@ const CONNECTOR_ITEMS = [
   { source: 'modrinth', project_id: 'connector' },
   { source: 'modrinth', project_id: 'forgified-fabric-api' },
 ]
+/** Connector has no build for older games: offering it on 1.7.10 ended in «нет версии под 1.7.10». */
+const CONNECTOR_MIN_GAME = '1.20.1'
 const fabricOnly = (m: ModFile) => {
   const ls = m.loaders?.length ? m.loaders : m.loader ? [m.loader] : []
   return ls.includes('fabric') && !ls.includes('forge') && !ls.includes('neoforge')
@@ -283,6 +299,7 @@ export function InstancePage() {
   const [tagFilter, setTagFilter] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
   const [packSafetyOpen, setPackSafetyOpen] = useState(false)
+  const [fileSafetyOpen, setFileSafetyOpen] = useState(false)
   const [authorRamGb, setAuthorRamGb] = useState(0)
   const [authorLocked, setAuthorLocked] = useState(false)
   const [embedded, setEmbedded] = useState<string[]>([])
@@ -313,6 +330,8 @@ export function InstancePage() {
   }, [profile, ram, ramMax])
   const [boost, setBoost] = useState<FpsBoostState | null>(null)
   const [boostBusy, setBoostBusy] = useState(false)
+  /// Пресет графики меняет шейдеры и буст: строка шейдеров перечитывает своё состояние.
+  const [gfxRev, setGfxRev] = useState(0)
   const [skinMod, setSkinModState] = useState<SkinModState | null>(null)
   const [skinModBusy, setSkinModBusy] = useState(false)
   const skinOff = skinModOff(skinMod)
@@ -638,8 +657,12 @@ export function InstancePage() {
 
   useEffect(() => {
     if (!modal.open || !profile) return
-    const { tab: wantTab, focusRename, share: wantShare } = useInstance.getState()
+    const { tab: wantTab, focusRename, share: wantShare, focusGfx } = useInstance.getState()
     setTab(wantTab)
+    if (focusGfx) {
+      useInstance.getState().set({ focusGfx: false })
+      scrollToGfx()
+    }
     if (wantTab === 'worlds') loadWorlds()
     if (wantTab === 'logs') loadLogs()
     // The rename input lives on the Settings tab, so focus is set after that
@@ -1177,7 +1200,8 @@ export function InstancePage() {
   const grouped = kind === 'mod' && !cq && !filter && !tagFilter
   const manualCount = items.filter((i) => i.origin === 'manual').length
   const forgeLike = !!pr && (loaderId(pr) === 'forge' || loaderId(pr) === 'neoforge')
-  const fabricOnForge = forgeLike && kind === 'mod' ? items.filter((i) => i.enabled && fabricOnly(i)) : []
+  const bridgeable = forgeLike && kind === 'mod' && !!pr && versionAtLeast(pr.version, CONNECTOR_MIN_GAME)
+  const fabricOnForge = bridgeable ? items.filter((i) => i.enabled && fabricOnly(i)) : []
   const hasConnector = items.some(isConnector)
   const libs = grouped ? shownItems.filter((i) => isLibraryMod(i)) : []
   const mains = grouped ? shownItems.filter((i) => !isLibraryMod(i)) : shownItems
@@ -1416,6 +1440,18 @@ export function InstancePage() {
               >
                 <Icon id="i-link" /> {t('Поделиться')}
               </button>
+              {GRAPHICS_PRESETS_PUBLIC ? (
+                <button
+                  className="btn lg secondary inst-gfx"
+                  data-track="build_gfx"
+                  onClick={() => {
+                    setTab('opts')
+                    scrollToGfx()
+                  }}
+                >
+                  <Icon id="i-settings" /> {t('Графика')}
+                </button>
+              ) : null}
               {thisRunning ? (
                 <button
                   className="btn lg stop"
@@ -1858,6 +1894,7 @@ export function InstancePage() {
                 />
               ) : null}
               {packSafetyOpen && profile ? <SafetyModal profile={profile} scope="packs" onClose={() => setPackSafetyOpen(false)} onChanged={() => loadMods()} /> : null}
+              {fileSafetyOpen ? <SafetyModal profile="" scope="files" onClose={() => setFileSafetyOpen(false)} onChanged={() => {}} /> : null}
               {exportOpen && profile ? <ExportModal profile={profile} ramGb={ram} onClose={() => setExportOpen(false)} /> : null}
               {moreMenu ? (
                 <ContextMenu
@@ -1869,6 +1906,7 @@ export function InstancePage() {
                       items.length && scanLabel === t('Сканировать') ? { id: 'scan', label: t('Опознать файлы'), icon: 'i-search', onPick: runScan } : null,
                       kind === 'mod' && items.length ? { id: 'safety', label: t('Проверить безопасность'), icon: 'i-shield', onPick: () => setSafetyOpen(true) } : null,
                       kind !== 'mod' ? { id: 'safety-packs', label: t('Проверить паки и карты'), icon: 'i-shield', onPick: () => setPackSafetyOpen(true) } : null,
+                      kind === 'mod' && hasTauri() ? { id: 'safety-files', label: t('Проверить любой файл на вирусы'), icon: 'i-shield', onPick: () => setFileSafetyOpen(true) } : null,
                       { id: 'export', label: t('Экспорт в .mrpack'), icon: 'i-download', onPick: runExport },
                       { id: 'export-other', label: t('Экспорт для других лаунчеров'), icon: 'i-download', onPick: () => setExportOpen(true) },
                       { id: 'template', label: t('Сохранить как шаблон'), icon: 'i-copy', onPick: saveTemplate },
@@ -2461,6 +2499,7 @@ export function InstancePage() {
                   ) : null}
                 </div>
               </div>
+              {profile && pr ? <HorizonBuildRow profile={profile} version={pr.version} loader={loaderId(pr)} /> : null}
               <div className="set-row" style={{ alignItems: 'center' }}>
                 <span className="lab">
                   {t('Иконка')}
@@ -2624,6 +2663,18 @@ export function InstancePage() {
                   }}
                 />
               </div>
+              {GRAPHICS_PRESETS_PUBLIC && profile && pr ? (
+                <BuildGfxPresets
+                  profile={profile}
+                  loader={loaderId(pr)}
+                  version={pr.version}
+                  onChange={() => {
+                    loadMods()
+                    setGfxRev((n) => n + 1)
+                    void fpsBoostState(profile).then(setBoost).catch(noted('instance-boost'))
+                  }}
+                />
+              ) : null}
               {boost && boost.applicable === false && !boost.enabled ? null : (
               <div className="set-row">
                 <span className="lab">
@@ -2670,7 +2721,7 @@ export function InstancePage() {
                   ></span>
                 </div>
               ) : null}
-              {profile ? <ShadersRow profile={profile} onChange={() => loadMods()} /> : null}
+              {profile ? <ShadersRow key={'shaders-' + gfxRev} profile={profile} onChange={() => loadMods()} /> : null}
               {pr && loaderId(pr) !== 'vanilla' ? (
                 <div className="set-row">
                   <span className="lab">
@@ -2715,6 +2766,7 @@ export function InstancePage() {
               ) : null}
               {profile ? <CommonShareRows profile={profile} /> : null}
               <div className="bx-opts-cap">{t('Файлы')}</div>
+              {profile ? <ShortcutRow profile={profile} /> : null}
               <div className="set-row">
                 <span className="lab">
                   {t('Починить сборку')}
@@ -2793,7 +2845,6 @@ export function InstancePage() {
                   onClick={() => {
                     if (!profile || !pr) return
                     useMigrate.getState().open(profile, pr.version, loaderId(pr))
-              {profile ? <ShortcutRow profile={profile} /> : null}
                   }}
                 >
                   <Icon id="i-arrow-r" /> {t('Перенести')}
@@ -3019,8 +3070,8 @@ export function InstancePage() {
                   onClick={async () => {
                     if (
                       !(await uiConfirm(
-                        t('Удалить сборку «{name}» со всеми модами, мирами и часами игры? Отменить будет нельзя. Введи её название, чтобы удалить.', { name: profile ?? '' }),
-                        { confirmLabel: t('Удалить'), typeToConfirm: profile ?? undefined },
+                        t('Удалить сборку «{name}» со всеми модами, мирами и часами игры? Отменить будет нельзя.', { name: profile ?? '' }),
+                        { confirmLabel: t('Удалить') },
                       ))
                     )
                       return
