@@ -19,11 +19,81 @@ pub struct ScanResult {
     pub items: Vec<ModFile>,
 }
 
-fn file_sha1(path: &std::path::Path) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
+/// Read buffer of the hash: a mod can be hundreds of megabytes, memory must not grow with it.
+const HASH_BUF: usize = 256 * 1024;
+
+fn sha1_reader<R: std::io::Read>(mut r: R) -> std::io::Result<String> {
     let mut h = Sha1::new();
-    h.update(&bytes);
-    Some(h.finalize().iter().map(|b| format!("{:02x}", b)).collect())
+    let mut buf = vec![0u8; HASH_BUF];
+    loop {
+        let n = r.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    Ok(h.finalize().iter().map(|b| format!("{:02x}", b)).collect())
+}
+
+fn file_sha1(path: &std::path::Path) -> Option<String> {
+    match std::fs::File::open(path).and_then(sha1_reader) {
+        Ok(sha1) => Some(sha1),
+        Err(e) => {
+            eprintln!("[scan] sha1 of {} was not computed: {e}", path.display());
+            None
+        }
+    }
+}
+
+/// Where the file of a metadata entry lies now: enabled, or renamed to `.disabled`.
+fn content_path(dir: &std::path::Path, file_name: &str) -> std::path::PathBuf {
+    let on = dir.join(file_name);
+    if on.exists() {
+        on
+    } else {
+        dir.join(format!("{}.disabled", file_name))
+    }
+}
+
+struct ScanPrep {
+    scanned: u32,
+    /// sha1 -> file name, of the files no catalog installed.
+    by_hash: HashMap<String, String>,
+}
+
+/// Everything the scan does on the disk, for the blocking pool: the metadata (only new and changed
+/// files are opened) and the hashes (only of files whose stored hash is gone with a change).
+/// Computed hashes are kept next to the metadata, so the next scan reads nothing it has seen.
+fn prepare_scan(profile: &str, kind: &str) -> ScanPrep {
+    let local = scan_local_meta(profile, kind, false);
+    let manifest = load_content_manifest(profile);
+    let known: std::collections::HashSet<String> = manifest
+        .iter()
+        .filter(|e| e.kind == kind && !e.project_id.is_empty())
+        .map(|e| e.file_name.clone())
+        .collect();
+    let dir = profile_dir(profile).join(content_dir(kind));
+    let mut by_hash: HashMap<String, String> = HashMap::new();
+    let mut computed: Vec<HashedFile> = Vec::new();
+    for m in &local {
+        if known.contains(&m.file_name) {
+            continue;
+        }
+        if !m.sha1.is_empty() {
+            by_hash.insert(m.sha1.clone(), m.file_name.clone());
+            continue;
+        }
+        let path = content_path(&dir, &m.file_name);
+        let before = file_stamp(&path);
+        let Some(sha1) = file_sha1(&path) else { continue };
+        // A file that changed while it was read has no hash worth keeping.
+        if file_stamp(&path) == before {
+            computed.push(HashedFile { file_name: m.file_name.clone(), size: before.0, mtime: before.1, sha1: sha1.clone() });
+        }
+        by_hash.insert(sha1, m.file_name.clone());
+    }
+    remember_hashes(profile, kind, &computed);
+    ScanPrep { scanned: local.len() as u32, by_hash }
 }
 
 pub(crate) async fn versions_by_hash(hashes: &[String]) -> HashMap<String, Value> {
@@ -76,30 +146,12 @@ async fn projects_by_id(ids: &[String]) -> HashMap<String, Value> {
 pub async fn scan_content(profile: String, kind: String) -> Result<ScanResult, String> {
     let p = profile.clone();
     let k = kind.clone();
-    let local = tauri::async_runtime::spawn_blocking(move || scan_local_meta(&p, &k, true))
+    // Disk work (opening jars, reading and hashing mods) never on the async thread: it would hold
+    // up every other request of the launcher for as long as a spinning disk takes.
+    let ScanPrep { scanned, by_hash } = tauri::async_runtime::spawn_blocking(move || prepare_scan(&p, &k))
         .await
         .map_err(|e| e.to_string())?;
-    let scanned = local.len() as u32;
-
-    let manifest = load_content_manifest(&profile);
-    let known: std::collections::HashSet<String> = manifest
-        .iter()
-        .filter(|e| e.kind == kind && !e.project_id.is_empty())
-        .map(|e| e.file_name.clone())
-        .collect();
     let dir = profile_dir(&profile).join(content_dir(&kind));
-    let mut by_hash: HashMap<String, String> = HashMap::new();
-    for m in &local {
-        if known.contains(&m.file_name) {
-            continue;
-        }
-        let on = dir.join(&m.file_name);
-        let off = dir.join(format!("{}.disabled", m.file_name));
-        let path = if on.exists() { on } else { off };
-        if let Some(sha1) = file_sha1(&path) {
-            by_hash.insert(sha1, m.file_name.clone());
-        }
-    }
     let mut identified = 0u32;
     let mut found: std::collections::HashSet<String> = std::collections::HashSet::new();
     if !by_hash.is_empty() {
@@ -163,6 +215,17 @@ pub async fn scan_content(profile: String, kind: String) -> Result<ScanResult, S
     })
 }
 
+/// CurseForge fingerprints of the files Modrinth did not know (sha1, file name), streamed from disk.
+fn fingerprints(dir: &std::path::Path, left: &[(String, String)]) -> HashMap<u32, (String, String)> {
+    let mut by_print: HashMap<u32, (String, String)> = HashMap::new();
+    for (sha1, file_name) in left {
+        if let Some(print) = fingerprint_file(&content_path(dir, file_name)) {
+            by_print.insert(print, (sha1.clone(), file_name.clone()));
+        }
+    }
+    by_print
+}
+
 /// Second pass: everything Modrinth did not claim is asked of CurseForge by
 /// fingerprint. The digest already computed for Modrinth is reused as the
 /// manifest sha1, so an update check and the shared file store keep working for
@@ -176,15 +239,14 @@ async fn identify_on_curseforge(
     if left.is_empty() {
         return 0;
     }
-    let mut by_print: HashMap<u32, (String, String)> = HashMap::new();
-    for (sha1, file_name) in left {
-        let on = dir.join(file_name);
-        let off = dir.join(format!("{}.disabled", file_name));
-        let path = if on.exists() { on } else { off };
-        if let Some(print) = fingerprint_file(&path) {
-            by_print.insert(print, (sha1.clone(), file_name.clone()));
+    let (owned_left, owned_dir) = (left.to_vec(), dir.to_path_buf());
+    let by_print = match tauri::async_runtime::spawn_blocking(move || fingerprints(&owned_dir, &owned_left)).await {
+        Ok(map) => map,
+        Err(e) => {
+            eprintln!("[scan] fingerprinting was interrupted: {e}");
+            return 0;
         }
-    }
+    };
     if by_print.is_empty() {
         return 0;
     }
@@ -243,4 +305,53 @@ async fn identify_on_curseforge(
         }
     }
     done
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The digest of a stream does not depend on how the reads are cut, and matches the known value.
+    #[test]
+    fn streamed_sha1_matches_the_known_digest_for_any_read_size() {
+        assert_eq!(sha1_reader(std::io::Cursor::new(b"abc".to_vec())).unwrap(), "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(sha1_reader(std::io::Cursor::new(Vec::new())).unwrap(), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
+        // Three buffers and a bit: the result must equal the digest of the same bytes in one go.
+        let data: Vec<u8> = (0..(HASH_BUF * 3 + 17)).map(|i| (i * 31 % 251) as u8).collect();
+        let mut h = Sha1::new();
+        h.update(&data);
+        let whole: String = h.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+        assert_eq!(sha1_reader(std::io::Cursor::new(data)).unwrap(), whole);
+    }
+
+    /// A reader that hands out at most 5 bytes at a time, as a pipe or a slow disk may.
+    #[test]
+    fn short_reads_do_not_change_the_hash() {
+        struct Dribble(std::io::Cursor<Vec<u8>>);
+        impl std::io::Read for Dribble {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                let n = buf.len().min(5);
+                self.0.read(&mut buf[..n])
+            }
+        }
+        let data = b"The quick brown fox jumps over the lazy dog".to_vec();
+        assert_eq!(sha1_reader(Dribble(std::io::Cursor::new(data))).unwrap(), "2fd4e1c67a2d28fced849ee1bb76e7391b93eb12");
+    }
+
+    #[test]
+    fn a_missing_file_has_no_hash_instead_of_an_empty_one() {
+        assert_eq!(file_sha1(std::path::Path::new("/definitely/not/here.jar")), None);
+    }
+
+    #[test]
+    fn a_disabled_mod_is_found_under_its_disabled_name() {
+        let dir = std::env::temp_dir().join(format!("millida-scan-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.jar"), b"x").unwrap();
+        std::fs::write(dir.join("b.jar.disabled"), b"x").unwrap();
+        assert_eq!(content_path(&dir, "a.jar"), dir.join("a.jar"));
+        assert_eq!(content_path(&dir, "b.jar"), dir.join("b.jar.disabled"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

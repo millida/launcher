@@ -14,6 +14,10 @@ import { pickJob, shotRank } from './shotQueue'
 import { textured } from './shotTextures'
 import { withSnapshotGl, type GlHolder } from './glPool'
 import { screenSettled } from './screenSettle'
+import { SHOT_H, SHOT_W, focusOf, shotAspect, type ShotFocus } from './outfitShotMeta'
+
+export { SHOT_H, SHOT_W, focusOf, shotAspect }
+export type { ShotFocus }
 
 /**
  * Снимки «ты в наборе» для карточек магазина (ТЗ v3, 06.10.2026). Живая 3D-сцена
@@ -42,8 +46,6 @@ export interface OutfitShot {
  * Размер кадра — ровно как показ в карточке (3:4, CSS-пиксели): движок сам
  * рендерит с запасом плотности экрана, и картинка не пережимается браузером.
  */
-export const SHOT_W = 240
-export const SHOT_H = 320
 /** Тот же поворот три четверти, что у живой сцены. */
 export const SHOP_YAW = 0.26
 /** Кадр снимка: ноги на 82% высоты (там подиум задника). */
@@ -55,7 +57,6 @@ export const SHOT_FRAME = { fillY: 0.5, offsetY: 1 - 2 * 0.82 + 0.5 }
  * offsetY — где центр тела (в полукадрах); голова на 0.75·fillY выше центра,
  * грудь на 0.375·fillY, ноги на 0.625·fillY ниже.
  */
-export type ShotFocus = 'full' | 'body' | 'head' | 'upper' | 'legs' | 'back'
 const FOCUS: Record<ShotFocus, { fillY: number; offsetY: number; yaw: number }> = {
   full: { ...SHOT_FRAME, yaw: SHOP_YAW },
   body: { fillY: 0.7, offsetY: 1 - 2 * 0.86 + 0.7, yaw: SHOP_YAW },
@@ -64,14 +65,6 @@ const FOCUS: Record<ShotFocus, { fillY: number; offsetY: number; yaw: number }> 
   legs: { fillY: 1.0, offsetY: 0.12 + 0.625 * 1.0, yaw: SHOP_YAW },
   back: { fillY: 0.72, offsetY: -0.02 - 0.3 * 0.72, yaw: Math.PI - 0.62 },
 }
-const SLOT_FOCUS: Record<string, ShotFocus> = {
-  HAT: 'head', HEAD: 'head', FACE: 'head', EARS: 'head',
-  BACK: 'back', WINGS: 'back', CAPE: 'back',
-  SHOES: 'legs', FEET: 'legs', PANTS: 'legs', SKIRT: 'legs',
-  PET: 'full',
-  ARMS: 'upper', HAND: 'upper', SHOULDERS: 'upper', SHOULDER: 'upper', ACCESSORY: 'upper',
-}
-export const focusOf = (slot: string): ShotFocus => SLOT_FOCUS[slot] ?? 'body'
 
 /**
  * Снимки на диске: IndexedDB, ключ — скин, состав, кадр и пропорции. SHOT_VER
@@ -190,7 +183,6 @@ const TEXTURE_WAIT_MS = 1500
  * растягивал снимок 3:4 в квадрат, и персонаж с крыльями выходил сплюснутым.
  * Округляем до 0,05, чтобы соседние плитки делили кэш.
  */
-export const shotAspect = (w: number, h: number) => (w > 0 && h > 0 ? Math.max(0.4, Math.min(2.5, Math.round((w / h) * 20) / 20)) : SHOT_W / SHOT_H)
 
 export function outfitShot(
   skin: string,
