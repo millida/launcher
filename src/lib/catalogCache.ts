@@ -17,6 +17,7 @@ const LIMIT = 120
 
 interface Row {
   at: number
+  ttl: number
   value: unknown
 }
 
@@ -40,7 +41,7 @@ export function peekCatalog<T>(key: string): T | undefined {
   const row = rows.get(key)
   if (!row) return undefined
   // Просроченный не удаляем: он ещё годится, чтобы показать сразу и обновить в фоне.
-  if (Date.now() - row.at >= TTL_MS) return undefined
+  if (Date.now() - row.at >= row.ttl) return undefined
   return row.value as T
 }
 
@@ -62,7 +63,7 @@ export async function staleCatalog<T>(key: string, diskWaitMs = 120): Promise<T 
  * повторное нажатие легко просят одно и то же в один кадр, и до склейки это
  * были три отдельных соединения к одному адресу.
  */
-export function cachedCatalog<T>(key: string, load: () => Promise<T>, opts?: { persist?: boolean }): Promise<T> {
+export function cachedCatalog<T>(key: string, load: () => Promise<T>, opts?: { persist?: boolean; ttlMs?: number }): Promise<T> {
   const hit = peekCatalog<T>(key)
   if (hit !== undefined) return Promise.resolve(hit)
 
@@ -75,7 +76,7 @@ export function cachedCatalog<T>(key: string, load: () => Promise<T>, opts?: { p
     .then((value) => {
       if (inflight.get(key) !== started) return value
       if (rows.size >= LIMIT && !rows.has(key)) evictOldest()
-      rows.set(key, { at: Date.now(), value })
+      rows.set(key, { at: Date.now(), ttl: (opts && opts.ttlMs) || TTL_MS, value })
       if (opts && opts.persist) diskSet(key, value)
       return value
     })
