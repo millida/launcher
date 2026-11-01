@@ -76,7 +76,7 @@ builds and works, and the sign-in button says plainly that sign-in is not set up
 ## What to run before a pull request
 
 ```bash
-bun run typecheck                                  # tsc -b, strict
+bun run typecheck                                  # tsc, strict, incremental
 bun test                                           # frontend tests
 
 cd src-tauri

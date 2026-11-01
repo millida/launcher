@@ -350,7 +350,7 @@ pub(crate) async fn launch_native(
             .classified("native", String::new())
             .with_exit(status.as_ref().map(super::earlyexit::exit_of).unwrap_or_default());
         diag.actions.retain(|a| NATIVE_CRASH_ACTIONS.contains(&a.kind.as_str()));
-        let _ = app2.emit("game-crash", diag);
+        crate::background::emit_main(&app2, "game-crash", diag);
         if !review_ok {
             tauri::async_runtime::spawn(async move {
                 report_review_launch(&pname, false, &reason).await;

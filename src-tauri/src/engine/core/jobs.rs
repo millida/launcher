@@ -19,6 +19,18 @@ const RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(3);
 
 pub(crate) fn count_downloaded(bytes: usize) {
     DOWNLOADED.fetch_add(bytes as u64, Ordering::Relaxed);
+    let _ = METER.try_with(|m| m.fetch_add(bytes as u64, Ordering::Relaxed));
+}
+
+tokio::task_local! {
+    /// The bytes of one piece of work (a step of a launch): parallel steps each count their own,
+    /// where the global counter only knows the sum.
+    static METER: Arc<std::sync::atomic::AtomicU64>;
+}
+
+/// Runs `fut` with its downloads also counted into `meter`.
+pub(crate) async fn metered<F: std::future::Future>(meter: Arc<std::sync::atomic::AtomicU64>, fut: F) -> F::Output {
+    METER.scope(meter, fut).await
 }
 
 type RateSamples = std::collections::VecDeque<(std::time::Instant, u64)>;
@@ -117,6 +129,9 @@ struct JobProgress {
     error: String,
     pausable: bool,
     bps: u64,
+    /// Seconds left, only when the download can honestly say (see pulse.rs); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    eta: Option<u64>,
 }
 
 fn registry() -> &'static Mutex<HashMap<String, Entry>> {
@@ -155,6 +170,11 @@ impl Job {
         &self.halt
     }
 
+    /// The same signals as an owned handle, for work that moves to another thread.
+    pub(crate) fn halt(&self) -> Arc<Halt> {
+        self.halt.clone()
+    }
+
     pub(crate) fn cancelled(&self) -> bool {
         self.halt.cancelled()
     }
@@ -187,6 +207,11 @@ impl Job {
     }
 
     pub(crate) fn emit(&self, app: &AppHandle, pct: f32, msg: &str) {
+        self.emit_eta(app, pct, msg, None);
+    }
+
+    /// `emit` with the time left in seconds, for transfers that measure their own speed.
+    pub(crate) fn emit_eta(&self, app: &AppHandle, pct: f32, msg: &str, eta: Option<u64>) {
         let (title, pausable) = {
             let mut m = lock();
             match m.get_mut(&self.key) {
@@ -209,6 +234,7 @@ impl Job {
                 error: String::new(),
                 pausable,
                 bps: download_rate(),
+                eta,
             },
         );
     }
@@ -226,6 +252,7 @@ impl Job {
                 error: res.as_ref().err().cloned().unwrap_or_default(),
                 pausable: false,
                 bps: download_rate(),
+                eta: None,
             },
         );
         res

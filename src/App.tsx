@@ -2,21 +2,15 @@ import { Suspense, lazy, useEffect } from 'react'
 import { SvgSprite } from './components/SvgSprite'
 import { Titlebar } from './components/Titlebar'
 import { HubTopTabs, Sidebar } from './components/Sidebar'
-import { PlayhubBar } from './components/playhub/MyBuilds'
-import { ClassicSidebar } from './components/ClassicSidebar'
-import { ClassicHome } from './screens/ClassicHome'
 import { useLayout } from './state/layout'
 import type { ScreenId } from './state/ui'
 import { LaunchToast, Toast } from './components/Toast'
-import { RewardHost } from './components/reward/RewardReveal'
 import { initChatScreen } from './state/chatScreen'
-import { Login } from './screens/Login'
-import { PixelTip } from './components/PixelTip'
-import { MilliDock } from './components/milli/MilliDock'
 // Screens are mounted only while open, and their chunks are prewarmed after boot
 // so switching tabs stays instant.
 import {
   Builds,
+  ClassicHome,
   Friends,
   Top,
   Hosting,
@@ -33,6 +27,8 @@ import {
   Skins,
   preloadScreens,
 } from './screens/registry'
+// Раскладка «Классика» — выбор в настройках, у остальных её код не нужен.
+const ClassicSidebar = lazy(() => import('./components/ClassicSidebar').then((m) => ({ default: m.ClassicSidebar })))
 const InstancePage = lazy(() => import('./modals/InstancePage').then((m) => ({ default: m.InstancePage })))
 const ChestOpenHost = lazy(() => import('./components/daily/ChestOpen').then((m) => ({ default: m.ChestOpenHost })))
 // Kept out of the startup bundle: most sessions never open them, and each is mounted
@@ -40,31 +36,43 @@ const ChestOpenHost = lazy(() => import('./components/daily/ChestOpen').then((m)
 const ProjectModal = lazy(() => import('./modals/Project').then((m) => ({ default: m.ProjectModal })))
 const NewBuildModal = lazy(() => import('./modals/NewBuild').then((m) => ({ default: m.NewBuildModal })))
 const OnboardingModal = lazy(() => import('./modals/Onboarding').then((m) => ({ default: m.OnboardingModal })))
-import { ImportModal } from './modals/Import'
-import { MoveBuildsModal } from './modals/MoveBuilds'
-import { AccountAddModal } from './modals/AccountAdd'
 import { gameStepPending, hasGameAccount, useFirstRun } from './state/firstRun'
-import { BuyModal } from './components/catalog/PaidActs'
-import { ModpackVersionsOverlay, ScreenshotsOverlay } from './modals/Overlays'
-import { MigrateBuildModal } from './modals/MigrateBuild'
 import { ImageLightbox } from './components/ImageLightbox'
 import { UpdateBanner } from './components/UpdateBanner'
-import { ConfirmModal } from './components/ConfirmModal'
-import { BuildPicker } from './components/BuildPicker'
-import { PackKeyHost } from './components/PackKeyHost'
-import { DepPlanModal } from './components/DepPlanModal'
-import { PackCodeHost } from './components/PackCodeHost'
 import { PartyHost } from './components/party/PartyHost'
 import { ChatNotify } from './components/ChatNotify'
-import { CallPanel } from './components/CallPanel'
-import { RoomModals } from './components/RoomManage'
+import {
+  AccountAddModal,
+  BuildPicker,
+  BuyModal,
+  CallPanel,
+  CommandPalette,
+  ConfirmModal,
+  CrashModal,
+  DepPlanModal,
+  ImportModal,
+  Login,
+  MigrateBuildModal,
+  LiveLog,
+  MilliDock,
+  ModpackVersionsOverlay,
+  MoveBuildsModal,
+  PackCodeHost,
+  PackKeyHost,
+  PixelTip,
+  PlayhubBar,
+  RewardHost,
+  RoomModals,
+  ScreenshotsOverlay,
+  ServerDetail,
+  Tour,
+} from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
-import { initInstalls } from './state/installs'
+import { initInstalls, useInstalls } from './state/installs'
 import { syncNativeTexts } from './lib/nativeTexts'
 import { initCalls } from './state/call'
 import { loadProfileSettings } from './ipc/commands'
-import { ServerDetail } from './components/ServerDetail'
 import { pushChatNotify } from './state/chatNotify'
 import { notifyAudible, notifyShown } from './state/notifyPrefs'
 import { createPresenceMemo, presenceEvents, presenceText, presenceTitle } from './state/presenceNotify'
@@ -72,10 +80,9 @@ import { initDesktopToasts, showAwayCard, showDesktopToast } from './lib/desktop
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
 import { markPreview, parseMark } from './lib/waypointShare'
-import { effectiveNick, getAccount, getMillidaAccount, isGameAccountKind, isMillidaKind, useAccounts } from './state/accounts'
-import { markMillidaEver, millidaEver, useOnboarding } from './state/onboarding'
+import { effectiveNick, getAccount, getMillidaAccount, useAccounts } from './state/accounts'
+import { markMillidaEver, useOnboarding } from './state/onboarding'
 import { useEverTrue } from './lib/everTrue'
-import { Tour } from './components/Tour'
 import { initAccent } from './lib/accent'
 import { initDensity } from './lib/density'
 import { refreshGameNick } from './state/gameNick'
@@ -228,10 +235,9 @@ import { gameCrashData } from './lib/crashEvent'
 import { initMusic, startMusicAfterLogin, stopMusicNow } from './state/music'
 import { initSounds, playSound } from './lib/sound'
 import { initUiTracking } from './lib/uiTrack'
-import { initDeepLinks } from './lib/deeplink'
+import { initWindowResume, windowReopened } from './lib/windowResume'
 import { initCli } from './lib/cli'
 import { initSessionKick } from './lib/sessionKick'
-import { CommandPalette } from './components/CommandPalette'
 import { McNewsModal } from './components/McNews'
 import { initA11y } from './lib/a11y'
 import { initGameInvites } from './lib/gameInvite'
@@ -247,33 +253,53 @@ import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning,
 import { useCrash } from './state/crash'
 import { fixMark, forgetCrash, rememberCrash } from './lib/repair'
 import { tryAutoHeal } from './lib/autoHeal'
+import { exitToastWithFps } from './lib/gfxFpsToast'
 import { sendCompatSignal } from './lib/compatSignal'
 import { syncRunningGame, useGame } from './state/game'
 import { watchPromo } from './state/promo'
 import { watchArcania2 } from './lib/arcaniaRelease'
 import { warmArcaniaCover } from './components/arcania/ArcaniaCard'
 import { watchPromoServers } from './lib/promoServers'
-import { CrashModal } from './components/CrashModal'
 import { LagCard } from './components/LagCard'
-import { LiveLog, startLiveLog } from './components/LiveLog'
+import { startLiveLog } from './components/liveLogStore'
 import { startLagHelp } from './lib/lagHelp'
 import { hideBoot } from './lib/boot'
 import { frontendReady } from './ipc/commands'
 import { initTelemetry, track, trackAppExit } from './lib/telemetry'
+import { screenPainted } from './lib/screenOpen'
 import { reportWebviewFailure, setLauncherIdleMemory, watchHeap, watchWebviewContext } from './lib/webviewHealth'
 import { onRenderGate, renderLive } from './lib/renderGate'
+import { currentDeviceTier } from './lib/deviceTier'
+import { liteOn } from './lib/liteMode'
 import { flushPrefs, hydratePrefs } from './lib/prefs'
 
-let gameStartedAt = 0
+/// The window may be unloaded and rebuilt while the game runs (lib/window.ts): the
+/// start time has to outlive the page for the exit's duration and «calm» check.
+const GAME_START_KEY = 'm-game-started-at'
+const readGameStart = (): number => {
+  try {
+    const v = Number(localStorage.getItem(GAME_START_KEY) || 0)
+    return v > 0 && Date.now() - v < 86_400_000 ? v : 0
+  } catch {
+    return 0
+  }
+}
+const storeGameStart = (at: number) => {
+  try {
+    if (at) localStorage.setItem(GAME_START_KEY, String(at))
+    else localStorage.removeItem(GAME_START_KEY)
+  } catch {}
+}
+let gameStartedAt = readGameStart()
 /** Когда запускали в последний раз. Не обнуляется выходом: событие выхода приходит и раньше события вылета. */
-let lastGameStartAt = 0
+let lastGameStartAt = gameStartedAt
 import { flushNativeCrashes, installErrorHandlers, reportGameCrash } from './lib/crash'
-import { autoUpdate, bootUpdate, checkForUpdate, installUpdateOnExit, updateReady } from './lib/updater'
+import { bootUpdate, checkForUpdate, installUpdateOnExit, pollUpdate, setUpdateBusyProbe, updateReady } from './lib/updater'
 import { pickReplies, replyText } from './lib/bugReplies'
 import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
 import { useSlidingSegs } from './lib/slidingSegs'
-import { beatAfterReconnect, gameSession, heartbeat, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
+import { beatAfterReconnect, gameSession, heartbeat, launchInProgress, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
 import { friendsPollDelayMs, friendsPollWait, pokeGate, safetyRefresh } from './lib/realtimePace'
 import {
@@ -351,6 +377,21 @@ function notifyPresence(before: Friend[], now: Friend[]) {
 }
 
 /** Пока грузится кусок экрана — серые строки, а не пустое окно под шапкой. */
+/// Sits inside the screens' Suspense boundary, so it mounts only once the new screen's code has
+/// loaded and its content is committed; the next frame after that is "the screen is open".
+function ScreenOpenProbe({ screen }: { screen: ScreenId }) {
+  useEffect(() => {
+    const frame = requestAnimationFrame(() =>
+      setTimeout(() => {
+        const opened = screenPainted(screen)
+        if (opened) track('perf', { what: 'screen_open', screen: opened.screen, from: opened.from, ms: opened.ms, visit: opened.visit })
+      }, 0),
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [screen])
+  return null
+}
+
 function ScreenSkeleton() {
   return (
     <div aria-hidden="true" style={{ display: 'grid', gap: 12, padding: '24px 28px' }}>
@@ -370,6 +411,7 @@ export function App() {
   // screen on every toast, animation frame and install progress event.
   const logged = useUi((s) => s.logged)
   const screen = useUi((s) => s.screen)
+  const navPending = useUi((s) => s.navPending)
   const setScreen = useUi((s) => s.setScreen)
   const instanceMounted = useUi((s) => s.modals.bsModal.open || s.modals.bsModal.vis)
   const projectMounted = useEverTrue(useUi((s) => s.modals.pjModal.open || s.modals.pjModal.vis))
@@ -397,7 +439,7 @@ export function App() {
     )
     void initDesktopToasts()
     void initAutostart()
-    initDeepLinks()
+    initWindowResume()
     initCli()
     initSessionKick()
     initA11y()
@@ -414,13 +456,16 @@ export function App() {
     const stopStreakReminder = initStreakReminder()
     const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
-    void bootUpdate().then((leaving) => {
-      if (leaving) return
-      preloadScreens()
-    })
-    const updPoll = setInterval(() => {
-      if (!updateReady()) void autoUpdate()
-    }, 1_800_000)
+    // The update never holds the start: screens warm up at once, the check runs next to them,
+    // and only a release the manifest calls critical takes the window over (updater.ts).
+    setUpdateBusyProbe(() => launchInProgress() || Object.values(useInstalls.getState().tasks).some((x) => x.state === 'run'))
+    // По одному, в простое и после первого движения мыши; на слабом ПК — только два самых вероятных.
+    preloadScreens(
+      () => useUi.getState().screen,
+      () => currentDeviceTier() === 'low' || liteOn(),
+    )
+    void bootUpdate()
+    const updPoll = setInterval(pollUpdate, 1_800_000)
     // The launcher can sit in the tray longer than an MC token lives, so refresh
     // near-expiry accounts periodically.
     const msPoll = setInterval(() => {
@@ -459,18 +504,22 @@ export function App() {
       clearTimeout(safety)
       syncLocaleFromPrefs()
       const acc = getAccount()
-      if (getMillidaAccount()) markMillidaEver()
+      const millida = getMillidaAccount()
+      if (millida) markMillidaEver()
+      // No way in without a Millida account (owner 27.10.2026: no guest mode, sign-in only).
+      // The browser preview (dev only) has neither the core nor a sign-in.
+      const preview = import.meta.env.DEV && !hasTauri()
       // Account present but its token did not survive a secret-storage migration:
       // clear the session once instead of showing a half-logged-in state everywhere.
-      if (acc && isMillidaKind(acc.kind) && !hasMillidaAccount()) {
+      if (millida && !hasMillidaAccount() && !preview) {
         logoutToLogin()
         showToast(t('После обновления войдите в Millida заново — один раз'), 'error')
+      } else if (!millida && !preview) {
+        logoutToLogin()
+        if (acc) showToast(t('Войди в аккаунт Millida — это нужно один раз'), 'error')
       } else if (acc && gameStepPending() && !hasGameAccount()) {
         useUi.getState().setLogged(false)
         useFirstRun.setState({ open: true })
-      } else if (acc && !millidaEver() && !isGameAccountKind(acc.kind)) {
-        logoutToLogin()
-        showToast(t('Войди в аккаунт Millida — это нужно один раз'), 'error')
       } else if (acc) enterApp()
       else logoutToLogin()
       void refreshProfiles()
@@ -483,7 +532,9 @@ export function App() {
       void refreshMsAccounts()
       void flushNativeCrashes()
       hideBoot()
-      void initTelemetry(performance.now()).then(reportWebviewFailure)
+      void windowReopened()
+        .then((again) => initTelemetry(performance.now(), again))
+        .then(reportWebviewFailure)
       watchHeap()
     })
     return () => {
@@ -512,15 +563,18 @@ export function App() {
     void w
       .onCloseRequested(async (e) => {
         if (leaving) return
+        // The cross goes to the tray even with an update waiting: the update lands on «Выход»
+        // from the tray or on the next start, never by closing the window someone meant to keep.
+        if (trayCloseEnabled()) {
+          e.preventDefault()
+          hideLauncherToTray()
+          return
+        }
         if (updateReady()) {
           leaving = true
           e.preventDefault()
           await installUpdateOnExit()
-          return
         }
-        if (!trayCloseEnabled()) return
-        e.preventDefault()
-        hideLauncherToTray()
       })
       .then((u) => {
         unlisten = u
@@ -627,6 +681,7 @@ export function App() {
     const onGameStarted = () => {
       gameStartedAt = Date.now()
       lastGameStartAt = gameStartedAt
+      storeGameStart(gameStartedAt)
     }
     window.addEventListener('millida-game-started', onGameStarted)
 
@@ -655,11 +710,12 @@ export function App() {
         return
       }
       gameStartedAt = 0
+      storeGameStart(0)
       setGameSession(null)
       heartbeat('lobby')
       void refreshPlayStats()
       if (restoreOnGameExit()) restoreLauncher()
-      showToast(t('Игра закрыта'))
+      void exitToastWithFps(profile)
     }).then((u) => {
       unlisten = u
     })
@@ -947,9 +1003,15 @@ export function App() {
               const c = document.querySelector('.content')
               if (c) c.scrollTop = 0
             }
-            return classic ? <ClassicSidebar onNav={onNav} /> : <Sidebar onNav={onNav} />
+            return classic ? (
+              <Suspense fallback={null}>
+                <ClassicSidebar onNav={onNav} />
+              </Suspense>
+            ) : (
+              <Sidebar onNav={onNav} />
+            )
           })()}
-          <main className="content">
+          <main className={'content' + (navPending ? ' nav-pending' : '')}>
             {/* Классика: шапки с вкладками нет — переключатель «Мои сборки / Каталог» над экраном. */}
             {classic && screen === 'playhub' ? (
               <div className="cl-hubbar">
@@ -962,6 +1024,7 @@ export function App() {
             {/* Navigation runs in a transition, so the fallback only ever shows on
                 the very first render. */}
             <Suspense fallback={<ScreenSkeleton />}>
+              <ScreenOpenProbe screen={screen} />
               {screen === 'play' && (
                 <Guard what="Лобби">
                   {classic ? <ClassicHome on /> : <Play on />}
