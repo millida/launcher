@@ -14,7 +14,5 @@ replace_first() {
 }
 
 replace_first src-tauri/tauri.conf.json '"version"[[:space:]]*:[[:space:]]*"' '"version": "'
-replace_first src-tauri/Cargo.toml '^version[[:space:]]*=[[:space:]]*"' 'version = "'
 grep -q "\"version\": \"$version\"" src-tauri/tauri.conf.json
-grep -q "^version = \"$version\"" src-tauri/Cargo.toml
 echo "Version $version"
