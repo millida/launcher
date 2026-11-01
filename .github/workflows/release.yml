@@ -545,7 +545,7 @@ jobs:
 
       # Saved only on main, like the Rust cache of the other targets: a tag reads
       # only its own entries, and 1.5 GB per tag pushes the other targets' caches
-      # out of the 10 GB limit.
+      # out of the 10 GB limit. The incremental state has a cache of its own below.
       - name: Restore cargo cache
         id: cargo-cache
         uses: actions/cache/restore@v4
@@ -554,6 +554,8 @@ jobs:
             .cross-cache/cargo/registry
             .cross-cache/cargo/git
             .cross-cache/target
+            !.cross-cache/target/*/release/incremental
+            !.cross-cache/target/*/release/bundle
           key: macos-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock', '.github/docker/macos-cross.Dockerfile') }}
           restore-keys: macos-${{ matrix.target }}-
 
@@ -606,6 +608,8 @@ jobs:
             .cross-cache/cargo/registry
             .cross-cache/cargo/git
             .cross-cache/target
+            !.cross-cache/target/*/release/incremental
+            !.cross-cache/target/*/release/bundle
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
 
       - name: Save incremental state
