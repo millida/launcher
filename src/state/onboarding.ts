@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { hydratePrefs, readPref, writePref } from '../lib/prefs'
 import { startTour } from './tour'
+import { GRAPHICS_PRESETS_PUBLIC } from '../lib/graphicsRelease'
 
 const DONE = 'm-onb-done'
 const EVER = 'm-mil-ever'
 
-export const ONBOARDING_STEPS = 6
+export const ONBOARDING_STEPS = GRAPHICS_PRESETS_PUBLIC ? 7 : 6
 /** Шаг «Кто тебя позвал?» — без аккаунта Millida спрашивать некого. */
 export const INVITER_STEP = 1
 

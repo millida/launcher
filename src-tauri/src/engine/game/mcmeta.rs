@@ -3,18 +3,49 @@ use md5::{Digest, Md5};
 use serde_json::Value;
 use std::path::PathBuf;
 
+/// The system a launch is planned for: Mojang's names for it (`osx`, `windows`, `linux`; `arm64`,
+/// `x86_64`) and the separator of a Java path list. The running system in the launcher; any
+/// system in tests, so a plan made on a Mac can be checked against the Windows one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Platform {
+    pub os: &'static str,
+    pub arch: &'static str,
+    /// `${arch}` in the name of a natives jar: "64" or "32".
+    pub bits: &'static str,
+}
+
+impl Platform {
+    pub(crate) fn host() -> Platform {
+        Platform {
+            os: if cfg!(target_os = "macos") {
+                "osx"
+            } else if cfg!(target_os = "windows") {
+                "windows"
+            } else {
+                "linux"
+            },
+            arch: if cfg!(target_arch = "aarch64") { "arm64" } else { "x86_64" },
+            bits: if cfg!(target_pointer_width = "64") { "64" } else { "32" },
+        }
+    }
+
+    /// Separator of the classpath and of `-p`.
+    pub(crate) fn path_sep(&self) -> &'static str {
+        if self.os == "windows" { ";" } else { ":" }
+    }
+}
+
 /// Evaluates version json `rules` (os.name/os.arch, features) the way the
 /// official launcher does: the last matching rule wins.
 pub(crate) fn rules_allow(rules: &Value) -> bool {
+    rules_allow_on(rules, &Platform::host())
+}
+
+/// `rules_allow` for the given system.
+pub(crate) fn rules_allow_on(rules: &Value, platform: &Platform) -> bool {
     let Some(arr) = rules.as_array() else { return true };
-    let os_name = if cfg!(target_os = "macos") {
-        "osx"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else {
-        "linux"
-    };
-    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x86_64" };
+    let os_name = platform.os;
+    let arch = platform.arch;
     let mut allowed = false;
     for r in arr {
         let action_allow = r["action"].as_str() == Some("allow");

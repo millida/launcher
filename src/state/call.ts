@@ -36,6 +36,7 @@ import {
 import { listenPartyVoiceLevels, listenPartyVoiceState, type PartyVoiceLevels, type PartyVoiceState } from '../ipc/events'
 import { tauri } from '../ipc/tauri'
 import { restoreLauncher } from '../lib/window'
+import { registerUnloadHold } from '../lib/unloadHold'
 import { useFriends } from './friends'
 import { api } from '../lib/api'
 import { nickInRooms, useRooms, type VoiceMember } from './rooms'
@@ -1071,6 +1072,12 @@ useCall.subscribe((s) => {
 let pump: { stop: () => void } | null = null
 
 /** Приём звонков включается один раз на запуск лаунчера. */
+// A call lives only in the page: the window is parked, not unloaded, until it ends.
+registerUnloadHold(
+  () => (useCall.getState().status !== 'idle' ? 'call' : null),
+  (cb) => useCall.subscribe(cb),
+)
+
 export function initCalls() {
   if (pump || !callSupported()) return
   watchPartyForRelay()

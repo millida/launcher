@@ -51,7 +51,8 @@ function pending(): LagReport | null {
   try {
     const r = JSON.parse(readPref(PENDING_KEY, '') || 'null') as LagReport | null
     return r && typeof r.profile === 'string' && Array.isArray(r.fixes) && Date.now() - r.at < PENDING_TTL_MS ? r : null
-  } catch {
+  } catch (e) {
+    console.warn('[lag] the saved report is unreadable', e)
     return null
   }
 }
@@ -69,14 +70,22 @@ export function muteLagHelp() {
   dismissLag()
 }
 
+/** Разбор лагов не падает из-за недоступной подробности, но причину оставляет в журнале. */
+const soft =
+  <T>(what: string, fallback: T) =>
+  (e: unknown): T => {
+    console.warn('[lag] ' + what + ' is unavailable', e)
+    return fallback
+  }
+
 async function lagFacts(profile: string): Promise<LagFacts> {
   const { ramMbFor } = await import('./launch')
   const { filesRead } = await import('./milliLocal')
   const [check, boost, mods, files] = await Promise.all([
-    ramCheck(profile, ramMbFor(profile)).catch(() => null),
-    fpsBoostState(profile).catch(() => null),
-    listContent(profile, 'mod').catch(() => []),
-    filesRead(profile, ['options.txt', 'config/iris.properties', 'config/oculus.properties']).catch(() => []),
+    ramCheck(profile, ramMbFor(profile)).catch(soft('memory check', null)),
+    fpsBoostState(profile).catch(soft('boost state', null)),
+    listContent(profile, 'mod').catch(soft('mod list', [])),
+    filesRead(profile, ['options.txt', 'config/iris.properties', 'config/oculus.properties']).catch(soft('build files', [])),
   ])
   const text = (path: string) => files.find((f) => f.path === path && f.exists)?.text ?? null
   const video = readVideo(text('options.txt'))
@@ -93,26 +102,40 @@ async function lagFacts(profile: string): Promise<LagFacts> {
 const windows = new Map<string, LagWindow>()
 const notified = new Map<string, number>()
 
-async function onVerdict(profile: string, v: LagVerdict) {
-  if (lagHelpOff() || Date.now() - (notified.get(profile) ?? 0) < COOLDOWN_MS) return
-  notified.set(profile, Date.now())
+/** Разборы, что ещё идут: выход игры ждёт их, иначе карточка «Почему лагало» не успеет появиться. */
+const judging = new Set<Promise<void>>()
+
+async function onVerdict(profile: string, v: LagVerdict, at: number) {
+  if (lagHelpOff() || at - (notified.get(profile) ?? 0) < COOLDOWN_MS) return
+  notified.set(profile, at)
   const plan = lagPlan(v, await lagFacts(profile))
-  const report: LagReport = { profile, fps: v.fps, cause: plan.cause, fixes: plan.fixes, at: Date.now() }
+  const report: LagReport = { profile, fps: v.fps, cause: plan.cause, fixes: plan.fixes, at }
   savePending(report)
   track('lag_detected', { cause: plan.cause, fps: v.fps, memory: v.memory, fixes: plan.fixes.map((f) => f.id).join(',') })
   const { title } = lagText(plan.cause)
-  await gameNotice(profile, t('Игра тормозит: {fps} FPS', { fps: v.fps }), t('{reason}. Исправить — в лаунчере', { reason: title })).catch(() => false)
+  await gameNotice(profile, t('Игра тормозит: {fps} FPS', { fps: v.fps }), t('{reason}. Исправить — в лаунчере', { reason: title }))
+    .catch((e) => {
+      console.warn('[lag] the in-game notice was not shown', e)
+      return false
+    })
 }
 
-function onPerf(p: GamePerf) {
+/** Кадры, что ядро копило без окна, приходят со своим временем `at`: судим по нему, а не по часам разбора. */
+export function onPerf(p: GamePerf) {
   let w = windows.get(p.profile)
   if (!w) windows.set(p.profile, (w = new LagWindow()))
-  const v = w.push(p, Date.now())
-  if (v) void onVerdict(p.profile, v).catch((e) => console.error('[lag]', e))
+  const at = p.at ?? Date.now()
+  const v = w.push(p, at)
+  if (!v) return
+  const job: Promise<void> = onVerdict(p.profile, v, at)
+    .catch((e) => console.error('[lag]', e))
+    .finally(() => judging.delete(job))
+  judging.add(job)
 }
 
-function onExit(profile: string) {
+async function onExit(profile: string) {
   windows.delete(profile)
+  if (judging.size) await Promise.allSettled([...judging])
   const r = pending()
   if (r && r.profile === profile && !lagHelpOff()) useLag.getState().show(r)
 }
@@ -179,7 +202,7 @@ export function startLagHelp() {
   if (started || !hasTauri()) return
   started = true
   void listenGamePerf(onPerf)
-  void listenGameExit(onExit)
+  void listenGameExit((profile) => void onExit(profile))
   setTimeout(() => {
     const r = pending()
     if (r && !lagHelpOff() && !useGame.getState().list.includes(r.profile)) useLag.getState().show(r)
