@@ -43,10 +43,54 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # The image the Linux legs build in. Only main writes it; a release tag pulls
+  # what the last main build pushed.
+  linux-image:
+    name: Linux build image (${{ matrix.arch }})
+    if: github.repository == 'millida/launcher' && github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: ubuntu-latest
+          - arch: arm64
+            os: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: .github/docker/linux-build.Dockerfile
+          push: true
+          tags: ghcr.io/millida/launcher-linux-build:22.04-${{ matrix.arch }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=registry,ref=ghcr.io/millida/launcher-linux-build:22.04-${{ matrix.arch }}
+          cache-to: type=inline
+
   build:
     name: ${{ matrix.label }}
-    if: github.repository == 'millida/launcher'
+    needs: linux-image
+    if: >-
+      ${{ !cancelled()
+      && github.repository == 'millida/launcher'
+      && contains(fromJSON('["success", "skipped"]'), needs.linux-image.result) }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
     # An optional target that fails leaves its players on the previous version
     # instead of holding back everyone else; the release job checks that every
     # required target uploaded its bundles.
@@ -59,6 +103,7 @@ jobs:
             platform: windows
             os: windows-latest
             container: ""
+            base: ""
             target: x86_64-pc-windows-msvc
             updater_key: windows-x86_64
             updater_dir: nsis
@@ -69,7 +114,8 @@ jobs:
             os: ubuntu-latest
             # AppImage bundles GLib, GTK and WebKit from the build machine, so the
             # oldest supported base decides which systems the launcher starts on.
-            container: ubuntu:22.04
+            container: ghcr.io/millida/launcher-linux-build:22.04-x64
+            base: ubuntu:22.04
             target: x86_64-unknown-linux-gnu
             updater_key: linux-x86_64
             updater_dir: appimage
@@ -80,14 +126,19 @@ jobs:
             # Native arm64 runner, free for public repositories; the same old
             # base image as x64 for the same glibc reason.
             os: ubuntu-24.04-arm
-            container: ubuntu:22.04
+            container: ghcr.io/millida/launcher-linux-build:22.04-arm64
+            base: ubuntu:22.04
             target: aarch64-unknown-linux-gnu
             updater_key: linux-aarch64
             updater_dir: appimage
             updater_pattern: "*.AppImage"
             updater_extra: "deb:*.deb:linux-aarch64-deb rpm:*.rpm:linux-aarch64-rpm"
             optional: true
-    container: ${{ matrix.container }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     env:
       SIGNING_POLICY: ${{ inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY }}
       # Not SIGN: linuxdeploy-plugin-appimage treats any SIGN value as a request
@@ -95,13 +146,14 @@ jobs:
       WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && github.ref != 'refs/heads/main' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
       RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
+      # The image already has all of it and this takes seconds; a package added
+      # here before main rebuilt the image is installed on the spot.
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          apt-get update
-          apt-get install -y \
+          packages="\
             ca-certificates \
             curl \
             git \
@@ -129,7 +181,8 @@ jobs:
             gstreamer1.0-libav \
             gstreamer1.0-gl \
             gstreamer1.0-pulseaudio \
-            gstreamer1.0-alsa
+            gstreamer1.0-alsa"
+          apt-get install -y $packages || { apt-get update && apt-get install -y $packages; }
 
       - name: Pick the newest release tag
         id: source
@@ -159,7 +212,7 @@ jobs:
         with:
           prefix-key: release-v1
           workspaces: src-tauri -> target
-          key: ${{ matrix.target }}-${{ matrix.container }}
+          key: ${{ matrix.target }}-${{ matrix.base }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Set version from the tag
@@ -170,7 +223,7 @@ jobs:
         run: bash .github/scripts/set-version.sh "${VERSION_INPUT:-${GITHUB_REF_NAME#v}}"
 
       - name: Build and bundle
-        if: env.WINDOWS_SIGNING != 'true'
+        if: env.WINDOWS_SIGNING != 'true' && matrix.platform != 'linux'
         shell: bash
         env:
           # linuxdeploy and appimagetool mount themselves through FUSE, which a
@@ -183,6 +236,42 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -C target-cpu=x86-64
         # Types are checked by CI on the commit this tag is cut from.
         run: bun run tauri build --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+
+      # rpm takes minutes to pack and the other two do not wait for it. The bundler
+      # stamps the package type into the binary in place and restores it after each
+      # package, so the rpm is packed from its own copy in a separate target dir.
+      - name: Build and bundle (Linux)
+        if: matrix.platform == 'linux'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          # linuxdeploy and appimagetool mount themselves through FUSE, which a
+          # container does not have.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          # Recent toolchains default C code to x86-64-v3; ring's curve25519 then
+          # crashes with SIGILL on every CPU before Haswell.
+          CFLAGS_x86_64_unknown_linux_gnu: -march=x86-64 -mtune=generic
+          CXXFLAGS_x86_64_unknown_linux_gnu: -march=x86-64 -mtune=generic
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -C target-cpu=x86-64
+        run: |
+          set -eu
+          bun run tauri build --no-bundle --target "$TARGET" --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+          rpm_target="$RUNNER_TEMP/rpm-target"
+          mkdir -p "$rpm_target/$TARGET/release"
+          cp "$RELEASE_DIR/millida-launcher" "$rpm_target/$TARGET/release/"
+          CARGO_TARGET_DIR="$rpm_target" bun run tauri bundle --bundles rpm --target "$TARGET" > "$RUNNER_TEMP/rpm.log" 2>&1 &
+          rpm_pid=$!
+          bun run tauri bundle --bundles deb,appimage --target "$TARGET"
+          rpm_status=0
+          wait "$rpm_pid" || rpm_status=$?
+          cat "$RUNNER_TEMP/rpm.log"
+          if [ "$rpm_status" != 0 ]; then
+            echo "::error::rpm bundling failed with status $rpm_status"
+            exit 1
+          fi
+          mkdir -p "$RELEASE_DIR/bundle/rpm"
+          cp "$rpm_target/$TARGET/release/bundle/rpm/"*.rpm "$RELEASE_DIR/bundle/rpm/"
+          ls -l "$RELEASE_DIR"/bundle/*/
 
       # Signed Windows build: the app exe is signed before it goes into the
       # installer, then the installer itself. Tauri stamps the bundle type into
