@@ -76,7 +76,7 @@ bun run dev      # http://127.0.0.1:5173, без ядра
 ## Что прогнать перед pull request
 
 ```bash
-bun run typecheck                                  # tsc -b, strict
+bun run typecheck                                  # tsc, strict, incremental
 bun test                                           # тесты фронтенда
 
 cd src-tauri
