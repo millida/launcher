@@ -31,6 +31,16 @@ pub struct AuthArgs {
 }
 
 fn emit(app: &AppHandle, stage: &str, pct: f32, msg: &str) {
+    // Work inside a step of the launch graph reports its share of the launch's one bar
+    // (game/pipeline/progress.rs), not its own numbers over the others'.
+    if game::lane_emit(stage, pct, msg) {
+        return;
+    }
+    emit_progress(app, stage, pct, msg);
+}
+
+/// Straight to the window: the progress of a launch as a whole.
+pub(crate) fn emit_progress(app: &AppHandle, stage: &str, pct: f32, msg: &str) {
     let _ = app.emit(
         "launch-progress",
         Progress { stage: stage.into(), pct, msg: msg.into() },

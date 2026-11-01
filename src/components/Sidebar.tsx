@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import { AccountMenu } from './AccountMenu'
 import { Head } from './Head'
@@ -7,13 +7,17 @@ import { getAccount, isMillidaKind, useAccounts } from '../state/accounts'
 import { useGameNick } from '../state/gameNick'
 import { unreadTotal, useFriends } from '../state/friends'
 import { radioOn, useMusic } from '../state/music'
-import { BugPx, FEEDBACK_SHARDS, FeedbackModal, feedbackRewardReady } from './Feedback'
+import { BugPx } from './BugPx'
+import { FEEDBACK_SHARDS, feedbackRewardReady } from './feedbackStatus'
+
+// Окно отзыва открывают редко: его код — отдельный чанк.
+const FeedbackModal = lazy(() => import('./Feedback').then((m) => ({ default: m.FeedbackModal })))
 import { playSound, setSoundMode, soundMode, soundVolume } from '../lib/sound'
 import { writePref } from '../lib/prefs'
 import { Slider } from './Slider'
 import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { openMessages } from '../state/chatScreen'
-import { PlayhubBar } from './playhub/MyBuilds'
+import { PlayhubBar } from './hosts'
 import { PxIcon } from './PxIcon'
 import { openCatalogHome, useHubTab } from './playhub/hubTab'
 import { SKINS_IMPORT_EVENT, SKINS_UPLOAD_EVENT, useTopBar } from '../state/topbar'
@@ -255,7 +259,11 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             <BugPx size={26} light />
             {fbReward ? <span className="lb-fb-gift">+{FEEDBACK_SHARDS}</span> : null}
           </button>
-          {fbOpen ? <FeedbackModal onClose={() => setFbOpen(false)} /> : null}
+          {fbOpen ? (
+            <Suspense fallback={null}>
+              <FeedbackModal onClose={() => setFbOpen(false)} />
+            </Suspense>
+          ) : null}
           <span className="lb-vol lb-quick">
             <button
               className="lb-btn"
