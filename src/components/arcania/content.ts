@@ -1,9 +1,26 @@
 import type { Vars } from '../../i18n'
 import { plural } from '../../lib/format'
+import { MEDIA_WAIT, mediaUrl } from '../../lib/media'
 
 // Page texts are Russian i18n keys: every place that shows them passes them through t().
 export const ART = '/packs/arcania/'
 export const ARCANIA_POSTER = ART + 'cover-poster.webp'
+
+/** Остаётся в установщике: постеры нужны до того, как что-то скачается, шрифт и логотип — на каждой странице. */
+const KEPT = new Set(['cover-poster.webp', 'guide-poster.jpg', 'skill-tree-poster.jpg', 'logo.png', 'cast.woff2'])
+
+/** Имя пакета картинок в media/manifest.json: боссы, классы, карта мира. Ядро качает его целиком, одним файлом. */
+export const ART_BUNDLE = '@arcania-art'
+
+/**
+ * Адрес картинки Arcania. Постеры лежат в установщике, остальное приходит из кэша медиа; пока пакет не скачан —
+ * прозрачная заглушка (серая плитка по стилю 05-media.css), и компонент перерисуется, когда файлы лягут.
+ * Компонент, который зовёт art(), вызывает useArcaniaArt().
+ */
+export const art = (file: string): string => (KEPT.has(file) ? ART + file : (mediaUrl('packs/arcania/' + file) ?? MEDIA_WAIT))
+
+/** Имя ролика в кэше медиа. */
+export const artClip = (file: string): string => 'packs/arcania/' + file
 
 export const ARCANIA_VERSION = '2.0'
 
