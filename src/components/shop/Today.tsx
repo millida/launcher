@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import type { ItemRef, ShopCard, ShopDay, ShopSource } from '../../lib/rubies'
-import { focusOf, outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitSnapshot'
+import { focusOf, outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitShotLazy'
 import { shopCards } from './wish'
 import { ItemArt, toneStyle } from './parts'
 import { RarityChip } from './rarityUi'
@@ -11,6 +11,7 @@ import { DayClock, OffBadge, useRailEdges } from './SetsV2'
 import { SceneBack, usePlayerSkin } from './ShopStage'
 import '../../styles/pixel/shop-motion.css'
 import { intlTag, useT } from '../../i18n'
+import { liveInterval } from '../../lib/liveInterval'
 
 /**
  * «Сегодня» (ТЗ v3 + решение 06.10.2026: витрина дня — крючок ежедневного
@@ -86,7 +87,7 @@ function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: Sh
       <button className="sv-card-pick" aria-label={card.item.name} disabled={card.owned || acts.busy === card.item.code} data-track={'shop_pick_' + source} onClick={buy}>
         <ItemShot item={card.item} />
         <span className="sv-corner">{card.discountPct > 0 && !card.owned ? <OffBadge pct={card.discountPct} /> : null}</span>
-        {timer && card.leavesAt ? (
+        {timer && card.leavesAt && source !== 'forYou' ? (
           <span className="td-left">
             <DayClock to={card.leavesAt} />
           </span>
@@ -123,8 +124,8 @@ function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][
     let seen = true
     const io = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((es) => setLive((seen = es.some((e) => e.isIntersecting))))
     io?.observe(el)
-    const timer = window.setInterval(() => {
-      if (hold.current || !seen || document.hidden) return
+    const stopTimer = liveInterval(() => {
+      if (hold.current || !seen) return
       // Ровно к началу следующей карточки: шаг «ширина + зазор» копил
       // ошибку, и лента вставала с обрезанной карточкой слева.
       const cards = [...el.querySelectorAll<HTMLElement>('.td-card')]
@@ -134,7 +135,7 @@ function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][
       else el.scrollTo({ left: next.offsetLeft - base, behavior: 'smooth' })
     }, 4000)
     return () => {
-      window.clearInterval(timer)
+      stopTimer()
       io?.disconnect()
     }
   }, [auto, cards.length])
