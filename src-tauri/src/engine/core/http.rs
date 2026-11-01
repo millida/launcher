@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use super::diskgate;
 use super::jobs::{count_downloaded, Halt, CANCELLED};
 
 /// Never leaves this layer: a paused stream ends with it, the caller waits at
@@ -33,6 +34,54 @@ const RESUME_MIN_BYTES: u64 = 64 * 1024 * 1024;
 const REFRESH_BUDGET: Duration = Duration::from_secs(4);
 
 const PROXY_RECHECK: Duration = Duration::from_secs(5);
+
+/// A transfer that gets no bytes for this long is hung, not slow: the connection is dropped and
+/// the file goes to the next mirror. The read timeout alone left a stuck socket holding the
+/// whole stage for a minute ("stuck at 55-60%" on the assets).
+const STALL: Duration = Duration::from_secs(10);
+
+// A test shortens the limit for its own task only; tests run side by side.
+#[cfg(test)]
+tokio::task_local! {
+    static STALL_TEST: Duration;
+}
+
+fn stall_limit() -> Duration {
+    #[cfg(test)]
+    if let Ok(short) = STALL_TEST.try_with(|d| *d) {
+        return short;
+    }
+    STALL
+}
+
+/// The wait for the first answer (DNS up to 3 s plus DoH up to 4 s, the connection, TLS, the
+/// headers) is longer than the pause allowed between chunks: a slow mobile network or a
+/// mirror that opens a big file late is slow, not hung. 10 s covered all of that and cut
+/// the 15 s connect timeout short.
+const HEADER_WAIT_FACTOR: u32 = 3;
+
+fn header_limit() -> Duration {
+    stall_limit() * HEADER_WAIT_FACTOR
+}
+
+/// Not marked as `NO_LINK` on purpose: one hung file must not move the whole source behind our
+/// mirror for the session (the mirror has its own rate limit). Only this file tries the next route.
+/// "timed out" is what the page's error classifier (errorKind.ts) reads as a timeout.
+fn stalled(url: &str) -> String {
+    format!("{}: timed out — no data for {} s", url, stall_limit().as_secs().max(1))
+}
+
+pub(crate) fn is_stall(err: &str) -> bool {
+    err.contains("timed out — no data for")
+}
+
+/// Which pool and which order a download tries. The default is the normal path; the duplicate of
+/// a hedged download goes the other way round, over the spare pool of connections.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Via {
+    pub spare: bool,
+    pub swap: bool,
+}
 
 struct Shared {
     client: reqwest::Client,
@@ -122,6 +171,8 @@ fn build_client(native_roots: bool) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(UA)
         .redirect(redirect_policy())
+        // System lookup first; public DNS over HTTPS only if it fails (doh.rs).
+        .dns_resolver(super::doh::resolver())
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(Duration::from_secs(60))
         .pool_idle_timeout(Duration::from_secs(90))
@@ -346,13 +397,25 @@ async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt>
         .map_err(|e| Attempt::Retry(format!("неожиданный ответ: {} — {}", e, url)))
 }
 
+fn status_message(url: &str, status: reqwest::StatusCode) -> String {
+    format!("{} от {}", status, url)
+}
+
 fn status_attempt(url: &str, status: reqwest::StatusCode) -> Attempt {
-    let msg = format!("{} от {}", status, url);
+    let msg = status_message(url, status);
     if retryable(status) {
         Attempt::Retry(msg)
     } else {
         Attempt::Fatal(msg)
     }
+}
+
+/// The server answered that the address names nothing. Unlike a request the
+/// network cut short, asking again gets the same answer.
+pub(crate) fn is_absent_answer(err: &str) -> bool {
+    [reqwest::StatusCode::NOT_FOUND, reqwest::StatusCode::GONE]
+        .into_iter()
+        .any(|status| err.starts_with(&status_message("", status)))
 }
 
 /// Marker of a download whose bytes arrived whole but hash to something else.
@@ -586,6 +649,45 @@ pub(crate) async fn get_json_revalidated(url: &str, cache: &Path) -> Result<Valu
     revalidated_within(url, cache, REFRESH_BUDGET).await
 }
 
+/// Files being refreshed in the background right now, so a quick relaunch does not start a
+/// second identical request.
+static REFRESHING: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Stale-while-revalidate for a small list the launch needs but does not have to be newest: the
+/// copy on disk is returned at once, and when it is older than `ttl` the source is asked in the
+/// background and the answer lands in the copy for the next launch. Without a copy the request
+/// runs to its end, as before.
+pub(crate) async fn get_json_swr(url: &str, cache: &Path, ttl: Duration) -> Result<Value, String> {
+    let Ok(copy) = read_json_file(cache) else {
+        return get_json_cached(url, cache).await;
+    };
+    if !copy_is_fresh(cache, ttl) {
+        refresh_in_background(url, cache);
+    }
+    Ok(copy)
+}
+
+fn refresh_in_background(url: &str, cache: &Path) {
+    {
+        let mut busy = REFRESHING.lock().unwrap_or_else(|e| e.into_inner());
+        if busy.iter().any(|p| p == cache) {
+            return;
+        }
+        busy.push(cache.to_path_buf());
+    }
+    let (url, cache) = (url.to_string(), cache.to_path_buf());
+    tauri::async_runtime::spawn(async move {
+        if let Ok(v) = get_json(&url).await {
+            super::paths::write_json_quiet(&cache, &v);
+        } else if let Ok(f) = std::fs::File::options().write(true).open(&cache) {
+            // A failed refresh still restarts the copy's age, so an unreachable source is asked
+            // once per `ttl` and not on every launch.
+            let _ = f.set_modified(std::time::SystemTime::now());
+        }
+        REFRESHING.lock().unwrap_or_else(|e| e.into_inner()).retain(|p| p != &cache);
+    });
+}
+
 async fn revalidated_within(url: &str, cache: &Path, budget: Duration) -> Result<Value, String> {
     let Ok(copy) = read_json_file(cache) else {
         return get_json_cached(url, cache).await;
@@ -724,6 +826,18 @@ async fn fetch_cancellable(
     cancel: Option<&Halt>,
     on: Option<&Progress<'_>>,
 ) -> Result<(), String> {
+    fetch_via(url, dest, sum, size, cancel, on, Via::default()).await
+}
+
+async fn fetch_via(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    cancel: Option<&Halt>,
+    on: Option<&Progress<'_>>,
+    via: Via,
+) -> Result<(), String> {
     if url.trim().is_empty() {
         return Err("пустая ссылка на файл".into());
     }
@@ -734,7 +848,10 @@ async fn fetch_cancellable(
     let _cleanup = PartGuard(part.clone());
     let mut last = String::new();
     let mut resume_from: u64 = 0;
-    let routes = super::mirror::routes(url).await;
+    let mut routes = super::mirror::routes(url).await;
+    if via.swap && routes.len() > 1 {
+        routes.rotate_left(1);
+    }
     for (ri, route) in routes.iter().enumerate() {
         let has_next = ri + 1 < routes.len();
         let mut attempt = 1;
@@ -744,7 +861,7 @@ async fn fetch_cancellable(
             } else {
                 route.clone()
             };
-            match fetch_once(&target, &part, sum, size, cancel, resume_from, on).await {
+            match fetch_once(&target, &part, sum, size, cancel, resume_from, on, via.spare).await {
                 Ok(()) => return publish(&part, dest, sum, size),
                 // A pause is not a failed attempt: everything that landed stays,
                 // whatever its size, and the same attempt picks up from there.
@@ -769,6 +886,11 @@ async fn fetch_cancellable(
                     if resume_from == 0 {
                         let _ = std::fs::remove_file(&part);
                     }
+                    // Throttling, a dropped line and a silent one all tell the batches running
+                    // next to this download to slow down (pace.rs).
+                    if is_throttled(&e) || e.contains(super::mirror::NO_LINK) || is_stall(&e) {
+                        super::pace::pressure();
+                    }
                     last = e;
                 }
             }
@@ -778,7 +900,11 @@ async fn fetch_cancellable(
             if cancelled(cancel) {
                 return Err(CANCELLED.into());
             }
-            if has_next && super::mirror::abandon_direct(route, &last) {
+            // A hung connection does not get two more tries of ten silent seconds each while
+            // another route is waiting.
+            // This also covers a connection cut a few kilobytes into the body (a filter that
+            // drops a host after ~16 KB): the next source, not the same one again.
+            if has_next && (super::mirror::abandon_direct(route, &last) || is_stall(&last) || last.contains(super::mirror::NO_LINK)) {
                 break;
             }
             if attempt < TRIES {
@@ -924,6 +1050,7 @@ fn resume_after(err: &str, have: u64) -> u64 {
 }
 
 // Downloads a file. The checksum is compared after the download, a wrong file is deleted (SUM_MISMATCH).
+#[allow(clippy::too_many_arguments)]
 async fn fetch_once(
     url: &str,
     part: &Path,
@@ -932,18 +1059,23 @@ async fn fetch_once(
     cancel: Option<&Halt>,
     resume_from: u64,
     on: Option<&Progress<'_>>,
+    spare: bool,
 ) -> Result<(), String> {
     if cancelled(cancel) {
         return Err(CANCELLED.into());
     }
-    let mut req = client().get(url);
+    let mut req = if spare { spare_client() } else { client() }.get(url);
     if resume_from > 0 {
         req = req.header("Range", format!("bytes={}-", resume_from));
     }
-    let resp = or_pause(req.send(), cancel).await?.map_err(|e| format!("{}: {}", url, net_err(&e)))?;
+    let resp = match or_pause(tokio::time::timeout(header_limit(), req.send()), cancel).await? {
+        Ok(sent) => sent.map_err(|e| format!("{}: {}", url, net_err(&e)))?,
+        Err(_) => return Err(stalled(url)),
+    };
     if !resp.status().is_success() {
         return Err(status_failure(url, &resp));
     }
+    let resp_len = resp.content_length();
     /*
      * Сервер вправе не поддержать докачку и ответить целым файлом: тогда
      * дописывать к уже скачанному нельзя — получится склейка двух начал,
@@ -953,6 +1085,23 @@ async fn fetch_once(
     let resumed = resume_from > 0 && resp.status() == reqwest::StatusCode::PARTIAL_CONTENT;
     let mut hasher = sum.filter(|s| s.is_usable()).map(|s| Hasher::for_sum(&s));
     let mut written: u64 = 0;
+    let mut stream = resp.bytes_stream();
+    // On a spinning disk only a few files are written at once, the connections stay as they were.
+    // A small body is read first, so the wait for a place to write does not hold a connection
+    // idle; a large one takes its place before the file is opened.
+    let limited = diskgate::limited().await;
+    let mut early = Vec::new();
+    if diskgate::buffers_body(limited, resp_len, resumed) {
+        loop {
+            let next = match or_pause(tokio::time::timeout(stall_limit(), stream.next()), cancel).await? {
+                Ok(next) => next,
+                Err(_) => return Err(stalled(url)),
+            };
+            let Some(chunk) = next else { break };
+            early.push(chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, net_err(&e)))?);
+        }
+    }
+    let _writing = or_pause(diskgate::write_permit(), cancel).await?;
     let mut file = if resumed {
         // Хеш считается по ходу закачки, поэтому уже лежащий кусок нужно
         // прогнать через него заново — это чтение с диска против повторной
@@ -976,18 +1125,30 @@ async fn fetch_once(
     } else {
         std::fs::File::create(part).map_err(|e| format!("{}: {}", part.display(), e))?
     };
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = or_pause(stream.next(), cancel).await? {
-        let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, net_err(&e)))?;
+    let mut take = |chunk: &[u8]| -> Result<(), String> {
         if let Some(h) = hasher.as_mut() {
-            h.update(&chunk);
+            h.update(chunk);
         }
         written += chunk.len() as u64;
-        file.write_all(&chunk).map_err(|e| e.to_string())?;
+        file.write_all(chunk).map_err(|e| e.to_string())?;
         count_downloaded(chunk.len());
         if let Some(report) = on {
             report(written, size);
         }
+        Ok(())
+    };
+    for chunk in &early {
+        take(chunk)?;
+    }
+    drop(early);
+    loop {
+        let next = match or_pause(tokio::time::timeout(stall_limit(), stream.next()), cancel).await? {
+            Ok(next) => next,
+            Err(_) => return Err(stalled(url)),
+        };
+        let Some(chunk) = next else { break };
+        let chunk = chunk.map_err(|e| format!("{}: обрыв загрузки ({})", url, net_err(&e)))?;
+        take(&chunk)?;
     }
     file.flush().map_err(|e| e.to_string())?;
     drop(file);
@@ -1061,18 +1222,58 @@ pub(crate) async fn download_checked_cancellable(
     size: Option<u64>,
     cancel: Option<&Halt>,
 ) -> Result<(), String> {
-    if dest.exists() {
-        let owned = sum.map(OwnedSum::of);
-        let path = dest.to_path_buf();
-        let ok = tokio::task::spawn_blocking(move || file_matches(&path, owned.as_ref().map(OwnedSum::sum), size))
-            .await
-            .unwrap_or(false);
-        if ok {
-            return Ok(());
-        }
-        let _ = std::fs::remove_file(dest);
+    if already_intact(dest, sum, size).await {
+        return Ok(());
     }
     fetch_cancellable(url, dest, sum, size, cancel, None).await
+}
+
+/// True when the destination already holds the wanted file; a copy that fails the check is removed.
+async fn already_intact(dest: &Path, sum: Option<Sum<'_>>, size: Option<u64>) -> bool {
+    if !dest.exists() {
+        return false;
+    }
+    let owned = sum.map(OwnedSum::of);
+    let path = dest.to_path_buf();
+    let ok = tokio::task::spawn_blocking(move || file_matches(&path, owned.as_ref().map(OwnedSum::sum), size))
+        .await
+        .unwrap_or(false);
+    if !ok {
+        let _ = std::fs::remove_file(dest);
+    }
+    ok
+}
+
+/// `download_checked` for a file that belongs to a batch (assets, libraries). While the batch is
+/// in its tail and this file has been running for `HEDGE_AFTER`, the same file is asked for a
+/// second time over the other route and the spare pool of connections; the first complete,
+/// verified answer wins. Each attempt writes its own temporary file, so they cannot tread on
+/// each other.
+pub(crate) async fn download_checked_hedged(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    tail: &super::hedge::Tail,
+) -> Result<(), String> {
+    download_hedged_after(url, dest, sum, size, tail, super::hedge::HEDGE_AFTER).await
+}
+
+async fn download_hedged_after(
+    url: &str,
+    dest: &Path,
+    sum: Option<Sum<'_>>,
+    size: Option<u64>,
+    tail: &super::hedge::Tail,
+    after: Duration,
+) -> Result<(), String> {
+    if already_intact(dest, sum, size).await {
+        return Ok(());
+    }
+    let started = std::time::Instant::now();
+    let primary = fetch_via(url, dest, sum, size, None, None, Via::default());
+    let backup = fetch_via(url, dest, sum, size, None, None, Via { spare: true, swap: true });
+    super::hedge::first_ok(primary, tail.due(started, after), backup).await
 }
 
 /// A digest that can cross into `spawn_blocking`.
@@ -1449,6 +1650,25 @@ pub(crate) async fn download_verify(
         return Ok(());
     }
     download_checked(url, dest, None, size).await
+}
+
+/// `download_verify` for a file of a batch whose tail may be duplicated (see `download_checked_hedged`).
+pub(crate) async fn download_verify_hedged(
+    url: &str,
+    dest: &Path,
+    sha1: Option<&str>,
+    size: Option<u64>,
+    tail: &super::hedge::Tail,
+) -> Result<(), String> {
+    if let Some(sha1) = sha1.filter(|s| !s.is_empty()) {
+        if !dest.exists() && super::dedup::link_from_store(sha1, dest, size) {
+            return Ok(());
+        }
+        download_checked_hedged(url, dest, Some(Sum::Sha1(sha1)), size, tail).await?;
+        super::dedup::adopt_to_store(dest, sha1);
+        return Ok(());
+    }
+    download_checked_hedged(url, dest, None, size, tail).await
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
@@ -2148,6 +2368,22 @@ PK"),
         assert!(!is_transient(&format!("x: {}", SUM_MISMATCH)), "a wrong checksum will not fix itself");
     }
 
+    /// Failed lookup -> whether the catalogue already gave its final answer.
+    #[test]
+    fn only_an_absent_address_is_a_final_answer() {
+        let url = "https://api.millida.net/v2/launcher/mr/v2/project/Thaumcraft/version";
+        let cases: [(String, bool, &str); 5] = [
+            (status_message(url, reqwest::StatusCode::NOT_FOUND), true, "30.10: a mod id guessed as a Modrinth slug kept a «Поставить» that ended in this 404"),
+            (status_message(url, reqwest::StatusCode::GONE), true, "a removed project is just as absent"),
+            (status_message(url, reqwest::StatusCode::BAD_GATEWAY), false, "a mirror outage is worth another click"),
+            (status_message(url, reqwest::StatusCode::TOO_MANY_REQUESTS), false, "a throttle passes"),
+            (format!("нет связи (reset) — {}", url), false, "a dropped line says nothing about the project"),
+        ];
+        for (err, absent, why) in cases {
+            assert_eq!(is_absent_answer(&err), absent, "{}: {}", why, err);
+        }
+    }
+
     /// The backend tells launcher releases apart by this header in its logs; a fixed
     /// "1.0" made every build look the same.
     #[test]
@@ -2155,5 +2391,215 @@ PK"),
         let expected = format!("MillidaLauncher/{} (+https://millida.net)", env!("CARGO_PKG_VERSION"));
         assert_eq!(UA, expected, "User-Agent обязан нести версию из Cargo.toml, которую CI ставит при выпуске");
         assert_ne!(env!("CARGO_PKG_VERSION"), "", "пустая версия дала бы «MillidaLauncher/» без номера");
+    }
+}
+
+#[cfg(test)]
+mod launch_speed_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn tmp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("millida-speed-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Answers the first `hung` connections with headers and a few bytes, then goes silent;
+    /// every later connection gets the whole body.
+    async fn serve_hanging(hung: usize, body: &'static [u8]) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/object", listener.local_addr().unwrap());
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = seen.clone();
+        tokio::spawn(async move {
+            let mut n = 0usize;
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                n += 1;
+                count.store(n, Ordering::Relaxed);
+                let stall = n <= hung;
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 2048];
+                    let _ = sock.read(&mut buf).await;
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                    let _ = sock.write_all(head.as_bytes()).await;
+                    if stall {
+                        let _ = sock.write_all(&body[..2]).await;
+                        // Holds the connection open without sending: the shape of a hung socket.
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                    } else {
+                        let _ = sock.write_all(body).await;
+                        let _ = sock.shutdown().await;
+                    }
+                });
+            }
+        });
+        (url, seen)
+    }
+
+    /// Answers after `head_delay`, then sends the whole body at once.
+    async fn serve_late_head(head_delay: Duration, body: &'static [u8]) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/object", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 2048];
+                    let _ = sock.read(&mut buf).await;
+                    tokio::time::sleep(head_delay).await;
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                    let _ = sock.write_all(head.as_bytes()).await;
+                    let _ = sock.write_all(body).await;
+                    let _ = sock.shutdown().await;
+                });
+            }
+        });
+        url
+    }
+
+    #[tokio::test]
+    async fn a_slow_first_answer_is_not_a_stall_but_silence_between_chunks_still_is() {
+        let dir = tmp("late-head");
+        let url = serve_late_head(Duration::from_millis(400), b"0123456789").await;
+        let dest = dir.join("o.bin");
+        // 250 ms between chunks, so 750 ms for the first answer: the answer at 400 ms is in time.
+        STALL_TEST
+            .scope(Duration::from_millis(250), fetch(&url, &dest, None, Some(10)))
+            .await
+            .expect("a server that opens the file late is slow, not hung");
+        assert_eq!(std::fs::read(&dest).unwrap(), b"0123456789");
+        assert!(header_limit() > stall_limit(), "the first answer gets more time than a pause between chunks");
+    }
+
+    #[tokio::test]
+    async fn a_download_with_no_bytes_for_the_stall_limit_fails_with_a_named_timeout() {
+        let dir = tmp("stall");
+        let (url, seen) = serve_hanging(10, b"0123456789").await;
+        let dest = dir.join("o.bin");
+        let started = std::time::Instant::now();
+        let err = STALL_TEST
+            .scope(Duration::from_millis(250), fetch(&url, &dest, None, Some(10)))
+            .await
+            .expect_err("a silent connection is not a download");
+        assert!(is_stall(&err), "the failure says it was silence: {err}");
+        assert!(
+            err.contains("timed out"),
+            "the page's error classifier (errorKind.ts) reads this phrase as a timeout: {err}"
+        );
+        assert!(!dest.exists(), "nothing half-written is left under the final name");
+        assert!(started.elapsed() < Duration::from_secs(8), "three quarter-second tries, not three minutes");
+        assert_eq!(seen.load(Ordering::Relaxed), 3, "the same route is retried while it is the only one");
+    }
+
+    #[test]
+    fn a_stalled_file_does_not_move_the_whole_source_behind_the_mirror() {
+        let err = stalled("https://resources.download.minecraft.net/ab/abcd");
+        assert!(is_stall(&err));
+        assert!(
+            !super::super::mirror::abandon_direct("https://resources.download.minecraft.net/ab/abcd", &err),
+            "one hung file is not proof that the direct road is blocked; the mirror has its own rate limit"
+        );
+        assert!(!is_stall("https://x: нет связи (connection reset)"), "a refused connection is not a stall");
+    }
+
+    #[tokio::test]
+    async fn the_tail_of_a_batch_is_saved_by_a_second_attempt() {
+        let dir = tmp("hedge");
+        let body: &'static [u8] = b"the last asset of the batch";
+        let (url, seen) = serve_hanging(1, body).await;
+        let dest = dir.join("a.bin");
+        let sum = sha1_hex(body);
+        let tail = super::super::hedge::Tail::new(1);
+        let started = std::time::Instant::now();
+        let got = STALL_TEST
+            .scope(
+                Duration::from_secs(20),
+                download_hedged_after(&url, &dest, Some(Sum::Sha1(&sum)), Some(body.len() as u64), &tail, Duration::from_millis(150)),
+            )
+            .await;
+        assert_eq!(got, Ok(()));
+        assert_eq!(std::fs::read(&dest).unwrap(), body, "the duplicate's bytes are the ones published");
+        assert!(started.elapsed() < Duration::from_secs(5), "no waiting for the hung connection");
+        assert_eq!(seen.load(Ordering::Relaxed), 2, "exactly one duplicate was made");
+        let leftovers = std::fs::read_dir(&dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".part")).count();
+        assert_eq!(leftovers, 0, "the dropped attempt cleans its temporary file");
+    }
+
+    #[tokio::test]
+    async fn the_body_of_a_batch_is_not_duplicated() {
+        let dir = tmp("nohedge");
+        let body: &'static [u8] = b"plain file";
+        let (url, seen) = serve_hanging(0, body).await;
+        let dest = dir.join("b.bin");
+        let sum = sha1_hex(body);
+        let tail = super::super::hedge::Tail::new(100);
+        let got = download_hedged_after(&url, &dest, Some(Sum::Sha1(&sum)), Some(body.len() as u64), &tail, Duration::ZERO).await;
+        assert_eq!(got, Ok(()));
+        assert_eq!(seen.load(Ordering::Relaxed), 1, "99 files to go: one request is enough");
+    }
+
+    #[tokio::test]
+    async fn a_file_already_on_disk_costs_no_request() {
+        let dir = tmp("have");
+        let dest = dir.join("c.bin");
+        std::fs::write(&dest, b"here").unwrap();
+        let sum = sha1_hex(b"here");
+        let tail = super::super::hedge::Tail::new(1);
+        let got = download_hedged_after("http://127.0.0.1:1/never", &dest, Some(Sum::Sha1(&sum)), Some(4), &tail, Duration::ZERO).await;
+        assert_eq!(got, Ok(()));
+    }
+
+    async fn wait_for(cache: &Path, want: &str) -> bool {
+        for _ in 0..100 {
+            if read_json_file(cache).is_ok_and(|v| v["v"] == want) {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        false
+    }
+
+    async fn serve_json(body: &'static str) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/list.json", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                let reply = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+                let _ = sock.write_all(reply.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        url
+    }
+
+    #[tokio::test]
+    async fn a_stale_list_is_used_at_once_and_refreshed_for_the_next_launch() {
+        let dir = tmp("swr");
+        let cache = dir.join("list.json");
+        std::fs::write(&cache, br#"{"v":"old"}"#).unwrap();
+        let url = serve_json(r#"{"v":"new"}"#).await;
+        let got = get_json_swr(&url, &cache, Duration::ZERO).await.unwrap();
+        assert_eq!(got["v"], "old", "the launch does not wait for the network");
+        assert!(wait_for(&cache, "new").await, "the answer lands in the copy for next time");
+    }
+
+    #[tokio::test]
+    async fn a_fresh_list_costs_no_request_and_a_missing_one_is_fetched() {
+        let dir = tmp("swr2");
+        let cache = dir.join("list.json");
+        std::fs::write(&cache, br#"{"v":"cached"}"#).unwrap();
+        let got = get_json_swr("http://127.0.0.1:1/unreachable.json", &cache, Duration::from_secs(600)).await.unwrap();
+        assert_eq!(got["v"], "cached");
+        let url = serve_json(r#"{"v":"first"}"#).await;
+        let nothing = dir.join("none.json");
+        let got = get_json_swr(&url, &nothing, Duration::from_secs(600)).await.unwrap();
+        assert_eq!(got["v"], "first", "no copy at all: the request runs to its end");
+        assert!(read_json_file(&nothing).is_ok(), "and is kept");
     }
 }

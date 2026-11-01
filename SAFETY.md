@@ -18,7 +18,10 @@ code in this repository ──► GitHub Actions ──► Releases ──► in
    GitHub Releases; if GitHub is unreachable, it takes the same copy from our server. Before installing, the file is checked
    against the Millida signature (the public half of the key is in [tauri.conf.json](src-tauri/tauri.conf.json)): without the
    private half, a foreign file will not install, wherever it came from. The signature is a separate file and does not change
-   the program's bytes.
+   the program's bytes. An update that is already downloaded and checked is installed on its own only when nobody is
+   looking: the launcher sits in the tray with no game running and nothing downloading for ten minutes, or it is just
+   starting and its window has not been shown yet (not when you started it to play). The file is checked against the
+   signature again right before it runs, and two failed tries at one version stop the attempts.
 
 ## Verify it yourself in a minute
 
@@ -53,6 +56,12 @@ Everything is visible in the code. Intercept the traffic and compare it with thi
 | Mods and modpacks | Modrinth, CurseForge, the Millida catalog | hash of every file |
 | The Millida mod (skins and cosmetics in game) | `cdn.millida.net/mod` | sha256 of every jar from the version list; if the list is signed, the signature as well ([millida_mod.rs](src-tauri/src/engine/content/millida_mod.rs)) |
 | The authlib-injector skin agent | the project's site and its GitHub | sha256 |
+| The table of pinned performance mods (which exact Modrinth version of Sodium and the like to install) | `cdn.millida.net/launcher/perf-profiles.json`, with a copy shipped inside the launcher | the copy from the network is unsigned, but it is accepted only if it names mods from the list built into the launcher and only newer than the shipped one; the files themselves still come from Modrinth with its hashes ([perfpins.rs](src-tauri/src/engine/game/perfpins.rs)) |
+| Shaders and simple textures of the graphics levels (Complementary, BSL, Bare Bones) | Modrinth, from the fixed list in [shaders.rs](src-tauri/src/engine/game/shaders.rs) and [presets.rs](src-tauri/src/engine/game/presets.rs) | hash of every file |
+| A patch for the launcher itself (Windows only, when the release offers one) | the file named in the signed version list: `launcher-storage.millida.net`, the same bytes on GitHub Releases as a second road | sha256 of the patch, and the signature of the **finished** program file with the update key; a file that does not pass is deleted and the full installer is taken instead ([selfdelta.rs](src-tauri/src/engine/core/selfdelta.rs)) |
+| Radio tracks, wallpaper clips and the Arcania page (only in a release built with `MEDIA_REMOTE=1`; otherwise they are inside the installer and nothing is downloaded) | `launcher-storage.millida.net/media/`, then the `media` release of this repository; the name of a file is its sha256 | sha256 and size of every file, from the list compiled into the launcher ([media.rs](src-tauri/src/engine/core/media.rs)) |
+| A catalog build, file by file | the file list of the build from `api.millida.net` (`/catalog/packs/files/{id}/index`), then ranged requests to the build archive on the Millida CDN | size, CRC and sha256 of every file from the list, and the sha512 of the whole archive when it is taken whole ([pack_install.rs](src-tauri/src/engine/content/pack_install.rs)) |
+| The IP address of a host, when the system DNS cannot find it | the name of the host (`api.millida.net`, a Mojang or mod site) is asked over HTTPS from public DNS: Cloudflare `1.1.1.1`, Google `8.8.8.8`, Yandex `77.88.8.8`. Only after the system resolver failed or stayed silent for 3 seconds. Nothing but the host name is sent | the connection itself still checks the site's certificate ([doh.rs](src-tauri/src/engine/core/doh.rs)) |
 
 Modrinth, CurseForge and some Mojang sites do not open for everyone in Russia. In that case the same file goes through
 our proxy server (the list of addresses is in [mirror.rs](src-tauri/src/engine/core/mirror.rs)); where a site

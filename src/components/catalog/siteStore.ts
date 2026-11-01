@@ -325,7 +325,7 @@ function createSiteStore(linked: boolean): SiteStore {
         // поднимаем наверх страницы (как Modrinth: «jei» → сначала JEI, а не всё с «jei» внутри).
         if (st.sort === 'relevance' && q.length >= 2) got = byRelevance(got, q)
         if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
-        else if (!more && packs && st.sort === 'recommended') got = pinArcania(got, premium, st, q, arcaniaLead(live))
+        else if (!more && packs && pinsLead(st.sort)) got = pinArcania(got, premium, st, q, arcaniaLead(live))
         // «Рекомендуемые», первая страница: полка переводов сверху и ещё несколько — в ленте.
         let ruShelf: SiteCard[] = []
         if (!more && packs && st.sort === 'recommended' && st.access === 'all' && !searching) {
@@ -428,6 +428,9 @@ export function byRelevance(cards: SiteCard[], q: string): SiteCard[] {
     .sort((a, b) => b.r - a.r || a.i - b.i)
     .map((x) => x.c)
 }
+
+/** Arcania 2.0 is not in the server's listing, only among the paid packs: a search sorts by relevance, and without the pin it was nowhere. */
+export const pinsLead = (sort: SiteSort): boolean => sort === 'recommended' || sort === 'relevance'
 
 /** Подходит ли платная сборка под выбранные версию, загрузчик и поиск: категорий у неё нет. */
 function matchesFilters(p: MillidaPack, st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string): boolean {

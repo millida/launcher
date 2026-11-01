@@ -1,0 +1,814 @@
+{
+ "v": 1,
+ "bases": [
+  "https://launcher-storage.millida.net/media/",
+  "https://github.com/millida/launcher/releases/download/media/"
+ ],
+ "bundles": {
+  "arcania-art": {
+   "sha256": "6e82e1d1385c6b679fd060ead6daafe461b05c71e6c6a92888511caf6fa163cc",
+   "size": 5461110
+  }
+ },
+ "files": {
+  "bg/bg1.mp4": {
+   "sha256": "3a5b56a4124a7b0cb3d15e3ccd30d25b9a7246e54bdc5b0d5bd03e569671da6f",
+   "size": 780364
+  },
+  "bg/bg2.mp4": {
+   "sha256": "ce3a1145de86a4174a31902c5a127bde26261362f405c38de494499d40e28354",
+   "size": 2867202
+  },
+  "bg/bg3.mp4": {
+   "sha256": "dcffbefb08df18acd2a223ebf994bd97943543b213772cd604bc36aa460becbd",
+   "size": 1493514
+  },
+  "bg/bg4.mp4": {
+   "sha256": "1b70ac608196c663d77cce6797f07113723a31d77233ce36df96ed9a784f9168",
+   "size": 943442
+  },
+  "music/01-starlight-city.mp3": {
+   "sha256": "98afe8bcb362eaba315bb192e1d76cd541c790689f3d7d5eb4340451bbaadd10",
+   "size": 1931310
+  },
+  "music/02-chibi-ninja.mp3": {
+   "sha256": "72b66bca6b3199d218bde016dbc31f67f488a1858ca4b96875405f2ba9023665",
+   "size": 2233128
+  },
+  "music/03-secret-base.mp3": {
+   "sha256": "b805c48b3d3dcaa37a34aee7ee7ffb7a7fe3535a390d7e268da545547957659f",
+   "size": 1983724
+  },
+  "music/04-jumpshot.mp3": {
+   "sha256": "8a29d05683d76c732a4d7283c2eb8e799cdc6b0744569261251766cc821b5bea",
+   "size": 1505281
+  },
+  "music/05-level-2.mp3": {
+   "sha256": "859103d30d9f6557cd0355d6a85e6f1f315d305cf8fe04382d746c0c2f71214d",
+   "size": 1218586
+  },
+  "music/06-hhavok.mp3": {
+   "sha256": "8635a6721f6851764e81f68746b4f892bbf91727cdb360ed7626512b4708416c",
+   "size": 1927716
+  },
+  "music/07-dizzy-spells.mp3": {
+   "sha256": "4278f048900c89ac1c07d69a33c31e8b2377021560013e1551eafbb0083e9e33",
+   "size": 2051329
+  },
+  "packs/arcania/archer.webp": {
+   "sha256": "cf6daf2c6eef6549ca87102b4a1fd8f8dee2ff4813772846c7e1eec835a82a17",
+   "size": 98762,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/assassin.webp": {
+   "sha256": "c89c26143ce74e90f78d667684cae7e637303282fd344fcf179da9936750d6f7",
+   "size": 82318,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-basalt.webp": {
+   "sha256": "7008a4f4937b1538f3f495d2f8eee644ca2a676694db9eb7cfc493b9fe0bae07",
+   "size": 60404,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-bigpig.webp": {
+   "sha256": "4ded1b71d99fc2997f6f700edda8a790dd4ec3c3d5006e5e16356e5583cca125",
+   "size": 58020,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-frost.webp": {
+   "sha256": "dac52f7d7316561afff53a58cc44e8ccff4195ee1c159ab36342e7520aa0648d",
+   "size": 101938,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-hanashiguro.webp": {
+   "sha256": "7c02ec85e2228a227edbec90f5207319bc0a9c975260e81d85872da7cb38f5df",
+   "size": 132384,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-huntress.webp": {
+   "sha256": "f422f94559f289bfe67c61167c707fc76763675b8c93ca994875f5122c4fa16a",
+   "size": 76828,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-knight.webp": {
+   "sha256": "30a721fa352a9e84ae8a29c8b840b7424ddec708e2fad51ed1d67b0707f2201f",
+   "size": 72388,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-malora.webp": {
+   "sha256": "d3695a2744bd5f8471e6620dc318bdb6243cc29b8402495898a3b3b2f8e4b6e3",
+   "size": 158922,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-minotaur.webp": {
+   "sha256": "4eff61631ec9b3381f58412bb369276b94ecf622db90d367d4c9b77af6468454",
+   "size": 85944,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-quindris.webp": {
+   "sha256": "9ddf8a1abcb5f7ec4bd5182ef7561d5d5404ffbb025195b8f2b39ace7d5d9ed0",
+   "size": 71724,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-slime.webp": {
+   "sha256": "c8cf58c92738def75d59ac8fe718c57546608ac64c8475abaf7733ec90b27cf3",
+   "size": 76304,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/boss-yeti.webp": {
+   "sha256": "21569fe542cc397490f6c78452f971b58609ead6b1ed5198ae8beaec0dc24a50",
+   "size": 56122,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/cover.mp4": {
+   "sha256": "a9e3cc32cfb920699ec50823bc60bf0e0c68ca509c2986ebe02fb24998347f96",
+   "size": 367726
+  },
+  "packs/arcania/graphics.webp": {
+   "sha256": "b736d9ec13b55868fa3b84cb6919087436807635a5c1fed4f538a804160ea6c2",
+   "size": 124076,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/group.webp": {
+   "sha256": "2499bf2ef46aa392d86af35d7f85cc5c8bafebd80fae67690c48f0d1f8022ae5",
+   "size": 71078,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/guide.mp4": {
+   "sha256": "eda7dd090fa4cf5c4f64b3dd7f59127b5d0e509979f9bd988e3408c5a8124ab5",
+   "size": 1751607
+  },
+  "packs/arcania/guide.webm": {
+   "sha256": "eb7230a8a76a5f5cab458776792eae01008865071fbea898ce5cb6ef729bed17",
+   "size": 1181972
+  },
+  "packs/arcania/paladin.webp": {
+   "sha256": "23e42b238f22403f6b3f93797c417b606844f76cb8566fae510c4bb67d347ac7",
+   "size": 87342,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/quests.webp": {
+   "sha256": "07eb41ac374971983681ec62e2e1dcd134889777d1b9ce7d04c9b9af3ac8a262",
+   "size": 52838,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/skill-tree.mp4": {
+   "sha256": "5627dccfec15f873262850b09cdc89e0f9e2e9445a28352816a988052a498841",
+   "size": 5153111
+  },
+  "packs/arcania/skill-tree.webm": {
+   "sha256": "a3e1a36f30f21663605d7cb47fb9f89e53c7ae2a100b80a64844b8b2e01587b7",
+   "size": 2436569
+  },
+  "packs/arcania/support.webp": {
+   "sha256": "702ad49b211783fe518ab3c66710fe39088bc853f837c42a793c2d6f8ce52710",
+   "size": 106422,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/warrior.webp": {
+   "sha256": "945d63f51fa8653df5b461b890998f0683a404a0f5f1899283d7dd6492514af8",
+   "size": 36582,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/watcher.webp": {
+   "sha256": "0ba25c4f21f5ad952ed4bd9028d6b5ffa0e2c559760aaca47620e70d935c90dd",
+   "size": 104504,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/map.webp": {
+   "sha256": "153f1e39bd2c5af3df564c7a01e522b0aea23e8b5d05c6387a016b4b21a26b39",
+   "size": 166492,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/01.webp": {
+   "sha256": "f7cbd17ae9720daf02ac9ca0e8472ce9ecc9f293bfab13b97649fe79bb45c33b",
+   "size": 35924,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/02.webp": {
+   "sha256": "484c41b53803975878fbd2536d16685e916659d3423259f40796d471d443bd62",
+   "size": 24862,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/04.webp": {
+   "sha256": "3fecfa794d35aed6d757b7478a695f6f5c7fccea99d5ee2239dce47b7e44b3f4",
+   "size": 44242,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/05.webp": {
+   "sha256": "a8a5dd3916c1493fd799cc35bdddac930f8cf25bacaf132e021d47eda26a8f8d",
+   "size": 33128,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/06.webp": {
+   "sha256": "699b5497c19027658186ad981fd0609f11ee5976c66c814db06a6b05803f36ec",
+   "size": 22442,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/08.webp": {
+   "sha256": "1aa2c7e2928a684f3b9518c545a2cec751c1ad2512d698234a2e563fd3e348c8",
+   "size": 73248,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/09.webp": {
+   "sha256": "f4deb4958d4acb18e099def467015d895fe2092ad2a0c34e9b70fb21c94cd428",
+   "size": 83860,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/10.webp": {
+   "sha256": "8b1d13a28229e0c9bc84ff17d0a11e1b6c96f951ffbad35198eae9c0a1910ec3",
+   "size": 52310,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/11.webp": {
+   "sha256": "64858f741ae1db7f3e74366e0665ff2a50cac3b5720e35b7b99ebf0d7bd930a1",
+   "size": 33910,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/13.webp": {
+   "sha256": "dd4485cdbf7fdca674ff1c80eb0c4d9d87a1d8b05dfdfad45040f54c172d79f8",
+   "size": 38494,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/14.webp": {
+   "sha256": "0aa6e98a97a76abae693440bd9c4b5e2abd4a7dde8995a9dc3f96ac405f636e8",
+   "size": 39582,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/15.webp": {
+   "sha256": "17545dd4edf3cc5818acf089c01f00c7442a1ff56f88239b76a8b14afb58b89e",
+   "size": 32238,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/17.webp": {
+   "sha256": "897d9a96f80155f60317ccfc83ff7fbb4fe232ff454e5b5ae512ea731c22a1fe",
+   "size": 42442,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/19.webp": {
+   "sha256": "85796f79a488fc8e139cc0b8c89668c9ad0d65b16174ed4eaf7657428a180b9f",
+   "size": 43444,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/20.webp": {
+   "sha256": "b890d0c2dbaf22793b6daecec13a7b77fa15664100da8c91f1de0525743a03fa",
+   "size": 48294,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/21.webp": {
+   "sha256": "beda1222c59b912c42c5484eaff06a2bf79ea8d4bea2b69a9141b3cad58e7a78",
+   "size": 62338,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/22.webp": {
+   "sha256": "b000ec43a734ebc844a110636467d2aac434cc27df63d17f6c942b8498e61788",
+   "size": 56442,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/24.webp": {
+   "sha256": "60b8dec76184ed84fd63aedaff5ad89956f3ef5b5dcfd48cd72bb923045e051f",
+   "size": 43534,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/26.webp": {
+   "sha256": "b39906cf8e18d3e726290b4d7eaf3120f82b80647c174c781cf4f36ff75c4056",
+   "size": 48380,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/28.webp": {
+   "sha256": "6d0dfff3468a7ef87dd81f3c01eae864b82ef28a020077137fee283f9dfe56c4",
+   "size": 102020,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/31.webp": {
+   "sha256": "53583dcf6562d0a87479b75d2391bce02d2aa062bb3ca05141891e54dd81b913",
+   "size": 106128,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/32.webp": {
+   "sha256": "ac53d82275b8661bc5ecfa82737558f8bfc642ff6338d06e61be653d98b1a137",
+   "size": 76724,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/34.webp": {
+   "sha256": "29a56217102c5e92e26f8225d08a0e8f4c440a41f96f3bdbded8928c45e0dc7c",
+   "size": 25296,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/35.webp": {
+   "sha256": "7e2230ba2d2b27213f0c936d075d78d4fb28b96999b459ec4292ee2d091eb155",
+   "size": 59896,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/36.webp": {
+   "sha256": "f23c4903dbe57ed39c0e78c719307fc8d2964ad4acfb74071d2f20577c6da160",
+   "size": 87198,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/38.webp": {
+   "sha256": "641820cfbb4244448344f44caebbfc0cc24d26a950817e989dbf35dd73c5bc04",
+   "size": 30050,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/39.webp": {
+   "sha256": "adb87bd8524a5696cba54bb56b682985ea0f0e186b71450a607ecd5e45e38028",
+   "size": 85718,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/40.webp": {
+   "sha256": "d69e0ee5d72f3b4923b98212dd4008dd7e76cf974e4925f27edc278380de5260",
+   "size": 32478,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/41.webp": {
+   "sha256": "b39078a4e8cb6c0b3544359c90226a592d579e29ea5bd1530bad89b6c863b0bf",
+   "size": 65520,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/42.webp": {
+   "sha256": "f62cc23bfa531cf81efb862db4f175c8d3aa60ca7b3e2ca41072714a74f880bf",
+   "size": 18596,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/43.webp": {
+   "sha256": "42591e44b5a6fd6017f305990bab1e2b9a7501fa8ad761328f79e83c982c83ad",
+   "size": 62482,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/44.webp": {
+   "sha256": "e5a4b479cb200057750fe0f6fccd37235d31ce69d0f4c21a63227065e80ba626",
+   "size": 74722,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/45.webp": {
+   "sha256": "4cf2e16f2d64b65d30b82ae5306cc19be9c91aff0a78b040e2cb7f93d78df956",
+   "size": 38106,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/46.webp": {
+   "sha256": "963f8c77b8f9e2dde8e4f4eea491421b08080227c0325cea189a7885bccc57cd",
+   "size": 20090,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/47.webp": {
+   "sha256": "f95457f96b92e581baa6e01f85e619e5098096e1afb37fc4b72b4bf54a04ce91",
+   "size": 65986,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/48.webp": {
+   "sha256": "6fab102bbe26bc8ceeb35d1f29a568f715f2f22aa767d967a4e6c6f207d925df",
+   "size": 32836,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/49.webp": {
+   "sha256": "5dd253d66226964cfa6d037477951359a2d89e0a43bb7eab3ed0db012046de08",
+   "size": 35254,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/51.webp": {
+   "sha256": "7ea118f2dfdb4c52ffb54f531c0a7efb38324c18fcf869f3b82ed674c21d7895",
+   "size": 48328,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/52.webp": {
+   "sha256": "032569ef4205af537d81a50447a9f0b533c00c588f8a99ca05f42022c88f7c10",
+   "size": 36468,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/55.webp": {
+   "sha256": "465588c4b7273b859d661d0bb455d3834f37db764131a125ba3116b147989b66",
+   "size": 44300,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/56.webp": {
+   "sha256": "a87af6c048b2dd04af2570f0cc4efa83528e0a81d57e8e106db6d1929678c197",
+   "size": 54772,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/57.webp": {
+   "sha256": "d52ab4379b6e9599d18f0d3f330aadeb8ff26030cad3302b8d3d625ac9109b06",
+   "size": 40740,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/58.webp": {
+   "sha256": "9653ef740f4451d04a1370abba2efd421ec1380db2f95357ef53b40793ffd281",
+   "size": 100322,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/60.webp": {
+   "sha256": "9c7cbdbf8c3313d5fa07c7be5f66584b89b6777796e451dc11b67a893df50a64",
+   "size": 27448,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/61.webp": {
+   "sha256": "275666792e16e63017ffcb0b71deab8b324e4628351b2ea949635d4c3e5ad516",
+   "size": 135544,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/62.webp": {
+   "sha256": "60fe6f107f9d30743e864a4eca83e1bbd1d14d7afc73233414c74a69618437eb",
+   "size": 113222,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/63.webp": {
+   "sha256": "690e4fba795a54f5374dfdb8f82fafa4678ff49f5dbd2fed8e618721075eace6",
+   "size": 77614,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/64.webp": {
+   "sha256": "99e1d3899ef4e3e8c9b612f452fbd42637af31f7539b296f5194a820a23749d2",
+   "size": 66742,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/65.webp": {
+   "sha256": "389b941f7edb6462dadde25f2454e0157ee4abcc2b3f66d00beff04bf6d86fba",
+   "size": 70208,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/66.webp": {
+   "sha256": "1650247051ebd3af66b9df3ba283e13bb0ea09b6b9a830053aef125872335365",
+   "size": 33572,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/67.webp": {
+   "sha256": "9536effd5ced4464ba303fa36bd83e7a6ab96e15f76ccc652632347e74bac88d",
+   "size": 37484,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/69.webp": {
+   "sha256": "a728542adada2017f4462539b347191d3cc0f5c6cce9b874d05bfebaab1ce584",
+   "size": 43880,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/70.webp": {
+   "sha256": "c68fa21f15b85dfffc75b01fe5c11f8d3e71a7c62e84a99b06fe0c3b79f1158d",
+   "size": 66082,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/71.webp": {
+   "sha256": "3a10b9579d28451a202e9dae6aeee7cefbce1e395001259f31b1f7640c8f53f7",
+   "size": 56488,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/72.webp": {
+   "sha256": "933bce50015387fd18ee68a636b5088d7ec7bb90e4ceed72d8194f01383dbf5c",
+   "size": 32240,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/73.webp": {
+   "sha256": "2212ea1f952de66b790cc12ac9bd012276702b7b384eaef1aca989fd4afd22d1",
+   "size": 31474,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/74.webp": {
+   "sha256": "a421bfd533c07f63f3f35815a6e6c9b86e6fe003b6fc0544fe6c6d6e2d1a6b21",
+   "size": 27396,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/75.webp": {
+   "sha256": "366ea1a730eecb2eba892ceab035c9ad9621b8bd61095c75c9b2f9495f7cd4ed",
+   "size": 38406,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/76.webp": {
+   "sha256": "a6ec235e1ce13a11b2706fd3cd185c703a45d78f8c47f37505eabbdd610ef7a3",
+   "size": 47212,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/77.webp": {
+   "sha256": "e7aa31f33178dc2a6a478549c56808739aadc529086bb493080b3ca68e11c1b8",
+   "size": 28372,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/78.webp": {
+   "sha256": "db5ac5f231be973e95203bd43a5d779d01d0ebb670d552dc2c7db5ad41fe064e",
+   "size": 52058,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/79.webp": {
+   "sha256": "77963b367106e7034e97e2fdcbcbe5b6b0f95f994f5c2973dc569b22cfbe81ef",
+   "size": 24538,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/places/80.webp": {
+   "sha256": "af1e600bf77c2e8ec982849f734879c1a30be2ea312b0e33f78be37436909365",
+   "size": 13070,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/01.webp": {
+   "sha256": "cf8c9ebb52a618781d23309cdd5351026b45dd2f2f3491b5f86fb28d69bcd781",
+   "size": 3934,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/02.webp": {
+   "sha256": "9cd7b243de44bc375c12cd28d0e38dc8705a44713e45a197aaf76121073eab01",
+   "size": 3582,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/04.webp": {
+   "sha256": "cd6b9507d920bef6ac1e2c1afc9a0a95c50311e6192e03bdfabfd5bc9f287fbc",
+   "size": 5514,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/05.webp": {
+   "sha256": "4f0415c8be90895e803cc76969211a23b9436a7a04590751b084bd792f448fc2",
+   "size": 4476,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/06.webp": {
+   "sha256": "43d3233583d6c11181dd780dbd1688ed41c8fc1042c9856dc5e58b3c7e01e0e3",
+   "size": 3048,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/08.webp": {
+   "sha256": "796c24c07a2b215b418d114df6a3ef80b40f8a8fb9b45a83445786b3666e991a",
+   "size": 7838,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/09.webp": {
+   "sha256": "f72840e0054c7f7af2c4b5667fbc910956c50ed1862467b3c64db63e46643862",
+   "size": 7520,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/10.webp": {
+   "sha256": "5ef470d767c7b49a7d63232a286eaf3e31082e71ab603af6666c63c9304feb6c",
+   "size": 5814,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/11.webp": {
+   "sha256": "1e2782d6129ed1a7f806a321a25e9cea7be8b53b787187fd2525391211cc1e80",
+   "size": 4492,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/13.webp": {
+   "sha256": "56fbf5e7d3d4dde2fc0c8a517a1879a1ac5ecaf76dc0ecf22a3e2a9fdc6061e7",
+   "size": 3200,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/14.webp": {
+   "sha256": "d947eb6cd8fce373fb8c209fb38e133c67eb0a7238cd7dd75622d5bee8995eda",
+   "size": 5738,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/15.webp": {
+   "sha256": "70ba01a130a5587247c2d3897aadc8593fafc08eb6234d595e0c71368946047e",
+   "size": 3882,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/17.webp": {
+   "sha256": "df8ab2b8b247013fcd9eb25e6c1cde517614ef5e8990325954de4ab4c916daf0",
+   "size": 5146,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/19.webp": {
+   "sha256": "29cc8daa439e2716e7704e3189c5a038b2d2654907caad4502335d488bea5ae8",
+   "size": 3784,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/20.webp": {
+   "sha256": "b41e72c5b563d280b98bf95b7be6d4a1fb6b011b63e8d688557b7fdcaeab1078",
+   "size": 5542,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/21.webp": {
+   "sha256": "d46d54cfe49e1e03d71a33975b5d244d012294647081aa81fc125cae25ccd489",
+   "size": 7682,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/22.webp": {
+   "sha256": "720c83120cf57059c959e41b9b3cf7f8b3a75be8d135101cd6422260f26a7144",
+   "size": 3684,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/24.webp": {
+   "sha256": "c93a7852fb3e548eea7cadfa1a38cf53771f382e9363feb8051e059df65f5bec",
+   "size": 5580,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/26.webp": {
+   "sha256": "0f2b8014ae1695a6234147bc27889b4ca93b1fe9c08c6ca50fe2c3e1fb7fea07",
+   "size": 4844,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/28.webp": {
+   "sha256": "41064e333e5b360a63f5273cfd7cd07849ecee5e4f7375e88f10a91f6a538798",
+   "size": 9000,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/31.webp": {
+   "sha256": "9bba7d61b50c17dff736508767d464f822fdf45626e704a4e445cc3e673c3927",
+   "size": 9580,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/32.webp": {
+   "sha256": "0dd4231d362680617a5db78d88918de0bf2a7dbb0e40ad310c36bef53735ce49",
+   "size": 7618,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/34.webp": {
+   "sha256": "846edd2f2a58d269b60547e829a57c8b5a4b1091b66805711cb90fa270bd8606",
+   "size": 2116,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/35.webp": {
+   "sha256": "f06cdb10c4eb33b09775851f16e88c6d16c62204ccb9232dd9cbc3153c000076",
+   "size": 6116,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/36.webp": {
+   "sha256": "194b2d4a8b42ceec3a73a5c2d8c54b900d48a33d817f212753f00af6bce0b49e",
+   "size": 10318,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/38.webp": {
+   "sha256": "620a1ba31e0c63ee5a2d7adc38e07098b282e355683d5f048fcc1e1c71439314",
+   "size": 2790,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/39.webp": {
+   "sha256": "a682239dac8d8e03cc7988c621c467b6c5aac42afbb45209d29f600259120c4a",
+   "size": 7386,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/40.webp": {
+   "sha256": "f46235303101909f5dab7fedff95a35c9ff7008db15a91e5532f5bac438e3a70",
+   "size": 4404,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/41.webp": {
+   "sha256": "dfb932dd726ab81f746ea268a83ea2b868a85d9a61c9471a67fabd355c485fcc",
+   "size": 5558,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/42.webp": {
+   "sha256": "87082b5d83e28045a755ac685073311faf493b4a242d16a1c1c97d3b94a0f1e8",
+   "size": 2752,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/43.webp": {
+   "sha256": "26b9e293817f4e27082c6cd368e5f40b7d388772581ed8353a4b0db71dbe4e90",
+   "size": 7050,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/44.webp": {
+   "sha256": "3f624e2a211112065388f83308519463b569554ccf95e786a129c8d919c5f864",
+   "size": 6158,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/45.webp": {
+   "sha256": "9d215233eed682f3bba437da130a8317a5e9cd6db0c4149a2977c6caa85cc714",
+   "size": 3444,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/46.webp": {
+   "sha256": "dbd8132afeb2ee54be722b0e3447997d7db85d69cc507673f0ebad72e60b6fc4",
+   "size": 2172,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/47.webp": {
+   "sha256": "dff50471336502a70afc932286e9d1101e6755cc138ab12e52b29b462ff564a0",
+   "size": 6428,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/48.webp": {
+   "sha256": "58bea1f319eb37619181042dadc39c5f910051f3f8c5dde999795ed7bd95df1d",
+   "size": 3610,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/49.webp": {
+   "sha256": "6544234a4f3eed8c3038f50fd91a1412287ce2d8729a856b6585041cdd686b4c",
+   "size": 3944,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/51.webp": {
+   "sha256": "be87f6dc4ac914edfefb6cb475e3f753b2984bc872734ef3dfd24b3112c76a73",
+   "size": 5036,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/52.webp": {
+   "sha256": "4eb7f096e107b176df1bc89395dfc0e394161ed86aa272b1e14bf41844e76cef",
+   "size": 4432,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/55.webp": {
+   "sha256": "a95661fd96dc4e0bfd40a2679938fe89b40dee0ba6198b94dfddeb426d4760a3",
+   "size": 3430,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/56.webp": {
+   "sha256": "7eeeea8ed0a5229791c744207dc0722822230dba81b8ea38751017623524ba38",
+   "size": 5514,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/57.webp": {
+   "sha256": "3f1f1ab4a8efb6715e084e3e1c71e1b2916923a44128d6b80e30feca629ace9d",
+   "size": 4452,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/58.webp": {
+   "sha256": "e75dad3c7f53143831fc9aeb87200716e6dfe95aa7da215076712db683778e7a",
+   "size": 8708,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/60.webp": {
+   "sha256": "e847e0912c1a6d03aca61a8afc20158d5234ec76976cdf8858d2f2cea30e08ef",
+   "size": 2634,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/61.webp": {
+   "sha256": "5d55b34d5c8344f5d0acfbf4021a095f350d009c55c24ee7430de36f8009d760",
+   "size": 14154,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/62.webp": {
+   "sha256": "9114f52f40687104156ec323eb16ac23514d6a61b026076ccc8892670dae9da4",
+   "size": 11748,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/63.webp": {
+   "sha256": "1dcbc2a1725eda9a908c0e6a4c2fd72d4e313e358ba2897165a9802c7f36f152",
+   "size": 9282,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/64.webp": {
+   "sha256": "120baa36848706b6e5520ce746efbbd5ae21fe5f0987d48650d76ecd7e194b65",
+   "size": 5846,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/65.webp": {
+   "sha256": "aa9a952b268fe467caf24aaa3e13110ea3198385613ffd70e95955293ee0c838",
+   "size": 7854,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/66.webp": {
+   "sha256": "d23d5b9b3e71451ec6e20047772b2c0dd911f56c28425e69f60e945ba17d9f7a",
+   "size": 3806,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/67.webp": {
+   "sha256": "c45b8b514d6319d3726fb4a3c8906adf867f611f4712ab6dfa43ed566f36153c",
+   "size": 2956,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/69.webp": {
+   "sha256": "52ccb44ed338807401e140e6af19afa6cc019bea5a25a369d5743900b01df71e",
+   "size": 4700,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/70.webp": {
+   "sha256": "294fa6e3fae4fd9cb5430328d8f77ad02e5379b8b4f699957c50c0cdb54a0adf",
+   "size": 4216,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/71.webp": {
+   "sha256": "e4ef4b3bd25a31dd5d888953c78b0f56c2eaec37913efec3bbc22e28bf7b49f3",
+   "size": 5272,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/72.webp": {
+   "sha256": "e1d81ee886427d60cb2d9735b7544621a751ec4509936a7b91930b970b50b199",
+   "size": 3196,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/73.webp": {
+   "sha256": "1fcb7fac62a9baef0d31a3fa36addabc5d6c773c970070498723d292948342b1",
+   "size": 2930,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/74.webp": {
+   "sha256": "7036f4f68afe713a02667bc3b365b06948dd5b3e6e3bd7e01d66907437ebf9b0",
+   "size": 3548,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/75.webp": {
+   "sha256": "49de81caff26150052b11fe4e90062aedf2be84ee7e0b7954d3e21ea44353b4f",
+   "size": 3586,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/76.webp": {
+   "sha256": "6ad537ed5d1ae16bc35f53fa48a28cf2a67435fb86bd47bd951086375ae715de",
+   "size": 6190,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/77.webp": {
+   "sha256": "2c3cacd6a89b19c838fb768186b73e16f7e56a857cebebfe994b013a523f3038",
+   "size": 2786,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/78.webp": {
+   "sha256": "75f72c2d9acc4c36219e750d9ee75d083b674442669190d4d48e834e0493091c",
+   "size": 5286,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/79.webp": {
+   "sha256": "55623dd552827e4048cd04ae7ec1d01755081a14a213f7c0647056ddeeb8a126",
+   "size": 3300,
+   "bundle": "arcania-art"
+  },
+  "packs/arcania/world/thumbs/80.webp": {
+   "sha256": "38587b61a0dd45393cca5cf1a87acfcfc6bee00bc2f093f9a787655ba888824e",
+   "size": 1962,
+   "bundle": "arcania-art"
+  }
+ }
+}
