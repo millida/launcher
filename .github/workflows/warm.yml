@@ -1,0 +1,35 @@
+# Published to millida/launcher as warm.yml. The sync deploy key cannot create
+# or change workflow files, so edits here must be pushed to the public
+# repository once by an account that can.
+#
+# A cache saved on a tag is visible to that tag alone, and the scheduled main
+# run may come hours later. As soon as a release build finishes, main builds the
+# same tag and saves the incremental state the next release starts from.
+name: Warm release caches
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    if: >-
+      ${{ github.repository == 'millida/launcher'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.conclusion == 'success'
+      && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    # A called job cannot hold more than the caller grants, so this is the union of
+    # what release.yml declares; its tag-only jobs stay skipped on main.
+    permissions:
+      contents: write
+      packages: write
+      actions: write
+      id-token: write
+      attestations: write
+    # By full name: the private tree keeps this file under another name, and a
+    # local path there would point at a workflow that cannot be called.
+    uses: millida/launcher/.github/workflows/release.yml@main

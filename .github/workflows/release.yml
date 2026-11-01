@@ -19,12 +19,9 @@ on:
   # The scheduled run also catches a toolchain update between releases.
   schedule:
     - cron: "23 */6 * * *"
-  # A tag cannot leave caches for the next release, and the scheduled run may come
-  # hours later: as soon as a release build finishes, main builds the same tag and
-  # saves the incremental state of the newest code.
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
+  # warm.yml calls this right after a release build: a workflow cannot listen to
+  # its own runs, and the jobs keep seeing the caller's workflow_run event.
+  workflow_call:
   workflow_dispatch:
     inputs:
       version:
