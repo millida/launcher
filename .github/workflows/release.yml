@@ -43,10 +43,10 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  # The image the Linux legs build in. Only main writes it; a release tag pulls
-  # what the last main build pushed.
+  # The images the Linux and Windows legs build in. Only main writes them; a
+  # release tag pulls what the last main build pushed.
   linux-image:
-    name: Linux build image (${{ matrix.arch }})
+    name: Build image (${{ matrix.image }})
     if: github.repository == 'millida/launcher' && github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.os }}
     permissions:
@@ -56,10 +56,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
+          - image: launcher-linux-build:22.04-x64
             os: ubuntu-latest
-          - arch: arm64
+            file: linux-build.Dockerfile
+          - image: launcher-linux-build:22.04-arm64
             os: ubuntu-24.04-arm
+            file: linux-build.Dockerfile
+          - image: launcher-xwin-build:24.04
+            os: ubuntu-latest
+            file: xwin-build.Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -73,11 +78,11 @@ jobs:
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: .github/docker/linux-build.Dockerfile
+          file: .github/docker/${{ matrix.file }}
           push: true
-          tags: ghcr.io/millida/launcher-linux-build:22.04-${{ matrix.arch }}
+          tags: ghcr.io/millida/${{ matrix.image }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
-          cache-from: type=registry,ref=ghcr.io/millida/launcher-linux-build:22.04-${{ matrix.arch }}
+          cache-from: type=registry,ref=ghcr.io/millida/${{ matrix.image }}
           cache-to: type=inline
 
   build:
@@ -99,12 +104,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Cross-compiled on Linux, see "Windows cross toolchain".
+          # Cross-compiled on Linux with cargo-xwin: the same MSVC CRT and Windows
+          # SDK libraries, clang-cl and lld-link instead of the MSVC tools. The app
+          # crate compiles twice as fast as on a Windows runner.
           - label: Windows x64
             platform: windows
             os: ubuntu-latest
-            container: ""
+            container: ghcr.io/millida/launcher-xwin-build:24.04
             base: xwin
+            runner_args: --runner cargo-xwin
             target: x86_64-pc-windows-msvc
             updater_key: windows-x86_64
             updater_dir: nsis
@@ -205,37 +213,6 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Windows is cross-compiled with cargo-xwin: the same MSVC CRT and Windows SDK
-      # libraries, clang-cl and lld-link instead of the MSVC tools. The app crate
-      # compiles twice as fast as on a Windows runner, and makensis packs the
-      # installer. tauri-cli looks for an appindicator library on the build host
-      # even for a Windows target.
-      - name: Windows cross toolchain
-        if: matrix.platform == 'windows'
-        env:
-          XWIN_VERSION: 0.18.4
-          XWIN_SHA256: 35d05e10b12e0f8d56bf25a4bb77700c1369e7d8db63e82a09c2dcf536c6ed71
-        run: |
-          set -eu
-          sudo apt-get update -q
-          sudo apt-get install -y -q nsis lld llvm clang libayatana-appindicator3-dev osslsigncode
-          archive="cargo-xwin-v$XWIN_VERSION.x86_64-unknown-linux-musl.tar.gz"
-          curl -fsSL --retry 5 -o "$RUNNER_TEMP/$archive" "https://github.com/rust-cross/cargo-xwin/releases/download/v$XWIN_VERSION/$archive"
-          echo "$XWIN_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$HOME/.cargo/bin"
-          echo "XWIN_CACHE_DIR=$HOME/.xwin" >> "$GITHUB_ENV"
-          echo "TAURI_RUNNER_ARGS=--runner cargo-xwin" >> "$GITHUB_ENV"
-
-      # Microsoft's servers took 13 minutes to hand over the SDK, so it is cached;
-      # only main saves it, like every other cache here.
-      - name: Restore the Windows SDK
-        if: matrix.platform == 'windows'
-        id: xwin-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.xwin
-          key: release-v1-xwin-0.18.4-x86_64
-
       # A cache saved on a tag is visible only to that same tag, so only main saves;
       # every release tag restores what the last main build left. The prefix keeps
       # entries written by other workflows on main out of the signed build, and every
@@ -276,15 +253,16 @@ jobs:
           CFLAGS_x86_64_unknown_linux_gnu: -march=x86-64 -mtune=generic
           CXXFLAGS_x86_64_unknown_linux_gnu: -march=x86-64 -mtune=generic
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -C target-cpu=x86-64
-        # Types are checked by CI on the commit this tag is cut from. rust-cache sets
-        # CARGO_INCREMENTAL=0, which would override the profile for the app crate.
+        # Types are checked by CI on the commit this tag is cut from. The toolchain
+        # actions set CARGO_INCREMENTAL=0 and the profile alone did not bring it back;
+        # Cargo applies it to workspace crates only, so dependencies stay as cached.
         run: |
-          unset CARGO_INCREMENTAL
-          bun run tauri build ${TAURI_RUNNER_ARGS:-} --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+          export CARGO_INCREMENTAL=1
+          bun run tauri build ${{ matrix.runner_args }} --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
 
-      # rpm takes minutes to pack and the other two do not wait for it. The bundler
-      # stamps the package type into the binary in place and restores it after each
-      # package, so the rpm is packed from its own copy in a separate target dir.
+      # The three packages are packed side by side. The bundler stamps the package
+      # type into the binary in place and restores it after each package, so rpm and
+      # deb are packed from their own copies in separate target dirs.
       - name: Build and bundle (Linux)
         if: matrix.platform == 'linux'
         shell: bash
@@ -300,23 +278,32 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -C target-cpu=x86-64
         run: |
           set -eu
-          unset CARGO_INCREMENTAL
+          export CARGO_INCREMENTAL=1
           bun run tauri build --no-bundle --target "$TARGET" --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
-          rpm_target="$RUNNER_TEMP/rpm-target"
-          mkdir -p "$rpm_target/$TARGET/release"
-          cp "$RELEASE_DIR/millida-launcher" "$rpm_target/$TARGET/release/"
-          CARGO_TARGET_DIR="$rpm_target" bun run tauri bundle --bundles rpm --target "$TARGET" > "$RUNNER_TEMP/rpm.log" 2>&1 &
-          rpm_pid=$!
-          bun run tauri bundle --bundles deb,appimage --target "$TARGET"
-          rpm_status=0
-          wait "$rpm_pid" || rpm_status=$?
-          cat "$RUNNER_TEMP/rpm.log"
-          if [ "$rpm_status" != 0 ]; then
-            echo "::error::rpm bundling failed with status $rpm_status"
-            exit 1
-          fi
-          mkdir -p "$RELEASE_DIR/bundle/rpm"
-          cp "$rpm_target/$TARGET/release/bundle/rpm/"*.rpm "$RELEASE_DIR/bundle/rpm/"
+          bundle_aside() {
+            local dir="$RUNNER_TEMP/$1-target"
+            mkdir -p "$dir/$TARGET/release"
+            cp "$RELEASE_DIR/millida-launcher" "$dir/$TARGET/release/"
+            CARGO_TARGET_DIR="$dir" bun run tauri bundle --bundles "$1" --target "$TARGET" > "$RUNNER_TEMP/$1.log" 2>&1
+          }
+          pids=()
+          for kind in rpm deb; do
+            bundle_aside "$kind" &
+            pids+=("$kind:$!")
+          done
+          bun run tauri bundle --bundles appimage --target "$TARGET"
+          for entry in "${pids[@]}"; do
+            kind="${entry%%:*}"
+            status=0
+            wait "${entry#*:}" || status=$?
+            cat "$RUNNER_TEMP/$kind.log"
+            if [ "$status" != 0 ]; then
+              echo "::error::$kind bundling failed with status $status"
+              exit 1
+            fi
+            mkdir -p "$RELEASE_DIR/bundle/$kind"
+            cp "$RUNNER_TEMP/$kind-target/$TARGET/release/bundle/$kind/"*."$kind" "$RELEASE_DIR/bundle/$kind/"
+          done
           ls -l "$RELEASE_DIR"/bundle/*/
 
       # Signed Windows build: the app exe is signed before it goes into the
@@ -327,8 +314,8 @@ jobs:
         if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
-          unset CARGO_INCREMENTAL
-          bun run tauri build ${TAURI_RUNNER_ARGS:-} --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+          export CARGO_INCREMENTAL=1
+          bun run tauri build ${{ matrix.runner_args }} --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
 
       - name: Stage the app for signing
         if: env.WINDOWS_SIGNING == 'true'
@@ -495,12 +482,28 @@ jobs:
           path: src-tauri/target/${{ matrix.target }}/release/incremental
           key: release-v1-incremental-${{ matrix.target }}-${{ github.run_id }}
 
-      - name: Save the Windows SDK
-        if: github.ref == 'refs/heads/main' && matrix.platform == 'windows' && steps.xwin-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.xwin
-          key: release-v1-xwin-0.18.4-x86_64
+  # Every main build saves a new incremental state per target under its run id;
+  # only the newest is kept, or they would push the dependency caches out of the
+  # 10 GB limit.
+  prune-caches:
+    name: Drop older incremental states
+    needs: [build, macos]
+    if: ${{ !cancelled() && github.repository == 'millida/launcher' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the newest state per target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh cache list -R "$GITHUB_REPOSITORY" --key release-v1-incremental- --limit 100 --json id,key,createdAt \
+            --jq 'group_by(.key | sub("-[0-9]+$"; "")) | map(sort_by(.createdAt) | reverse | .[1:]) | flatten | .[] | "\(.id) \(.key)"' |
+            while read -r id key; do
+              echo "Удаляю $key"
+              gh cache delete "$id" -R "$GITHUB_REPOSITORY"
+            done
 
   macos:
     name: ${{ matrix.label }}
