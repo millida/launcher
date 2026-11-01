@@ -28,6 +28,8 @@ export interface InstallProgress {
   done: boolean
   error: string
   pausable: boolean
+  /** Секунд до конца, только когда загрузка может сказать честно (ядро: pulse.rs). */
+  eta?: number
 }
 
 export function listenInstallProgress(handler: (p: InstallProgress) => void): Promise<UnlistenFn | null> {
@@ -166,6 +168,8 @@ export interface GamePerf {
   heapMb: number
   maxMb: number
   gcPct: number
+  /** Когда мод прислал кадры (мс с 1970): есть у отчётов, что ядро копило, пока окна не было. */
+  at?: number
 }
 
 export function listenGamePerf(handler: (p: GamePerf) => void): Promise<UnlistenFn | null> {

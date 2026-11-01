@@ -69,7 +69,7 @@ pub fn record_freeze(stamp: u64, stalled: std::time::Duration, recovered: bool) 
     }
     let body = format!(
         "millida-launcher {}\nos: {} {}\nместо: главный поток\nсообщение: интерфейс не отвечал {} с\nитог: {}\n",
-        env!("CARGO_PKG_VERSION"),
+        env!("MILLIDA_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,
         stalled.as_secs(),

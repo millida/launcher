@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { whenIdle } from '../../lib/idle'
+import { mark3dLoaded } from '../../lib/lazy3d'
+import { saveLobbyStill } from '../../lib/lobbyStill'
 import { loadMine3d } from '../../lib/mine3d'
 import { headLook } from '../../lib/headLook'
 import type { Mine3dModule } from '../../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../../vendor/mine3d'
 import { textureSource } from '../../lib/textureSource'
-import { detectSlimFromUrl, loadImg } from '../../lib/skinArms'
+import { loadImg } from '../../lib/skinArms'
+import { loadLookSkin, nickLookSkin, type LookSkin } from '../../lib/lobbySkin'
+import { keepLookSkin, keptLookSkin } from '../../lib/lookCache'
+import { noted } from '../../lib/noted'
 import { useViewPrefs } from '../../state/viewPrefs'
-import { LOOK_EVENT, catalogKnowing, gameProfile, loadCosmeticCatalog, loadWardrobe, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
+import { LOOK_EVENT, catalogKnowing, gameProfile, loadCosmeticCatalog, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
 import { getAccount, useAccounts } from '../../state/accounts'
@@ -137,7 +143,6 @@ function pinned<A extends { update(player: unknown, dt: number): void }>(anim: A
  */
 const OUTFIT_WAIT_MS = 2500
 
-type LookSkin = Pick<Look, 'skin' | 'slim' | 'cape'>
 
 /**
  * How long the figure waits for the wardrobe before it stands in the skin found
@@ -146,32 +151,20 @@ type LookSkin = Pick<Look, 'skin' | 'slim' | 'cape'>
  */
 const WARDROBE_WAIT_MS = 3500
 
-async function nickLookSkin(nick: string): Promise<LookSkin> {
-  const skin = nickSkinUrl(nick)
-  // A skin found by nick carries no arm type, so it is read from the texture
-  // exactly as the wardrobe does; otherwise an Alex skin got Steve arms here.
-  return { skin, slim: await detectSlimFromUrl(skin).catch(() => false), cape: null }
-}
-
-async function loadLookSkin(nick: string, signedIn: boolean): Promise<LookSkin> {
-  if (!signedIn) return nickLookSkin(nick)
-  const wardrobe = await loadWardrobe().catch(() => null)
-  const fresh = (u: string) => (lookVersion && !/^(data|blob):/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'v=' + lookVersion : u)
-  const cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
-  if (wardrobe?.active.skinUrl) return { skin: fresh(wardrobe.active.skinUrl), slim: wardrobe.active.model === 'slim', cape }
-  return { ...(await nickLookSkin(nick)), cape }
-}
-
 function loadLook(nick: string, signedIn: boolean): { first: Promise<Look>; full: Promise<Look> } {
-  return lookStages<LookSkin, Pick<Look, 'items' | 'show'>>(
+  const skin = loadLookSkin(nick, signedIn)
+  const staged = lookStages<LookSkin, Pick<Look, 'items' | 'show'>>(
     {
-      skin: loadLookSkin(nick, signedIn),
+      skin,
       nickSkin: () => nickLookSkin(nick),
       outfit: loadLookOutfit(signedIn),
       noOutfit: { items: [], show: [] },
     },
     { skinMs: WARDROBE_WAIT_MS, outfitMs: OUTFIT_WAIT_MS },
   )
+  void skin.then((s) => keepLookSkin(nick, s), noted('lobby-look-keep'))
+  const first = keptLookSkin(nick).then((k): Promise<Look> => (k ? Promise.resolve({ ...k, items: [], show: [] }) : staged.first))
+  return { first, full: staged.full }
 }
 
 async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | 'show'>> {
@@ -235,6 +228,7 @@ export function LobbyCharacter({
   dress,
   shop,
   onDressed,
+  onShown,
 }: {
   on: boolean
   /**
@@ -245,6 +239,8 @@ export function LobbyCharacter({
   shop?: boolean
   /** Витрина: сколько вещей из `dress` встало на фигуру (0 — 3D не вышло, покажи превью). */
   onDressed?: (n: number) => void
+  /** Лобби: фигура одета и показана — снимок-заглушка (LobbyFigure) можно убирать. */
+  onShown?: () => void
 }) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -298,7 +294,14 @@ export function LobbyCharacter({
   const [skinFor, setSkinFor] = useState('')
   const [dressedFor, setDressedFor] = useState('')
   const shown = !!look && skinFor === lookKey(look) && dressedFor === lookKey(look)
+  const [shownOn, setShownOn] = useState(0)
+  useEffect(() => {
+    if (shown && ready) setShownOn(ready)
+  }, [shown, ready])
+  const visible = shown || (!shop && ready !== 0 && shownOn === ready)
   const [emoting, setEmoting] = useState(false)
+  const onShownRef = useRef(onShown)
+  onShownRef.current = onShown
   const [maskShow, setMaskShow] = useState<CosmeticItem | null>(null)
   const skinMasks = useMemo(() => {
     if (!look) return ''
@@ -364,9 +367,34 @@ export function LobbyCharacter({
     return () => window.clearTimeout(t)
   }, [ready, look, shown])
 
+  // Фигура показана: сообщаем лобби и, в простое, снимаем её для следующего запуска (lib/lobbyStill).
+  const shownKey = shown ? lookKey(look) : ''
+  useEffect(() => {
+    if (!shownKey || shop) return
+    onShownRef.current?.()
+    let alive = true
+    const cancel = whenIdle(() => {
+      // Кадр движка уже зарегистрирован, наш — после него: буфер WebGL ещё не очищен.
+      setTimeout(() => {
+        requestAnimationFrame(() => {
+          const c = canvasRef.current
+          if (alive && c && !pausedRef.current && !busyRef.current) saveLobbyStill(c, shownKey)
+        })
+      }, 0)
+    }, 1500)
+    return () => {
+      alive = false
+      cancel()
+    }
+  }, [shownKey, shop])
+
   // Лёгкая графика после сбоя видеокарты: без WebGL, плоская фигурка.
   const lite = useGpuLite()
   const [flatShown, setFlatShown] = useState(false)
+  // Плоская фигурка вместо 3D (нет контекста WebGL) — тоже «показано», заглушка лобби может уйти.
+  useEffect(() => {
+    if (flatShown && !shop) onShownRef.current?.()
+  }, [flatShown, shop])
   useEffect(() => {
     if (!on || m3d || lite) return
     let alive = true
@@ -376,6 +404,7 @@ export function LobbyCharacter({
       .then(() => (gpuLite() ? null : loadMine3d()))
       .then((mod) => {
         if (!mod) return
+        mark3dLoaded()
         if (alive) setM3d(mod)
       })
       .catch((e) => console.error('[lobby] 3d', e))
@@ -898,7 +927,7 @@ export function LobbyCharacter({
   return (
     <div
       ref={stageRef}
-      className={'lobby-char' + (shop ? ' shop-stage' : '') + (shown ? ' shown' : '')}
+      className={'lobby-char' + (shop ? ' shop-stage' : '') + (visible ? ' shown' : '')}
       onPointerDown={(e) => {
         const engine = viewerRef.current
         if (!engine || e.button !== 0) return
@@ -953,7 +982,7 @@ export function LobbyCharacter({
     >
       <canvas key={glEpoch} ref={canvasRef} aria-label={t('Персонаж {nick}', { nick })} />
       <span ref={tagWrap} className="lobby-tag-follow">
-        {shop ? null : <Nametag nick={nick} at={shown ? tag : null} />}
+        {shop ? null : <Nametag nick={nick} at={visible ? tag : null} />}
       </span>
       {shop ? null : (
         <PartyOverlay
