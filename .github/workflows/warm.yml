@@ -19,6 +19,7 @@ jobs:
   warm:
     if: >-
       ${{ github.repository == 'millida/launcher'
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
       && github.event.workflow_run.event == 'push'
       && github.event.workflow_run.conclusion == 'success'
       && startsWith(github.event.workflow_run.head_branch, 'v') }}

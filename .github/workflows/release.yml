@@ -202,9 +202,20 @@ jobs:
         shell: bash
         env:
           BUILT_TAG: ${{ github.event.workflow_run.head_branch }}
+          BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          ref="${BUILT_TAG:-}"
-          [ -n "$ref" ] || ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          set -eu
+          remote="https://github.com/$GITHUB_REPOSITORY"
+          if [ -n "${BUILT_TAG:-}" ]; then
+            # Only a release tag that still points at the commit that was built:
+            # a branch can share the name, and a tag can move after the build.
+            [[ "$BUILT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$BUILT_TAG is not a release tag"; exit 1; }
+            tagged=$(git ls-remote "$remote" "refs/tags/$BUILT_TAG^{}" "refs/tags/$BUILT_TAG" | sort -k2 -r | head -n 1 | cut -f1)
+            [ "$tagged" = "$BUILT_SHA" ] || { echo "::error::$BUILT_TAG points at ${tagged:-nothing}, the build was $BUILT_SHA"; exit 1; }
+            ref=$BUILT_SHA
+          else
+            ref=$(git ls-remote --tags --refs "$remote" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
@@ -536,9 +547,20 @@ jobs:
         if: github.ref == 'refs/heads/main'
         env:
           BUILT_TAG: ${{ github.event.workflow_run.head_branch }}
+          BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          ref="${BUILT_TAG:-}"
-          [ -n "$ref" ] || ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          set -eu
+          remote="https://github.com/$GITHUB_REPOSITORY"
+          if [ -n "${BUILT_TAG:-}" ]; then
+            # Only a release tag that still points at the commit that was built:
+            # a branch can share the name, and a tag can move after the build.
+            [[ "$BUILT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$BUILT_TAG is not a release tag"; exit 1; }
+            tagged=$(git ls-remote "$remote" "refs/tags/$BUILT_TAG^{}" "refs/tags/$BUILT_TAG" | sort -k2 -r | head -n 1 | cut -f1)
+            [ "$tagged" = "$BUILT_SHA" ] || { echo "::error::$BUILT_TAG points at ${tagged:-nothing}, the build was $BUILT_SHA"; exit 1; }
+            ref=$BUILT_SHA
+          else
+            ref=$(git ls-remote --tags --refs "$remote" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
