@@ -12,14 +12,19 @@ name: Release
 on:
   push:
     tags: ["v*"]
-    # The public main moves with every stable release. Building it fills the Rust
-    # caches that tag builds may read: a cache saved on a tag is visible to that tag alone.
+    # A cache saved on a tag is visible to that tag alone, so main fills the caches
+    # tag builds read. Every main run builds the newest release tag: main itself
+    # moves only with stable releases and would leave the caches on old code.
     branches: [main]
-  # Betas move only tags, so main alone would leave the caches on the last stable
-  # dependencies and toolchain. A scheduled run belongs to main and saves what the
-  # newest tag needs, which keeps the next release build warm.
+  # The scheduled run also catches a toolchain update between releases.
   schedule:
     - cron: "23 */6 * * *"
+  # A tag cannot leave caches for the next release, and the scheduled run may come
+  # hours later: as soon as a release build finishes, main builds the same tag and
+  # saves the incremental state of the newest code.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
@@ -47,7 +52,7 @@ jobs:
   # release tag pulls what the last main build pushed.
   linux-image:
     name: Build image (${{ matrix.image }})
-    if: github.repository == 'millida/launcher' && github.ref == 'refs/heads/main'
+    if: github.repository == 'millida/launcher' && github.ref == 'refs/heads/main' && github.event_name != 'workflow_run'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -91,7 +96,8 @@ jobs:
     if: >-
       ${{ !cancelled()
       && github.repository == 'millida/launcher'
-      && contains(fromJSON('["success", "skipped"]'), needs.linux-image.result) }}
+      && contains(fromJSON('["success", "skipped"]'), needs.linux-image.result)
+      && (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))) }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -195,9 +201,14 @@ jobs:
 
       - name: Pick the newest release tag
         id: source
-        if: github.event_name == 'schedule'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'workflow_dispatch'
         shell: bash
-        run: echo "ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
+        env:
+          BUILT_TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          ref="${BUILT_TAG:-}"
+          [ -n "$ref" ] || ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
@@ -507,7 +518,10 @@ jobs:
 
   macos:
     name: ${{ matrix.label }}
-    if: github.repository == 'millida/launcher' && (github.event_name == 'push' || github.event_name == 'schedule')
+    if: >-
+      ${{ github.repository == 'millida/launcher'
+      && contains(fromJSON('["push", "schedule", "workflow_run"]'), github.event_name)
+      && (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -522,8 +536,13 @@ jobs:
     steps:
       - name: Pick the newest release tag
         id: source
-        if: github.event_name == 'schedule'
-        run: echo "ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
+        if: github.ref == 'refs/heads/main'
+        env:
+          BUILT_TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          ref="${BUILT_TAG:-}"
+          [ -n "$ref" ] || ref=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
