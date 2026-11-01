@@ -1,0 +1,14 @@
+# vanilla-1.8.9-microsoft
+route: version 1.8.9 + vanilla, java 8
+files: client 1, libraries 31, natives 4, log4j yes, loader libraries 0
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: false, skin_server: None, kill_switch: false }
+graph (first launch):
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  natives [natives] <- meta
+  assets [assets] <- meta
+  log4j [assets] <- meta
+  mods [mods]

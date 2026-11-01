@@ -39,6 +39,18 @@ describe('textureSource', () => {
     fetchImpl = async (url) => 'data:image/png;base64,' + url
   })
 
+  test('a failed read is asked again next time: one stalled answer must not leave the figure bare until restart', async () => {
+    forgetTextureSource(CDN)
+    fetchImpl = async () => {
+      throw new Error('нет сети')
+    }
+    expect(await textureSource(CDN)).toBe(CDN)
+    fetchImpl = async (url) => 'data:image/png;base64,' + url
+    expect(await textureSource(CDN), 'the failure was kept in memory, the webview gets a CORS-blocked link forever').toBe(
+      'data:image/png;base64,' + CDN,
+    )
+  })
+
   test('local and inline textures stay untouched: the core has nothing to fetch', async () => {
     fetched = []
     expect(await textureSource('/capes/millida.png')).toBe('/capes/millida.png')
