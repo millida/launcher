@@ -39,6 +39,13 @@ fn shares(profile: &str) -> Option<CommonShare> {
     (s != CommonShare::default() && fps_boost_applicable(profile)).then_some(s)
 }
 
+/// The shared options.txt this build takes before every start, when it shares
+/// options at all. The graphics presets tune and restore it with the build's own
+/// file: otherwise the shared copy would overwrite the preset on the next start.
+pub(super) fn shared_options_path(profile: &str) -> Option<PathBuf> {
+    shares(profile).filter(|s| s.options).map(|_| common_dir().join(OPTIONS))
+}
+
 /// Key bindings changed format in 1.13: numbers before, names after. A binding
 /// in the other format would make the old game stop reading the file.
 fn same_shape(a: &str, b: &str) -> bool {

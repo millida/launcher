@@ -728,11 +728,33 @@ export interface LaunchAuth {
   xuid?: string
 }
 
-export const launchGame = (version: string, nick: string, fabric: boolean, ramMb: number, auth: LaunchAuth) =>
-  invoke<string>('launch_game', { version, nick, fabric, ramMb, auth })
+/// What the core answers to Play: "started" is a new game process. The others are not launches:
+/// "focused" (that build is running and its window came forward), "running" (running, nothing to
+/// raise), "starting" (its first start is still under way).
+export type LaunchOutcome = 'started' | 'focused' | 'running' | 'starting'
 
-export const launchProfile = (profile: string, nick: string, ramMb: number, auth: LaunchAuth) =>
-  invoke<string>('launch_profile', { profile, nick, ramMb, auth })
+/// `prepMs`: time between the click and this call, for the timing the core reports.
+export const launchGame = (version: string, nick: string, fabric: boolean, ramMb: number, auth: LaunchAuth, prepMs?: number) =>
+  invoke<string>('launch_game', { version, nick, fabric, ramMb, auth, prepMs })
+
+/// Play on a build that is already running: its window comes forward and the outcome ("focused" or
+/// "running") comes back, or null when the core does not have that game (Play goes the usual way).
+export const raiseRunning = (profile: string) => invoke<string | null>('raise_running', { profile })
+
+export const launchProfile = (profile: string, nick: string, ramMb: number, auth: LaunchAuth, prepMs?: number) =>
+  invoke<string>('launch_profile', { profile, nick, ramMb, auth, prepMs })
+
+/// What preparing a build ahead of Play found (engine/game/pipeline/warm.rs): `ready` — Play
+/// starts the game at once; `cold` — something must be downloaded first; `skipped` — not now.
+export interface WarmOutcome {
+  state: 'ready' | 'cold' | 'skipped'
+  why: string
+  ms: number
+  missingDeps: number
+}
+
+/// Prepares the build for Play without starting it and without downloading the game.
+export const warmLaunch = (profile: string, auth?: LaunchAuth) => invoke<WarmOutcome>('warm_launch', { profile, auth })
 
 export const listContent = (profile: string, kind: string) =>
   invoke<ModFile[]>('list_content', { profile, kind })
@@ -842,6 +864,68 @@ export interface CommonShare {
 export const commonShareState = (profile: string) => invoke<CommonShare>('common_share_state', { profile })
 export const setCommonShare = (profile: string, share: CommonShare) => invoke<CommonShare>('set_common_share', { profile, share })
 export const setShaders = (profile: string, on: boolean) => invoke<ShadersState>('set_shaders', { profile, on })
+
+export interface FpsRecord {
+  /** Средний FPS сессии: отчёты мода раз в 5 с, только в мире и с окном игры впереди. */
+  avg: number
+  /** Средний самой медленной двадцатой части отчётов — так ощущаются подлагивания. */
+  low: number
+  minutes: number
+  preset: string | null
+  /** Unix-секунды конца сессии. */
+  at: number
+}
+
+export interface GfxPresetState {
+  preset: string | null
+  /** 'own' — выбран у сборки, 'global' — взят из общего выбора. */
+  source: string | null
+  /** Выбор игрока для сборки, применится перед запуском: id, 'auto' (под ПК), 'none' (не трогать) или null (как в общих настройках). */
+  want: string | null
+  canRevert: boolean
+  applicable: boolean
+  /** Игра эту сборку ещё не запускала: новая сборка, её берёт общий выбор. */
+  fresh: boolean
+  /** Загрузчик держит моды-ускорители. */
+  mods: boolean
+  /** Шейдеры ставятся на этот загрузчик, и ядро видит дискретную карту (или не может сказать). */
+  shadersOk: boolean
+  lastFps: FpsRecord | null
+  beforeFps: FpsRecord | null
+  skipped: string[]
+  /** Драйвер, на котором Sodium не запускается (Sodium wiki): Sodium не ставим, предлагаем сайт производителя. */
+  driver: DriverIssue | null
+  /** Пресет поставлен для ноутбука на батарее: ступень ниже и 60 FPS. */
+  battery: boolean
+  /** Поставлен из «Авто»: у мода Millida включена авто-дальность. */
+  auto: boolean
+  /** Игрок менял графику пресета в игре — ступень «Своя», лаунчер её не перезаписывает. */
+  custom: boolean
+}
+
+export interface DriverIssue {
+  card: string
+  version: string
+  url: string
+}
+
+export const gpuDriverIssue = () => invoke<DriverIssue | null>('gpu_driver_issue')
+
+export const gfxPresetState = (profile: string) => invoke<GfxPresetState>('gfx_preset_state', { profile })
+
+/** video — options.txt уровня под экран (lib/gfxPresets.ts); ядро пропускает только графические ключи. */
+/** auto — выбран «Авто»: ядро включит авто-дальность в профиле мода (millida-perf.json). */
+export const applyGfxPreset = (profile: string, preset: string, video?: [string, string][], source: 'own' | 'global' = 'own', battery = false, auto = false) =>
+  invoke<GfxPresetState>('apply_gfx_preset', { profile, preset, video: video ?? null, source, battery, auto })
+
+export const revertGfxPreset = (profile: string) => invoke<GfxPresetState>('revert_gfx_preset', { profile })
+
+/** Сыгранные сборки без выбора графики — для кнопки «Оптимизировать мои сборки (N)». */
+export const gfxUnchosenBuilds = () => invoke<string[]>('gfx_unchosen_builds')
+
+/** Выбор на странице сборки: сохраняется сразу, ставится перед следующим запуском. null — как в общих настройках. */
+export const chooseGfxPreset = (profile: string, preset: string | null) =>
+  invoke<GfxPresetState>('choose_gfx_preset', { profile, preset })
 
 export type ApiMarket = 'RU' | 'EN'
 
@@ -999,6 +1083,12 @@ export interface MusicAdded {
   too_big: string[]
 }
 
+/// Большие медиафайлы из кэша ядра: имя из media/manifest.json → путь на диске.
+export const mediaReady = () => invoke<Record<string, string>>('media_ready')
+
+/// Скачать указанные файлы (имя с `/` на конце — всё под ним) и вернуть пути всего, что лежит в кэше из названного.
+export const mediaFetch = (names: string[]) => invoke<Record<string, string>>('media_fetch', { names })
+
 export const musicTracks = () => invoke<MusicTrackFile[]>('music_tracks')
 
 export const openMusicFolder = () => invoke<void>('open_music_folder')
@@ -1025,7 +1115,8 @@ export const quickPlay = (
   world: string | null,
   server: string | null,
   auth?: LaunchAuth,
-) => invoke<string>('quick_play', { profile, nick, ramMb, world, server, auth })
+  prepMs?: number,
+) => invoke<string>('quick_play', { profile, nick, ramMb, world, server, auth, prepMs })
 
 export const readLog = (profile: string, name: string) => invoke<string>('read_log', { profile, name })
 
@@ -1168,6 +1259,9 @@ export interface DeviceSpecs {
 
 export const deviceSpecs = () => invoke<DeviceSpecs>('device_specs')
 
+/// "ssd", "hdd" or "unknown": the drive under the games folder, read by the core.
+export const diskKind = () => invoke<string>('disk_kind')
+
 /// Why the webview's render process died last time, reported once by the page
 /// that came back after it.
 export interface WebviewFailure {
@@ -1197,6 +1291,8 @@ export interface FallbackUpdate {
   source: string
   /** CDN-зеркало тех же байтов, когда url ведёт в релиз на GitHub. */
   mirror?: string
+  /** Манифест назвал релиз срочным: его не откладывают до выхода. */
+  critical?: boolean
 }
 
 export interface FallbackInstall {
@@ -1209,7 +1305,19 @@ export const updateFallbackCheck = () => invoke<FallbackUpdate | null>('update_f
 
 export const updateNotes = () => invoke<FallbackUpdate | null>('update_notes')
 
-export const updateFallbackStage = () => invoke<FallbackInstall | null>('update_fallback_stage')
+export const updateFallbackStage = (skipDelta = false) => invoke<FallbackInstall | null>('update_fallback_stage', { skipDelta })
+/** Обновление, которое ядро уже скачало и проверило: лежит на диске, окно его не теряет. */
+export const updateStaged = () => invoke<FallbackInstall | null>('update_staged')
+
+export interface DeltaStaged {
+  version: string
+  path: string
+  patchBytes: number
+  fullBytes: number
+}
+
+/// Обновление патчем от установленного exe (Windows). null — патча нет или он не вышел: качать обычным путём.
+export const updateDeltaStage = () => invoke<DeltaStaged | null>('update_delta_stage')
 
 export const updateFallbackRun = (path: string, restart = true) =>
   invoke<FallbackInstall>('update_fallback_run', { path, restart })
@@ -1334,6 +1442,20 @@ export const hideToTray = () => invoke<void>('hide_to_tray')
 export const mainWindowVisible = () => invoke<boolean>('main_window_visible')
 export const showFromTray = () => invoke<void>('show_from_tray')
 export const setRestoreOnExitNative = (on: boolean) => invoke<void>('set_restore_on_exit', { on })
+/** Destroys the main window and its WebView2 (tray, game); `hold` parks it while page-only work runs. */
+export const unloadMainWindow = (reason: 'tray' | 'game', hold: 'install' | 'call' | 'launch' | null, screen: string | null) =>
+  invoke<void>('unload_main_window', { reason, hold, screen })
+export interface WindowResume {
+  reopened: boolean
+  screen: string | null
+  links: string[]
+}
+/** A rebuilt window asks once what to come back to. */
+export const takeWindowResume = () => invoke<WindowResume>('take_window_resume')
+/** The core repeats the last presence beat while the game runs without a window. */
+export const rememberBeat = (path: '/friends/presence/heartbeat' | '/launcher/heartbeat', body: unknown) =>
+  invoke<void>('remember_beat', { path, body })
+export const setTrayLastBuild = (build: string) => invoke<void>('set_tray_last_build', { build })
 
 export interface OverlayState { enabled: boolean; toasts: boolean; hotkey: string; cardMs: number }
 
@@ -1505,6 +1627,7 @@ export interface SafetyReport {
 }
 
 export const scanModSafety = (profile: string) => invoke<SafetyReport>('scan_mod_safety', { profile })
+export const scanPickedFiles = () => invoke<SafetyReport | null>('scan_picked_files')
 export const quarantineMods = (profile: string, files: string[]) =>
   invoke<number>('quarantine_mods', { profile, files })
 
@@ -1767,6 +1890,22 @@ export interface LinuxTools {
 export const linuxToolsState = (profile: string) => invoke<LinuxTools>('linux_tools_state', { profile })
 export const setLinuxTools = (profile: string, gamemode: boolean, gamescope: boolean) =>
   invoke<LinuxTools>('set_linux_tools', { profile, gamemode, gamescope })
+
+/** Horizon beta engine (engine/game/horizon.rs): only vanilla 26.3 on a platform with a pinned build. */
+export interface HorizonState {
+  available: boolean
+  enabled: boolean
+  reason: string | null
+  release: string
+}
+
+/** Launch errors with this prefix came from Horizon: the window offers the usual Java start. */
+export const HORIZON_FAIL_PREFIX = 'horizon: '
+
+export const horizonState = (profile: string) => invoke<HorizonState>('horizon_state', { profile })
+export const horizonStateFor = (version: string, loader: string) => invoke<HorizonState>('horizon_state_for', { version, loader })
+export const setHorizon = (profile: string, on: boolean) => invoke<HorizonState>('set_horizon', { profile, on })
+export const horizonJavaOnce = (profile: string) => invoke<void>('horizon_java_once', { profile })
 
 export const scanPackSafety = (profile: string) => invoke<SafetyReport>('scan_pack_safety', { profile })
 export const quarantinePacks = (profile: string, files: string[]) => invoke<number>('quarantine_packs', { profile, files })
