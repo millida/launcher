@@ -26,11 +26,11 @@ RUN apt-get update \
       osslsigncode \
  && apt-get clean
 
-ARG XWIN_VERSION=0.18.4
-ARG XWIN_SHA256=35d05e10b12e0f8d56bf25a4bb77700c1369e7d8db63e82a09c2dcf536c6ed71
+ARG CARGO_XWIN_VERSION=0.18.4
+ARG CARGO_XWIN_SHA256=35d05e10b12e0f8d56bf25a4bb77700c1369e7d8db63e82a09c2dcf536c6ed71
 RUN curl -fsSL --retry 5 -o /tmp/cargo-xwin.tar.gz \
-      "https://github.com/rust-cross/cargo-xwin/releases/download/v${XWIN_VERSION}/cargo-xwin-v${XWIN_VERSION}.x86_64-unknown-linux-musl.tar.gz" \
- && echo "${XWIN_SHA256}  /tmp/cargo-xwin.tar.gz" | sha256sum -c - \
+      "https://github.com/rust-cross/cargo-xwin/releases/download/v${CARGO_XWIN_VERSION}/cargo-xwin-v${CARGO_XWIN_VERSION}.x86_64-unknown-linux-musl.tar.gz" \
+ && echo "${CARGO_XWIN_SHA256}  /tmp/cargo-xwin.tar.gz" | sha256sum -c - \
  && tar -xzf /tmp/cargo-xwin.tar.gz -C /usr/local/bin \
  && rm /tmp/cargo-xwin.tar.gz
 
