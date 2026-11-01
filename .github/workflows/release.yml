@@ -234,7 +234,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/.xwin
-          key: xwin-0.18.4-x86_64
+          key: release-v1-xwin-0.18.4-x86_64
 
       # A cache saved on a tag is visible only to that same tag, so only main saves;
       # every release tag restores what the last main build left. The prefix keeps
@@ -254,8 +254,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: src-tauri/target/${{ matrix.target }}/release/incremental
-          key: incremental-${{ matrix.target }}-${{ github.run_id }}
-          restore-keys: incremental-${{ matrix.target }}-
+          key: release-v1-incremental-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: release-v1-incremental-${{ matrix.target }}-
 
       - name: Set version from the tag
         if: github.ref != 'refs/heads/main'
@@ -493,14 +493,14 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: src-tauri/target/${{ matrix.target }}/release/incremental
-          key: incremental-${{ matrix.target }}-${{ github.run_id }}
+          key: release-v1-incremental-${{ matrix.target }}-${{ github.run_id }}
 
       - name: Save the Windows SDK
         if: github.ref == 'refs/heads/main' && matrix.platform == 'windows' && steps.xwin-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ~/.xwin
-          key: xwin-0.18.4-x86_64
+          key: release-v1-xwin-0.18.4-x86_64
 
   macos:
     name: ${{ matrix.label }}
@@ -560,8 +560,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .cross-cache/target/${{ matrix.target }}/release/incremental
-          key: incremental-${{ matrix.target }}-${{ github.run_id }}
-          restore-keys: incremental-${{ matrix.target }}-
+          key: release-v1-incremental-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: release-v1-incremental-${{ matrix.target }}-
 
       - name: Set version from the tag
         if: github.ref != 'refs/heads/main'
@@ -610,7 +610,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .cross-cache/target/${{ matrix.target }}/release/incremental
-          key: incremental-${{ matrix.target }}-${{ github.run_id }}
+          key: release-v1-incremental-${{ matrix.target }}-${{ github.run_id }}
 
       - name: Collect bundles
         if: github.ref != 'refs/heads/main'
