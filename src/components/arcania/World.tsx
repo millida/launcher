@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { useT } from '../../i18n'
 import { plural } from '../../lib/format'
-import { ART } from './content'
+import { art } from './content'
+import { useArcaniaArt } from './useArcaniaArt'
 import { KIND_WORDS, REGION, SINGLE, WORLD_POINTS, WORLD_REGIONS, type WorldKind, type WorldPoint } from './world-map'
 import './world.css'
 
@@ -11,7 +12,7 @@ import './world.css'
  */
 
 const STEP_MS = 3800
-const WORLD = ART + 'world/'
+const WORLD = 'world/'
 
 const KIND_ORDER = ['boss', 'dungeon', 'village', 'loot', 'story', 'poi'] as const
 
@@ -180,6 +181,7 @@ const TOTAL = Object.values(COUNTS).reduce((a, b) => a + b, 0)
 const LANES = [TOUR]
 
 export function World() {
+  useArcaniaArt()
   const t = useT()
   const [index, setIndex] = useState(0)
   const [auto, setAuto] = useState(true)
@@ -256,7 +258,7 @@ export function World() {
           {TOUR.map((p, i) =>
             near.has(i) ? (
               <div key={p.p} className="arc-world-shot" data-on={i === index} aria-hidden={i !== index}>
-                <img src={WORLD + 'places/' + p.p} alt={t(p.t)} decoding="async" draggable={false} />
+                <img src={art(WORLD + 'places/' + p.p)} alt={t(p.t)} decoding="async" draggable={false} />
               </div>
             ) : null,
           )}
@@ -271,7 +273,7 @@ export function World() {
         </div>
 
         <div className="arc-world-map" aria-label={t('Где на карте')} onPointerLeave={resume}>
-          {seen && <img src={WORLD + 'map.webp'} alt="" decoding="async" draggable={false} />}
+          {seen && <img src={art(WORLD + 'map.webp')} alt="" decoding="async" draggable={false} />}
           {WORLD_POINTS.map((p) => {
             const i = TOUR.findIndex((q) => q.t === p.t)
             return (
@@ -318,7 +320,7 @@ export function World() {
                       aria-label={t(p.t)}
                       tabIndex={copy ? -1 : 0}
                     >
-                      {seen && <img src={WORLD + 'thumbs/' + p.p} alt="" loading="lazy" decoding="async" draggable={false} />}
+                      {seen && <img src={art(WORLD + 'thumbs/' + p.p)} alt="" loading="lazy" decoding="async" draggable={false} />}
                     </button>
                   )
                 }),
