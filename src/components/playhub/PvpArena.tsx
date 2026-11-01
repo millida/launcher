@@ -12,6 +12,7 @@ import type { LobbyMode } from '../../state/lobbyMode'
 import { TIER_SERVER, kitIcon, modeTitle, tierRank, useTiers, type TierMode } from '../../state/tiers'
 import '../../styles/pixel/arena.css'
 import { useT } from '../../i18n'
+import { liveInterval } from '../../lib/liveInterval'
 
 /**
  * PvP-арена Millida (владелец 11.10.2026: «как в Dawn — выбор класса, сразу
@@ -85,19 +86,16 @@ function ArenaStatus({ uuid, launching, modes }: { uuid: string | null; launchin
         .catch(() => alive && setSt(null))
     }
     tick()
-    const id = window.setInterval(tick, 2500)
+    const stop = liveInterval(tick, 2500)
     return () => {
       alive = false
-      window.clearInterval(id)
+      stop()
     }
   }, [uuid])
   const timed = !!st?.since
   useEffect(() => {
     if (!timed) return
-    const id = window.setInterval(() => {
-      if (renderLive()) setNow(Date.now())
-    }, 1000)
-    return () => window.clearInterval(id)
+    return liveInterval(() => setNow(Date.now()), 1000)
   }, [timed])
   const kitName = st?.kit ? modeTitle(modes, st.kit) : ''
   const timer = st?.since ? clock(now - st.since) : ''
@@ -138,10 +136,7 @@ export function PvpArena() {
     const t = useTiers.getState()
     void t.load(nick)
     void t.loadLive()
-    const id = window.setInterval(() => {
-      if (renderLive()) void useTiers.getState().loadLive()
-    }, 30_000)
-    return () => window.clearInterval(id)
+    return liveInterval(() => void useTiers.getState().loadLive(), 30_000)
   }, [nick])
 
   useEffect(() => {

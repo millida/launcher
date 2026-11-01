@@ -35,6 +35,8 @@ pub(crate) struct DeltaEntry {
     pub(crate) end: u64,
     pub(crate) method: u16,
     pub(crate) dir: bool,
+    /// Index v2 only: SHA-256 of the unpacked file, recorded by the server when the pack was uploaded.
+    pub(crate) sha256: Option<[u8; 32]>,
 }
 
 #[derive(Debug)]
@@ -75,6 +77,26 @@ fn num(v: &Value) -> Option<u64> {
     v.as_u64()
 }
 
+/// 64 hex digits -> 32 bytes. Anything else is not a hash and the index is not used.
+pub(crate) fn parse_sha256(s: Option<&str>) -> Option<[u8; 32]> {
+    let s = s?;
+    if s.len() != 64 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+impl DeltaIndex {
+    /// Every file carries its hash: only then can a file be taken from anywhere but the archive itself.
+    pub(crate) fn fully_hashed(&self) -> bool {
+        self.entries.iter().filter(|e| !e.dir).all(|e| e.sha256.is_some())
+    }
+}
+
 /// Only names that the whole-archive unzip writes under the very same path
 /// are accepted, so both roads build one tree. Anything the unzip would
 /// normalise or skip sends the update down the full download.
@@ -107,8 +129,11 @@ pub(crate) fn parse_index(v: &Value, archive_size: u64) -> Result<DeltaIndex, St
     let mut files = HashSet::new();
     let mut dirs = HashSet::new();
     let mut declared = 0u64;
-    for row in rows {
-        let r = row.as_array().filter(|r| r.len() == 6).ok_or("строка оглавления неполная")?;
+    // Hashes may come as a seventh element of each row or, without touching the rows older launchers read, as a
+    // parallel top-level array `sha256` (same order, null for folders).
+    let side: Option<&Vec<Value>> = v["sha256"].as_array().filter(|a| a.len() == rows.len());
+    for (i, row) in rows.iter().enumerate() {
+        let r = row.as_array().filter(|r| r.len() == 6 || r.len() == 7).ok_or("строка оглавления неполная")?;
         let name = r[0].as_str().ok_or("в оглавлении запись без имени")?;
         let (rel, dir) = canonical_rel(name).ok_or_else(|| format!("путь «{}» распаковка записала бы иначе", name))?;
         let crc = num(&r[1]).and_then(|c| u32::try_from(c).ok()).ok_or("битая контрольная сумма в оглавлении")?;
@@ -116,13 +141,17 @@ pub(crate) fn parse_index(v: &Value, archive_size: u64) -> Result<DeltaIndex, St
             return Err(format!("битые размеры записи «{}»", name));
         };
         let method = num(&r[5]).and_then(|m| u16::try_from(m).ok()).ok_or("битый метод сжатия в оглавлении")?;
+        let sha256 = match r.get(6).or_else(|| side.and_then(|a| a.get(i))) {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(parse_sha256(v.as_str()).ok_or_else(|| format!("index has a broken hash for '{}'", name))?),
+        };
         let folded = rel.to_lowercase();
         let fresh = if dir { dirs.insert(folded) } else { files.insert(folded) };
         if !fresh && !dir {
             return Err(format!("в архиве дважды лежит «{}»", rel));
         }
         declared = declared.saturating_add(fsize);
-        entries.push(DeltaEntry { rel, raw_name: name.to_string(), crc, size: fsize, csize, offset, end: 0, method, dir });
+        entries.push(DeltaEntry { rel, raw_name: name.to_string(), crc, size: fsize, csize, offset, end: 0, method, dir, sha256 });
     }
     if files.iter().any(|f| dirs.contains(f)) {
         return Err("в архиве одно имя служит и файлом, и папкой".into());
@@ -187,13 +216,19 @@ pub(crate) fn make_plan(index: &DeltaIndex, installed: &Path) -> Result<Plan, St
 }
 
 pub(crate) fn groups(index: &DeltaIndex, fetch: &[usize]) -> Vec<Group> {
+    groups_with(index, fetch, MERGE_GAP, GROUP_CAP)
+}
+
+/// The same grouping with the limits chosen by the caller: a first install wants smaller groups, so that several run side
+/// by side and a cut connection costs a few megabytes instead of sixty-four.
+pub(crate) fn groups_with(index: &DeltaIndex, fetch: &[usize], merge_gap: u64, cap: u64) -> Vec<Group> {
     let mut sorted = fetch.to_vec();
     sorted.sort_by_key(|&i| index.entries[i].offset);
     let mut out: Vec<Group> = Vec::new();
     for i in sorted {
         let e = &index.entries[i];
         match out.last_mut() {
-            Some(g) if e.offset - g.to <= MERGE_GAP && e.end - g.from <= GROUP_CAP => {
+            Some(g) if e.offset - g.to <= merge_gap && e.end - g.from <= cap => {
                 g.to = e.end;
                 g.members.push(i);
             }
@@ -555,7 +590,7 @@ mod tests {
     }
 
     fn entry(rel: &str, size: u64, crc: u32) -> DeltaEntry {
-        DeltaEntry { rel: rel.into(), raw_name: rel.into(), crc, size, csize: size, offset: 0, end: 0, method: 0, dir: false }
+        DeltaEntry { rel: rel.into(), raw_name: rel.into(), crc, size, csize: size, offset: 0, end: 0, method: 0, dir: false, sha256: None }
     }
 
     /// entry vs the installed file -> action. Reusing a file that differs
@@ -759,6 +794,52 @@ mod tests {
         let many: Vec<Group> = (0..=MAX_REQUESTS as u64).map(|i| span(i, i + 1)).collect();
         let index = DeltaIndex { size: u64::MAX / 2, entries: Vec::new() };
         assert!(worth_it(&index, &many).is_err(), "тысячи мелких запросов дороже одного архива");
+    }
+
+    /// A row may carry the file's SHA-256 as a seventh element (index v2). Only an index with a hash for every file
+    /// lets a file be taken from anywhere but the archive itself; a broken hash refuses the whole index.
+    #[test]
+    fn index_rows_may_carry_a_sha256_and_a_broken_one_refuses_the_index() {
+        let sha = "ab".repeat(32);
+        let doc = |rows: Value| serde_json::json!({ "v": 1, "size": 1000, "directoryOffset": 900, "entries": rows });
+        let v2 = doc(serde_json::json!([["mods/a.jar", 1, 10, 10, 0, 0, sha], ["config/", 0, 0, 0, 100, 0]]));
+        let index = parse_index(&v2, 1000).expect("v2 rows parse");
+        assert_eq!(index.entries[0].sha256, Some([0xab; 32]));
+        assert!(index.fully_hashed(), "a folder needs no hash");
+
+        let v1 = doc(serde_json::json!([["mods/a.jar", 1, 10, 10, 0, 0]]));
+        assert!(!parse_index(&v1, 1000).unwrap().fully_hashed(), "an index without hashes is not fully hashed");
+
+        for (broken, why) in [("zz".repeat(32), "not hex"), ("ab".repeat(31), "too short"), ("AB".repeat(33), "too long")] {
+            let bad = doc(serde_json::json!([["mods/a.jar", 1, 10, 10, 0, 0, broken]]));
+            assert!(parse_index(&bad, 1000).is_err(), "{why}");
+        }
+
+        // the form that keeps 6-element rows for older launchers: a parallel array next to `entries`
+        let side = serde_json::json!({
+            "v": 1, "size": 1000, "directoryOffset": 900,
+            "entries": [["mods/a.jar", 1, 10, 10, 0, 0], ["config/", 0, 0, 0, 100, 0]],
+            "sha256": [sha, null]
+        });
+        let index = parse_index(&side, 1000).expect("the parallel array parses");
+        assert_eq!(index.entries[0].sha256, Some([0xab; 32]));
+        assert!(index.fully_hashed());
+        let short = serde_json::json!({ "v": 1, "size": 1000, "directoryOffset": 900, "entries": [["mods/a.jar", 1, 10, 10, 0, 0]], "sha256": [sha, sha] });
+        assert!(!parse_index(&short, 1000).unwrap().fully_hashed(), "an array that does not line up with the rows is not used");
+    }
+
+    /// The same grouping with a smaller cap: a first install runs several ranges side by side.
+    #[test]
+    fn a_smaller_cap_splits_a_run_into_more_requests() {
+        let index = DeltaIndex {
+            size: 400,
+            entries: (0..4).map(|i| DeltaEntry { offset: i * 100, end: (i + 1) * 100, ..entry(&format!("f{i}"), 50, 0) }).collect(),
+        };
+        let all = [0, 1, 2, 3];
+        assert_eq!(groups(&index, &all).len(), 1, "touching entries share a request");
+        let split = groups_with(&index, &all, 0, 200);
+        assert_eq!(split.len(), 2, "a cap of 200 bytes keeps two entries per request");
+        assert!(split.iter().all(|g| g.to - g.from <= 200));
     }
 
     /// Changed entries close together go in one request; far apart or past
