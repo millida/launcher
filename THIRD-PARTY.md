@@ -79,7 +79,7 @@ under their own license and do not make the program a derivative of them.
 
 ## Music
 
-The tracks in `public/music/` are works of other people under free licenses.
+The tracks in `media/music/` are works of other people under free licenses.
 The GPL does not apply to them:
 
 - "Chibi Ninja", "Jumpshot", "HHavok", "A Night Of Dizzy Spells":
@@ -99,7 +99,7 @@ Changes: the volume is leveled (EBU R128, −18 LUFS), and the files are re-enco
 
 ## Other resources
 
-- Background images and videos (`public/bg/`), block
+- Background images and videos (`public/bg/`, `media/bg/`), block
   icons (`public/block-icons/`), brand images: see `TRADEMARK.md`.
   Millida brand assets are not covered by the GPL.
 - Minecraft, Mojang/Microsoft resources, and CurseForge/Modrinth content

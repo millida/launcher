@@ -489,7 +489,7 @@ export function CaseReveal({
           <span className="rv2-halo" aria-hidden="true" />
           <span className={'rv2-chest' + (phase === 'burst' ? ' pop' : '')}>
             <span ref={chest$} className="rv2-hitbox">
-              <Chest3D tier={tier} tint={tint} mode={phase === 'hit' ? (hits ? 'shake' : 'ready') : 'open'} framing="hero" look="model" flatSize={300} noFlat />
+              <Chest3D tier={tier} tint={tint} mode={phase === 'hit' ? (hits ? 'shake' : 'ready') : 'open'} framing="hero" look="model" flatSize={300} noFlat holdShelf />
             </span>
             {/* Свет из щелей и трещины — сильнее с каждым ударом. */}
             <i className="rv2-leak" aria-hidden="true" />
@@ -665,7 +665,7 @@ function Deal({
               ) : null}
               <div className="rv3-flip">
                 <span className="rv3-back" aria-hidden="true">
-                  {done ? null : <Chest3D className="rv3-chest" tier={tier} tint={tint} mode={hot ? 'ready' : 'closed'} look="model" noFlat />}
+                  {done ? null : <Chest3D className="rv3-chest" tier={tier} tint={tint} mode={hot ? 'ready' : 'closed'} look="model" noFlat holdShelf />}
                 </span>
                 <span className="rv3-face">
                   <RewardCard r={r} />

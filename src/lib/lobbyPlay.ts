@@ -2,7 +2,7 @@ import { hasTauri } from '../ipc/tauri'
 import { PACK_ACCESS_PREFIX, installCatalogPack, loadProfileSettings } from '../ipc/commands'
 import { ensureVersionBuild, versionFps } from './versionBuild'
 import type { Profile } from '../ipc/commands'
-import { cancelPrelaunch, realLaunch, startPrelaunch } from './launch'
+import { cancelPrelaunch, realLaunch, startPrelaunch, withLaunchPrep } from './launch'
 import { quickJoin } from './joinServer'
 import { setScreen, showToast, useUi } from '../state/ui'
 import { useLobby } from '../state/lobbyMode'
@@ -47,10 +47,13 @@ export async function playMode(m: LobbyMode, profiles: Profile[]): Promise<void>
   if (targetsAnarchy(m)) return playAnarchy()
   if (m.kind === 'build') return launch(m.name)
   if (m.kind === 'version') {
-    // Сборка под версию — общая с каталогом режимов: Fabric, FPS-моды по
-    // тумблеру из каталога, мод косметики (lib/versionBuild.ts).
-    const name = await ensureVersionBuild(m.version, { fps: versionFps(m.version) })
-    if (name) launch(name)
+    // The version build is shared with the modes catalog: Fabric, FPS mods by the catalog's toggle,
+    // the cosmetics mod (lib/versionBuild.ts). It cannot be built without the core.
+    if (!hasTauri()) return
+    const prep = await withLaunchPrep('Minecraft ' + m.version, () => ensureVersionBuild(m.version, { fps: versionFps(m.version) }))
+    if (!prep) return
+    if (prep.value) launch(prep.value)
+    else showToast(t('Не получилось подготовить Minecraft {version}. Нажми «Играть» ещё раз.', { version: m.version }), 'error')
     return
   }
   if (m.kind === 'server') return quickJoin(m.ip, m.name, m.licensed, m.versions)

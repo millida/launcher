@@ -551,10 +551,12 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
 
     if (low.contains("оператив") || low.contains("памяти")) && reason != SYSTEM_MEMORY_REASON {
         let tuning = tune_profile(profile);
-        if let Some(mb) = heap_after_oom(tuned_ram_mb(profile, 0), tuning.total_ram_mb) {
+        // The step goes from the heap the game had: the build's own -Xmx and a pack's bounds included.
+        let pack_max = trusted_pack_launch_spec(profile).map_or(0, |s| s.max_ram_mb);
+        if let Some(mb) = oom_offer(launch_heap_of(profile, 0), tuning.total_ram_mb, pack_max) {
             actions.insert(
                 0,
-                CrashAction::new("set-ram", format!("Выделить {} ГБ памяти", mb / 1024), mb.to_string(), &tuning.reasons.join(". ")),
+                CrashAction::new("set-ram", format!("Выделить {} ГБ памяти", gb_label(mb)), mb.to_string(), &tuning.reasons.join(". ")),
             );
         }
     }
@@ -689,7 +691,7 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             Ok(format!("Мод «{}» отключён", file))
         }
         "update-loader" => {
-            let (id, _) = dep_arg(&arg)?;
+            let (id, range) = dep_arg(&arg)?;
             let mut all = load_profiles();
             let p = all.iter_mut().find(|p| p.name == profile).ok_or("Сборка не найдена")?;
             let loader = p.loader.clone().unwrap_or_default().to_lowercase();
@@ -698,11 +700,18 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             }
             // Закреплённая версия снимается: при запуске ядро поставит последнюю
             // стабильную для этой версии игры (install.rs, без закрепления).
-            let Some(old) = p.loader_version.take().filter(|v| !v.trim().is_empty()) else {
-                return Err("Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры".into());
-            };
-            save_profiles(&all)?;
-            Ok(format!("Загрузчик {} обновится при запуске (был {})", loader, old))
+            if let Some(old) = p.loader_version.take().filter(|v| !v.trim().is_empty()) {
+                save_profiles(&all)?;
+                return Ok(format!("Загрузчик {} обновится при запуске (был {})", loader, old));
+            }
+            // Unpinned builds used to keep whatever loader an older install left behind; the
+            // launch now moves them to the current one, unless even that is too old for the mod.
+            let builds = list_loader_versions(&loader, &p.version).await.unwrap_or_default();
+            match builds.iter().find(|b| b.recommended) {
+                Some(b) if version_satisfies(&b.version, &range) => Ok(format!("Загрузчик {} обновится до {} при запуске", loader, b.version)),
+                Some(_) => Err("Загрузчик сборки и так последний для этой версии игры — моду нужна другая версия игры".into()),
+                None => Err("Не получили список версий загрузчика — проверь интернет и попробуй ещё раз".into()),
+            }
         }
         "set-ram" => {
             let mb: u32 = arg.parse().map_err(|_| "Некорректный объём памяти".to_string())?;
@@ -710,7 +719,8 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
                 return Err("Такой объём памяти лаунчер не выставит".into());
             }
             set_profile_ram(&profile, mb)?;
-            Ok(format!("Сборке выделено {} ГБ", mb / 1024))
+            drop_own_heap_args(&profile);
+            Ok(format!("Сборке выделено {} ГБ", gb_label(mb)))
         }
         "install-deps" => {
             let audit = audit_deps(profile.clone()).await?;
@@ -789,9 +799,21 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
     }
 }
 
+/// Whole gigabytes for a button, rounded to the nearest: 8088 MB reads 8 GB, not 7 GB.
+fn gb_label(mb: u32) -> u32 {
+    (mb + 512) / 1024
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_button_rounds_to_the_nearest_gigabyte() {
+        for (mb, gb, why) in [(8088, 8, "the offer after 6040 MB read «7 ГБ»"), (6011, 6, "8 GB machine at its reserve"), (8192, 8, "whole gigabytes stay as they are"), (2560, 3, "a half rounds up")] {
+            assert_eq!(gb_label(mb), gb, "{why}");
+        }
+    }
 
     /// game version -> java major. A wrong answer here is offered to the player
     /// as a button that installs the wrong runtime and leaves the build broken.

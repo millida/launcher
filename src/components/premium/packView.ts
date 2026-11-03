@@ -52,8 +52,13 @@ export interface PackView {
 
 const packViewKey = (slug: string) => 'pack-view:' + slug
 
+/** A partner publishes a fix and expects players to see the new version within half a minute. */
+const PACK_VIEW_TTL_MS = 30_000
+
 export const loadPackView = (slug: string): Promise<PackView> =>
-  cachedCatalog(packViewKey(slug), () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)))
+  cachedCatalog(packViewKey(slug), () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)), {
+    ttlMs: PACK_VIEW_TTL_MS,
+  })
 
 export const forgetPackView = (slug: string): void => forgetCatalog(packViewKey(slug))
 
