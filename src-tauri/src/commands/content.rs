@@ -4,7 +4,7 @@ use crate::engine;
 
 #[tauri::command]
 pub fn core_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
+    env!("MILLIDA_VERSION").to_string()
 }
 
 #[tauri::command]
@@ -334,6 +334,13 @@ mod hosting_pack_tests {
 #[tauri::command]
 pub async fn scan_mod_safety(profile: String) -> Result<engine::SafetyReport, String> {
     engine::scan_safety(profile).await
+}
+
+/// Checks files the player picks in a system dialog the core opens. `None` means
+/// the dialog was dismissed.
+#[tauri::command]
+pub async fn scan_picked_files() -> Result<Option<engine::SafetyReport>, String> {
+    engine::scan_picked_files().await
 }
 
 /// Turns off the files named by the report. The webview passes back file names

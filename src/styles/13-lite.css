@@ -1,0 +1,96 @@
+/*
+ * Лёгкий режим (lib/liteMode.ts, 26.10.2026): класс `m-lite` на <html> ставится заранее по
+ * железу — прежде всего по видеокарте окна (встроенная Intel/AMD, старая дискретная),
+ * ещё Windows 10 с ≤8 ГБ, ≤4 ГБ, ≤2 ядра, программная графика, упавший WebGL — или выбором
+ * «Слабый ПК» в настройках (deviceTier.liteVerdict).
+ * Файл стоит последним в main.tsx: правила бьют остальные по порядку и по префиксу `html.m-lite`.
+ *
+ *  - стекло (backdrop-filter) выключено — на встроенной графике оно съедает кадры всех плашек;
+ *  - бесконечные украшательские анимации (лучи, искры, свечения, плавания) играют один раз
+ *    и останавливаются; загрузчики и скелетоны из списка ниже крутятся как прежде;
+ *  - видеофоны подменяет картинка (wallpaper: анимация по умолчанию выключена,
+ *    Arcania: постер вместо ролика) — это делает код, не CSS.
+ *
+ * Новый загрузчик с бесконечной анимацией добавляй в список: тест
+ * src/styles/lite-loaders.test.ts падает, если загрузчик по имени ключевого кадра там не назван.
+ */
+
+html.m-lite *,
+html.m-lite *::before,
+html.m-lite *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  animation-iteration-count: 1 !important;
+}
+
+/* Загрузчики, скелетоны и «печатает…»: показывают, что приложение живо. */
+html.m-lite :is(
+  .spin,
+  .login-code-wait,
+  .skin-loader,
+  .skin-body3d-slot.is-loading::after,
+  .skel::after,
+  .srv-ping-dot.loading::after,
+  .log-live-dot::after,
+  .cosmetic-wait,
+  .stage-spin,
+  .cape-load,
+  .mr-loadbar.on::after,
+  .mr-spin::before,
+  .skel-text,
+  .btn.skel-btn,
+  .ch-tile-load,
+  .fr-skel-ava,
+  .fr-skel-line,
+  .mm-dot,
+  .ml-panel .mpc-busy::before,
+  .ml-panel .mpc-skel-row i,
+  .milli-dots rect,
+  .ml-typing i,
+  .party-dots i,
+  .pab-spin,
+  .rv2-pips.wait > i,
+  .bs-spin
+) {
+  animation-iteration-count: infinite !important;
+}
+
+/* Системная настройка «меньше движения»: то же самое без стекла — ни одна петля не крутится, прокрутка без плавности. */
+@media (prefers-reduced-motion: reduce) {
+  html *,
+  html *::before,
+  html *::after {
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  html :is(
+    .spin,
+    .login-code-wait,
+    .skin-loader,
+    .skin-body3d-slot.is-loading::after,
+    .skel::after,
+    .srv-ping-dot.loading::after,
+    .log-live-dot::after,
+    .cosmetic-wait,
+    .stage-spin,
+    .cape-load,
+    .mr-loadbar.on::after,
+    .mr-spin::before,
+    .skel-text,
+    .btn.skel-btn,
+    .ch-tile-load,
+    .fr-skel-ava,
+    .fr-skel-line,
+    .mm-dot,
+    .ml-panel .mpc-busy::before,
+    .ml-panel .mpc-skel-row i,
+    .milli-dots rect,
+    .ml-typing i,
+    .party-dots i,
+    .pab-spin,
+    .rv2-pips.wait > i,
+    .bs-spin
+  ) {
+    animation-iteration-count: infinite !important;
+  }
+}
