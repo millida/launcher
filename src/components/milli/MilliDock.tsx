@@ -14,7 +14,7 @@ import { useBench } from '../../state/milliBench'
 import { MilliAva, MilliHead, MilliSafe, MilliScene } from './MilliStage'
 import { PxArt, type PxName } from './px'
 import { SUPPORT_URL, openExt } from '../../lib/api'
-import { LOADER_LABEL, MILLI_TEXT_MAX, isMilliSizeAsk, milliLeft, milliLook, milliPlanNumbers, milliPreviewOn, milliPreviewTier, milliResetText, setMilliPreviewTier } from '../../lib/milli'
+import { LOADER_LABEL, MILLI_TEXT_MAX, isMilliSizeAsk, milliLeft, milliLook, milliOutError, milliPlanNumbers, milliPreviewOn, milliPreviewTier, milliResetText, setMilliPreviewTier } from '../../lib/milli'
 import type { MilliError, MilliGreeting, MilliGreetingChip, MilliMessage } from '../../lib/milli'
 import { milliCue, type MilliMode } from './Milli'
 import { useHasMillida } from '../../state/auth'
@@ -47,6 +47,7 @@ import '../../styles/pixel/milli.css'
 // Анимации ленты и карточки (моушн-дизайнер): подключаются, как только файл появится.
 import.meta.glob('../../styles/pixel/milli-motion.css', { eager: true })
 import { intlTag, t, useT } from '../../i18n'
+import { liveInterval } from '../../lib/liveInterval'
 
 /** Правило 11: игроку не больше двух подсказок; «Отмени» не дублирует кнопку «Отменить» события. */
 function replyChips(m: MilliMessage): string[] {
@@ -177,8 +178,7 @@ function Hotbar() {
   const [press, setPress] = useState(-1)
   useEffect(() => {
     if (!open || hold) return
-    const id = window.setInterval(() => setSel((v) => (v + 1) % EXAMPLES.length), 2_600)
-    return () => window.clearInterval(id)
+    return liveInterval(() => setSel((v) => (v + 1) % EXAMPLES.length), 2_600)
   }, [open, hold])
   const pick = (i: number) => setSel(i)
   const cur = EXAMPLES[sel]!
@@ -488,8 +488,7 @@ function Thinking() {
   const editing = useBench((s) => !!s.head)
   useEffect(() => {
     const started = Date.now()
-    const id = window.setInterval(() => setElapsed(Date.now() - started), 1_000)
-    return () => window.clearInterval(id)
+    return liveInterval(() => setElapsed(Date.now() - started), 1_000)
   }, [])
   // «Понимаю запрос» сервер шлёт на любой ход; сборка — только когда пошли следующие этапы.
   const live = stages.some((st) => st.key !== 'plan')
@@ -608,7 +607,7 @@ function Hello({ mood }: { mood: MilliMode }) {
   useEffect(() => {
     if (!free || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
     let off: number | undefined
-    const tick = window.setInterval(() => {
+    const tick = liveInterval(() => {
       setTryOn(true)
       off = window.setTimeout(() => setTryOn(false), 2400)
     }, 9000)
@@ -617,7 +616,7 @@ function Hello({ mood }: { mood: MilliMode }) {
       off = window.setTimeout(() => setTryOn(false), 2400)
     }, 2500)
     return () => {
-      window.clearInterval(tick)
+      tick()
       window.clearTimeout(first)
       window.clearTimeout(off)
     }
@@ -768,11 +767,11 @@ function Panel() {
       away = el.scrollHeight - el.scrollTop - el.clientHeight > 80
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    const id = window.setInterval(() => {
+    const stopFollow = liveInterval(() => {
       if (!away && el.scrollHeight - el.scrollTop - el.clientHeight > 1) el.scrollTop = el.scrollHeight
     }, 200)
     return () => {
-      window.clearInterval(id)
+      stopFollow()
       el.removeEventListener('scroll', onScroll)
     }
   }, [pending])
@@ -780,6 +779,7 @@ function Panel() {
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
   const off = status && !status.enabled
   const blocked = status?.blocked
+  const shownError = error ?? (pending ? null : milliOutError(status))
   const body = !signed ? (
     <Gate />
   ) : off || blocked ? (
@@ -798,7 +798,7 @@ function Panel() {
         <Bubble key={m.id} m={m} last={!pending && !error && m === lastAssistant} cheer={mood === 'happy' && m === lastAssistant} asked={messages[i - 1]?.role === 'user' ? messages[i - 1]!.text : ''} />
       ))}
       {pending ? <Thinking /> : null}
-      {error && error.kind !== 'auth' ? <ErrorCard e={error} /> : null}
+      {shownError && shownError.kind !== 'auth' ? <ErrorCard e={shownError} /> : null}
     </>
   )
 

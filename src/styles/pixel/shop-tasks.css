@@ -1,0 +1,134 @@
+/* ============================================================
+   Задания магазина: «Подпишись на Telegram», «Вступи в Discord»
+   (переделка 26.10.2026, владелец: «некрасиво и непонятно — не видно, что
+   происходит, выполнено ли задание; выполненное должно пропадать»).
+
+   Плитка: знак сервиса, награда числом, полоса из трёх делений, одна строка и
+   одна главная кнопка. Рамка — сплошная ступенчатая по срезу (слой `.card`
+   из 12-pixel.css): цвет состояния ставится переменными `--px-ol` / `--px-ft`,
+   inset-теней и border здесь нет.
+   Высота плитки не зависит от состояния: строка занимает две строки всегда,
+   проверка и сообщения встают на то же место (правило §7 языка).
+   ============================================================ */
+
+.sq-sec { --sq-gap: 44px; }
+@container shop (max-width: 960px) { .sq-sec { --sq-gap: 22px; } }
+
+/* Свёртка всего блока, когда оба задания получены: высота уходит в ноль, а
+   отступ ленты (gap) гасится отрицательным полем — иначе после исчезновения
+   блока всё ниже прыгнуло бы на величину gap. */
+.sq-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.34s var(--m-ease-smooth), opacity 0.24s linear; }
+.sq-fold-in { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.sq-sec.is-fold { margin-bottom: calc(-1 * var(--sq-gap)); transition: margin-bottom 0.34s var(--m-ease-smooth); }
+.sq-sec.is-fold .sq-fold { grid-template-rows: 0fr; opacity: 0; }
+.sq-sec.is-fold .sq-fold-in { overflow: hidden; }
+
+.sq-fold-in > .sh-head { margin-bottom: 0; }
+.sq-fold-in > .sh-head h2 { font-size: 24px; font-weight: 900; letter-spacing: -0.02em; }
+@container shop (max-width: 960px) { .sq-fold-in > .sh-head h2 { font-size: 20px; } }
+
+.sq-total {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 8px;
+  background: var(--m-surface-2); color: var(--m-fg); font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums;
+  --px-n: 4px; --px-ol: transparent; --px-ft: var(--px-plate-t); --px-ft-w: 2px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+}
+:root:root .sq-total { clip-path: var(--px-4); }
+
+.sq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@container shop (max-width: 1000px) { .sq-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Осталась одна плитка — не растягивается на весь ряд. */
+.sq-grid > .sq-cell:only-child { grid-column: 1; }
+@container shop (max-width: 1000px) { .sq-grid > .sq-cell:only-child { grid-column: auto; } }
+
+/* Плитка сворачивается по высоте: одна колонка ряда не прыгает, пока уходит другая. */
+.sq-cell { display: grid; grid-template-rows: 1fr; min-width: 0; transition: grid-template-rows 0.34s var(--m-ease-smooth), opacity 0.24s linear; }
+.sq-cell > .sq-task { min-height: 0; }
+.sq-cell.is-leaving { grid-template-rows: 0fr; opacity: 0; }
+.sq-cell.is-leaving > .sq-task { overflow: hidden; padding-block: 0; }
+
+.sq-task {
+  --sq-brand: #2aabee;
+  --sq-edge: transparent;
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-areas: 'logo title prize' 'logo line line' 'foot foot foot';
+  column-gap: 14px; row-gap: 4px; align-items: center;
+  padding: 18px 16px 16px; min-width: 0;
+}
+.sq-task.is-discord { --sq-brand: #5865f2; }
+
+/* Грани плитки: сверху цвет сервиса (как «Предмет дня»), снизу тень подложки;
+   цвет состояния — сплошная обводка по всему силуэту. */
+:root:root .sq-task.card {
+  background-color: var(--m-surface);
+  --px-n: 10px;
+  --px-ol: var(--sq-edge); --px-ol-w: 2px;
+  --px-ft: var(--sq-brand); --px-ft-w: 5px; --px-fb: var(--px-plate-b); --px-fb-w: 3px;
+  --px-fl: transparent; --px-fr: transparent;
+  transition-property: background-color;
+}
+:root:root .sq-task.card.is-warn { --sq-edge: var(--m-warning); }
+:root:root .sq-task.card.is-bad { --sq-edge: var(--m-danger); }
+:root:root .sq-task.card.is-done {
+  --sq-edge: var(--m-accent);
+  --px-ft: var(--m-accent);
+  background-color: color-mix(in srgb, var(--m-accent) 18%, var(--m-surface));
+}
+
+.sq-logo {
+  grid-area: logo; display: grid; place-items: center; width: 64px; height: 64px;
+  background-color: var(--sq-brand); color: #fff;
+  --px-n: 5px; --px-ol: var(--px-btn-ol); --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
+}
+:root:root .sq-logo { clip-path: var(--px-5); }
+.sq-logo > svg { display: block; padding-bottom: 2px; }
+
+.sq-text { display: contents; }
+.sq-title { grid-area: title; min-width: 0; font-size: 20px; font-weight: 900; letter-spacing: -0.01em; line-height: 1.1; }
+/* Две строки зарезервированы: сообщение об ошибке не растягивает плитку. */
+.sq-line, .sq-wait { grid-area: line; align-self: start; height: 2.7em; font-size: 13px; line-height: 1.35; font-weight: 700; }
+.sq-line {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  color: var(--m-fg-muted);
+}
+.sq-line > svg.icon { display: inline-block; width: 14px; height: 14px; margin: 0 5px -2px 0; }
+.sq-task.is-warn .sq-line { color: var(--m-warning); }
+.sq-task.is-bad .sq-line { color: var(--m-danger); }
+.sq-task.is-done .sq-line { color: var(--m-accent); }
+
+/* Проверка идёт: шесть клеток зажигаются по очереди, ступеньками, без плавности. */
+.sq-wait { display: flex; align-items: center; gap: 5px; }
+.sq-wait > i { display: block; width: 9px; height: 9px; background: var(--sq-brand); opacity: 0.3; animation: sq-run 1.2s steps(1, end) infinite; animation-delay: calc(var(--i) * 0.2s); }
+@keyframes sq-run { 0% { opacity: 1; } 16.67%, 100% { opacity: 0.3; } }
+
+.sq-prize { grid-area: prize; display: inline-flex; align-items: center; gap: 7px; }
+.sq-prize > b { font-size: 32px; font-weight: 900; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sq-task.is-done .sq-prize { animation: sq-pop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 1; }
+.sq-task.is-done .sq-prize > b { color: var(--m-accent); }
+@keyframes sq-pop { 0% { transform: scale(0.7); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
+
+/* Полоса: привязка → подписка → проверка. Деление, которое сейчас ждёт, мигает ступенькой. */
+.sq-foot { grid-area: foot; margin-top: 10px; display: flex; align-items: center; gap: 14px; min-width: 0; }
+.sq-bar { flex: 1 1 0; min-width: 40px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.sq-bar > i { display: block; height: 10px; background: color-mix(in srgb, var(--m-fg) 16%, var(--m-surface)); }
+.sq-bar > i.on { background: var(--sq-brand); }
+.sq-task.is-done .sq-bar > i.on { background: var(--m-accent); }
+.sq-bar > i.now { animation: sq-blink 1s steps(1, end) infinite; }
+@keyframes sq-blink { 0% { background: var(--sq-brand); } 50% { background: color-mix(in srgb, var(--m-fg) 16%, var(--m-surface)); } }
+
+.sq-act { flex: none; display: flex; justify-content: flex-end; gap: 8px; min-height: 44px; align-items: center; }
+.sq-got { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 900; color: var(--m-accent); }
+.sq-got > svg.icon { width: 18px; height: 18px; }
+
+/* Нажатие «Проверить» не двигает соседей: недоступная кнопка остаётся на месте и тускнеет. */
+.sq-act .btn { white-space: nowrap; }
+.sq-act .btn:disabled { opacity: 0.55; cursor: default; }
+
+/* Подсветка при переходе из лобби («Забрать +300»): мигает яркость, а не тень —
+   тень срезается clip-path. */
+.sq-task.sh-flash { animation: sq-flash 1.4s linear 1; box-shadow: none; }
+@keyframes sq-flash { 0%, 100% { filter: none; } 20%, 60% { filter: brightness(1.4); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sq-fold, .sq-cell, .sq-sec.is-fold { transition: none; }
+  .sq-task.is-done .sq-prize, .sq-bar > i.now, .sq-wait > i, .sq-task.sh-flash { animation: none; }
+  .sq-wait > i:nth-child(odd) { opacity: 1; }
+}

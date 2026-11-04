@@ -65,6 +65,10 @@ body{
   min-height:100vh;transition:background-color 150ms ease,color 150ms ease;
 }
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+/* A hand over everything clickable, not only <button>. Plain selectors without :where/:has: the WebKit of
+   the Intel build (Safari 13) drops those rules, and an element's own rule further down still wins. */
+a[href],summary,select,input[type=checkbox],input[type=radio],[role=button],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=option],[role=menuitem]{cursor:pointer}
+button:disabled,[aria-disabled=true]{cursor:default}
 input,select{font:inherit;color:inherit}
 svg{flex-shrink:0}
 svg.icon{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

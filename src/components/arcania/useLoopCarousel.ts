@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useOffscreenPause } from '../shop/useOffscreen'
 
 /**
  * Endless carousel: the list is rendered three times and the position lives in the middle copy;
@@ -6,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
  */
 export function useLoopCarousel<T extends HTMLElement>(count: number, holdMs: (active: number) => number) {
   const rootRef = useRef<T>(null)
+  useOffscreenPause(rootRef)
   const [pos, setPos] = useState(count)
   const [animated, setAnimated] = useState(true)
   const [visible, setVisible] = useState(false)

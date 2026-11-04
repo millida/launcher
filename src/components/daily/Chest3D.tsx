@@ -3,6 +3,7 @@ import type { ChestTier } from '../../lib/rubies'
 import type { ChestLook, ChestMode, ChestScene } from './chestScene'
 import { ChestArt } from './ChestArt'
 import { gpuLite } from '../../lib/gpuLite'
+import { holdShelfChests } from './chestShelf'
 
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -21,6 +22,7 @@ export function Chest3D({
   tint,
   onOpened,
   noFlat,
+  holdShelf,
 }: {
   tier: ChestTier
   mode: ChestMode
@@ -33,11 +35,14 @@ export function Chest3D({
   onOpened?: () => void
   /** Пока грузится 3D — пусто, а не плоский рисунок (иначе в открытии мелькал чужой сундук). */
   noFlat?: boolean
+  /** A reveal scene: while it is up, the 3D chests of the shelf under it become a drawing (chestShelf). */
+  holdShelf?: boolean
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<ChestScene | null>(null)
   const openedRef = useRef(onOpened)
+  useEffect(() => (holdShelf ? holdShelfChests() : undefined), [holdShelf])
   openedRef.current = onOpened
   const modeRef = useRef(mode)
   modeRef.current = mode

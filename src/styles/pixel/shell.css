@@ -106,8 +106,6 @@
 .onb-scan { display: flex; align-items: center; gap: 10px; }
 .onb-scan .spin { width: 14px; height: 14px; flex: none; }
 
-/* Кнопка гостя — отступ вместо разделителя «или без сервисов». */
-.login-guest { margin-top: 14px; }
 .login-code-box .login-reg { margin-top: 2px; font-size: 12px; }
 
 /* ============================================================
@@ -275,3 +273,8 @@
 }
 .launch-toast ~ #toast { bottom: 88px; }
 @media (prefers-reduced-motion: reduce) { :root:root .toast.launch-toast { animation: none; } }
+
+/* Переход на другой экран рисуется в фоне (state/ui.setScreen): старый экран тускнеет через 80 мс,
+   если новый ещё не готов, — нажатие видно сразу, а быстрые переходы не мигают. */
+:root .content.nav-pending { cursor: progress; }
+:root .content.nav-pending > .screen { opacity: 0.55; transition: opacity 140ms linear 80ms; pointer-events: none; }
