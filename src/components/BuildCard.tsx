@@ -4,8 +4,9 @@ import { BuildIcon } from './playhub/BuildIcon'
 import { ContextMenu, type ContextItem } from './ContextMenu'
 import { LOADER_NAME, fmtPlaytime, whenText } from '../lib/format'
 import { useGuarded, useProfiles } from '../state/profiles'
-import { openBuildSettings, openBuildShare, type InstanceTab } from '../state/instance'
+import { openBuildGraphics, openBuildSettings, openBuildShare, type InstanceTab } from '../state/instance'
 import { realLaunch } from '../lib/launch'
+import { GRAPHICS_PRESETS_PUBLIC } from '../lib/graphicsRelease'
 import { useLobby } from '../state/lobbyMode'
 import { useGame } from '../state/game'
 import { uiConfirm } from '../state/confirm'
@@ -39,8 +40,8 @@ export function BuildCard({
 
   const remove = () => {
     void uiConfirm(
-      t('Сборка «{name}» удалится с модами, мирами и часами игры. Вернуть нельзя. Введи её название, чтобы удалить.', { name: p.name }),
-      { title: t('Удаление сборки'), confirmLabel: t('Удалить'), typeToConfirm: p.name },
+      t('Сборка «{name}» удалится с модами, мирами и часами игры. Вернуть нельзя.', { name: p.name }),
+      { title: t('Удаление сборки'), confirmLabel: t('Удалить') },
     ).then((ok) => {
       if (!ok) return
       if (!hasTauri()) {
@@ -71,6 +72,19 @@ export function BuildCard({
   const guarded = useGuarded(p.name)
   const allItems: ContextItem[] = [
     { id: 'play', label: running ? t('Запустить ещё копию') : t('Играть'), icon: 'i-play', onPick: () => play() },
+    ...(GRAPHICS_PRESETS_PUBLIC
+      ? [
+          {
+            id: 'graphics',
+            label: t('Графика'),
+            icon: 'i-settings',
+            onPick: () => {
+              setSelected(p.name)
+              openBuildGraphics(p.name)
+            },
+          },
+        ]
+      : []),
     { id: 'rename', label: t('Переименовать'), icon: 'i-edit', separated: true, onPick: () => go('opts', true) },
     {
       id: 'share',
@@ -119,6 +133,10 @@ export function BuildCard({
         data-private
         onClick={(e) => {
           setSelected(p.name)
+          if ((e.target as HTMLElement).closest('.build-gfx')) {
+            openBuildGraphics(p.name)
+            return
+          }
           if ((e.target as HTMLElement).closest('.build-cover')) {
             void refresh()
             play()
@@ -147,6 +165,13 @@ export function BuildCard({
         <span className="build-body">
           <b>{p.name}</b>
           <span className="meta">{LOADER_NAME(p) + ' · ' + p.version}</span>
+          {/* Рядом с «Играть» на обложке: сразу к пресетам графики сборки. */}
+          {GRAPHICS_PRESETS_PUBLIC ? (
+            <span className="build-gfx" data-nosound aria-label={t('Графика')}>
+              <Icon id="i-settings" />
+              {t('Графика')}
+            </span>
+          ) : null}
           {hours ? (
             <span className="meta build-hours">
               <Icon id="i-clock" />

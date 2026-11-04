@@ -8,6 +8,7 @@ import { useMemo } from 'react'
 import { anarchyServer, withAnarchyPromo, type AnarchyServer } from './ownServer'
 import { usePromo } from '../state/promo'
 import { t } from '../i18n'
+import { withLaunchPrep } from './launch'
 
 /**
  * A 1.21.4 build fits the 1.21 line for an ordinary server, but the anarchy
@@ -20,13 +21,17 @@ export async function playAnarchy(): Promise<void> {
     showToast(t('Подключение к серверу доступно в приложении'), 'error')
     return
   }
-  const build = await ensureVersionBuild(an.version, { fps: versionFps(an.version) })
-  if (!build) {
-    showToast(t('Не получилось подготовить Minecraft {version}. Нажми «Играть» ещё раз.', { version: an.version }), 'error')
-    return
-  }
-  useProfiles.getState().setSelected(build)
-  return quickJoin(an.addr, an.fullName, false, [an.version])
+  // A server join has no launch window of its own, so this one stays open until the game starts.
+  await withLaunchPrep(an.fullName, async (wanted) => {
+    const build = await ensureVersionBuild(an.version, { fps: versionFps(an.version) })
+    if (!wanted()) return
+    if (!build) {
+      showToast(t('Не получилось подготовить Minecraft {version}. Нажми «Играть» ещё раз.', { version: an.version }), 'error')
+      return
+    }
+    useProfiles.getState().setSelected(build)
+    await quickJoin(an.addr, an.fullName, false, [an.version], undefined, wanted)
+  })
 }
 
 const ONLINE_TTL = 60_000

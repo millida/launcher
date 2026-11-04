@@ -194,6 +194,13 @@ pub async fn repair_profile_files(app: AppHandle, profile: String) -> Result<Rep
     if known.is_some() {
         emit(&app, "content", 88.0, "Проверяем моды…");
         repair_content(&app, &profile, &mut report).await;
+        // A catalogue pack that launches by its own description is not ours to add a jar to.
+        if trusted_pack_launch_spec(&profile).is_none() {
+            emit(&app, "content", 96.0, "Проверяем моды…");
+            if let Err(e) = restore_millida_mod(&app, &profile).await {
+                warn(&app, &format!("Мод Millida не поставлен: {}", e));
+            }
+        }
     }
     check_cancel()?;
     emit(&app, "content", 100.0, "Готово");

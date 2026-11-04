@@ -1,16 +1,36 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
-import { moveInstance, planMoves } from '../ipc/commands'
-import type { MoveCandidate } from '../ipc/commands'
+import { closeMoveSources, moveBlockers, moveInstance, planMoves } from '../ipc/commands'
+import type { MoveBlocker, MoveCandidate } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { closeModal, showToast, useUi } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
 import { backdropClose } from '../lib/dismiss'
 import { track } from '../lib/telemetry'
-import { batchSummary, candidateMeta, confirmText, contentText, errorText, launchersText, rowVerdict } from '../lib/moves'
+import { liveInterval } from '../lib/liveInterval'
+import { batchSummary, candidateMeta, confirmText, contentText, errorText, launchersText, moveGate, rowVerdict } from '../lib/moves'
 import type { RowResult } from '../lib/moves'
-import { useT } from '../i18n'
+import { tx, useT } from '../i18n'
+
+/** The auto-close checkbox is remembered between openings of the window. */
+const AUTO_CLOSE_KEY = 'm-move-close-source'
+const readAutoClose = () => {
+  try {
+    return localStorage.getItem(AUTO_CLOSE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const saveAutoClose = (on: boolean) => {
+  try {
+    localStorage.setItem(AUTO_CLOSE_KEY, on ? '1' : '0')
+  } catch (e) {
+    console.warn('[move] the auto-close choice was not saved', e)
+  }
+}
+/** How often the panel asks the core whether the source launcher is still open. */
+const BLOCKERS_POLL_MS = 2000
 
 /** The core copies and checks worlds and mods against the source; the build in the other launcher is never changed. */
 export function MovePanel() {
@@ -20,6 +40,9 @@ export function MovePanel() {
   const [picked, setPicked] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState('')
   const [results, setResults] = useState<Record<string, RowResult>>({})
+  const [blockers, setBlockers] = useState<MoveBlocker[]>([])
+  const [autoClose, setAutoClose] = useState(readAutoClose)
+  const [closing, setClosing] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -39,16 +62,75 @@ export function MovePanel() {
   }, [])
 
   const moved = (c: MoveCandidate) => results[c.path]?.kind === 'ok'
-  const selected = (list || []).filter((c) => picked[c.path] && !moved(c))
+  const movable = (list || []).filter((c) => !moved(c))
+  const selected = movable.filter((c) => picked[c.path])
+  const allPicked = movable.length > 0 && selected.length === movable.length
+  const toggleAll = () => setPicked((p) => ({ ...p, ...Object.fromEntries(movable.map((c) => [c.path, !allPicked])) }))
+  const paths = selected.map((c) => c.path)
+  const pathsKey = paths.join('\n')
+  const gate = moveGate(blockers, autoClose)
+
+  // Whether the source launcher or a game from a picked build is open: the button wakes up once they close.
+  const askSeq = useRef(0)
+  const askBlockers = (forPaths: string[]) => {
+    const seq = ++askSeq.current
+    if (!hasTauri() || !forPaths.length) return setBlockers([])
+    moveBlockers(forPaths)
+      .then((b) => {
+        if (seq === askSeq.current) setBlockers(b)
+      })
+      .catch((e) => console.warn('[move-blockers]', e))
+  }
+  useEffect(() => {
+    if (busy) return
+    const forPaths = pathsKey ? pathsKey.split('\n') : []
+    const check = () => askBlockers(forPaths)
+    check()
+    const stop = liveInterval(check, BLOCKERS_POLL_MS)
+    window.addEventListener('focus', check)
+    return () => {
+      stop()
+      window.removeEventListener('focus', check)
+      askSeq.current++
+    }
+  }, [pathsKey, busy])
+
+  // The select-all row: indeterminate when only some builds are picked.
+  const allRef = useRef<HTMLInputElement>(null)
+  const somePicked = selected.length > 0 && !allPicked
+  useEffect(() => {
+    if (allRef.current) allRef.current.indeterminate = somePicked
+  }, [somePicked, list])
+
+  const toggleAutoClose = () => {
+    saveAutoClose(!autoClose)
+    setAutoClose(!autoClose)
+  }
 
   const run = async () => {
-    if (!selected.length || busy) return
+    if (!selected.length || busy || closing || !gate.ok) return
     const yes = await uiConfirm(confirmText(selected), {
       title: t('Скопировать в Millida'),
       confirmLabel: t('Скопировать'),
       danger: false,
     })
     if (!yes) return
+    if (autoClose && blockers.some((b) => !b.game)) {
+      setClosing(true)
+      try {
+        const left = await closeMoveSources(paths)
+        if (left.length) {
+          showToast(t('Не получилось закрыть {where} — закрой вручную', { where: launchersText(left.map((l) => ({ launcher: tx(l) }))) }), 'error')
+          return askBlockers(paths)
+        }
+      } catch (e) {
+        console.error('[move-close]', e)
+        showToast(errorText(e), 'error')
+        return
+      } finally {
+        setClosing(false)
+      }
+    }
     const batch: RowResult[] = []
     for (const c of selected) {
       setBusy(c.path)
@@ -84,6 +166,17 @@ export function MovePanel() {
   const where = launchersText(list)
   return (
     <>
+      {movable.length > 1 ? (
+        <label className="onb-row onb-all">
+          <input ref={allRef} type="checkbox" checked={allPicked} disabled={!!busy} onChange={toggleAll} />
+          <span className="onb-row-main">
+            <b>{t('Выбрать все')}</b>
+          </span>
+          <span className="pill">
+            {selected.length} / {movable.length}
+          </span>
+        </label>
+      ) : null}
       <div className="onb-scroll">
         {list.map((c) => {
           const r = results[c.path]
@@ -107,9 +200,30 @@ export function MovePanel() {
         })}
       </div>
       <div className="onb-inline">
-        <span className="faint-note">{t('Закрой {where} перед переносом', { where })}</span>
-        <button className="btn sm primary" onClick={() => void run()} disabled={!selected.length || !!busy}>
-          <Icon id="i-download" /> {busy ? t('Переносим…') : t('Перенести ({n})', { n: selected.length })}
+        <div className="onb-inline-start">
+          <label
+            className="faint-note"
+            role="checkbox"
+            aria-checked={autoClose}
+            tabIndex={0}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            onClick={(e) => {
+              e.preventDefault()
+              if (!busy && !closing) toggleAutoClose()
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== ' ' && e.key !== 'Enter') return
+              e.preventDefault()
+              if (!busy && !closing) toggleAutoClose()
+            }}
+          >
+            <span className={'chk' + (autoClose ? ' on' : '')}></span>
+            {t('Закрыть {where} перед переносом', { where })}
+          </label>
+          {!gate.ok ? <span className="faint-note">{t('Закрой {where} перед переносом', { where: gate.holder })}</span> : null}
+        </div>
+        <button className="btn sm primary" onClick={() => void run()} disabled={!selected.length || !!busy || closing || !gate.ok}>
+          <Icon id="i-download" /> {busy || closing ? t('Переносим…') : t('Перенести ({n})', { n: selected.length })}
         </button>
       </div>
     </>

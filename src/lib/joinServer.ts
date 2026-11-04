@@ -188,7 +188,7 @@ async function millidaSmpBuild(wanted: string[]): Promise<string | null> {
 }
 
 /** `ratedSlug` — the caller already knows the rating card (the website rating screen lists servers the local page has not loaded). */
-export async function quickJoin(ip: string, name: string, licensed?: boolean, versions?: string[], ratedSlug?: string): Promise<void> {
+export async function quickJoin(ip: string, name: string, licensed?: boolean, versions?: string[], ratedSlug?: string, stillWanted?: () => boolean): Promise<void> {
   if (!hasTauri()) {
     showToast(t('Подключение к серверу доступно в приложении'), 'error')
     return Promise.reject(new Error('no-tauri'))
@@ -216,6 +216,7 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
       : await buildForServer({ ip, name, licensed, versions: wanted }, wanted)
   if (!prof) return Promise.reject(new Error('no-profile'))
   if (!(await licenseGate(!!licensed))) return
+  if (stillWanted && !stillWanted()) return
   addServer(prof, name, ip).catch(() => {})
   rememberServerName(ip, name)
   return joinWithAuth(prof, null, ip, name)

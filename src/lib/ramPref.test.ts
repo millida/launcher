@@ -25,6 +25,7 @@ mock.module('../ipc/commands', () => ({
 }))
 
 const { adoptLegacyRam, buildRamGb, pendingLegacyRamMb, ramPrefKey, setBuildRamMb } = await import('./ramPref')
+const { jvmHeapMb, withoutHeapArgs } = await import('./jvmHeap')
 
 afterEach(() => {
   localStorage.removeItem(ramPrefKey('Big'))
@@ -80,4 +81,22 @@ describe('память сборки — одно значение в ядре', 
     writeFails = true
     expect(await setBuildRamMb('Big', 4096)).toBe(false)
   })
+})
+
+test('the -Xmx of the own JVM arguments of a build is read the way the JVM reads it', () => {
+  const cases: [string, number, string][] = [
+    ['', 0, 'no arguments'],
+    ['-XX:+UseG1GC', 0, 'no memory flag'],
+    ['-Xmx4G', 4096, 'gigabytes'],
+    ['-Xmx6144m -XX:+UseG1GC', 6144, 'megabytes'],
+    ['-Xmx2G -Xmx6G', 6144, 'the JVM keeps the last one'],
+    ['-Xmx4096', 0, 'no unit is bytes: not a heap the launcher can show'],
+    ['-Xms4G', 0, '-Xms alone sets no ceiling'],
+  ]
+  for (const [args, mb, why] of cases) expect(jvmHeapMb(args), why).toBe(mb)
+})
+
+test('removing the memory flags leaves the rest of the arguments as they were', () => {
+  expect(withoutHeapArgs('-Xms4G -Xmx8G -XX:+UseG1GC  -Dfoo=bar')).toBe('-XX:+UseG1GC -Dfoo=bar')
+  expect(withoutHeapArgs('-Xmx8G')).toBe('')
 })

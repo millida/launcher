@@ -234,9 +234,11 @@
 }
 .rw-card-pop {
   display: block;
-  animation:
-    rw-plop 0.52s ease-out both,
-    rw-glow 1.2s ease-out 0.28s both;
+  /* The glow around the item stands at its final look from the start: animating the drop-shadow
+     radius recomputes the blur of every card on every frame, which stalls the reveal on a slow core.
+     The drop of the card moves only transform. */
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--rw-it, var(--rw-tone)) 70%, transparent));
+  animation: rw-plop 0.52s ease-out both;
 }
 @keyframes rw-plop {
   0% {
@@ -258,17 +260,6 @@
   100% {
     transform: none;
     opacity: 1;
-  }
-}
-@keyframes rw-glow {
-  0% {
-    filter: drop-shadow(0 0 0 transparent);
-  }
-  30% {
-    filter: drop-shadow(0 0 34px var(--rw-it, var(--rw-tone)));
-  }
-  100% {
-    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--rw-it, var(--rw-tone)) 70%, transparent));
   }
 }
 .rw-card-bob {
