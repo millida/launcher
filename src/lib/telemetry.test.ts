@@ -30,13 +30,26 @@ type Batch = { events: Array<{ type: string; at?: number; appVersion?: string; d
 const sent: Batch[] = []
 let release: Array<(ok: boolean) => void> = []
 let manual = false
+/// What the core says about the disk; null means the core does not answer (the usual case in these tests).
+let disk: string | null = null
+/// Что ушло в файл настроек ядра (долговечные ключи).
+const prefWrites: Array<[string, string]> = []
+/// Содержимое файла настроек ядра, как его отдаёт uiPrefs.
+let diskPrefs: Record<string, string> = {}
 
 mock.module('../ipc/tauri', () => ({ hasTauri: () => true }))
 mock.module('../ipc/commands', () => ({
   appVersion: async () => '2.0.1',
   setGameTelemetry: async () => {},
+  uiPrefs: async () => diskPrefs,
+  setUiPref: async (k: string, v: string) => void prefWrites.push([k, v]),
   rememberInstallId: async () => {},
+  rememberBeat: async () => {},
   deviceSpecs: async () => ({ os: 'windows', os_version: '11', arch: 'x86_64' }),
+  diskKind: async () => {
+    if (disk === null) throw new Error('no core')
+    return disk
+  },
   millidaApi: (path: string, _m: string, body: Batch) => {
     if (path !== '/launcher/telemetry') return Promise.resolve({})
     sent.push(JSON.parse(JSON.stringify(body)))
@@ -58,6 +71,7 @@ describe('очередь телеметрии', () => {
     sent.length = 0
     release = []
     manual = false
+    disk = null
     for (const k of Object.keys(listeners)) delete listeners[k]
     ;(globalThis as { location: { hash: string } }).location.hash = ''
   })
@@ -92,6 +106,16 @@ describe('очередь телеметрии', () => {
     expect(all.filter((t) => t === 'screen_view').length).toBe(1)
     expect(all.filter((t) => t === 'app_exit').length).toBe(1)
     expect(all.filter((t) => t === 'app_start').length).toBe(1)
+  })
+
+  // Окно пересобирается из трея и после игры: это не запуск лаунчера, а его дашборды
+  // и время холодного старта не должны смешиваться с открытием прогретого окна.
+  test('пересобранное окно не считается запуском лаунчера', async () => {
+    await T.initTelemetry(250, true)
+    await tick()
+    const ev = sent.flatMap((b) => b.events)
+    expect(ev.some((e) => e.type === 'app_start')).toBe(false)
+    expect(ev.find((e) => e.type === 'perf' && e.data?.what === 'window_reopen')).toBeDefined()
   })
 
   test('каждое событие со временем и версией, которая его записала', async () => {
@@ -183,5 +207,70 @@ describe('очередь телеметрии', () => {
     T.track('ui_click', {})
     expect(store.get('m-telemetry-queue')).toBeUndefined()
     T.setTelemetryEnabled(true)
+  })
+
+  // Переустановка и выход из трея обнуляют localStorage, а отказ от статистики
+  // обязан пережить это: его зеркало лежит в файле ядра, и с диска оно главнее.
+  test('отказ от телеметрии записывается и в файл настроек ядра', async () => {
+    const { flushPrefs } = await import('./prefs')
+    prefWrites.length = 0
+    T.setTelemetryEnabled(false)
+    await flushPrefs()
+    expect(prefWrites).toContainEqual(['m-telemetry-off', '1'])
+    T.setTelemetryEnabled(true)
+    await flushPrefs()
+    expect(prefWrites).toContainEqual(['m-telemetry-off', '0'])
+  })
+
+  test('после переустановки отказ от телеметрии возвращается из файла ядра', async () => {
+    const { hydratePrefs } = await import('./prefs')
+    store.delete('m-telemetry-off')
+    diskPrefs = { 'm-telemetry-off': '1' }
+    await hydratePrefs()
+    diskPrefs = {}
+    expect(T.telemetryEnabled()).toBe(false)
+    T.setTelemetryEnabled(true)
+  })
+
+  test('тип диска уходит одним словом и один раз на версию', async () => {
+    disk = 'hdd'
+    await T.initTelemetry(1)
+    await tick()
+    await tick()
+    await T.flushTelemetry()
+    const perf = () => sent.flatMap((b) => b.events).filter((e) => e.type === 'perf' && e.data?.what === 'disk')
+    expect(perf().map((e) => e.data?.kind), 'один замер диска с ответом ядра').toEqual(['hdd'])
+    expect(store.get('m-disk-kind')).toBe('2.0.1:hdd')
+    // Второй запуск той же версии диск уже не спрашивает и не шлёт.
+    T.__resetTelemetryForTests()
+    sent.length = 0
+    disk = 'ssd'
+    await T.initTelemetry(1)
+    await tick()
+    await tick()
+    await T.flushTelemetry()
+    expect(perf().length, 'на той же версии повтора нет').toBe(0)
+    // Новая версия лаунчера — новый замер (диск могли сменить).
+    store.set('m-disk-kind', '2.0.0:hdd')
+    T.__resetTelemetryForTests()
+    await T.initTelemetry(1)
+    await tick()
+    await tick()
+    await T.flushTelemetry()
+    expect(perf().map((e) => e.data?.kind)).toEqual(['ssd'])
+  })
+
+  test('без ответа ядра и при выключенной статистике замера диска нет', async () => {
+    await T.initTelemetry(1)
+    await tick()
+    await tick()
+    await T.flushTelemetry()
+    expect(sent.flatMap((b) => b.events).some((e) => e.data?.what === 'disk')).toBe(false)
+    expect(store.get('m-disk-kind')).toBeUndefined()
+    T.__resetTelemetryForTests()
+    store.set('m-telemetry-off', '1')
+    disk = 'ssd'
+    await T.reportDiskKind()
+    expect(store.get('m-disk-kind'), 'статистика выключена — ядро даже не спрашивают').toBeUndefined()
   })
 })

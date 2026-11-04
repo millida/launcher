@@ -7,16 +7,34 @@ import { buildDiagnostics } from './diag'
 const LAUNCH_LOG = 'logs/launcher-latest.log'
 const GAME_LOG = 'logs/latest.log'
 
+// Text of the core's refusal to send an empty log (sharelog.rs, EMPTY_LOG): the next log is tried then.
+const EMPTY_LOG = 'Лог пустой'
+const isEmptyLog = (e: unknown) => String(e instanceof Error ? e.message : e).includes(EMPTY_LOG)
+
 export async function shareCrashLog(profile: string, crashLog?: string): Promise<string> {
-  if (crashLog) return shareLog(profile, crashLog)
-  const files = await listLogs(profile)
-  const file =
-    files.find((f) => f === LAUNCH_LOG) ??
-    files.find((f) => f === GAME_LOG) ??
-    files.find((f) => f.startsWith('logs/')) ??
-    files[0]
-  if (!file) throw new Error('Лога от этого запуска нет')
-  return shareLog(profile, file)
+  const files = await listLogs(profile).catch(() => [] as string[])
+  // Launch log, then the game's own, then any other log: an empty one (a game that died before
+  // writing anything) must not end the search while a crash report lies next to it.
+  const order = [
+    crashLog,
+    files.find((f) => f === LAUNCH_LOG),
+    files.find((f) => f === GAME_LOG),
+    ...files.filter((f) => f.startsWith('logs/')),
+    ...files,
+  ]
+  const tried = new Set<string>()
+  let sawEmpty = false
+  for (const file of order) {
+    if (!file || tried.has(file)) continue
+    tried.add(file)
+    try {
+      return await shareLog(profile, file)
+    } catch (e) {
+      if (!isEmptyLog(e)) throw e
+      sawEmpty = true
+    }
+  }
+  throw new Error(sawEmpty ? 'Логи этого запуска пустые — игра закрылась, ничего не записав' : 'Лога от этого запуска нет')
 }
 
 // A failed part is written into the report instead of being dropped: support

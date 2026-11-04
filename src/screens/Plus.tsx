@@ -17,6 +17,7 @@ import { useGameNick } from '../state/gameNick'
 import { useDaily } from '../state/daily'
 import { useUi } from '../state/ui'
 import { onRealtime } from '../lib/realtime'
+import { liveInterval } from '../lib/liveInterval'
 
 /**
  * Экран Millida PLUS в лаунчере. Пересобран 30.09.2026 вместе с
@@ -201,8 +202,7 @@ export function Plus({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (!on || hold || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const id = window.setInterval(() => setPrompt((v) => (v + 1) % PROMPTS().length), 2800)
-    return () => window.clearInterval(id)
+    return liveInterval(() => setPrompt((v) => (v + 1) % PROMPTS().length), 2800)
   }, [on, hold])
 
   const price = plus?.priceKopecks || (rules?.packs as { plus?: { priceKopecks?: number } } | undefined)?.plus?.priceKopecks || 0

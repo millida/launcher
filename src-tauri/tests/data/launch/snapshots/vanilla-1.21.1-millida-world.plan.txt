@@ -1,0 +1,14 @@
+# vanilla-1.21.1-millida-world
+route: version 1.21.1 + vanilla, java 21
+files: client 1, libraries 70, natives 0, log4j no, loader libraries 0
+checks: Plan { gate: None, token: None, pack_mod: None, mod_token: false, skin_server: Some("https://api.millida.net/v2/yggdrasil"), kill_switch: false }
+graph (first launch):
+  auth [net]
+  skin-server [net] <- auth
+  meta [client]
+  java-pick [java]
+  java [java] <- meta, java-pick
+  client [client] <- meta
+  libs [libs] <- meta
+  assets [assets] <- meta
+  mods [mods] <- skin-server

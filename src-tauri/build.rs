@@ -50,9 +50,25 @@ fn set(identifier: &str, description: &str, cmds: &[String]) -> String {
     )
 }
 
+const MAIN_THREAD_STACK: usize = 8 * 1024 * 1024;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=MILLIDA_MS_CLIENT_ID");
+    // media.rs reads it with option_env!: a release build with MEDIA_REMOTE=1 must not reuse an object built without it.
+    println!("cargo:rerun-if-env-changed=MEDIA_REMOTE");
     println!("cargo:rerun-if-changed=src/lib.rs");
+    // The release number lives in tauri.conf.json alone: stamping it into Cargo.toml changed the crate's
+    // metadata hash on every release, and with it the key of the incremental cache CI keeps between releases.
+    println!("cargo:rerun-if-changed=tauri.conf.json");
+    let conf: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string("tauri.conf.json").expect("tauri.conf.json")).expect("tauri.conf.json is not JSON");
+    let version = conf["version"].as_str().expect("tauri.conf.json has no version");
+    println!("cargo:rustc-env=MILLIDA_VERSION={version}");
+    // Tauri builds every async command's future on the main thread before a worker takes it, and the launch
+    // pipeline's futures put tens of KB per copy on the stack: Windows' default 1 MB main thread ran out on «Играть».
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        println!("cargo:rustc-link-arg-bins=/STACK:{}", MAIN_THREAD_STACK);
+    }
 
     let src = fs::read_to_string("src/lib.rs").expect("src/lib.rs");
     let all = registered_commands(&src);

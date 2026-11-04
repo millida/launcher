@@ -1246,7 +1246,7 @@ export const Milli = memo(function Milli({ mode = 'idle', size = 60, className =
     <span
       ref={rootRef}
       className={'milli milli-' + m + ' mm-s-' + state + (flipped ? ' mm-flipped' : '') + (className ? ' ' + className : '')}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, ...(onClick ? { cursor: 'pointer' } : null) }}
       aria-hidden="true"
       onClick={onClick}
       onDoubleClick={

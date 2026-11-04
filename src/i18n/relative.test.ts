@@ -132,3 +132,23 @@ describe('pluralIn picks the source form by the rules of the language', () => {
       expect(pluralIn(tag, n, 'one', 'few', 'many'), why).toBe(want)
     })
 })
+
+describe('WebKit without Intl.RelativeTimeFormat (macOS 10.15 and older)', () => {
+  const real = Intl.RelativeTimeFormat
+  const without = (run: () => void) => {
+    Object.defineProperty(Intl, 'RelativeTimeFormat', { value: undefined, configurable: true, writable: true })
+    try {
+      run()
+    } finally {
+      Object.defineProperty(Intl, 'RelativeTimeFormat', { value: real, configurable: true, writable: true })
+    }
+  }
+
+  test('a moment renders as a time or a date instead of taking the whole screen down', () => {
+    without(() => {
+      expect(relativeTimeIn('en-US', NOW - 5 * MIN, NOW), 'within a day the clock time says enough').toBe(new Date(NOW - 5 * MIN).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
+      expect(relativeTimeIn('en-US', NOW - 3 * DAY, NOW), 'older moments need the date').toBe(new Date(NOW - 3 * DAY).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }))
+      expect(relativeTimeIn('en-US', Number.NaN, NOW), 'an unknown moment stays empty').toBe('')
+    })
+  })
+})

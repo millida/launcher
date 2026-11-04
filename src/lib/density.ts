@@ -1,5 +1,6 @@
 import { hydratePrefs, readPref, writePref } from './prefs'
 import { t } from '../i18n'
+import { onMediaChange } from './mediaQuery'
 
 /// Размер интерфейса — атрибут `data-density` на <html>, правила в 07-density.css.
 
@@ -58,7 +59,7 @@ function watchAutoDensity() {
   const mq = wideQuery()
   if (!mq) return
   autoDensityWatched = true
-  mq.addEventListener('change', () => {
+  onMediaChange(mq, () => {
     if (storedDensity() === 'auto') writeDensityAttr(resolveDensity('auto'))
   })
 }
