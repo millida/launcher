@@ -100,4 +100,21 @@ describe('buildCrashReport', () => {
     expect(text).toContain('нет связи')
     expect(text).toContain('ОС: тестовая')
   })
+
+  test('пустой лог пропускается — берётся следующий, а API сервиса не дёргается ошибкой', async () => {
+    files = ['logs/latest.log', 'logs/launcher-latest.log', 'crash-reports/crash-1.txt']
+    shareImpl = async (_p, name) => {
+      if (name !== 'crash-reports/crash-1.txt') throw new Error('Лог пустой')
+      return 'https://millida.net/l/' + name
+    }
+    expect(await shareCrashLog('p')).toBe('https://millida.net/l/crash-reports/crash-1.txt')
+  })
+
+  test('все логи пусты — понятный текст вместо ошибки сервиса', async () => {
+    files = ['logs/latest.log']
+    shareImpl = async () => {
+      throw new Error('Лог пустой')
+    }
+    await expect(shareCrashLog('p')).rejects.toThrow('пустые')
+  })
 })

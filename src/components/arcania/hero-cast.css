@@ -4,27 +4,37 @@
   initial-value: transparent;
 }
 
-@property --glow-x {
-  syntax: '<percentage>';
-  inherits: true;
-  initial-value: 50%;
-}
-
 .arc-cast {
+  /* A card lights up on a fast ease-out and fades on the slow ease-in-out: an ease-in-out
+     start barely moves for the first ~150 ms, which read as the hover lagging. */
   --ease: cubic-bezier(0.65, 0, 0.35, 1);
   --ms: 520ms;
+  --ease-in: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ms-in: 260ms;
   position: relative;
-  transition:
-    --tint 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    --glow-x 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: --tint 260ms var(--ease-in);
 }
 
+/* No blur filter: re-blurring a layer this wide on every frame of a hover was what made it stutter.
+   The gradient fades on its own, it moves by translate on the compositor, and the box clips it
+   with soft side edges. */
 .arc-cast-glow {
   position: absolute;
   inset: 6% 2%;
+  overflow: hidden;
   pointer-events: none;
-  background: radial-gradient(48% 62% at var(--glow-x) 62%, color-mix(in srgb, var(--tint) 32%, transparent), transparent 72%);
-  filter: blur(36px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.arc-cast-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(48% 52% at 50% 58%, color-mix(in srgb, var(--tint) 30%, transparent), color-mix(in srgb, var(--tint) 12%, transparent) 45%, transparent 78%);
+  translate: calc(var(--glow-x, 50%) - 50%) 0;
+  transition: translate 380ms var(--ease-in);
+  will-change: translate;
 }
 
 .arc-cast-row {
@@ -36,6 +46,8 @@
 }
 
 .arc-card {
+  --t-ms: var(--ms);
+  --t-ease: var(--ease);
   container-type: size;
   position: relative;
   display: flex;
@@ -50,12 +62,24 @@
   color: #fff;
   font: inherit;
   transition:
-    border-color var(--ms) var(--ease),
-    box-shadow var(--ms) var(--ease),
-    translate var(--ms) var(--ease);
+    border-color var(--t-ms) var(--t-ease),
+    box-shadow var(--t-ms) var(--t-ease),
+    translate var(--t-ms) var(--t-ease);
+}
+
+.arc-card[data-lit],
+.arc-play:is(:hover, :focus-visible) {
+  --t-ms: var(--ms-in);
+  --t-ease: var(--ease-in);
 }
 
 .arc-card > * { pointer-events: none; }
+
+/* A class card is a button that starts the pack, like the play card; its light shows the focus. */
+.arc-class {
+  cursor: pointer;
+  outline: none;
+}
 
 .arc-card[data-lit] {
   border-color: color-mix(in srgb, var(--c) 70%, transparent);
@@ -72,7 +96,7 @@
   background:
     radial-gradient(80% 45% at 50% 100%, color-mix(in srgb, var(--c) 55%, transparent), transparent 72%),
     linear-gradient(180deg, transparent, color-mix(in srgb, color-mix(in srgb, var(--c) 50%, #111) 45%, transparent));
-  transition: opacity var(--ms) var(--ease);
+  transition: opacity var(--t-ms) var(--t-ease);
 }
 
 .arc-beam {
@@ -85,13 +109,17 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--c) 26%, transparent), transparent 70%);
   filter: blur(18px);
   opacity: 0;
-  transition: opacity var(--ms) var(--ease);
+  transition: opacity var(--t-ms) var(--t-ease);
   animation: arc-beam 3s ease-in-out infinite;
+  animation-play-state: paused;
 }
 
 @keyframes arc-beam { 50% { scale: 0.85 1; } }
 
 .arc-card[data-lit] :is(.arc-tint, .arc-beam) { opacity: 1; }
+
+/* The beam and the sparks of a dark card are invisible: they run only while it is lit. */
+.arc-card[data-lit] :is(.arc-beam, .arc-sparks i) { animation-play-state: running; }
 
 .arc-letter {
   position: absolute;
@@ -113,7 +141,7 @@
   inset: 0 0 36%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--c, #fff) 40%, transparent), transparent);
   opacity: 0;
-  transition: opacity var(--ms) var(--ease);
+  transition: opacity var(--t-ms) var(--t-ease);
 }
 
 .arc-card[data-lit] .arc-letter::before { opacity: 1; }
@@ -121,7 +149,7 @@
 .arc-letter-line {
   color: transparent;
   -webkit-text-stroke: 2px rgb(255 255 255 / 0.3);
-  transition: -webkit-text-stroke-color var(--ms) var(--ease);
+  transition: -webkit-text-stroke-color var(--t-ms) var(--t-ease);
 }
 
 .arc-card[data-lit] .arc-letter-line {
@@ -141,7 +169,7 @@
   mask-repeat: no-repeat;
   -webkit-mask-position: 0 0%;
   mask-position: 0 0%;
-  transition: -webkit-mask-position 700ms var(--ease), mask-position 700ms var(--ease);
+  transition: -webkit-mask-position calc(var(--t-ms) * 1.35) var(--t-ease), mask-position calc(var(--t-ms) * 1.35) var(--t-ease);
 }
 
 .arc-card[data-lit] .arc-letter-fill,
@@ -162,7 +190,9 @@
   height: var(--h);
   transform-origin: bottom center;
   filter: grayscale(1) brightness(0.55);
-  transition: filter var(--ms) var(--ease), scale var(--ms) var(--ease);
+  transition: filter var(--t-ms) var(--t-ease), scale var(--t-ms) var(--t-ease);
+  /* Its own layer: the filter and the scale then run on the GPU instead of repainting the image. */
+  will-change: filter, scale;
 }
 
 .arc-hero img {
@@ -184,7 +214,7 @@
   position: absolute;
   inset: 0;
   opacity: 0;
-  transition: opacity var(--ms) var(--ease);
+  transition: opacity var(--t-ms) var(--t-ease);
 }
 
 .arc-card[data-lit] .arc-sparks { opacity: 1; }
@@ -199,6 +229,7 @@
   box-shadow: 0 0 10px var(--c);
   opacity: 0;
   animation: arc-rise var(--t) linear var(--d) infinite;
+  animation-play-state: paused;
 }
 
 @keyframes arc-rise {
@@ -221,7 +252,7 @@
   text-shadow: 0 0 18px color-mix(in srgb, var(--c) 80%, transparent);
   opacity: 0;
   translate: 0 12px;
-  transition: opacity var(--ms) var(--ease), translate var(--ms) var(--ease);
+  transition: opacity var(--t-ms) var(--t-ease), translate var(--t-ms) var(--t-ease);
 }
 
 .arc-label small {

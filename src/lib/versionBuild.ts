@@ -3,6 +3,7 @@ import { hasTauri } from '../ipc/tauri'
 import {
   createProfile,
   fpsBoostState,
+  gfxPresetState,
   millidaModInstall,
   millidaModState,
   setFpsBoost,
@@ -10,6 +11,7 @@ import {
   toggleContent,
 } from '../ipc/commands'
 import { hardwareVideo } from './perfTier'
+import { GRAPHICS_PRESETS_PUBLIC } from './graphicsRelease'
 import type { Profile } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { MODRINTH_API, api, mirrorAsset } from './api'
@@ -81,6 +83,12 @@ export interface FpsMod {
 
 const modsCache = new Map<string, Promise<FpsMod[] | null>>()
 /**
+ * How long Modrinth is waited for. The request goes from the window, which has no timeout of its
+ * own, so a stalled connection would hold the build preparation for minutes. Past this it counts
+ * as a network error: null, and the core installs the FPS mods with its own client.
+ */
+const MODRINTH_WAIT_MS = 8000
+/**
  * FPS-моды с файлом под версию на Modrinth (под её загрузчик) — ровно то,
  * что поставит ядро. null — Modrinth не ответил: тогда ничего не обещаем,
  * но и не прячем режим — ядро само пропустит то, чего под версию нет.
@@ -89,8 +97,14 @@ export function fpsMods(version: string): Promise<FpsMod[] | null> {
   const hit = modsCache.get(version)
   if (hit) return hit
   const loader = versionLoader(version)
-  const get = <T,>(path: string) =>
-    fetch(MODRINTH_API + path).then((r) => (r.ok ? (r.json() as Promise<T>) : Promise.reject(r.status)))
+  const get = <T,>(path: string): Promise<T> => {
+    // The WebKit of the Intel build (Safari 13) has no AbortSignal.timeout.
+    const stop = typeof AbortController === 'function' ? new AbortController() : null
+    const timer = setTimeout(() => stop?.abort(), MODRINTH_WAIT_MS)
+    return fetch(MODRINTH_API + path, stop ? { signal: stop.signal } : undefined)
+      .then((r) => (r.ok ? (r.json() as Promise<T>) : Promise.reject(r.status)))
+      .finally(() => clearTimeout(timer))
+  }
   const one = async (slug: string): Promise<FpsMod | null> => {
     const files = await get<{ version_number: string; version_type?: string }[]>(
       '/v2/project/' +
@@ -111,6 +125,8 @@ export function fpsMods(version: string): Promise<FpsMod[] | null> {
     all.every((r) => r === null) ? null : all.flatMap((r) => (r && r.x ? [r.x] : [])),
   )
   modsCache.set(version, asked)
+  // A failed answer is not kept: the next visit to the version page asks again.
+  void asked.then((l) => l === null && modsCache.get(version) === asked && modsCache.delete(version))
   return asked
 }
 
@@ -154,6 +170,16 @@ async function fabricBuild(version: string, name: string): Promise<string | null
   return p.name
 }
 
+/**
+ * Новая ревизия набора («stale») переделывает режим в сборке: ставит закреплённые версии и
+ * убирает моды, которые прежний набор ставил сам. Новой сборке (игра ещё не запускалась —
+ * нет options.txt) это можно; сыгранная не меняется молча, её набор обновляет сам игрок
+ * через «Оптимизировать мои сборки». Нет ответа ядра о сборке — считаем её сыгранной.
+ */
+export function fpsTopUpAllowed(st: { stale: boolean }, gfx: { fresh: boolean } | null): boolean {
+  return st.stale && gfx?.fresh === true
+}
+
 /** FPS-моды: включить (поставить недостающие) или выключить без удаления. */
 async function applyFps(profile: string, on: boolean): Promise<void> {
   const st = await fpsBoostState(profile)
@@ -161,7 +187,8 @@ async function applyFps(profile: string, on: boolean): Promise<void> {
     await setFpsBoost(profile, true, true, await hardwareVideo())
     return
   }
-  if (on && st.stale) await setFpsBoost(profile, true, true, await hardwareVideo())
+  if (on && st.stale && (!GRAPHICS_PRESETS_PUBLIC || fpsTopUpAllowed(st, await gfxPresetState(profile).catch(() => null))))
+    await setFpsBoost(profile, true, true, await hardwareVideo())
   // Режим уже включён: его моды могли быть выключены этим же переключателем.
   for (const file of st.mods) await toggleContent(profile, 'mod', file, on).catch(() => {})
 }
@@ -177,17 +204,36 @@ async function ensureCosmetics(profile: string): Promise<void> {
  * сборки или null (браузер без ядра, ошибка создания). Моды FPS и косметики —
  * по возможности: их ошибка не мешает играть.
  */
-export async function ensureVersionBuild(version: string, opts: { fps: boolean; name?: string }): Promise<string | null> {
-  if (!hasTauri()) return null
+export function ensureVersionBuild(version: string, opts: { fps: boolean; name?: string }): Promise<string | null> {
+  if (!hasTauri()) return Promise.resolve(null)
+  const build = opts.name ?? versionBuildName(version)
+  return sharedPreparation(build, () => prepareVersionBuild(version, build, opts.fps))
+}
+
+const preparing = new Map<string, Promise<string | null>>()
+
+/**
+ * Cancelling a launch does not stop the preparation behind it, so the next Play joins the one
+ * still running: two of them would write the mods of one build at the same time.
+ */
+export function sharedPreparation(build: string, work: () => Promise<string | null>): Promise<string | null> {
+  const running = preparing.get(build)
+  if (running) return running
+  const run = work().finally(() => preparing.delete(build))
+  preparing.set(build, run)
+  return run
+}
+
+async function prepareVersionBuild(version: string, build: string, wantFps: boolean): Promise<string | null> {
   let name: string | null
   try {
-    name = await fabricBuild(version, opts.name ?? versionBuildName(version))
+    name = await fabricBuild(version, build)
   } catch (e) {
     console.error('[version-build] create', version, e)
     return null
   }
   if (!name) return null
-  const fps = opts.fps && (await fpsAvailable(version))
+  const fps = wantFps && (await fpsAvailable(version))
   await applyFps(name, fps).catch((e) => console.error('[version-build] fps', e))
   await ensureCosmetics(name).catch((e) => console.error('[version-build] cosmetics', e))
   return name

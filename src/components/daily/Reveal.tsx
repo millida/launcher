@@ -76,7 +76,7 @@ function Card({ reward, plus, index }: { reward: Reward; plus?: boolean; index: 
           </span>
         ) : null}
         <span className="rv-card-art">
-          <RewardArt reward={reward} size={84} />
+          <RewardArt reward={reward} size={84} inScene />
           {reward.kind === 'ITEM' || reward.kind === 'FRAGMENTS' ? <RarityChip rarity={rewardRarity(reward)} /> : null}
         </span>
         <b className="rv-card-label">
@@ -263,7 +263,7 @@ export function Reveal({
     >
       {chest ? (
         <div className="rv-stage">
-          <Chest3D tier={tier} mode={mode} framing="reveal" onOpened={onOpened} />
+          <Chest3D tier={tier} mode={mode} framing="reveal" onOpened={onOpened} holdShelf />
         </div>
       ) : null}
 
@@ -300,7 +300,7 @@ export function Reveal({
             <span className="rv-missed-row">
               {missed.map((r, i) => (
                 <span key={i} className="rv-missed-item" style={{ '--rv-tone': rarityTone(r) } as CSSProperties} title={rewardTitle(r)}>
-                  <RewardArt reward={r} size={56} />
+                  <RewardArt reward={r} size={56} inScene />
                   <b>{rewardLabel(r)}</b>
                 </span>
               ))}

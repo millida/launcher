@@ -185,12 +185,16 @@ fn compare_contents(src_root: &Path, dst_root: &Path, m: &Manifest) -> Result<()
     Ok(())
 }
 
+/// Whether `process` is the source launcher itself, by its process name.
+fn is_launcher_process(kind: MoveSource, process: &str) -> bool {
+    let name = process.to_lowercase();
+    kind.process_names().contains(&name.strip_suffix(".exe").unwrap_or(&name))
+}
+
 /// Whether a running process stops the move: the source launcher itself
 /// (it rewrites its instance files on exit) or a game started from this build.
 pub(crate) fn process_blocks(kind: MoveSource, process: &str, cmdline: &str, instance: &str) -> bool {
-    let name = process.to_lowercase();
-    let name = name.strip_suffix(".exe").unwrap_or(&name);
-    if kind.process_names().contains(&name) {
+    if is_launcher_process(kind, process) {
         return true;
     }
     let norm = |s: &str| s.replace('\\', "/").to_lowercase();
@@ -198,28 +202,187 @@ pub(crate) fn process_blocks(kind: MoveSource, process: &str, cmdline: &str, ins
     !inst.is_empty() && norm(cmdline).contains(inst.trim_end_matches('/'))
 }
 
-fn running_blockers(kind: MoveSource, dir: &Path) -> Vec<String> {
+/// What keeps a build from moving right now. The launcher (`game: false`) can be asked to quit
+/// for the player; a game started from the build never is, its world is open.
+#[derive(Clone, serde::Serialize, PartialEq, Eq, Debug)]
+pub struct MoveBlocker {
+    pub label: String,
+    pub game: bool,
+}
+
+pub(crate) fn blocker_for(kind: MoveSource, process: &str) -> MoveBlocker {
+    if is_launcher_process(kind, process) {
+        MoveBlocker { label: kind.label().to_string(), game: false }
+    } else {
+        MoveBlocker { label: "Minecraft из этой сборки".to_string(), game: true }
+    }
+}
+
+fn process_list() -> sysinfo::System {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, UpdateKind};
     let mut sys = sysinfo::System::new();
     sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always));
+    sys
+}
+
+/// Every running process that holds the build in `dir`.
+fn holders(sys: &sysinfo::System, kind: MoveSource, dir: &Path) -> Vec<(sysinfo::Pid, MoveBlocker)> {
     let inst = dir.to_string_lossy().to_string();
-    let mut out: Vec<String> = vec![];
-    for p in sys.processes().values() {
+    let mut out = vec![];
+    for (pid, p) in sys.processes() {
         let name = p.name().to_string_lossy().to_string();
         let cmd = p.cmd().iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ");
-        if !process_blocks(kind, &name, &cmd, &inst) {
-            continue;
-        }
-        let what = if kind.process_names().contains(&name.to_lowercase().trim_end_matches(".exe")) {
-            kind.label().to_string()
-        } else {
-            "Minecraft из этой сборки".to_string()
-        };
-        if !out.contains(&what) {
-            out.push(what);
+        if process_blocks(kind, &name, &cmd, &inst) {
+            out.push((*pid, blocker_for(kind, &name)));
         }
     }
     out
+}
+
+fn running_blockers(kind: MoveSource, dir: &Path) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for (_, b) in holders(&process_list(), kind, dir) {
+        if !out.contains(&b.label) {
+            out.push(b.label);
+        }
+    }
+    out
+}
+
+/// Builds from the list of found ones, with their launcher; anything else is skipped.
+fn move_sources(paths: &[String]) -> Vec<(MoveSource, PathBuf)> {
+    paths
+        .iter()
+        .map(PathBuf::from)
+        .filter(|d| is_vouched(d))
+        .filter_map(|d| move_source_kind(&d).map(|k| (k, d)))
+        .collect()
+}
+
+/// What holds the picked builds right now, each blocker once. The move panel polls it to keep
+/// its button off while a source launcher or a game from one of the builds is open.
+pub fn move_blockers(paths: Vec<String>) -> Vec<MoveBlocker> {
+    let sys = process_list();
+    let mut out: Vec<MoveBlocker> = vec![];
+    for (kind, dir) in move_sources(&paths) {
+        for (_, b) in holders(&sys, kind, &dir) {
+            if !out.contains(&b) {
+                out.push(b);
+            }
+        }
+    }
+    out
+}
+
+const CLOSE_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+const CLOSE_POLL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Asks the launchers that hold the picked builds to quit, the way their own close button does,
+/// and waits for them. Never kills a process: Prism writes its files on the way out. A game
+/// started from a build is left alone. Returns the launchers still running, empty when all quit.
+pub fn close_move_sources(paths: Vec<String>) -> Vec<String> {
+    let sources = move_sources(&paths);
+    let launchers = |sys: &sysinfo::System| {
+        let mut out: Vec<(sysinfo::Pid, String)> = vec![];
+        for (kind, dir) in &sources {
+            for (pid, b) in holders(sys, *kind, dir) {
+                if !b.game && !out.iter().any(|(p, _)| *p == pid) {
+                    out.push((pid, b.label));
+                }
+            }
+        }
+        out
+    };
+    let sys = process_list();
+    for (pid, _) in launchers(&sys) {
+        quit::ask(&sys, pid);
+    }
+    let deadline = std::time::Instant::now() + CLOSE_WAIT;
+    loop {
+        let left = launchers(&process_list());
+        if left.is_empty() || std::time::Instant::now() >= deadline {
+            let mut labels: Vec<String> = vec![];
+            for (_, l) in left {
+                if !labels.contains(&l) {
+                    labels.push(l);
+                }
+            }
+            return labels;
+        }
+        std::thread::sleep(CLOSE_POLL);
+    }
+}
+
+/// The polite quit of another program, per system: what its own close button would do.
+mod quit {
+    pub(super) fn ask(sys: &sysinfo::System, pid: sysinfo::Pid) {
+        if os::ask(pid.as_u32()) {
+            return;
+        }
+        #[cfg(unix)]
+        {
+            if let Some(p) = sys.process(pid) {
+                let _ = p.kill_with(sysinfo::Signal::Term);
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = sys;
+        }
+    }
+
+    /// WM_CLOSE to every visible top-level window of the process, as if its title bar X was
+    /// pressed. Nothing is killed when the program has no window or ignores the request.
+    #[cfg(windows)]
+    mod os {
+        use windows_sys::Win32::Foundation::{HWND, LPARAM};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE};
+
+        struct Search {
+            pid: u32,
+            closed: bool,
+        }
+
+        // Called by the system for every top-level window; never stops early.
+        unsafe extern "system" fn each(hwnd: HWND, param: LPARAM) -> i32 {
+            // SAFETY: `param` is the address of the `Search` on the stack of `ask`, which outlives
+            // the EnumWindows call that runs this callback on the same thread.
+            let search = unsafe { &mut *(param as *mut Search) };
+            let mut owner: u32 = 0;
+            // SAFETY: plain query on a window handle the system just gave us.
+            unsafe { GetWindowThreadProcessId(hwnd, &mut owner) };
+            // SAFETY: same handle; posting WM_CLOSE only queues a message for its owner.
+            if owner == search.pid && unsafe { IsWindowVisible(hwnd) } != 0 && unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) } != 0 {
+                search.closed = true;
+            }
+            1
+        }
+
+        pub(super) fn ask(pid: u32) -> bool {
+            let mut search = Search { pid, closed: false };
+            // SAFETY: the callback only touches `search`, which lives until this call returns.
+            unsafe { EnumWindows(Some(each), &mut search as *mut Search as LPARAM) };
+            search.closed
+        }
+    }
+
+    /// The same request the Dock's Quit sends: the app saves and exits on its own.
+    #[cfg(target_os = "macos")]
+    mod os {
+        use objc2_app_kit::NSRunningApplication;
+
+        pub(super) fn ask(pid: u32) -> bool {
+            NSRunningApplication::runningApplicationWithProcessIdentifier(pid as libc::pid_t).is_some_and(|app| app.terminate())
+        }
+    }
+
+    /// SIGTERM is the polite quit on Linux; the caller sends it.
+    #[cfg(not(any(windows, target_os = "macos")))]
+    mod os {
+        pub(super) fn ask(_pid: u32) -> bool {
+            false
+        }
+    }
 }
 
 fn sibling(dir: &Path, tag: &str) -> PathBuf {
@@ -473,6 +636,21 @@ mod tests {
         ];
         for (kind, name, cmd, want, why) in cases {
             assert_eq!(process_blocks(kind, name, cmd, inst), want, "{why}");
+        }
+    }
+
+    /// The launcher is what Millida may ask to quit; anything else that holds the build is the game.
+    #[test]
+    fn blocker_tells_launcher_from_game() {
+        let cases = [
+            (MoveSource::Prism, "prismlauncher.exe", false, "Prism Launcher", "Prism on Windows"),
+            (MoveSource::Prism, "PrismLauncher", false, "Prism Launcher", "Prism on Linux"),
+            (MoveSource::ModrinthApp, "Modrinth App", false, "Modrinth App", "Modrinth App on macOS"),
+            (MoveSource::MultiMc, "MultiMC.exe", false, "MultiMC", "MultiMC"),
+            (MoveSource::Prism, "javaw.exe", true, "Minecraft из этой сборки", "the game is never closed"),
+        ];
+        for (kind, name, game, label, why) in cases {
+            assert_eq!(blocker_for(kind, name), MoveBlocker { label: label.to_string(), game }, "{why}");
         }
     }
 
