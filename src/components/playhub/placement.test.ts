@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ANARCHY_CELLS, FY_HEAD_CELLS, ROW, headCells, libraryShelf, modesShown, shelfOrder, shownCount, withPrison } from './placement'
+import { ANARCHY_CELLS, FY_HEAD_CELLS, ROW, headCells, leadFirst, libraryShelf, modesShown, shelfOrder, shownCount, withPrison } from './placement'
 import { ANARCHY } from '../../lib/ownServer'
 import { ANARCHY_ID, DEFAULT_PROMO } from '../../state/promo'
 
@@ -80,6 +80,19 @@ describe('«Сборки» row of the library', () => {
   for (const [input, want, why] of cases)
     test(why, () => {
       expect(libraryShelf(input).map((p) => p.slug), why).toEqual(want)
+    })
+})
+
+describe('lead pack of the «Ещё от…» row', () => {
+  const packs = (...slugs: string[]) => slugs.map((slug) => ({ slug }))
+  const cases: Array<[string[], string, string[], string]> = [
+    [['arcania', 'arcania-2', 'atm10'], 'arcania-2', ['arcania-2', 'arcania', 'atm10'], 'the partner asked for the new Arcania in first place, ahead of the protected 1.4'],
+    [['arcania', 'atm10'], 'arcania-2', ['arcania', 'atm10'], 'on the page of Arcania 2.0 itself it is not in the row: the others keep their order'],
+    [['atm10', 'tlou'], 'arcania', ['atm10', 'tlou'], 'another partner without the lead pack sees the row unchanged'],
+  ]
+  for (const [input, lead, want, why] of cases)
+    test(why, () => {
+      expect(leadFirst(packs(...input), lead).map((p) => p.slug), why).toEqual(want)
     })
 })
 

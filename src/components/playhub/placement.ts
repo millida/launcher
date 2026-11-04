@@ -45,6 +45,10 @@ export function libraryShelf<T extends { preview?: boolean; coverUrl?: string | 
   return [...packs.filter((p) => p.preview), ...packs.filter((p) => !p.preview && !!p.coverUrl)]
 }
 
+export function leadFirst<T extends { slug: string }>(packs: readonly T[], lead: string): T[] {
+  return [...packs.filter((p) => p.slug === lead), ...packs.filter((p) => p.slug !== lead)]
+}
+
 /**
  * How many shelf tiles to show. Unfolded, «Свернуть» must not sit alone in the
  * last row, so the weakest mode gives up its cell.
