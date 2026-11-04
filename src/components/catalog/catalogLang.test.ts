@@ -15,6 +15,7 @@ describe('withCatalogLang', () => {
     { why: 'Turkish is a public interface language with its own catalogue text', path: '/catalog/items/sodium', locale: 'tr', want: '/catalog/items/sodium?lang=tr' },
     { why: 'Spanish is a public interface language with its own catalogue text', path: '/catalog/items/sodium', locale: 'es', want: '/catalog/items/sodium?lang=es' },
     { why: 'Brazilian Portuguese keeps its region tag, the server accepts pt-BR as is', path: '/catalog/listing?section=mods', locale: 'pt-BR', want: '/catalog/listing?section=mods&lang=pt-BR' },
+    { why: 'Ukrainian sends itself: the server reads it as the ruble market where Russian packs are sold', path: '/catalog/items/arcania-2', locale: 'uk', want: '/catalog/items/arcania-2?lang=uk' },
     { why: 'an interface without a catalogue translation falls back to English like the UI itself', path: '/catalog/authors/x', locale: 'fr', want: '/catalog/authors/x?lang=en' },
     { why: 'a right-to-left interface without a catalogue translation also reads English', path: '/catalog/items/sodium', locale: 'ar', want: '/catalog/items/sodium?lang=en' },
   ]

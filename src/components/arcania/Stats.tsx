@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useT } from '../../i18n'
 import { CAST, STATS, type ClassCard } from './content'
 import { RollingNumber } from './RollingNumber'
+import { useOffscreenPause } from '../shop/useOffscreen'
 import './stats.css'
 
 const CLASSES = CAST.filter((c): c is ClassCard => !('play' in c))
@@ -17,6 +18,7 @@ const WORD_SPARKS = [
 export function Stats() {
   const t = useT()
   const ref = useRef<HTMLDListElement>(null)
+  const paused = useOffscreenPause<HTMLElement>()
   const [seen, setSeen] = useState(false)
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export function Stats() {
   }, [])
 
   return (
-    <section className="arc-stats">
+    <section ref={paused} className="arc-stats">
       <p className="arc-stats-lead">
         {t('Arcania — сборка, где ты сам выбираешь путь: стань')}{' '}
         {CLASSES.map((c, i) => (

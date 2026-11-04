@@ -1,6 +1,8 @@
-import { useState, type CSSProperties } from 'react'
+import { memo, useState, type CSSProperties } from 'react'
 import { useT } from '../../i18n'
-import { ART, CAST, type ClassCard } from './content'
+import { CAST, art, type ClassCard } from './content'
+import { useArcaniaArt } from './useArcaniaArt'
+import { useOffscreenPause } from '../shop/useOffscreen'
 import './hero-cast.css'
 
 const SPARKS = [
@@ -12,7 +14,9 @@ const SPARKS = [
 ] as const
 
 export function HeroCast({ installed, onPlay }: { installed: boolean; onPlay: () => void }) {
+  useArcaniaArt()
   const t = useT()
+  const paused = useOffscreenPause<HTMLDivElement>()
   const [lit, setLit] = useState<number | null>(null)
   const playIndex = CAST.findIndex((c) => 'play' in c)
   const all = lit === playIndex
@@ -21,6 +25,7 @@ export function HeroCast({ installed, onPlay }: { installed: boolean; onPlay: ()
 
   return (
     <div
+      ref={paused}
       className="arc-cast"
       style={{ '--tint': tint, '--glow-x': lit === null ? '50%' : ((lit + 0.5) / CAST.length) * 100 + '%' } as CSSProperties}
       onMouseLeave={() => setLit(null)}
@@ -53,7 +58,7 @@ export function HeroCast({ installed, onPlay }: { installed: boolean; onPlay: ()
               </span>
             </button>
           ) : (
-            <ClassTile key={c.id} card={c} lit={lit === i || all} onEnter={() => setLit(i)} />
+            <ClassTile key={c.id} card={c} index={i} lit={lit === i || all} onEnter={setLit} onPlay={onPlay} />
           ),
         )}
       </div>
@@ -61,10 +66,35 @@ export function HeroCast({ installed, onPlay }: { installed: boolean; onPlay: ()
   )
 }
 
-function ClassTile({ card, lit, onEnter }: { card: ClassCard; lit: boolean; onEnter: () => void }) {
+// Memoised with a stable onEnter: a hover re-renders only the two tiles whose light changes.
+// The tile asks for the art itself, otherwise memo would keep it on the placeholder after the files land.
+// The "Become …" label reads as a call to play, so the tile does what the play card does.
+const ClassTile = memo(function ClassTile({
+  card,
+  index,
+  lit,
+  onEnter,
+  onPlay,
+}: {
+  card: ClassCard
+  index: number
+  lit: boolean
+  onEnter: (i: number) => void
+  onPlay: () => void
+}) {
+  useArcaniaArt()
   const t = useT()
   return (
-    <div className="arc-card" data-lit={lit || undefined} style={{ '--c': card.color, '--h': card.height } as CSSProperties} onMouseEnter={onEnter}>
+    <button
+      className="arc-card arc-class"
+      data-lit={lit || undefined}
+      data-sound="open"
+      data-track="arcania_class_card"
+      style={{ '--c': card.color, '--h': card.height } as CSSProperties}
+      onMouseEnter={() => onEnter(index)}
+      onFocus={() => onEnter(index)}
+      onClick={onPlay}
+    >
       <span className="arc-tint" aria-hidden="true" />
       <span className="arc-beam" aria-hidden="true" />
       <Letter ch={card.letter} />
@@ -74,15 +104,15 @@ function ClassTile({ card, lit, onEnter }: { card: ClassCard; lit: boolean; onEn
         ))}
       </span>
       <span className="arc-hero">
-        <img src={ART + card.id + '.webp'} alt="" draggable={false} />
+        <img src={art(card.id + '.webp')} alt="" draggable={false} />
       </span>
       <span className="arc-label">
         <small>{t('Стань')}</small>
         {t(card.role)}
       </span>
-    </div>
+    </button>
   )
-}
+})
 
 // Two stacked copies of the letter: the fill rises over the outline, so a lit card reads as light filling it.
 function Letter({ ch }: { ch: string }) {

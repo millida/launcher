@@ -480,7 +480,9 @@
 /* Карточка: снаружи свечение редкости (drop-shadow считается по силуэту
    среза), внутри плита со срезом. Свечение гаснет до мягкого после «плюха». */
 .rv-card {
-  display: block; animation: rv-plop 0.52s cubic-bezier(0.2, 1.5, 0.4, 1) both, rv-glow 1.1s ease-out both;
+  /* The glow stands at its final look from the start, without animating the drop-shadow radius (see rw-card-pop in reward.css). */
+  display: block; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rv-tone) 60%, transparent));
+  animation: rv-plop 0.52s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 .rv-card-in {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
@@ -508,11 +510,6 @@
   55% { transform: translateY(10px) scale(1.14); opacity: 1; }
   78% { transform: translateY(0) scale(0.95); }
   100% { transform: none; opacity: 1; }
-}
-@keyframes rv-glow {
-  0% { filter: drop-shadow(0 0 0 transparent); }
-  35% { filter: drop-shadow(0 0 22px var(--rv-tone)); }
-  100% { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rv-tone) 60%, transparent)); }
 }
 @keyframes rv-flash {
   0% { opacity: 0.85; }

@@ -5,7 +5,9 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
-use super::http::{download_fresh, get_json};
+use super::http::{download_checked, download_fresh, get_json, Sum};
+use super::selfdelta::{self, DeltaOffer};
+use super::silentupdate;
 use super::paths::{data_dir, is_flatpak};
 use super::prefs::ui_pref;
 use super::safepath::safe_file_name;
@@ -62,6 +64,19 @@ pub struct FallbackUpdate {
     /// signature check.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mirror: Option<String>,
+    /// The manifest marks this release as one that must not wait for the player to quit
+    /// (`"critical": true` at the top or in the platform entry). Absent means an ordinary release.
+    #[serde(default)]
+    pub critical: bool,
+    /// A patch from named older executables to this one, when the release publishes it (selfdelta.rs). The window
+    /// never sees it: the core decides whether to use it.
+    #[serde(skip)]
+    pub delta: Option<DeltaOffer>,
+}
+
+/// `critical` in the manifest, at the top level or on the platform's own entry.
+pub(crate) fn manifest_critical(doc: &serde_json::Value, platform_key: &str) -> bool {
+    doc["critical"].as_bool().unwrap_or(false) || doc["platforms"][platform_key]["critical"].as_bool().unwrap_or(false)
 }
 
 #[derive(Serialize, Clone)]
@@ -71,6 +86,22 @@ pub struct FallbackInstall {
     pub path: String,
     pub started: bool,
 }
+
+/// What the new copy does after an install the launcher started itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Restart {
+    /// The player quit: nothing starts again.
+    No,
+    /// The new copy opens its window: the player pressed «Обновить», or started the launcher and an update was waiting.
+    Show,
+    /// The new copy starts in the tray without a window and the installer shows nothing: an install while nobody looks
+    /// (the launcher sat in the tray, or was started at login).
+    Tray,
+}
+
+/// The flag the system passes at login (commands::system::AUTOSTART_ARG): a copy started with it stays in the tray.
+/// Kept here so the engine does not reach up into the commands; a test holds the two equal.
+pub(crate) const TRAY_START_ARG: &str = "--autostart";
 
 fn platform_key() -> Result<&'static str, String> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
@@ -211,9 +242,10 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             let link = e["url"].as_str().unwrap_or("").trim().to_string();
             let signature = e["signature"].as_str().unwrap_or("").trim().to_string();
             let mirror = e["mirror"].as_str().map(|m| m.trim().to_string()).filter(|m| m.starts_with("https://"));
-            (!link.is_empty() && !signature.is_empty()).then_some((link, signature, mirror))
+            let critical = manifest_critical(&doc, key);
+            (!link.is_empty() && !signature.is_empty()).then(|| (link, signature, mirror, critical, selfdelta::parse_offer(&e["delta"])))
         };
-        let Some((link, signature, mirror)) = keys.iter().find_map(|k| entry(k.as_str())) else {
+        let Some((link, signature, mirror, critical, delta)) = keys.iter().find_map(|k| entry(k.as_str())) else {
             last = format!("{}: в манифесте нет сборки для {}", url, keys.join(" / "));
             continue;
         };
@@ -225,6 +257,8 @@ async fn fetch_manifest(app: &AppHandle, require_newer: bool) -> Result<Option<F
             signature,
             source: url,
             mirror,
+            critical,
+            delta,
         };
         if best.as_ref().is_none_or(|b| is_newer(&found.version, &b.version)) {
             best = Some(found);
@@ -314,11 +348,16 @@ pub fn take_show_after_update() -> bool {
 }
 
 fn drop_stale(keep: &Path) {
+    drop_stale_in(&updates_dir(), keep);
+}
+
+fn drop_stale_in(dir: &Path, keep: &Path) {
     let sig = sig_path(keep);
-    if let Ok(rd) = std::fs::read_dir(updates_dir()) {
+    let ver = ver_path(keep);
+    if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
             let p = e.path();
-            if p != keep && p != sig {
+            if p != keep && p != sig && p != ver {
                 // Deletes old downloaded updates in our own updates folder.
                 let _ = std::fs::remove_file(p);
             }
@@ -326,10 +365,116 @@ fn drop_stale(keep: &Path) {
     }
 }
 
-fn sig_path(file: &Path) -> PathBuf {
+pub(crate) fn sig_path(file: &Path) -> PathBuf {
     let mut name = file.file_name().map(|n| n.to_os_string()).unwrap_or_default();
     name.push(".millidasig");
     file.with_file_name(name)
+}
+
+/// The version a staged file was downloaded for. The core finds a staged update by it after the
+/// window (which used to hold the downloaded bytes in memory) is gone or rebuilt.
+pub(crate) fn ver_path(file: &Path) -> PathBuf {
+    let mut name = file.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".millidaver");
+    file.with_file_name(name)
+}
+
+fn is_sidecar(file: &Path) -> bool {
+    file.extension().is_some_and(|e| e == "millidasig" || e == "millidaver")
+}
+
+/// Staged files newer than the running build, newest first. Pure: the disk walk and the
+/// signature check are the caller's.
+fn staged_candidates(found: Vec<(PathBuf, String)>, current: &str) -> Vec<(PathBuf, String)> {
+    let mut list: Vec<(PathBuf, String)> = found
+        .into_iter()
+        .map(|(p, v)| (p, v.trim().trim_start_matches('v').to_string()))
+        .filter(|(_, v)| !v.is_empty() && is_newer(v, current))
+        .collect();
+    list.sort_by(|a, b| {
+        if is_newer(&a.1, &b.1) {
+            std::cmp::Ordering::Less
+        } else if is_newer(&b.1, &a.1) {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    });
+    list
+}
+
+/// Every staged file with the version written beside it, as found on disk. The signature is the caller's business.
+fn staged_found(dir: &Path) -> Vec<(PathBuf, String)> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    rd.flatten()
+        .map(|entry| entry.path())
+        .filter(|path| !is_sidecar(path))
+        .filter_map(|path| std::fs::read_to_string(ver_path(&path)).ok().map(|version| (path, version)))
+        .collect()
+}
+
+/// A file the core finished staging is findable by the next window and by the tray: the signature and the version go
+/// beside it. A patch is staged the same way as an installer (the review found it without the version file, so the
+/// core never saw it again once the window was unloaded).
+fn record_staged(file: &Path, signature: &str, version: &str) -> Result<(), String> {
+    std::fs::write(sig_path(file), signature.as_bytes()).map_err(|e| e.to_string())?;
+    std::fs::write(ver_path(file), version.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// The end of the patch road: a built exe that passed the signature check is staged like an installer (signature and
+/// version beside it, so the core finds it again); one that did not is removed.
+fn keep_built(file: &Path, signature: &str, version: &str, verified: Result<(), String>) -> Result<(), String> {
+    if let Err(e) = verified {
+        let _ = std::fs::remove_file(file);
+        return Err(e);
+    }
+    record_staged(file, signature, version)
+}
+
+/// Cheap: is there a staged update newer than this build? Looks at the version files only, never at the (large) file
+/// itself, so the tray can ask often. `staged_update` is the one that checks the signature.
+pub fn staged_hint(app: &AppHandle) -> bool {
+    staged_hint_version(app).is_some()
+}
+
+/// The newest staged version newer than this build, if any (same cheap look as `staged_hint`).
+pub fn staged_hint_version(app: &AppHandle) -> Option<String> {
+    if is_flatpak() {
+        return None;
+    }
+    staged_candidates(staged_found(&updates_dir()), &app.package_info().version.to_string()).into_iter().next().map(|(_, v)| v)
+}
+
+/// An update the core already downloaded and verified: lives on disk, so it survives the window
+/// being destroyed for the tray or a game and does not have to be downloaded again.
+pub fn staged_update(app: &AppHandle) -> Option<FallbackInstall> {
+    if is_flatpak() {
+        return None;
+    }
+    let key = pubkey(app).ok()?;
+    let current = app.package_info().version.to_string();
+    for (path, version) in staged_candidates(staged_found(&updates_dir()), &current) {
+        let Ok(signature) = std::fs::read_to_string(sig_path(&path)) else { continue };
+        match verify(&path, signature.trim(), &key) {
+            Ok(()) => return Some(FallbackInstall { version, path: path.to_string_lossy().to_string(), started: false }),
+            Err(e) => eprintln!("[update] staged {} is not usable: {e}", path.display()),
+        }
+    }
+    None
+}
+
+/// The player quits from the tray while the window is gone: a staged update goes in now, without
+/// restarting (the player closed the launcher and expects it to stay closed). True: the
+/// installer is running and this process must end.
+pub fn install_staged_on_exit(app: &AppHandle) -> bool {
+    let Some(staged) = staged_update(app) else { return false };
+    match fallback_run(app, &staged.path, false) {
+        Ok(run) => run.started,
+        Err(e) => {
+            eprintln!("[update] staged update was not started on exit: {e}");
+            false
+        }
+    }
 }
 
 /// Flatpak mounts /app read-only and updates through its own repository: the
@@ -344,9 +489,37 @@ fn refuse_inside_flatpak() -> Result<(), String> {
 const FLATPAK_UPDATE_HINT: &str =
     "лаунчер из Flatpak обновляется через магазин приложений или командой flatpak update net.millida.launcher";
 
+/// One preparation of an update at a time. The core's tray loop and the window can both ask for the same file: two
+/// downloads into one path made the loser delete the winner's good file (on Windows its rename fails while the
+/// winner's check holds the file open, and the cleanup after the failure removes the destination). The second asker
+/// waits, then finds the verified file already there and does nothing.
+fn staging_turn() -> &'static tokio::sync::Mutex<()> {
+    static TURN: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    TURN.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
 /// Downloads ahead of time and stores the signature next to the artifact so the
 /// launch step can re-verify it without network access.
 pub async fn fallback_stage(app: &AppHandle, upd: &FallbackUpdate) -> Result<PathBuf, String> {
+    let _turn = staging_turn().lock().await;
+    stage_full(app, upd).await
+}
+
+/// Same, but a patch from the installed exe is tried first when the release has one and this build can take it. Any
+/// failure of the patch road is a reason to download the installer, never to stop.
+pub async fn fallback_stage_prefer_delta(app: &AppHandle, upd: &FallbackUpdate) -> Result<PathBuf, String> {
+    let _turn = staging_turn().lock().await;
+    match stage_delta(app, upd).await {
+        Ok(Some(path)) => Ok(path),
+        Ok(None) => stage_full(app, upd).await,
+        Err(e) => {
+            eprintln!("[update] обновление патчем не вышло ({}), качаем установщик", e);
+            stage_full(app, upd).await
+        }
+    }
+}
+
+async fn stage_full(app: &AppHandle, upd: &FallbackUpdate) -> Result<PathBuf, String> {
     refuse_inside_flatpak()?;
     let dir = updates_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -377,14 +550,100 @@ pub async fn fallback_stage(app: &AppHandle, upd: &FallbackUpdate) -> Result<Pat
             return Err(last);
         }
     }
-    std::fs::write(sig_path(&dest), upd.signature.as_bytes()).map_err(|e| e.to_string())?;
+    record_staged(&dest, &upd.signature, &upd.version)?;
     drop_stale(&dest);
     Ok(dest)
+}
+
+/// Patch road: the installed exe plus the patch built from exactly it give the new exe; its own signature decides.
+/// `Ok(None)` means there is nothing to try (no offer, not Windows, a critical release, a read-only folder).
+async fn stage_delta(app: &AppHandle, upd: &FallbackUpdate) -> Result<Option<PathBuf>, String> {
+    let Some(offer) = upd.delta.as_ref() else { return Ok(None) };
+    // A patch of this version that already failed to go in is not tried again, by whoever asks (the core remembers it,
+    // the window's own note lives only in the window).
+    if upd.critical || silentupdate::delta_bad_for(&upd.version) || !selfdelta::eligible() {
+        return Ok(None);
+    }
+    refuse_inside_flatpak()?;
+    let current = std::env::current_exe().map_err(|e| e.to_string())?;
+    let base_sha = {
+        let path = current.clone();
+        tokio::task::spawn_blocking(move || selfdelta::sha256_file(&path)).await.map_err(|e| e.to_string())??
+    };
+    let Some(patch) = selfdelta::pick(offer, &base_sha).cloned() else { return Ok(None) };
+    let dir = updates_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dest = dir.join(safe_file_name(&selfdelta::staged_name(&upd.version))?);
+    let key = pubkey(app)?;
+    if dest.exists() && verify(&dest, &offer.exe_signature, &key).is_ok() {
+        record_staged(&dest, &offer.exe_signature, &upd.version)?;
+        return Ok(Some(dest));
+    }
+    let patch_file = dir.join(format!("{}.patch", dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+    let mut last = String::new();
+    let mut got = false;
+    for link in std::iter::once(&patch.url).chain(patch.mirror.iter()) {
+        match download_checked(link, &patch_file, Some(Sum::Sha256(&patch.sha256)), Some(patch.size)).await {
+            Ok(()) => {
+                got = true;
+                break;
+            }
+            Err(e) => last = e,
+        }
+    }
+    if !got {
+        let _ = std::fs::remove_file(&patch_file);
+        return Err(last);
+    }
+    let (offer2, cur2, patch2, dest2) = (offer.clone(), current, patch_file.clone(), dest.clone());
+    let built = tokio::task::spawn_blocking(move || selfdelta::build_exe(&cur2, &patch2, &offer2, &dest2)).await.map_err(|e| e.to_string());
+    let _ = std::fs::remove_file(&patch_file);
+    built??;
+    // The signature of the FINISHED file, made with the release key: whatever the patch road did, a file that does not
+    // pass this is never kept.
+    keep_built(&dest, &offer.exe_signature, &upd.version, verify(&dest, &offer.exe_signature, &key))?;
+    drop_stale(&dest);
+    Ok(Some(dest))
+}
+
+/// What the window needs to know after a patch was staged: the version and the file, plus how many bytes travelled.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeltaStaged {
+    pub version: String,
+    pub path: String,
+    pub patch_bytes: u64,
+    pub full_bytes: u64,
+}
+
+/// For the plugin road: the window found an update through the plugin and asks whether a patch can replace the full
+/// download. `None` = no (nothing offered, nothing to patch from, or the patch failed); the plugin then downloads as before.
+pub async fn delta_stage_latest(app: &AppHandle) -> Result<Option<DeltaStaged>, String> {
+    let Some(upd) = fallback_check(app).await? else { return Ok(None) };
+    let Some(offer) = upd.delta.clone() else { return Ok(None) };
+    let sizes = {
+        let base = std::env::current_exe().ok().and_then(|p| selfdelta::sha256_file(&p).ok()).unwrap_or_default();
+        selfdelta::pick(&offer, &base).map(|p| (p.size, offer.exe_size))
+    };
+    let _turn = staging_turn().lock().await;
+    match stage_delta(app, &upd).await? {
+        Some(path) => {
+            let (patch_bytes, full_bytes) = sizes.unwrap_or((0, 0));
+            Ok(Some(DeltaStaged { version: upd.version, path: path.to_string_lossy().into_owned(), patch_bytes, full_bytes }))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Only accepts paths inside the updates directory and re-verifies the signature:
 /// the file could have been swapped between download and launch.
 pub fn fallback_run(app: &AppHandle, path: &str, restart: bool) -> Result<FallbackInstall, String> {
+    fallback_run_as(app, path, if restart { Restart::Show } else { Restart::No })
+}
+
+/// Same, with the choice of what starts afterwards. A patch that could not be put in place is remembered by the core
+/// itself: the next stage takes the full installer, whoever asked (the window, the tray, the start of the launcher).
+pub fn fallback_run_as(app: &AppHandle, path: &str, restart: Restart) -> Result<FallbackInstall, String> {
     refuse_inside_flatpak()?;
     let file = std::path::Path::new(path)
         .canonicalize()
@@ -395,13 +654,21 @@ pub fn fallback_run(app: &AppHandle, path: &str, restart: bool) -> Result<Fallba
     }
     let signature = std::fs::read_to_string(sig_path(&file)).map_err(|e| format!("нет подписи обновления: {}", e))?;
     verify(&file, signature.trim(), &pubkey(app)?)?;
-    let started = run_installer(&file, restart)?;
+    let started = match run_installer_as(&file, restart) {
+        Ok(started) => started,
+        Err(e) => {
+            if selfdelta::is_delta_file(&file) {
+                silentupdate::delta_failed(&file);
+            }
+            return Err(e);
+        }
+    };
     Ok(FallbackInstall { version: String::new(), path: file.to_string_lossy().to_string(), started })
 }
 
-pub async fn fallback_stage_latest(app: &AppHandle) -> Result<Option<FallbackInstall>, String> {
+pub async fn fallback_stage_latest(app: &AppHandle, skip_delta: bool) -> Result<Option<FallbackInstall>, String> {
     let Some(upd) = fallback_check(app).await? else { return Ok(None) };
-    let file = fallback_stage(app, &upd).await?;
+    let file = if skip_delta { fallback_stage(app, &upd).await? } else { fallback_stage_prefer_delta(app, &upd).await? };
     Ok(Some(FallbackInstall { version: upd.version, path: file.to_string_lossy().to_string(), started: false }))
 }
 
@@ -413,13 +680,15 @@ const NSIS_UPDATE_ARGS: [&str; 2] = ["/P", "/UPDATE"];
 
 /// `/R` makes the installer start the launcher again. An install on exit must
 /// not pass it: the player closed the launcher and expects it to stay closed.
+/// An install while nobody looks runs silent (`/S`: no progress window at all) and starts the new copy with the login
+/// flag, which keeps it in the tray. The updater plugin passes the old copy's arguments the same way, after `/ARGS`.
 #[cfg(any(windows, test))]
-fn nsis_args(restart: bool) -> Vec<&'static str> {
-    let mut args = NSIS_UPDATE_ARGS.to_vec();
-    if restart {
-        args.push("/R");
+fn nsis_args(restart: Restart) -> Vec<&'static str> {
+    match restart {
+        Restart::No => NSIS_UPDATE_ARGS.to_vec(),
+        Restart::Show => NSIS_UPDATE_ARGS.iter().copied().chain(["/R"]).collect(),
+        Restart::Tray => vec!["/S", "/UPDATE", "/R", "/ARGS", TRAY_START_ARG],
     }
-    args
 }
 
 /// Windows hands off to the installer; macOS and Linux replace the .app bundle
@@ -428,8 +697,14 @@ fn nsis_args(restart: bool) -> Vec<&'static str> {
 ///
 /// `true` = the caller must terminate this process.
 pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
-    #[cfg(not(windows))]
-    let _ = restart;
+    run_installer_as(file, if restart { Restart::Show } else { Restart::No })
+}
+
+/// Same, with the choice of what starts afterwards.
+pub fn run_installer_as(file: &Path, restart: Restart) -> Result<bool, String> {
+    if selfdelta::is_delta_file(file) {
+        return selfdelta::install(file, restart);
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -450,7 +725,7 @@ pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
     }
     #[cfg(target_os = "macos")]
     {
-        match install_app_bundle(file) {
+        match install_app_bundle(file, restart) {
             Ok(()) => Ok(true),
             Err(e) => {
                 open_path(&file.parent().unwrap_or(file).to_string_lossy());
@@ -464,7 +739,7 @@ pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
             open_path(&file.to_string_lossy());
             return Ok(false);
         }
-        match install_appimage(file) {
+        match install_appimage(file, restart) {
             Ok(true) => Ok(true),
             Ok(false) => {
                 open_path(&file.parent().unwrap_or(file).to_string_lossy());
@@ -475,6 +750,16 @@ pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
                 Err(e)
             }
         }
+    }
+}
+
+/// The shell command that starts the new copy. After a silent install in the tray it carries the login flag, so the
+/// copy stays in the tray instead of opening a window under someone who is not looking.
+#[cfg(any(unix, test))]
+fn relaunch_command(opener: &str, args_marker: &str, restart: Restart) -> String {
+    match restart {
+        Restart::Tray => format!("{opener}{args_marker} {TRAY_START_ARG}"),
+        Restart::No | Restart::Show => opener.to_string(),
     }
 }
 
@@ -502,7 +787,7 @@ fn relaunch_after_exit(target: &Path, opener: &str) -> Result<(), String> {
 /// copy) and moves the old bundle aside instead of deleting it: the running
 /// process still loads its frameworks from there.
 #[cfg(target_os = "macos")]
-fn install_app_bundle(archive: &Path) -> Result<(), String> {
+fn install_app_bundle(archive: &Path, restart: Restart) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let bundle = exe
         .ancestors()
@@ -549,7 +834,7 @@ fn install_app_bundle(archive: &Path) -> Result<(), String> {
         return Err(format!("новая копия не встала на место: {}", e));
     }
     let _ = std::fs::remove_dir_all(&stage);
-    relaunch_after_exit(&bundle, r#"open -n "$2""#)
+    relaunch_after_exit(&bundle, &relaunch_command(r#"open -n "$2""#, " --args", restart))
 }
 
 /// Uses the system tar: it preserves the symlinks inside Contents/Frameworks and
@@ -609,7 +894,7 @@ fn is_system_package(file: &Path) -> bool {
 /// allowed, so the new file is staged alongside and renamed into place.
 /// `false` = nothing to install (deb/rpm, or the artifact is not an AppImage).
 #[cfg(all(unix, not(target_os = "macos")))]
-fn install_appimage(file: &Path) -> Result<bool, String> {
+fn install_appimage(file: &Path, restart: Restart) -> Result<bool, String> {
     let Some(current) = std::env::var_os("APPIMAGE").map(PathBuf::from) else { return Ok(false) };
     let name = file.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !name.ends_with(".appimage") {
@@ -627,12 +912,37 @@ fn install_appimage(file: &Path) -> Result<bool, String> {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!("новая копия не встала на место: {}", e));
     }
-    relaunch_after_exit(&current, r#"exec "$2""#).map(|_| true)
+    relaunch_after_exit(&current, &relaunch_command(r#"exec "$2""#, "", restart)).map(|_| true)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn staged(list: &[(&str, &str)]) -> Vec<(PathBuf, String)> {
+        list.iter().map(|(f, v)| (PathBuf::from(f), v.to_string())).collect()
+    }
+
+    /// input -> verdict. What the core finds on disk after the window is gone: only builds newer
+    /// than the running one, the newest first; a leftover of an old release is never installed.
+    #[test]
+    fn a_staged_update_is_found_by_its_version() {
+        let found = staged(&[("old.exe", "2.0.299"), ("new.exe", "2.0.301"), ("same.exe", "2.0.300"), ("newer.exe", "v2.0.302\n"), ("junk.exe", "")]);
+        let got: Vec<String> = staged_candidates(found, "2.0.300").into_iter().map(|(p, v)| format!("{}={}", p.display(), v)).collect();
+        assert_eq!(got, ["newer.exe=2.0.302", "new.exe=2.0.301"]);
+        assert!(staged_candidates(staged(&[("a.exe", "2.0.300")]), "2.0.300").is_empty(), "та же версия уже стоит");
+        assert!(staged_candidates(Vec::new(), "2.0.300").is_empty());
+    }
+
+    #[test]
+    fn signature_and_version_files_are_not_updates_themselves() {
+        assert!(is_sidecar(Path::new("Millida_2.0.301_setup.exe.millidasig")));
+        assert!(is_sidecar(Path::new("Millida_2.0.301_setup.exe.millidaver")));
+        assert!(!is_sidecar(Path::new("Millida_2.0.301_setup.exe")));
+        let f = Path::new("updates/Millida_2.0.301_setup.exe");
+        assert_eq!(ver_path(f), Path::new("updates/Millida_2.0.301_setup.exe.millidaver"));
+        assert_ne!(ver_path(f), sig_path(f));
+    }
 
     /// input -> verdict. Only a marker left by the install the player just
     /// started may override the hidden start at login.
@@ -737,17 +1047,81 @@ mod tests {
     #[test]
     fn install_on_exit_keeps_launcher_closed() {
         assert!(
-            !nsis_args(false).contains(&"/R"),
+            !nsis_args(Restart::No).contains(&"/R"),
             "/R при установке на выходе снова открывает лаунчер: игрок закрыл его, а он появляется опять"
         );
         assert!(
-            nsis_args(true).contains(&"/R"),
+            nsis_args(Restart::Show).contains(&"/R"),
             "«Обновить сейчас» и самовосстановление обязаны поднять лаунчер после установки"
         );
-        assert!(
-            nsis_args(false).contains(&"/UPDATE") && nsis_args(true).contains(&"/UPDATE"),
-            "без /UPDATE мастер NSIS запускает деинсталлятор с удалением данных"
-        );
+        for restart in [Restart::No, Restart::Show, Restart::Tray] {
+            assert!(
+                nsis_args(restart).contains(&"/UPDATE"),
+                "без /UPDATE мастер NSIS запускает деинсталлятор с удалением данных ({restart:?})"
+            );
+        }
+    }
+
+    /// The install nobody watches: silent (no progress window), the new copy comes back to the tray with the login flag
+    /// that keeps its window hidden, and `/ARGS` is last because the installer takes everything after it as the arguments.
+    #[test]
+    fn a_tray_install_is_silent_and_returns_to_the_tray() {
+        let args = nsis_args(Restart::Tray);
+        assert_eq!(args, ["/S", "/UPDATE", "/R", "/ARGS", "--autostart"]);
+        assert!(!args.contains(&"/P"), "/P рисует окно с полосой под тем, кто не смотрит");
+        assert_eq!(args.last(), Some(&TRAY_START_ARG));
+        assert_eq!(nsis_args(Restart::Show), ["/P", "/UPDATE", "/R"], "кнопка и старт с окном остаются как были");
+        assert_eq!(TRAY_START_ARG, crate::commands::system::AUTOSTART_ARG, "флаг входа — один и тот же в ядре и в запуске системой");
+    }
+
+    #[test]
+    fn the_new_copy_on_mac_and_linux_gets_the_login_flag_only_for_the_tray() {
+        assert_eq!(relaunch_command(r#"open -n "$2""#, " --args", Restart::Tray), r#"open -n "$2" --args --autostart"#);
+        assert_eq!(relaunch_command(r#"exec "$2""#, "", Restart::Tray), r#"exec "$2" --autostart"#);
+        assert_eq!(relaunch_command(r#"open -n "$2""#, " --args", Restart::Show), r#"open -n "$2""#);
+        assert_eq!(relaunch_command(r#"exec "$2""#, "", Restart::No), r#"exec "$2""#);
+    }
+
+    /// The review found it: a staged patch had a signature but no version file, so once the window was gone the core
+    /// never saw it again, "Выход" from the tray did not install it and the 10-minute download deleted it.
+    #[test]
+    fn a_staged_patch_is_found_by_the_core_like_an_installer() {
+        let dir = std::env::temp_dir().join(format!("millida-staged-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let patch = dir.join(selfdelta::staged_name("2.0.9"));
+        let installer = dir.join("Millida-Launcher_2.0.8_x64-setup.exe");
+        std::fs::write(&patch, b"patched exe").unwrap();
+        std::fs::write(&installer, b"installer").unwrap();
+        record_staged(&patch, "patch-signature", "2.0.9").unwrap();
+        record_staged(&installer, "installer-signature", "2.0.8").unwrap();
+        assert_eq!(std::fs::read_to_string(sig_path(&patch)).unwrap(), "patch-signature");
+        assert_eq!(std::fs::read_to_string(ver_path(&patch)).unwrap(), "2.0.9");
+
+        let mut found = staged_found(&dir);
+        found.sort();
+        assert_eq!(found.len(), 2, "sidecars are not updates: {found:?}");
+        let got = staged_candidates(found, "2.0.7");
+        assert_eq!(got.iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>(), ["2.0.9", "2.0.8"], "the patch is newest and found first");
+        assert!(selfdelta::is_delta_file(&got[0].0));
+        assert!(staged_candidates(staged_found(&dir), "2.0.9").iter().all(|(_, v)| v != "2.0.9"), "the version that is running is not an update");
+        // the end of the patch road is what writes them: a good file is recorded, a bad one is removed
+        let built = dir.join(selfdelta::staged_name("2.0.10"));
+        std::fs::write(&built, b"built").unwrap();
+        keep_built(&built, "sig", "2.0.10", Ok(())).unwrap();
+        assert_eq!(std::fs::read_to_string(ver_path(&built)).unwrap(), "2.0.10", "the finished patch is findable once the window is gone");
+        let bad = dir.join(selfdelta::staged_name("2.0.11"));
+        std::fs::write(&bad, b"wrong").unwrap();
+        assert!(keep_built(&bad, "sig", "2.0.11", Err("signature".into())).is_err());
+        assert!(!bad.exists() && !ver_path(&bad).exists(), "a file that fails the signature is never kept");
+        let _ = std::fs::remove_file(&built);
+        let _ = std::fs::remove_file(sig_path(&built));
+        let _ = std::fs::remove_file(ver_path(&built));
+        // a fresh staging of the same version leaves the patch and its sidecars alone
+        drop_stale_in(&dir, &patch);
+        assert!(patch.exists() && sig_path(&patch).exists() && ver_path(&patch).exists());
+        assert!(!installer.exists(), "the older installer is the stale one");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -759,6 +1133,22 @@ mod tests {
         assert!(update_acceptable("2.0.210", "2.0.210", false));
         assert!(update_acceptable("v2.0.211", "2.0.210", false));
         assert!(!update_acceptable("2.0.209", "2.0.210", false));
+    }
+
+    #[test]
+    fn a_release_is_critical_only_when_the_manifest_says_so() {
+        use serde_json::json;
+        assert!(!manifest_critical(&json!({"version": "1.0.1", "platforms": {"windows-x86_64": {}}}), "windows-x86_64"));
+        assert!(manifest_critical(&json!({"critical": true, "platforms": {}}), "windows-x86_64"), "the whole release");
+        assert!(
+            manifest_critical(&json!({"platforms": {"windows-x86_64": {"critical": true}}}), "windows-x86_64"),
+            "or only the build for this system"
+        );
+        assert!(
+            !manifest_critical(&json!({"platforms": {"darwin-aarch64": {"critical": true}}}), "windows-x86_64"),
+            "another system's flag is not ours"
+        );
+        assert!(!manifest_critical(&json!({"critical": "yes"}), "windows-x86_64"), "only a real boolean counts");
     }
 
     #[test]

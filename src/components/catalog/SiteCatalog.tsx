@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
+import { onMediaChange } from '../../lib/mediaQuery'
 import { CatalogFor } from './CatalogTop'
 import { CatalogNotice } from './CatalogShell'
 import { FilterGroup, SiteFilters } from './SiteFilters'
@@ -64,8 +65,7 @@ function useNarrow(): boolean {
   useEffect(() => {
     const m = window.matchMedia(q)
     const on = () => setNarrow(m.matches)
-    m.addEventListener('change', on)
-    return () => m.removeEventListener('change', on)
+    return onMediaChange(m, on)
   }, [])
   return narrow
 }

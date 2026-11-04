@@ -422,6 +422,10 @@ pub(crate) async fn install_managed_java(app: &AppHandle, major: u64) -> Result<
     install_runtime(app, major, None).await.map(|d| java_bin(&d))
 }
 
+pub(crate) fn managed_runtime_home(bin: &Path) -> Option<PathBuf> {
+    managed_identity(bin).map(|(home, _, _)| home)
+}
+
 /// Наш ли это рантайм и какой: (major, arch) по имени его папки.
 fn managed_identity(bin: &Path) -> Option<(PathBuf, u64, Option<&'static str>)> {
     let root = data_dir().join("java");
@@ -460,6 +464,33 @@ pub(crate) async fn ensure_java(app: &AppHandle, major: u64) -> Result<PathBuf, 
         return Ok(sys);
     }
     install_managed_java(app, major).await
+}
+
+/// `ensure_java` without the download: the Java it would answer with, if that is already on this
+/// computer. The lobby prepares a build with it and never fetches a runtime ahead of Play.
+pub(crate) fn java_present(major: u64) -> Option<PathBuf> {
+    let major = if major == 16 { 17 } else { major };
+    bundled_java(major)
+        .or_else(|| managed_runtime(&runtime_base(major, None)).map(|d| java_bin(&d)))
+        .or_else(|| system_java(major))
+}
+
+/// `ensure_java_vendor` without the download.
+pub(crate) fn java_vendor_present(major: u64, vendor: JavaVendor) -> Option<PathBuf> {
+    if vendor == JavaVendor::Temurin {
+        return java_present(major);
+    }
+    let major = if major == 16 { 17 } else { major };
+    managed_runtime(&vendor.base(major, None)).map(|d| java_bin(&d))
+}
+
+/// `ensure_java_for` without the download (and without asking for Rosetta).
+pub(crate) fn java_present_for(major: u64, version: &str) -> Option<PathBuf> {
+    if !needs_rosetta(version) {
+        return java_present(major);
+    }
+    let major = if major == 16 { 17 } else { major };
+    managed_runtime(&runtime_base(major, Some("x64"))).map(|d| java_bin(&d))
 }
 
 /// Major Java по её `java -version`. Запоминается на сессию по пути и времени
@@ -503,6 +534,14 @@ pub(crate) fn java_fits(app: &AppHandle, picked: PathBuf, need: u64, version: &s
             );
             None
         }
+        _ => Some(picked),
+    }
+}
+
+/// `java_fits` without telling the window: the lobby's preparation must not raise a launch warning.
+pub(crate) fn java_fits_quietly(picked: PathBuf, need: u64) -> Option<PathBuf> {
+    match java_major_of_bin(&picked) {
+        Some(have) if too_old(have, need) => None,
         _ => Some(picked),
     }
 }

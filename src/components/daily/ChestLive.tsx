@@ -5,9 +5,13 @@ import { Chest3D } from './Chest3D'
 import { gpuLite } from '../../lib/gpuLite'
 import { useScreenSettled } from '../../lib/screenSettle'
 import type { ChestLook } from './chestScene'
+import { onShelfHold, shelfYields } from './chestShelf'
 
-/** Сколько 3D-сундуков живёт одновременно; остальные — плоский рисунок. */
-const MAX_LIVE = 9
+/**
+ * How many 3D chests are live at once; the rest are a flat drawing. Every live chest copies its
+ * frame out of the shared WebGL canvas on every frame, which holds the main thread on a slow core.
+ */
+const MAX_LIVE = 4
 const live = new Set<symbol>()
 const waiting = new Set<() => void>()
 
@@ -28,6 +32,7 @@ export function ChestLive({
   tier = 'COMMON',
   look = 'model',
   tint,
+  inScene = false,
 }: {
   ready: boolean
   size: number
@@ -36,6 +41,8 @@ export function ChestLive({
   look?: ChestLook
   /** Свой цвет модели сундука (ящики магазина). */
   tint?: string
+  /** Part of the reveal scene itself, not of the shelf behind it: stays 3D during a reveal. */
+  inScene?: boolean
 }) {
   const box = useRef<HTMLSpanElement>(null)
   const id = useRef(Symbol('chest')).current
@@ -54,7 +61,9 @@ export function ChestLive({
 
   useEffect(() => {
     const tryTake = () => {
-      if (seen && !live.has(id) && live.size < MAX_LIVE) live.add(id)
+      // During a reveal the shelf behind it stops drawing. The slot frees silently: the hold notifies everyone anyway.
+      if (shelfYields(inScene)) live.delete(id)
+      else if (seen && !live.has(id) && live.size < MAX_LIVE) live.add(id)
       setOn(seen && live.has(id))
       bump((n) => n + 1)
     }
@@ -65,11 +74,13 @@ export function ChestLive({
     }
     tryTake()
     waiting.add(tryTake)
+    const offHold = onShelfHold(tryTake)
     return () => {
+      offHold()
       waiting.delete(tryTake)
       release(id)
     }
-  }, [seen, settled, id])
+  }, [seen, settled, id, inScene])
 
   const k = Math.round(size * 1.5)
   return (
