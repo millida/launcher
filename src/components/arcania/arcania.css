@@ -225,6 +225,12 @@
   box-shadow: inset 0 -4px 0 rgb(0 0 0 / 0.22), 0 0 18px rgb(123 211 90 / 0.5);
 }
 
+/* A section off screen keeps its endless animations paused (useOffscreenPause), so they do not
+   take frames from the hover of the cards that are on screen. */
+.arc [data-off] *,
+.arc [data-off] *::before,
+.arc [data-off] *::after { animation-play-state: paused !important; }
+
 @media (prefers-reduced-motion: reduce) {
   .arc *,
   .arc *::before,

@@ -1,6 +1,7 @@
 import { useCallback, useRef, type CSSProperties } from 'react'
 import { useT } from '../../i18n'
-import { ART, BOSSES, TOTAL_BOSSES, bossesLeft } from './content'
+import { BOSSES, TOTAL_BOSSES, art, bossesLeft } from './content'
+import { useArcaniaArt } from './useArcaniaArt'
 import { useLoopCarousel } from './useLoopCarousel'
 import './bosses.css'
 
@@ -15,6 +16,7 @@ const SPARKS = [
 ] as const
 
 export function Bosses() {
+  useArcaniaArt()
   const t = useT()
   const hold = useCallback(() => HOLD_MS, [])
   const { rootRef, pos, active, animated, playing, settle, go } = useLoopCarousel<HTMLElement>(N, hold)
@@ -57,7 +59,7 @@ export function Bosses() {
                   go(row)
                 }}
               >
-                <img src={ART + 'boss-' + b.id + '.webp'} alt="" loading="lazy" decoding="async" draggable={false} />
+                <img src={art('boss-' + b.id + '.webp')} alt="" loading="lazy" decoding="async" draggable={false} />
                 <span className="arc-boss-shade" />
                 {on ? (
                   <span key={pos} className="arc-boss-caption">

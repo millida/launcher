@@ -11,6 +11,9 @@ pub(crate) fn is_log_path(name: &str) -> bool {
     known_dir && known_ext
 }
 
+/// The text is matched by the interface, which then tries the next log: keep it in step with src/lib/crashSupport.ts.
+pub(crate) const EMPTY_LOG: &str = "Лог пустой";
+
 pub async fn share_log(profile: String, name: String) -> Result<String, String> {
     // path arrives over IPC and is uploaded publicly, so confine it to the profile
     let path = safe_join(&profile_dir(&profile), &name)?;
@@ -21,6 +24,8 @@ pub async fn share_log(profile: String, name: String) -> Result<String, String> 
         let start = (cut..content.len()).find(|i| content.is_char_boundary(*i)).unwrap_or(content.len());
         content = content[start..].to_string();
     }
+    // mclo.gs answers an empty text with "Required field 'content' is empty": the request is not sent at all.
+    if content.trim().is_empty() { return Err(EMPTY_LOG.into()); }
     let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
     let content = redact_log(&content, home.as_deref());
     // Third-party service mclo.gs, not Millida: the log becomes a public page. Sent only after the button click.
@@ -166,7 +171,12 @@ fn hide_flag_value(text: &str, flag: &str) -> String {
 
 #[cfg(test)]
 mod redact_tests {
-    use super::redact_log;
+    use super::{redact_log, EMPTY_LOG};
+
+    #[test]
+    fn the_empty_log_message_is_the_one_the_interface_matches() {
+        assert_eq!(EMPTY_LOG, "Лог пустой");
+    }
 
     #[test]
     fn home_and_access_token_do_not_leave_the_machine() {

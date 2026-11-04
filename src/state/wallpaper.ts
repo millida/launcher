@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { liteOn } from '../lib/liteMode'
 import { convertFileSrc } from '../ipc/commands'
 import { stillOf } from '../lib/wallpaper'
 import { showToast } from './ui'
@@ -65,8 +66,9 @@ const initCur = notScene(
 const IS_LINUX =
   typeof navigator !== 'undefined' && /linux/i.test(navigator.userAgent) && !/android/i.test(navigator.userAgent)
 const storedAnim = localStorage.getItem('m-wp-anim')
+// Лёгкий режим (слабое железо) тоже по умолчанию отдаёт неподвижный кадр вместо ролика.
 const initAnim =
-  (storedAnim === null ? !IS_LINUX : storedAnim !== '0') &&
+  (storedAnim === null ? !IS_LINUX && !liteOn() : storedAnim !== '0') &&
   !matchMedia('(prefers-reduced-motion: reduce)').matches
 
 interface WallpaperState {

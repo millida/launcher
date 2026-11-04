@@ -492,10 +492,20 @@ export function refineMilliError(e: MilliError, s: MilliStatus | null): MilliErr
   if (!s || e.kind === 'auth' || e.kind === 'offline') return e
   if (!s.enabled) return err('off')
   if (s.blocked) return err('blocked')
-  if (s.month.remaining <= 0) return err('limit', 'month')
-  if (s.day.remaining <= 0) return err('limit', 'day')
+  const out = milliOutError(s)
+  if (out) return out
   if (e.kind === 'limit') return err('failed')
   return e
+}
+
+/**
+ * Исчерпанный счётчик отключает отправку, поэтому ответа сервера с лимитом при
+ * открытии чата не будет: причину неактивной кнопки объясняет сам счётчик.
+ */
+export function milliOutError(s: Pick<MilliStatus, 'day' | 'month'> | null): MilliError | null {
+  if (!s) return null
+  if (s.month.remaining <= 0) return err('limit', 'month')
+  return s.day.remaining <= 0 ? err('limit', 'day') : null
 }
 
 // ─── Счётчик и время ─────────────────────────────────────────────────────

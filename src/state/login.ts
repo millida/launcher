@@ -274,16 +274,3 @@ export async function startWebLogin(reopen = false) {
 
   pollTimer = setTimeout(() => void poll(), intervalMs)
 }
-
-export function quickStart() {
-  // Guest mode is a shortcut for a returning user, not a way around the account:
-  // friends, skins, hosting and the game profile all need a Millida login.
-  if (!millidaEver()) {
-    showToast(t('Сначала войди в аккаунт Millida — это нужно один раз'), 'error')
-    return
-  }
-  const nick = 'Player' + Math.floor(1000 + Math.random() * 8999)
-  useAccounts.getState().add({ nick, kind: 'guest' })
-  enterApp()
-  showToast(t('Вошли как {nick}', { nick }))
-}

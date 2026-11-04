@@ -11,6 +11,9 @@ interface TopBarState {
   /** Подстраница без вкладок «Библиотека | Ресурсы» наверху — только «← Назад». */
   bare: boolean
   setBare: (v: boolean) => void
+  /** Wardrobe: the character wears something to remove (items, a try-on, a cape), so Remove all is active. */
+  skinsWorn: boolean
+  setSkinsWorn: (v: boolean) => void
 }
 
 export const useTopBar = create<TopBarState>((set) => ({
@@ -18,8 +21,11 @@ export const useTopBar = create<TopBarState>((set) => ({
   setBack: (fn) => set({ back: fn }),
   bare: false,
   setBare: (v) => set({ bare: v }),
+  skinsWorn: false,
+  setSkinsWorn: (v) => set({ skinsWorn: v }),
 }))
 
 /** Гардероб: кнопки верхней строки зовут экран событиями. */
 export const SKINS_UPLOAD_EVENT = 'm-skins-upload'
 export const SKINS_IMPORT_EVENT = 'm-skins-import'
+export const SKINS_TAKE_OFF_EVENT = 'm-skins-take-off'

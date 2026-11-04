@@ -22,7 +22,16 @@ pub(crate) fn zip_readable(path: &Path) -> bool {
 pub(crate) const UNPACK_CEILING: u64 = 32 * 1024 * 1024 * 1024;
 
 pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
-    extract_zip(archive, dest, UNPACK_CEILING, whole_path, nothing_skippable)
+    extract_zip(archive, dest, UNPACK_CEILING, whole_path, nothing_skippable, None)
+}
+
+/// Bytes unpacked so far and the total, called from whichever thread finished a file.
+pub(crate) type Unpacked<'a> = dyn Fn(u64, u64) + Sync + 'a;
+
+/// The same, reporting how much is done. A pack of three thousand small files spends its minutes in file creation
+/// (an antivirus looks at every one), so the work is spread over several threads when there is enough of it.
+pub(crate) fn unzip_to_progress(archive: &Path, dest: &Path, on: &Unpacked<'_>) -> Result<(), String> {
+    extract_zip(archive, dest, UNPACK_CEILING, whole_path, nothing_skippable, Some(on))
 }
 
 /// Drops the archive's top-level directory (`tar --strip-components=1`), the
@@ -30,7 +39,7 @@ pub(crate) fn unzip_to(archive: &Path, dest: &Path) -> Result<(), String> {
 /// run without: one that a lock refuses to let us write is left out instead of
 /// failing the whole extraction.
 pub(crate) fn unzip_strip1(archive: &Path, dest: &Path, skippable: fn(&str) -> bool) -> Result<(), String> {
-    extract_zip(archive, dest, UNPACK_CEILING, below_top_folder, skippable)
+    extract_zip(archive, dest, UNPACK_CEILING, below_top_folder, skippable, None)
 }
 
 fn nothing_skippable(_: &str) -> bool {
@@ -57,6 +66,7 @@ fn extract_zip(
     ceiling: u64,
     place: fn(&Path) -> Option<String>,
     skippable: fn(&str) -> bool,
+    progress: Option<&Unpacked<'_>>,
 ) -> Result<(), String> {
     let f = std::fs::File::open(archive).map_err(|e| super::io_fail("Распаковка", archive, &e))?;
     let mut zip = zip::ZipArchive::new(f).map_err(|e| format!("Архив повреждён: {}", e))?;
@@ -69,9 +79,144 @@ fn extract_zip(
         ));
     }
     let mut written = Written::default();
-    match extract_entries(&mut zip, dest, declared, place, skippable, &mut written) {
+    if parallel_worth(zip.len(), declared) {
+        match extract_parallel(archive, dest, &mut zip, declared, place, skippable, progress, &mut written) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(e) => return Err(written.take_back(e)),
+        }
+    }
+    match extract_entries(&mut zip, dest, declared, place, skippable, &mut written, progress) {
         Ok(()) => Ok(()),
         Err(e) => Err(written.take_back(e)),
+    }
+}
+
+/// Below this the threads cost more than they save.
+const PARALLEL_MIN_ENTRIES: usize = 48;
+const PARALLEL_MIN_BYTES: u64 = 8 * 1024 * 1024;
+
+fn parallel_worth(entries: usize, declared: u64) -> bool {
+    entries >= PARALLEL_MIN_ENTRIES && declared >= PARALLEL_MIN_BYTES && worker_count() > 1
+}
+
+/// More threads than cores on purpose: most of the time a worker waits for the file system, not for the processor.
+fn worker_count() -> usize {
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
+    (cores * 2).clamp(2, 8)
+}
+
+struct Task {
+    index: usize,
+    out: PathBuf,
+    rel: String,
+    size: u64,
+}
+
+/// Spreads the files of one archive over several threads, each with its own handle on the archive. `Ok(false)` means
+/// the layout asks for the one-by-one road (two entries that land on one name, where the last must win), and nothing
+/// has been written. Anything it did write goes into `written`, so a failure takes back exactly that.
+#[allow(clippy::too_many_arguments)]
+fn extract_parallel(
+    archive: &Path,
+    dest: &Path,
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    declared: u64,
+    place: fn(&Path) -> Option<String>,
+    skippable: fn(&str) -> bool,
+    progress: Option<&Unpacked<'_>>,
+    written: &mut Written,
+) -> Result<bool, String> {
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+    use std::sync::Mutex;
+
+    let mut tasks: Vec<Task> = Vec::new();
+    let mut folders: Vec<PathBuf> = Vec::new();
+    let mut names = std::collections::HashSet::new();
+    for i in 0..zip.len() {
+        let file = zip.by_index_raw(i).map_err(|e| e.to_string())?;
+        let Some(name) = file.enclosed_name() else { continue };
+        let Some(rel) = place(&name) else { continue };
+        let Ok(out) = crate::engine::safe_join(dest, &rel) else { continue };
+        if file.is_dir() {
+            folders.push(out);
+            continue;
+        }
+        if !names.insert(out.to_string_lossy().to_lowercase()) {
+            return Ok(false);
+        }
+        if let Some(parent) = out.parent() {
+            folders.push(parent.to_path_buf());
+        }
+        tasks.push(Task { index: i, out, rel, size: file.size() });
+    }
+    folders.sort();
+    folders.dedup();
+    for dir in &folders {
+        written.dir(dir).map_err(|e| super::io_fail("Распаковка", dir, &e))?;
+    }
+
+    let next = AtomicUsize::new(0);
+    let failed = AtomicBool::new(false);
+    let first_error: Mutex<Option<String>> = Mutex::new(None);
+    let made: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+    let copied = AtomicU64::new(0);
+    let fail = |why: String| {
+        failed.store(true, Ordering::SeqCst);
+        first_error.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(why);
+    };
+    let work = || {
+        let opened = std::fs::File::open(archive)
+            .map_err(|e| super::io_fail("Распаковка", archive, &e))
+            .and_then(|f| zip::ZipArchive::new(f).map_err(|e| format!("Архив повреждён: {}", e)));
+        let mut mine = match opened {
+            Ok(z) => z,
+            Err(e) => return fail(e),
+        };
+        while !failed.load(Ordering::SeqCst) {
+            let k = next.fetch_add(1, Ordering::SeqCst);
+            let Some(task) = tasks.get(k) else { break };
+            let mut file = match mine.by_index(task.index) {
+                Ok(f) => f,
+                Err(e) => return fail(e.to_string()),
+            };
+            let _ = std::fs::remove_file(&task.out);
+            let mut o = match super::retry_locked(|| std::fs::File::create(&task.out)) {
+                Ok(o) => o,
+                Err(e) if skippable(&task.rel) && super::is_locked_error(&e) => continue,
+                Err(e) => return fail(super::io_fail("Распаковка", &task.out, &e)),
+            };
+            made.lock().unwrap_or_else(|e| e.into_inner()).push(task.out.clone());
+            match copy_at_most(&mut file, &mut o, task.size) {
+                Ok(Some(n)) => {
+                    let total = copied.fetch_add(n, Ordering::SeqCst) + n;
+                    if let Some(report) = progress {
+                        report(total, declared);
+                    }
+                }
+                Ok(None) => {
+                    return fail(format!(
+                        "Архив повреждён или подделан: «{}» распаковывается больше, чем заявлено в самом архиве. Распаковку остановили и убрали то, что успело распаковаться, — возьми файл заново из источника",
+                        task.rel
+                    ))
+                }
+                Err(e) if skippable(&task.rel) && super::is_locked_error(&e) => {
+                    drop(o);
+                    let _ = std::fs::remove_file(&task.out);
+                }
+                Err(e) => return fail(super::io_fail("Распаковка", &task.out, &e)),
+            }
+        }
+    };
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count().min(tasks.len().max(1)) {
+            scope.spawn(work);
+        }
+    });
+    written.files.extend(made.into_inner().unwrap_or_else(|e| e.into_inner()));
+    match first_error.into_inner().unwrap_or_else(|e| e.into_inner()) {
+        Some(e) => Err(e),
+        None => Ok(true),
     }
 }
 
@@ -91,6 +236,7 @@ fn extract_entries(
     place: fn(&Path) -> Option<String>,
     skippable: fn(&str) -> bool,
     written: &mut Written,
+    progress: Option<&Unpacked<'_>>,
 ) -> Result<(), String> {
     let mut budget = declared;
     for i in 0..zip.len() {
@@ -124,7 +270,12 @@ fn extract_entries(
             other => other.map_err(|e| super::io_fail("Распаковка", &out, &e))?,
         };
         match copied {
-            Some(n) => budget -= n,
+            Some(n) => {
+                budget -= n;
+                if let Some(report) = progress {
+                    report(declared - budget, declared);
+                }
+            }
             None => {
                 return Err(format!(
                     "Архив повреждён или подделан: «{}» распаковывается больше, чем заявлено в самом архиве. Распаковку остановили и убрали то, что успело распаковаться, — возьми файл заново из источника",
@@ -297,11 +448,6 @@ pub(crate) fn copy_replacing(from: &Path, to: &Path) -> std::io::Result<u64> {
         return Err(e);
     }
     Ok(n)
-}
-
-/// OS key used by the `natives` map in Mojang library entries.
-pub(crate) fn natives_os_key() -> &'static str {
-    if cfg!(target_os = "macos") { "osx" } else if cfg!(target_os = "windows") { "windows" } else { "linux" }
 }
 
 /// Extracts native libraries from a classifier jar honouring `extract.exclude`;
@@ -512,7 +658,7 @@ mod tests {
                 std::fs::write(&keep, "мир игрока").unwrap();
             }
             let place: fn(&Path) -> Option<String> = if c.strip { below_top_folder } else { whole_path };
-            let res = extract_zip(&archive, &dest, c.ceiling, place, nothing_skippable);
+            let res = extract_zip(&archive, &dest, c.ceiling, place, nothing_skippable, None);
             match c.refused_with {
                 None => {
                     res.unwrap_or_else(|e| panic!("случай {i}: {} — а распаковка отказала: {e}", c.why));
@@ -539,6 +685,50 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
+    /// An archive with many files goes through the threads and comes out exactly as the one-by-one road leaves it;
+    /// a forged size still stops it and takes back what the threads wrote; two names that land on one path keep
+    /// the old road, where the last entry wins.
+    #[test]
+    fn many_files_are_unpacked_in_parallel_and_guarded_the_same_way() {
+        let base = std::env::temp_dir().join(format!("millida-unzip-parallel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let names: Vec<String> = (0..90).map(|i| format!("mods/lib-{i}.jar")).collect();
+        let entries: Vec<(&str, usize)> = names.iter().map(|n| (n.as_str(), 120_000)).collect();
+        assert!(parallel_worth(entries.len(), 90 * 120_000), "the sample must be big enough to take the parallel road");
+
+        let archive = base.join("a.zip");
+        write_zip(&archive, &entries, zip::CompressionMethod::Deflated);
+        let seen = std::sync::atomic::AtomicU64::new(0);
+        let dest = base.join("ok");
+        unzip_to_progress(&archive, &dest, &|done, total| {
+            assert!(done <= total);
+            seen.fetch_max(done, std::sync::atomic::Ordering::SeqCst);
+        })
+        .unwrap();
+        for (name, len) in &entries {
+            assert_eq!(std::fs::read(dest.join(name)).unwrap(), body(*len), "{name}");
+        }
+        assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 90 * 120_000, "progress ends at the declared total");
+
+        let forged = base.join("forged.zip");
+        write_zip(&forged, &entries, zip::CompressionMethod::Deflated);
+        declare_size(&forged, "mods/lib-40.jar", 100);
+        let dest = base.join("forged-out");
+        let err = unzip_to(&forged, &dest).expect_err("a forged size must stop the threads");
+        assert!(err.contains("больше, чем заявлено"), "{err}");
+        assert!(!dest.exists(), "everything the threads wrote is taken back: {:?}", tree(&dest));
+
+        let twins = base.join("twins.zip");
+        let mut dup: Vec<(&str, usize)> = entries.clone();
+        dup.push(("MODS/LIB-0.JAR", 5));
+        write_zip(&twins, &dup, zip::CompressionMethod::Deflated);
+        let dest = base.join("twins-out");
+        unzip_to(&twins, &dest).unwrap();
+        assert!(dest.join("mods/lib-0.jar").exists() || dest.join("MODS/LIB-0.JAR").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     /// A directory squatting on the entry's path makes Windows answer
     /// «Access is denied», the same error an antivirus gives when it refuses a
     /// file by name. Only entries the caller marked skippable may be left out.
@@ -562,7 +752,7 @@ mod tests {
             let dest = dir.join("out");
             write_zip(&archive, &[("jdk-21/bin/java.exe", 3000), ("jdk-21/bin/ucrtbase.dll", 3000), ("jdk-21/lib/modules", 3000)], zip::CompressionMethod::Deflated);
             std::fs::create_dir_all(dest.join("bin").join("ucrtbase.dll")).unwrap();
-            let res = extract_zip(&archive, &dest, UNPACK_CEILING, below_top_folder, skippable);
+            let res = extract_zip(&archive, &dest, UNPACK_CEILING, below_top_folder, skippable, None);
             assert_eq!(res.is_ok(), want_ok, "случай {i}: {why} ({res:?})");
             if want_ok {
                 for rel in ["bin/java.exe", "lib/modules"] {
