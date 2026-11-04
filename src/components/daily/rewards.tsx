@@ -59,7 +59,7 @@ export function rewardTitle(r: TrackReward): string {
   return t('{name}, навсегда', { name: r.item?.name || RARITY_NAME_SHORT[rewardRarity(r)] })
 }
 
-export function RewardArt({ reward, size }: { reward: TrackReward; size: number }) {
+export function RewardArt({ reward, size, inScene }: { reward: TrackReward; size: number; inScene?: boolean }) {
   const it = reward.kind === 'ITEM' || reward.kind === 'FRAGMENTS' ? reward.item : undefined
   const preview = useVariantPreview(it?.preview, it?.tintFrom, it?.tintFrom ? it.color : null)
   const style = { '--ra-size': size + 'px', '--ra-tone': rarityTone(reward) } as CSSProperties
@@ -94,7 +94,7 @@ export function RewardArt({ reward, size }: { reward: TrackReward; size: number 
   if (reward.kind === 'CHEST') {
     return (
       <span className="ra ra-chest" style={style}>
-        <ChestLive ready={false} tier={reward.tier} size={Math.round(size * 0.8)} />
+        <ChestLive ready={false} tier={reward.tier} size={Math.round(size * 0.8)} inScene={inScene} />
       </span>
     )
   }

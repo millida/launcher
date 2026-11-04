@@ -1,4 +1,4 @@
-import type { MoveCandidate, MoveOutcome } from '../ipc/commands'
+import type { MoveBlocker, MoveCandidate, MoveOutcome } from '../ipc/commands'
 import { LOADER_NAME, plural } from './format'
 import { formatFixed, t, tx } from '../i18n'
 
@@ -57,6 +57,16 @@ export function batchSummary(results: RowResult[]): { text: string; kind: 'ok' |
   const head = t('Перенесли {count} — играй в «Моих сборках»', { count: ok + ' ' + plural(ok, t('сборку'), t('сборки'), t('сборок')) })
   if (!failed) return { text: head, kind: 'ok' }
   return { text: t('{head}. Не вышло: {n} — причина под сборкой', { head, n: failed }), kind: 'error' }
+}
+
+/**
+ * Whether Move can be pressed and what holds the button. A game from the build is never closed;
+ * the source launcher holds the button only until the player lets Millida close it.
+ */
+export function moveGate(blockers: MoveBlocker[], autoClose: boolean): { ok: boolean; holder: string } {
+  const holding = blockers.filter((b) => b.game || !autoClose)
+  if (!holding.length) return { ok: true, holder: '' }
+  return { ok: false, holder: launchersText(holding.map((b) => ({ launcher: tx(b.label) }))) }
 }
 
 /** Ядро отвечает строкой ошибки; из Error берём сообщение, остальное — как есть. */

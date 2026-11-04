@@ -175,11 +175,13 @@ export function safetyDue(live: boolean, hidden: boolean, sinceLastMs: number): 
 
 export const PARTY_POLL_MS = 15_000
 export const PARTY_SLOW_POLL_MS = 60_000
+/** Every party change is published to its members, so with the socket up the poll only catches a lost one. */
+export const PARTY_LIVE_SAFETY_MS = 600_000
 
 /** Null: skip this tick. Without the socket the cadence is the old one: 15 s with a party or an invite, 60 s otherwise. */
 export function partyPollEveryMs(live: boolean, busy: boolean, hidden: boolean): number | null {
   if (hidden && !busy) return null
-  if (live) return safetyPollMs(hidden)
+  if (live) return hidden ? PARTY_LIVE_SAFETY_MS * HIDDEN_SAFETY_FACTOR : PARTY_LIVE_SAFETY_MS
   return busy ? PARTY_POLL_MS : PARTY_SLOW_POLL_MS
 }
 

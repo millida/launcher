@@ -11,6 +11,7 @@ import { inviteToParty, joinPartyByCode, partyInviteCode, usePartyStore } from '
 import { setScreen, showToast } from '../../state/ui'
 import '../../styles/pixel/party-invite.css'
 import { t, useT } from '../../i18n'
+import { liveInterval } from '../../lib/liveInterval'
 
 /** Сколько приглашение «висит» на кнопке, прежде чем её можно нажать снова. */
 const INVITE_MS = 60_000
@@ -97,8 +98,7 @@ export function PartyInviteList({ close }: { close: () => void }) {
   const [now, setNow] = useState(Date.now)
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
+    return liveInterval(() => setNow(Date.now()), 1000)
   }, [])
 
   useEffect(() => {

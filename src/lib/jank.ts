@@ -1,6 +1,8 @@
 // Measures long UI frames (over 50 ms) for statistics: screen and function name, no content. Sent by telemetry.ts.
 import { useUi, type ScreenId } from '../state/ui'
 import { track } from './telemetry'
+import { renderLive } from './renderGate'
+import { STUTTER_GRACE_MS } from './slowLite'
 
 export const LONG_FRAME_MS = 50
 export const REPORT_WORST_MS = 100
@@ -88,12 +90,27 @@ export function initJankWatch(): void {
     if (next.screen !== prev.screen) enter(next.screen)
   })
 
+  // Stutter in practice (lib/slowLite): frames count while the window is visible and no game runs
+  // (renderLive), and not in the first seconds after start or a screen change. The counter
+  // (stutter.ts) loads once those seconds pass, so it stays out of the startup set.
+  let stutters: { frame(start: number, duration: number, calmSince: number): boolean } | null = null
+  let demote: ((at: ScreenId) => void) | null = null
+  window.setTimeout(() => {
+    void import('./stutter')
+      .then((m) => {
+        stutters = m.stutterWatch()
+        demote = m.demoteSlowPc
+      })
+      .catch(() => undefined)
+  }, STUTTER_GRACE_MS)
+
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries() as LoafEntry[]) {
       if (entry.duration < LONG_FRAME_MS) continue
       const frame = { start: entry.startTime, duration: entry.duration, source: frameSource(entry) }
       if (import.meta.env.DEV) console.warn('[jank]', screen, Math.round(frame.duration) + 'ms', frame.source)
       if (frame.start >= enteredAt && frame.start < enteredAt + ENTRY_WINDOW_MS) frames.push(frame)
+      if (stutters && renderLive() && stutters.frame(frame.start, frame.duration, enteredAt)) demote?.(screen)
     }
   }).observe({ type, buffered: false })
 }

@@ -163,6 +163,24 @@ fn fit_to_machine_with(want: u32, total_mb: u64, available_mb: u64) -> (u32, Opt
     (want.min(MAX_HEAP_MB), None)
 }
 
+/// The most any launch may take, however the number was chosen (slider, crash fix, a pack's own
+/// memory): the machine minus what the system keeps. Past it Windows swaps and the game and the
+/// launcher stutter far worse than with a smaller heap. Unknown machine size: no limit.
+pub fn os_reserve_ceiling_mb(total_mb: u64) -> Option<u32> {
+    if total_mb == 0 {
+        return None;
+    }
+    Some(total_mb.saturating_sub(reserved_mb(total_mb)).clamp(1024, 65536) as u32)
+}
+
+/// `ram` cut to what the machine can give without swapping.
+pub fn clamp_to_os_reserve(ram: u32, total_mb: u64) -> u32 {
+    match os_reserve_ceiling_mb(total_mb) {
+        Some(ceiling) => ram.min(ceiling),
+        None => ram,
+    }
+}
+
 fn manual_ram_mb(profile: &str) -> u32 {
     let s: serde_json::Value = std::fs::read(profile_dir(profile).join("millida-settings.json"))
         .ok()
@@ -248,7 +266,12 @@ pub fn set_auto_tune(profile: &str, on: bool) {
 /// occurrence of a flag wins, so a duplicate would silently override the
 /// player's own value.
 pub fn tuned_flags(profile: &str, own_args: &str, boost_on: bool) -> Vec<String> {
-    if !auto_tune_on(profile) || boost_on {
+    tuned_flags_for(auto_tune_on(profile), own_args, boost_on)
+}
+
+/// `tuned_flags` with the build's auto-tuning switch already read.
+pub(crate) fn tuned_flags_for(auto_tune: bool, own_args: &str, boost_on: bool) -> Vec<String> {
+    if !auto_tune || boost_on {
         return vec![];
     }
     let taken: Vec<&str> = own_args.split_whitespace().collect();
@@ -312,6 +335,10 @@ const LAUNCHER_OPTIONS_SINCE: &[(&str, u32)] = &[
     ("--enable-native-access", 17),
 ];
 
+/// Не для Java 8: резервирование всей кучи на её старте там делается одним потоком и держит
+/// запуск минуту на больших кучах, а выигрыша в кадрах старая JVM не даёт.
+const NOT_ON_JAVA_8: &[&str] = &[PRETOUCH_FLAG];
+
 /// Последняя правка аргументов JVM перед запуском. Флаги собираются из
 /// четырёх мест (описание версии, автоподбор, буст, свои аргументы игрока), и
 /// каждое по отдельности верно, а вместе они роняли JVM до окна:
@@ -328,6 +355,9 @@ pub fn fit_jvm_args(args: &mut Vec<String>, java_major: Option<u32>) {
             let name = a.split('=').next().unwrap_or(a);
             !LAUNCHER_OPTIONS_SINCE.iter().any(|(opt, since)| name == *opt && major < *since)
         });
+        if major <= 8 {
+            args.retain(|a| !NOT_ON_JAVA_8.contains(&a.as_str()));
+        }
     }
     let gcs: Vec<usize> = (0..args.len()).filter(|&i| gc_choice(&args[i])).collect();
     if let Some((&keep, rest)) = gcs.split_last() {
@@ -355,6 +385,15 @@ pub fn fit_jvm_args(args: &mut Vec<String>, java_major: Option<u32>) {
             args.insert(i, UNLOCK_EXPERIMENTAL.to_string());
         }
     }
+    // -Xms above the heap the JVM ends up with (the player's Aikar set on a smaller machine) stops
+    // it before the window: "Initial heap size set to a larger value than the maximum heap size".
+    if let Some(xmx) = args.iter().rev().find_map(|a| heap_flag_mb(a, "-Xmx")) {
+        for a in args.iter_mut() {
+            if heap_flag_mb(a, "-Xms").is_some_and(|xms| xms > xmx) {
+                *a = format!("-Xms{xmx}M");
+            }
+        }
+    }
     if !args.iter().any(|a| a.contains("IgnoreUnrecognizedVMOptions")) {
         let at = usize::from(!args.is_empty() && args[0].starts_with("-Xmx"));
         args.insert(at, "-XX:+IgnoreUnrecognizedVMOptions".into());
@@ -378,14 +417,78 @@ pub struct RamCheck {
     pub manual: bool,
     /// A catalogue pack states its own memory; the launch follows it.
     pub pack_owned: bool,
+    /// -Xmx of the build's own JVM arguments, 0 without one. It stands right of the launcher's
+    /// and wins over the slider, so the build page shows it instead.
+    pub own_args_mb: u32,
+    /// Memory bounds of a catalogue pack, 0 when it states none.
+    pub pack_min_mb: u32,
+    pub pack_max_mb: u32,
+}
+
+/// A heap size flag (`-Xmx4G`, `-Xms512m`) in MB. None without a unit: the JVM reads a bare
+/// number as bytes, and `-Xmx4096` stops it at start.
+pub fn heap_flag_mb(arg: &str, flag: &str) -> Option<u32> {
+    let v = arg.strip_prefix(flag)?;
+    if v.len() < 2 || !v.is_ascii() {
+        return None;
+    }
+    let (num, unit) = v.split_at(v.len() - 1);
+    let n: u64 = num.parse().ok()?;
+    let mb = match unit {
+        "k" | "K" => n / 1024,
+        "m" | "M" => n,
+        "g" | "G" => n.saturating_mul(1024),
+        "t" | "T" => n.saturating_mul(1024 * 1024),
+        _ => return None,
+    };
+    Some(mb.min(u32::MAX as u64) as u32)
+}
+
+/// The heap the build's own JVM arguments set: their last -Xmx, as the JVM reads it. 0 when none.
+pub fn own_heap_mb(jvm_args: &str) -> u32 {
+    jvm_args.split_whitespace().rev().find_map(|a| heap_flag_mb(a, "-Xmx")).unwrap_or(0)
+}
+
+fn own_jvm_args(profile: &str) -> String {
+    let s: serde_json::Value = std::fs::read(profile_dir(profile).join("millida-settings.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::Value::Null);
+    s["jvmArgs"].as_str().unwrap_or("").to_string()
+}
+
+/// Takes -Xmx and -Xms out of the build's own JVM arguments, so the heap the launcher sets is the
+/// one the game gets. The out-of-memory crash fix does this, otherwise its value never applies.
+pub fn drop_own_heap_args(profile: &str) {
+    let raw = own_jvm_args(profile);
+    let kept: Vec<&str> = raw.split_whitespace().filter(|a| !a.starts_with("-Xmx") && !a.starts_with("-Xms")).collect();
+    if kept.len() == raw.split_whitespace().count() {
+        return;
+    }
+    let mut patch = serde_json::Map::new();
+    patch.insert("jvmArgs".into(), serde_json::json!(kept.join(" ")));
+    crate::engine::merge_settings(profile, patch);
+}
+
+/// The heap the next launch of this build gets, the way the launch decides it: the build's own
+/// -Xmx if its JVM arguments have one, otherwise the slider or auto-tuning inside a pack's bounds
+/// and the system's reserve.
+pub fn launch_heap_of(profile: &str, requested: u32) -> u32 {
+    let own = own_heap_mb(&own_jvm_args(profile));
+    if own > 0 {
+        return own;
+    }
+    let pack = crate::engine::trusted_pack_launch_spec(profile).map(|s| (s.min_ram_mb, s.max_ram_mb));
+    super::pipeline::plan::launch_heap(&HeapAsk::of(profile, requested), &Machine::now(), pack)
 }
 
 pub fn ram_check(profile: &str, requested: u32) -> RamCheck {
     let mods = count_files(profile, "mod");
     let shaders = count_files(profile, "shader") > 0;
     let tuning = tune_profile(profile);
+    let pack = crate::engine::trusted_pack_launch_spec(profile);
     RamCheck {
-        heap_mb: tuned_ram_mb(profile, requested),
+        heap_mb: launch_heap_of(profile, requested),
         need_mb: wanted_mb(mods, shaders),
         fit_mb: tuning.ram_mb,
         total_mb: tuning.total_ram_mb,
@@ -393,22 +496,68 @@ pub fn ram_check(profile: &str, requested: u32) -> RamCheck {
         mods,
         manual: requested > 0 || manual_ram_mb(profile) > 0,
         pack_owned: !crate::engine::fps_boost_applicable(profile),
+        own_args_mb: own_heap_mb(&own_jvm_args(profile)),
+        pack_min_mb: pack.as_ref().map_or(0, |s| s.min_ram_mb),
+        pack_max_mb: pack.as_ref().map_or(0, |s| s.max_ram_mb),
     }
 }
 
 /// Memory for a launch: an explicit request wins, otherwise the tuned value.
 pub fn tuned_ram_mb(profile: &str, requested: u32) -> u32 {
-    if requested > 0 {
-        return requested.clamp(512, 65536);
+    heap_for(&HeapAsk::of(profile, requested), &Machine::now())
+}
+
+/// What a build asks of memory: an explicit request for this launch, the build's own pinned value,
+/// whether auto-tuning is on, and what the build holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct HeapAsk {
+    pub requested: u32,
+    pub manual: u32,
+    pub auto_tune: bool,
+    pub mods: u32,
+    pub shaders: bool,
+}
+
+/// The memory of the machine at the moment of the launch, in MB.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Machine {
+    pub total_mb: u64,
+    pub available_mb: u64,
+}
+
+impl Machine {
+    pub(crate) fn now() -> Machine {
+        Machine { total_mb: total_ram_mb(), available_mb: available_ram_mb() }
     }
-    let manual = manual_ram_mb(profile);
-    if manual > 0 {
-        return manual.clamp(512, 65536);
+}
+
+impl HeapAsk {
+    /// The build's own side of the question, read from its folder.
+    pub(crate) fn of(profile: &str, requested: u32) -> HeapAsk {
+        HeapAsk {
+            requested,
+            manual: manual_ram_mb(profile),
+            auto_tune: auto_tune_on(profile),
+            mods: count_files(profile, "mod"),
+            shaders: count_files(profile, "shader") > 0,
+        }
     }
-    if !auto_tune_on(profile) {
-        return default_half_ram();
+}
+
+/// `tuned_ram_mb` as a calculation: the same answer from the same facts, without reading the disk
+/// or the system. An explicit request wins, then the build's own value, then half the machine
+/// with auto-tuning off, then auto-tuning.
+pub(crate) fn heap_for(ask: &HeapAsk, machine: &Machine) -> u32 {
+    if ask.requested > 0 {
+        return ask.requested.clamp(512, 65536);
     }
-    tune_profile(profile).ram_mb
+    if ask.manual > 0 {
+        return ask.manual.clamp(512, 65536);
+    }
+    if !ask.auto_tune {
+        return half_ram_of(machine.total_mb);
+    }
+    fit_to_machine_with(wanted_mb(ask.mods, ask.shaders), machine.total_mb, machine.available_mb).0
 }
 
 /// Heap to offer after the game ran out of the `used_mb` it had. The tuned value
@@ -425,12 +574,19 @@ pub fn heap_after_oom(used_mb: u32, total_mb: u64) -> Option<u32> {
     (next > used_mb).then_some(next)
 }
 
+/// The out-of-memory offer for a build. A catalogue pack's upper bound caps it: the launch cuts
+/// anything above that bound, so a larger offer would change nothing. None when no step is left.
+pub fn oom_offer(used_mb: u32, total_mb: u64, pack_max_mb: u32) -> Option<u32> {
+    let next = heap_after_oom(used_mb, total_mb)?;
+    let next = if pack_max_mb > 0 { next.min(pack_max_mb) } else { next };
+    (next > used_mb).then_some(next)
+}
+
 const OOM_STEP_MB: u32 = 2048;
 
 /// What auto-tuning is measured against: half the machine, the rule launchers
 /// used before anyone looked at the pack.
-pub(crate) fn default_half_ram() -> u32 {
-    let total = total_ram_mb();
+fn half_ram_of(total: u64) -> u32 {
     if total == 0 {
         return 4096;
     }
@@ -449,6 +605,21 @@ pub fn profile_content_bytes(profile: &str) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    /// Вход (память системы) → потолок кучи. Резерв системы — четверть, но не меньше 2 ГБ.
+    #[test]
+    fn a_launch_never_takes_the_memory_the_system_needs() {
+        let gb = 1024u64;
+        assert_eq!(super::os_reserve_ceiling_mb(4 * gb), Some(2048), "на 4 ГБ системе остаются 2");
+        assert_eq!(super::os_reserve_ceiling_mb(8 * gb), Some(6144));
+        assert_eq!(super::os_reserve_ceiling_mb(16 * gb), Some(12 * 1024));
+        assert_eq!(super::os_reserve_ceiling_mb(0), None, "размер памяти неизвестен — не режем");
+        assert_eq!(super::os_reserve_ceiling_mb(2 * gb), Some(1024), "даже на 2 ГБ игре остаётся минимум, чтобы запуститься");
+        // Игрок или автор сборки просит 6 ГБ на 4-гигабайтном ПК: своп вместо игры.
+        assert_eq!(super::clamp_to_os_reserve(6144, 4 * gb), 2048);
+        assert_eq!(super::clamp_to_os_reserve(1536, 4 * gb), 1536, "меньше потолка — не трогаем");
+        assert_eq!(super::clamp_to_os_reserve(6144, 0), 6144);
+    }
+
     #[test]
     fn a_16gb_laptop_never_gives_the_heap_more_than_half() {
         assert_eq!(super::safe_ceiling_mb(16 * 1024, 12 * 1024), 6 * 1024);
@@ -594,6 +765,56 @@ mod tests {
         );
     }
 
+    /// heap that ran out x pack bound -> offer. An offer above the bound would be cut at launch
+    /// while the button reports the memory as given.
+    #[test]
+    fn oom_offer_stays_inside_the_pack_bound() {
+        let cases = [
+            (4096, 32768, 0, Some(6144), "no bound: the usual step"),
+            (4096, 32768, 5120, Some(5120), "the step would pass the bound: stop at it"),
+            (4096, 32768, 6144, Some(6144), "the step lands on the bound"),
+            (6144, 32768, 6144, None, "already at the bound: no button that changes nothing"),
+            (8192, 32768, 6144, None, "the build's own -Xmx above the bound: never offer less"),
+        ];
+        for (used, total, bound, want, why) in cases {
+            assert_eq!(oom_offer(used, total, bound), want, "ran out at {used} MB, bound {bound} MB. Why pinned: {why}");
+        }
+    }
+
+    /// flag -> MB the JVM gets; a bare number is bytes and never counts as megabytes.
+    #[test]
+    fn heap_flags_read_the_way_the_jvm_reads_them() {
+        let cases: [(&str, &str, Option<u32>, &str); 8] = [
+            ("-Xmx4G", "-Xmx", Some(4096), "gigabytes"),
+            ("-Xmx6144m", "-Xmx", Some(6144), "megabytes, lower case"),
+            ("-Xms524288K", "-Xms", Some(512), "kilobytes"),
+            ("-Xmx4096", "-Xmx", None, "no unit: bytes, not megabytes"),
+            ("-Xmx", "-Xmx", None, "no value at all"),
+            ("-Xmx4Г", "-Xmx", None, "a Cyrillic unit is not a unit"),
+            ("-Xms4G", "-Xmx", None, "the other flag"),
+            ("-Xmx99999999999T", "-Xmx", Some(u32::MAX), "an absurd size saturates instead of wrapping"),
+        ];
+        for (arg, flag, want, why) in cases {
+            assert_eq!(heap_flag_mb(arg, flag), want, "{arg}: {why}");
+        }
+        assert_eq!(own_heap_mb("-Xmx2G -XX:+UseG1GC -Xmx6G"), 6144, "the JVM keeps the last -Xmx");
+        assert_eq!(own_heap_mb("-Xms2G -XX:+UseG1GC"), 0, "-Xms alone sets no ceiling");
+    }
+
+    /// The player's -Xms above the heap the launch ends up with used to stop the JVM before the window.
+    #[test]
+    fn initial_heap_never_exceeds_the_maximum() {
+        let mut a = v(&["-Xmx4096M", "-Xms6G", "-XX:+UseG1GC", "Main"]);
+        fit_jvm_args(&mut a, Some(21));
+        assert!(a.contains(&"-Xms4096M".to_string()), "-Xms is cut to -Xmx: {a:?}");
+        let mut ok = v(&["-Xmx8G", "-Xms4G", "Main"]);
+        fit_jvm_args(&mut ok, Some(21));
+        assert!(ok.contains(&"-Xms4G".to_string()), "a smaller -Xms is the player's and stays: {ok:?}");
+        let mut later = v(&["-Xmx8192M", "-Xms6G", "-Xmx4G", "Main"]);
+        fit_jvm_args(&mut later, Some(21));
+        assert!(later.contains(&"-Xms4096M".to_string()), "measured against the last -Xmx, the one the JVM keeps: {later:?}");
+    }
+
     fn v(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
     }
@@ -635,6 +856,20 @@ mod tests {
         assert!(a.iter().any(|x| x.starts_with("--enable-native-access")), "с Java 17 она есть");
         assert!(a.contains(&"-XX:+IgnoreUnrecognizedVMOptions".to_string()));
         assert_eq!(a[0], "-Xmx4G", "память остаётся первой");
+    }
+
+    #[test]
+    fn heap_pretouch_stays_off_java_8() {
+        let boost = v(&["-Xmx6G", "-XX:+UseG1GC", PRETOUCH_FLAG, "Main"]);
+        let mut old = boost.clone();
+        fit_jvm_args(&mut old, Some(8));
+        assert!(!old.contains(&PRETOUCH_FLAG.to_string()), "на Java 8 запуск с предзаполнением кучи тянется минуту: {old:?}");
+        assert!(old.contains(&"-XX:+UseG1GC".to_string()), "остальные флаги буста остаются");
+        for major in [Some(11), Some(17), Some(21), Some(25), None] {
+            let mut a = boost.clone();
+            fit_jvm_args(&mut a, major);
+            assert!(a.contains(&PRETOUCH_FLAG.to_string()), "на Java {major:?} предзаполнение — выбор буста: {a:?}");
+        }
     }
 
     #[test]

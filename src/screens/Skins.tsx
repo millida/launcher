@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
 import { t, tx, useT } from '../i18n'
 import { PixelField } from '../components/lobby/PixelField'
-import { SKINS_IMPORT_EVENT, SKINS_UPLOAD_EVENT } from '../state/topbar'
+import { SKINS_IMPORT_EVENT, SKINS_TAKE_OFF_EVENT, SKINS_UPLOAD_EVENT, useTopBar } from '../state/topbar'
 import { HEAD_FROM_CPU, getAccount, useAccounts } from '../state/accounts'
 import type { Account } from '../state/accounts'
 import { noteCosmeticsSeen } from '../state/newHint'
@@ -85,7 +85,8 @@ import { loadShowcase, showcaseSkinUrl, type ShowcaseCard, type ShowcaseKind } f
 import { ShopFeed, ShopOverlays, useShop } from '../components/shop/ShopKit'
 import '../styles/pixel/shop2.css'
 import '../styles/pixel/sets.css'
-import { buyCosmetic, buySet, loadBalance, loadSets, tierPct, type SetColorwayView, type SetView } from '../lib/rubies'
+import { buyCosmetic, buySet, loadBalance, loadEconomyProgress, loadSets, tierPct, type SetColorwayView, type SetView } from '../lib/rubies'
+import { achievementNote, achievementSources } from '../lib/achievementSource'
 import { usePlus } from '../state/plus'
 import { onRealtime } from '../lib/realtime'
 import { useVariantPreview } from '../lib/variantArt'
@@ -160,7 +161,10 @@ const EARNED_BY = (): Record<string, string> => ({
 
 const onSale = (c: CosmeticItem) => c.access === 'PURCHASE' && (c.priceRubies ?? 0) > 0
 
-const earnedNote = (c: CosmeticItem) => (c.access === 'PURCHASE' && !onSale(c) ? EARNED_BY()[c.channel ?? ''] ?? t('Не продаётся') : undefined)
+const earnedNote = (c: CosmeticItem, sources?: Map<string, string>) =>
+  c.access === 'PURCHASE' && !onSale(c)
+    ? (c.channel === 'ACHIEVEMENT' && sources ? achievementNote(sources, c.id, c.baseId) : undefined) ?? EARNED_BY()[c.channel ?? ''] ?? t('Не продаётся')
+    : undefined
 
 
 /** Дата словами: «до 14 октября» читается, «2026-10-14T00:00:00Z» - нет. */
@@ -819,6 +823,17 @@ export function Skins({ on }: { on: boolean }) {
   const [variantById, setVariantById] = useState<Record<string, string>>({})
   const [emoting, setEmoting] = useState(false)
   const [stars, setStars] = useState<string[]>(() => starredIds())
+  // Какое достижение открывает вещь: из прогресса игрока, одной загрузкой. Нет ответа — общая пометка.
+  const [achSources, setAchSources] = useState<Map<string, string>>(() => new Map())
+  useEffect(() => {
+    let alive = true
+    loadEconomyProgress()
+      .then((p) => alive && setAchSources(achievementSources(p)))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
   /**
    * Сколько вещей раскрыто в каждом разделе. Каталог на семьсот картинок,
    * выложенный разом, минуту тянет их по сети и всё это время выглядит пустым:
@@ -2221,19 +2236,24 @@ export function Skins({ on }: { on: boolean }) {
    * Строку и страницу приводим к пикселям, иначе на трекпаде и в части браузеров
    * один и тот же жест даёт разный шаг.
    */
-  // «Загрузить скин» и «Импорт» — в верхней строке экрана (правка 22:38).
+  // Upload, Import and Remove all live in the top bar of the screen.
   const pickSkinRef = useRef<() => void>(() => {})
+  const takeOffAllRef = useRef<() => void>(() => {})
   useEffect(() => {
     const up = () => pickSkinRef.current()
+    const off = () => takeOffAllRef.current()
     const imp = () => {
       setSection('skin')
       setImportOpen(true)
     }
     window.addEventListener(SKINS_UPLOAD_EVENT, up)
     window.addEventListener(SKINS_IMPORT_EVENT, imp)
+    window.addEventListener(SKINS_TAKE_OFF_EVENT, off)
     return () => {
       window.removeEventListener(SKINS_UPLOAD_EVENT, up)
       window.removeEventListener(SKINS_IMPORT_EVENT, imp)
+      window.removeEventListener(SKINS_TAKE_OFF_EVENT, off)
+      useTopBar.getState().setSkinsWorn(false)
     }
   }, [])
 
@@ -2511,6 +2531,17 @@ export function Skins({ on }: { on: boolean }) {
 
   const use3d = svReady && !fallback
   const currentCape = capeById(capes, cape)
+
+  // Remove all: the cape and every worn or tried-on item, the same way a section's Remove does.
+  takeOffAllRef.current = () => {
+    if (cosmeticBusy) return
+    if (currentCape) takeOffCape()
+    void takeOffSlots([...new Set([...worn, ...fitting].map((c) => c.slot))])
+  }
+  const canTakeOff = !cosmeticBusy && (worn.length > 0 || fitting.length > 0 || !!currentCape)
+  useEffect(() => {
+    useTopBar.getState().setSkinsWorn(canTakeOff)
+  }, [canTakeOff])
 
   const skinTitle = (): string => {
     const stored = activeWardrobe ? wardrobe.find((i) => i.id === activeWardrobe) : null
@@ -3088,7 +3119,7 @@ export function Skins({ on }: { on: boolean }) {
         plus={locked && c.access === 'PLUS'}
         priceRubies={shown}
         priceWas={pct ? base : undefined}
-        note={locked ? earnedNote(c) : undefined}
+        note={locked ? earnedNote(c, achSources) : undefined}
         on={worn.some((w) => w.id === c.id)}
         trying={fitting.some((f) => f.id === c.id)}
         loading={fitLoading.includes(c.id) || cosmeticBusy === c.id}
@@ -3492,7 +3523,7 @@ export function Skins({ on }: { on: boolean }) {
                 name: item.name,
                 art: <CosmeticArt item={item} height={54} />,
                 price: locked && onSale(item) ? item.priceRubies : undefined,
-                note: locked ? earnedNote(item) : undefined,
+                note: locked ? earnedNote(item, achSources) : undefined,
                 plus: locked && item.access === 'PLUS',
                 loading: fitLoading.includes(item.id),
                 tones: item.variants,
@@ -3563,7 +3594,7 @@ export function Skins({ on }: { on: boolean }) {
             )}
             {/* Одна раскладка во всех разделах (владелец 24.09.2026, 19:34): чипы
                 слева, справа «Снять» (если в разделе что-то надето) и «Все/Мои».
-                Поиска по вещам и «Снять всё» нет. */}
+                Поиска по вещам нет; Remove all is in the top bar, next to Import. */}
             {(() => {
               const off = sectionTakeOff(
                 section,

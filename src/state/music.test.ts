@@ -66,6 +66,8 @@ mock.module('../ipc/commands', () => ({
   musicRemove: () => Promise.resolve(),
   openMusicFolder: () => Promise.resolve(),
   mainWindowVisible: () => Promise.resolve(false),
+  mediaReady: () => Promise.resolve({}),
+  mediaFetch: () => Promise.resolve({}),
 }))
 mock.module('../ipc/events', () => ({
   listenWindowVisibility: (fn: (visible: boolean) => void) => {
@@ -87,6 +89,8 @@ const { useMusic } = mus
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+// Автозапуск включил сам игрок (в настройках): без этого радио молчит до первого «играть».
+prefs['m-mus-auto'] = '1'
 tauriPresent = true
 mus.initMusic()
 await new Promise((r) => setTimeout(r, 500))
@@ -221,6 +225,19 @@ test('пауза переживает перезапуск: автостарт �
   await wait(1100)
   expect(el().paused, 'после ручного запуска автостарт снова разрешён').toBe(false)
 }, 20000)
+
+// Автозапуск — только выбор игрока: вход (что записано) → играет ли радио само.
+test('автозапуск: сам по себе не включается, включает его выбор игрока, пауза сильнее', () => {
+  const cases: Array<[string, string, boolean, string]> = [
+    ['', '', false, 'новый игрок, ничего не нажимал: лаунчер молчит (раньше играл с первого запуска)'],
+    ['', '1', true, 'игрок сам запускал радио и не ставил на паузу: выбор запомнился'],
+    ['', '0', false, 'игрок ставил на паузу'],
+    ['1', '', true, 'включил «Музыку при запуске»'],
+    ['0', '1', false, 'выключил «Музыку при запуске» — главнее прошлого запуска радио'],
+    ['0', '', false, 'выключил'],
+  ]
+  for (const [auto, play, want, why] of cases) expect(mus.autostartChosen(auto, play), why).toBe(want)
+})
 
 // Радио Millida и своя музыка: вход (радио, свои треки, что играло) → какой
 // плейлист и что звучит. Закреплено за просьбой владельца 05.10.2026: дефолт

@@ -15,6 +15,8 @@
 .onb-scroll{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
 .onb-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--m-r-card);background:var(--m-surface);cursor:pointer}
 .onb-row.off{opacity:.55;cursor:default}
+.onb-all{background:none;border:1px solid var(--m-border);margin-bottom:8px;padding:8px 12px}
+.onb-all .onb-row-main b{font-size:13px}
 .onb-row input{width:16px;height:16px;accent-color:var(--m-accent);flex-shrink:0}
 .onb-row-main{flex:1;min-width:0}
 .onb-row-main b{display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

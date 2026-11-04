@@ -10,6 +10,7 @@ import {
   type MilliEventDef,
   type MilliEventKind,
 } from './milliEventData'
+import { liveInterval } from '../../lib/liveInterval'
 
 /**
  * Случайные события в пустой сцене (04.10.2026): мимо пролетает что-то из
@@ -134,12 +135,12 @@ export const MilliEvents = memo(function MilliEvents({ active = true }: { active
     const def = MILLI_EVENTS[ev.kind]
     const layer = ref.current
     const sprite = () => layer?.querySelector('.mev-s') ?? null
-    const follow = setInterval(() => milliLean(sprite()), 120)
+    const follow = liveInterval(() => milliLean(sprite()), 120)
     milliLean(sprite())
     const wow = setTimeout(() => milliCue('wow', layer?.parentElement ?? undefined), def.ms * def.wow)
     const end = setTimeout(() => setEv(null), def.ms + 60)
     return () => {
-      clearInterval(follow)
+      follow()
       clearTimeout(wow)
       clearTimeout(end)
       milliLean(null)
