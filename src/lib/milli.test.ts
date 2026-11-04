@@ -8,6 +8,7 @@ import {
   milliError,
   milliInstallBody,
   milliItems,
+  milliOutError,
   milliPlans,
   milliResetText,
   refineMilliError,
@@ -172,4 +173,22 @@ describe('withMilliLang: Milli answers in the launcher language', () => {
       useI18n.setState({ locale: before })
     }
   })
+})
+
+describe('milliOutError', () => {
+  const counter = (remaining: number) => ({ used: 0, limit: 10, remaining, resetAt: '2026-11-05T00:00:00.000Z' })
+  const cases: Array<[string, { day: number; month: number } | null, 'day' | 'month' | null]> = [
+    ['статус ещё не пришёл: кнопку никто не отключал', null, null],
+    ['запросы есть: карточки нет, чат не перекрыт', { day: 3, month: 20 }, null],
+    ['сутки кончились: кнопка неактивна, объяснить обязаны до первой попытки', { day: 0, month: 20 }, 'day'],
+    ['месяц кончился: завтра не поможет, это другая новость', { day: 5, month: 0 }, 'month'],
+    ['кончилось оба: месяц важнее, его не лечит ожидание', { day: 0, month: 0 }, 'month'],
+  ]
+  for (const [why, left, scope] of cases) {
+    test(why, () => {
+      const got = milliOutError(left && { day: counter(left.day), month: counter(left.month) })
+      expect(got?.kind ?? null, why).toBe(scope ? 'limit' : null)
+      expect(got?.scope ?? null, why).toBe(scope)
+    })
+  }
 })

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { batchSummary, candidateMeta, confirmText, contentText, launchersText, rowVerdict, sizeText } from './moves'
+import { batchSummary, candidateMeta, confirmText, contentText, launchersText, moveGate, rowVerdict, sizeText } from './moves'
 import type { RowResult } from './moves'
 import type { MoveCandidate, MoveOutcome } from '../ipc/commands'
 
@@ -72,4 +72,19 @@ test('batch summary never reports success that did not happen', () => {
   expect(batchSummary([bad, bad]).text).not.toContain('Перенесли')
   expect(batchSummary([ok, ok])).toEqual({ text: 'Перенесли 2 сборки — играй в «Моих сборках»', kind: 'ok' })
   expect(batchSummary([ok, bad]).kind, 'a partial batch must not look fully done').toBe('error')
+})
+
+test('the move button waits for the source launcher unless the player let it be closed, and always for the game', () => {
+  const prism = { label: 'Prism Launcher', game: false }
+  const game = { label: 'Minecraft из этой сборки', game: true }
+  const cases: [typeof prism[], boolean, boolean, string][] = [
+    [[], false, true, 'nothing open: the button works'],
+    [[prism], false, false, 'the launcher is open and the player closes it themselves'],
+    [[prism], true, true, 'the launcher is open, but the player let Millida close it'],
+    [[game], true, false, 'a game from the build is never closed for the player'],
+    [[prism, game], true, false, 'the game holds the button even when the launcher may be closed'],
+  ]
+  for (const [blockers, autoClose, ok, why] of cases) expect(moveGate(blockers, autoClose).ok, why).toBe(ok)
+  expect(moveGate([prism], false).holder, 'the hint names what to close').toBe('Prism Launcher')
+  expect(moveGate([prism], true).holder, 'nothing to name when the button works').toBe('')
 })

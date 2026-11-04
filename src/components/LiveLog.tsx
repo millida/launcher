@@ -1,60 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { create } from 'zustand'
 import { Icon } from './Icon'
 import { applyCrashFix, openUrl } from '../ipc/commands'
-import { listenGameLogStart, type CrashInfo } from '../ipc/events'
-import { hasTauri } from '../ipc/tauri'
 import { backdropClose } from '../lib/dismiss'
-import { followGameLog } from '../lib/gameLogFeed'
-import { culpritPattern, lineKind, liveLogFix, LIVE_LOG_MAX } from '../lib/liveLog'
+import { culpritPattern, lineKind, liveLogFix } from '../lib/liveLog'
 import { readPref, writePref } from '../lib/prefs'
-import { lastCrash, markFixApplied } from '../lib/repair'
+import { markFixApplied } from '../lib/repair'
 import { useCrash } from '../state/crash'
 import { showToast } from '../state/ui'
 import { tx, useT } from '../i18n'
-
-const PREF = 'm-live-log'
-const REDRAW_MS = 150
-
-interface LiveLogState {
-  open: boolean
-  profile: string
-  lines: string[]
-  crash: CrashInfo | null
-}
-
-const useLiveLog = create<LiveLogState>(() => ({ open: false, profile: '', lines: [], crash: null }))
-
-let buffer: string[] = []
-let redraw: ReturnType<typeof setTimeout> | null = null
-
-const flush = () => {
-  redraw = null
-  useLiveLog.setState({ lines: buffer })
-}
-
-export const openLiveLog = () => useLiveLog.setState({ open: true, lines: buffer })
-
-let started = false
-
-/** Слушает лог с первого запуска: окно может открыться позже, а строки нужны с начала. */
-export function startLiveLog() {
-  if (started || !hasTauri()) return
-  started = true
-  void listenGameLogStart((profile) => {
-    // A build that crashed last time opens the log by itself: that is when the player wants to watch it.
-    const open = readPref(PREF, '0') === '1' || !!lastCrash(profile)
-    useLiveLog.setState((s) => ({ profile, lines: [], crash: null, open: s.open || open }))
-  })
-  followGameLog(LIVE_LOG_MAX, (lines, profile) => {
-    buffer = lines
-    if (profile && profile !== useLiveLog.getState().profile) useLiveLog.setState({ profile })
-    if (useLiveLog.getState().open && !redraw) redraw = setTimeout(flush, REDRAW_MS)
-  })
-  useCrash.subscribe((s) => {
-    if (s.info && s.info.profile === useLiveLog.getState().profile) useLiveLog.setState({ crash: s.info })
-  })
-}
+import { LIVE_LOG_PREF as PREF, useLiveLog } from './liveLogStore'
 
 /** Окно живого лога запуска: ошибки цветом, виновный мод красным, после вылета — «Починить» тем же исправлением, что и окно вылета. */
 export function LiveLog() {

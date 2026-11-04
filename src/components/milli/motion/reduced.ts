@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { onMediaChange } from '../../../lib/mediaQuery'
 
 /*
  * prefers-reduced-motion: один MediaQueryList на всё приложение. CSS гасит
@@ -23,8 +24,7 @@ export function reducedMotion(): boolean {
 function subscribe(cb: () => void): () => void {
   const m = list()
   if (!m) return () => {}
-  m.addEventListener('change', cb)
-  return () => m.removeEventListener('change', cb)
+  return onMediaChange(m, cb)
 }
 
 export function useReducedMotion(): boolean {

@@ -28,8 +28,20 @@ function formatter(tag: string, style: 'long' | 'short' | 'narrow'): Intl.Relati
   return f
 }
 
+export const hasRelativeFormat = (): boolean => typeof Intl.RelativeTimeFormat === 'function'
+
+// WebKit before Safari 14 (macOS 10.15 and older) has no Intl.RelativeTimeFormat,
+// and the constructor call used to take the whole screen down with it.
+function absoluteMoment(tag: string, then: number, now: number): string {
+  const moment = new Date(then)
+  return Math.abs(then - now) < DAY
+    ? moment.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit' })
+    : moment.toLocaleDateString(tag, { day: 'numeric', month: 'short' })
+}
+
 export function relativeTimeIn(tag: string, then: number, now: number, options: RelativeOptions = {}): string {
   if (!Number.isFinite(then) || !Number.isFinite(now)) return ''
+  if (!hasRelativeFormat()) return absoluteMoment(tag, then, now)
   const rtf = formatter(tag, options.style ?? 'long')
   const floor = ORDER.indexOf(options.floor ?? 'minute')
   const ceil = ORDER.indexOf(options.ceil ?? 'year')
