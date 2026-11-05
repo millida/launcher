@@ -92,7 +92,7 @@ import {
 } from '../lib/window'
 import type { LaunchWindowMode } from '../lib/window'
 import type { SkinSource } from '../lib/gameProfile'
-import { logoutToLogin } from '../lib/session'
+import { showLogin } from '../lib/session'
 import { PremiumSwatches, ThemeRow } from '../components/premium/ThemeRow'
 import { leavePremiumLook, markThemeChoice } from '../lib/premiumTheme'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
@@ -1072,7 +1072,7 @@ export function Settings({ on }: { on: boolean }) {
       <Group title={t('Видно в профиле на millida.net')}>
         {!hasMillida ? (
           <Row title={t('Нужен аккаунт Millida')} keys="приватность профиль видно">
-            <button className="btn sm primary" onClick={() => logoutToLogin()}>
+            <button className="btn sm primary" onClick={() => showLogin()}>
               <Icon id="i-login" /> {t('Войти')}
             </button>
           </Row>

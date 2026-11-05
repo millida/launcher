@@ -1,6 +1,9 @@
 // Stores and hands out login tokens. The UI only gets the answer "logged in or not". The tokens themselves are in secrets.rs.
 // The token is put in at game launch (resolve_launch_auth) and nowhere else.
 use crate::engine::*;
+use super::microsoft::{grant_gone, ms_refresh_token, xbox_chain};
+#[cfg(test)]
+use super::microsoft::ms_token_refusal;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -36,17 +39,20 @@ pub fn ms_forget(account_id: &str) -> Result<(), String> {
 }
 
 /// What the frontend is allowed to know about stored secrets: whether they exist.
-pub fn session_presence(account_ids: &[String]) -> (bool, HashMap<String, bool>) {
+/// An unreadable vault is an error, not "signed out": the webview then keeps the player in and
+/// asks again instead of sending them to the sign-in screen.
+pub fn session_presence(account_ids: &[String]) -> Result<(bool, HashMap<String, bool>), String> {
+    finish_pending_sign_out();
     let mut keys: Vec<String> = vec![SEC_MILLIDA.into(), SEC_MILLIDA_LEGACY.into()];
     keys.extend(account_ids.iter().map(|id| mc_token_key(id)));
-    let present = crate::secrets::present(&keys);
+    let present = crate::secrets::present(&keys)?;
     let has = |k: &str| present.get(k).copied().unwrap_or(false);
     let millida = has(SEC_MILLIDA) || has(SEC_MILLIDA_LEGACY);
     let accounts = account_ids
         .iter()
         .map(|id| (id.clone(), has(&mc_token_key(id))))
         .collect();
-    (millida, accounts)
+    Ok((millida, accounts))
 }
 
 struct PendingLogin {
@@ -111,11 +117,12 @@ fn commit_login(device_code: &str, account_id: &str, missing: &str) -> Result<()
     crate::secrets::set_many(pairs)
 }
 
-/// Only a revoked or expired refresh token warrants wiping the session; a
-/// network failure must never be treated as one.
+/// Only a revoked or expired refresh token warrants wiping the session; a network failure, a busy
+/// service or throttling must never be treated as one. Microsoft's refusals are sorted in
+/// `ms_token_refusal`: only a gone grant reads "истекла".
 fn needs_relogin(err: &str) -> bool {
     let e = err.to_lowercase();
-    e.contains("invalid_grant") || e.contains("истекла") || e.contains("aadsts700") || e.contains("aadsts50")
+    e.contains("invalid_grant") || e.contains("истекла") || grant_gone(&e)
 }
 
 /// One lock per account: Microsoft rotates the refresh token on every use and
@@ -141,13 +148,27 @@ pub async fn ms_session_refresh(account_id: &str) -> Result<Value, String> {
     let Some(rt) = crate::secrets::get(&ms_refresh_key(id)).filter(|t| !t.is_empty()) else {
         return Ok(serde_json::json!({ "status": "none" }));
     };
-    match ms_refresh(rt.clone()).await {
+    let (ms_token, next) = match ms_refresh_token(&rt).await {
+        Ok(pair) => pair,
+        Err(e) if needs_relogin(&e) => {
+            ms_forget(id)?;
+            return Ok(serde_json::json!({ "status": "relogin" }));
+        }
+        Err(e) => return Err(e),
+    };
+    // Microsoft has rotated the refresh token and answers a second use of the spent one by
+    // revoking the family: keep the new one now, even if Xbox or Minecraft fails next.
+    if next != rt {
+        if let Err(e) = crate::secrets::set_many(vec![(ms_refresh_key(id), next.clone())]) {
+            eprintln!("[ms] the rotated refresh token was not saved: {}", e);
+        }
+    }
+    match xbox_chain(&ms_token).await {
         Ok(j) => {
             let token = j["token"].as_str().unwrap_or_default().to_string();
             if token.is_empty() {
                 return Ok(serde_json::json!({ "status": "unavailable" }));
             }
-            let next = j["refresh_token"].as_str().filter(|s| !s.is_empty()).unwrap_or(&rt).to_string();
             crate::secrets::set_many(vec![(mc_token_key(id), token), (ms_refresh_key(id), next)])?;
             Ok(serde_json::json!({
                 "status": "ok",
@@ -366,6 +387,22 @@ mod tests {
         assert!(needs_relogin("Сессия Microsoft истекла — войди заново"));
         assert!(needs_relogin("AADSTS70000: expired"));
         assert!(!needs_relogin("нет соединения с сервером"));
+        // A busy, throttled or looping service keeps the session: it is tried again later.
+        assert!(!needs_relogin("microsoft token refresh refused (temporarily_unavailable): AADSTS90033: try later"));
+        assert!(!needs_relogin("microsoft token refresh refused (server_error): AADSTS50196: request loop"));
+        assert!(!needs_relogin("microsoft token refresh refused (no_access_token): "));
+    }
+
+    #[test]
+    fn microsoft_refusals_end_the_session_only_for_a_gone_grant() {
+        let refusal = |error: &str, desc: &str| ms_token_refusal(&serde_json::json!({ "error": error, "error_description": desc }));
+        assert!(needs_relogin(&refusal("invalid_grant", "AADSTS70008: The refresh token has expired")));
+        assert!(needs_relogin(&refusal("interaction_required", "AADSTS50076: MFA required")));
+        assert!(!needs_relogin(&refusal("temporarily_unavailable", "AADSTS90033: A transient error has occurred")));
+        assert!(!needs_relogin(&refusal("server_error", "AADSTS50196: request loop")));
+        assert!(!needs_relogin(&ms_token_refusal(&serde_json::json!({}))));
+        // AADSTS700001 is another code than AADSTS70000.
+        assert!(!grant_gone("AADSTS700001: other"));
     }
 
     #[test]

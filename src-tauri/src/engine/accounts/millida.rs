@@ -383,6 +383,9 @@ pub const SEC_MILLIDA_LEGACY: &str = "mc";
 pub const UNAUTHORIZED: &str = "unauthorized";
 
 pub fn millida_token() -> Option<String> {
+    if sign_out_pending() {
+        return None;
+    }
     if let Some((access, _)) = unsaved_pair() {
         return Some(access);
     }
@@ -486,12 +489,21 @@ fn without_refresh_token(has_access: bool) -> Refreshed {
 /// answers by invalidating the whole token family.
 async fn refresh_session(used: Option<String>) -> Refreshed {
     let _guard = REFRESH_LOCK.lock().await;
+    if sign_out_pending() {
+        return Refreshed::SignedOut;
+    }
     if let Some((access, refresh)) = unsaved_pair() {
         keep_pair(&access, &refresh);
     }
     let (current, stored_refresh) = match unsaved_pair() {
         Some((access, refresh)) => (Some(access), Some(refresh)),
-        None => (crate::secrets::get(SEC_MILLIDA), crate::secrets::get(SEC_MILLIDA_REFRESH)),
+        // One read for the pair: a failed second read used to look like "no refresh token", and
+        // the session was ended while it was alive (04.11.2026: "the launcher logs me out").
+        None => match crate::secrets::get_many(&[SEC_MILLIDA, SEC_MILLIDA_REFRESH]) {
+            Ok(pair) => (pair[0].clone(), pair[1].clone()),
+            // The vault is busy right now: the session is not gone, ask again later.
+            Err(_) => return Refreshed::Unavailable,
+        },
     };
     if current.is_some() && current != used {
         return Refreshed::Token(current.unwrap_or_default());
@@ -785,6 +797,65 @@ pub async fn millida_upload_auth(
     }
 }
 
+static SIGN_OUT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn sign_out_marker() -> std::path::PathBuf {
+    data_dir().join("millida-sign-out-pending")
+}
+
+fn drop_sign_out_marker() {
+    if let Err(e) = std::fs::remove_file(sign_out_marker()) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("[auth] sign-out marker was not removed: {e}");
+        }
+    }
+}
+
+/// The player's own sign-out. A vault that refuses it leaves a marker on disk, so the tokens are
+/// still erased by a later session check, also after a restart.
+pub fn millida_sign_out() -> Result<(), String> {
+    let _guard = SIGN_OUT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let result = millida_forget_session();
+    match &result {
+        Ok(()) => drop_sign_out_marker(),
+        Err(_) => {
+            if let Err(e) = std::fs::write(sign_out_marker(), b"") {
+                eprintln!("[auth] sign-out marker was not written: {e}");
+            }
+        }
+    }
+    result
+}
+
+pub fn finish_pending_sign_out() {
+    let _guard = SIGN_OUT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if !sign_out_marker().exists() {
+        return;
+    }
+    match millida_forget_session() {
+        Ok(()) => drop_sign_out_marker(),
+        Err(e) => eprintln!("[auth] pending sign-out is still waiting: {e}"),
+    }
+}
+
+/// Tokens the player asked to erase are not used while the vault keeps them from being erased.
+fn sign_out_pending() -> bool {
+    finish_pending_sign_out();
+    sign_out_marker().exists()
+}
+
+/// Under one lock, so a pending sign-out cannot erase the new session. The marker goes only after
+/// the new session is stored: a refused sign-in must not cancel the sign-out it came after.
+fn store_login_after_sign_out(pairs: Vec<(String, String)>) -> Result<(), String> {
+    let _guard = SIGN_OUT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if sign_out_marker().exists() {
+        millida_forget_session()?;
+    }
+    crate::secrets::store_login(pairs)?;
+    drop_sign_out_marker();
+    Ok(())
+}
+
 pub fn millida_forget_session() -> Result<(), String> {
     set_unsaved_pair(None);
     for key in [SEC_MILLIDA, SEC_MILLIDA_REFRESH, SEC_MILLIDA_LEGACY, SEC_MILLIDA_GAME_PROFILE] {
@@ -904,7 +975,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<Value, String> {
     if let Some(rt) = r["refreshToken"].as_str().filter(|s| !s.is_empty()) {
         pairs.push((SEC_MILLIDA_REFRESH.to_string(), rt.to_string()));
     }
-    crate::secrets::store_login(pairs)?;
+    store_login_after_sign_out(pairs)?;
     set_unsaved_pair(None);
     Ok(serde_json::json!({ "status": "ok", "user": r["user"].clone() }))
 }

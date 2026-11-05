@@ -50,3 +50,12 @@ describe('lookCache', () => {
     expect(await keptLookSkin('Old')).toBeNull()
   })
 })
+
+describe('kept outfit', () => {
+  test('the outfit of the last look comes back for the same nick and only for it', async () => {
+    const { keepLookOutfit, keptLookOutfit } = await import('./lookCache')
+    await keepLookOutfit('Steve', [{ item: { id: 'HAT' }, texture: 't.png' }])
+    expect(await keptLookOutfit('Steve')).toEqual([{ item: { id: 'HAT' }, texture: 't.png' }])
+    expect(await keptLookOutfit('Alex')).toEqual([])
+  })
+})

@@ -105,9 +105,9 @@ pub struct SessionStatus {
 
 /// The only session fact the webview gets: which sessions are stored.
 #[tauri::command(async)]
-pub fn session_status(account_ids: Vec<String>) -> SessionStatus {
-    let (millida, accounts) = engine::session_presence(&account_ids);
-    SessionStatus { millida, accounts }
+pub fn session_status(account_ids: Vec<String>) -> Result<SessionStatus, String> {
+    let (millida, accounts) = engine::session_presence(&account_ids)?;
+    Ok(SessionStatus { millida, accounts })
 }
 
 #[tauri::command]
@@ -117,7 +117,7 @@ pub async fn millida_login_poll(device_code: String) -> Result<serde_json::Value
 
 #[tauri::command(async)]
 pub fn millida_logout() -> Result<(), String> {
-    engine::millida_forget_session()
+    engine::millida_sign_out()
 }
 
 #[tauri::command]

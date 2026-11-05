@@ -4,7 +4,7 @@ let locale = 'en'
 const asked: string[] = []
 const stored: string[] = []
 
-mock.module('../state/accounts', () => ({ getAccount: () => null }))
+mock.module('../state/accounts', () => ({ getAccount: () => null, lookOwner: () => '' }))
 mock.module('../i18n', () => ({ getLocale: () => locale }))
 mock.module('./idbCache', () => ({
   idbGet: async () => null,

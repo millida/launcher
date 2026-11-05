@@ -48,9 +48,10 @@ import { installReviewCandidate } from '../ModRow'
 import { reviewCandidateFor } from '../../state/mods'
 import { useT } from '../../i18n'
 import { ArcaniaPage } from '../arcania/ArcaniaPage'
+import { leadFirst } from './placement'
 import { ArcaniaLegacy } from '../arcania/ArcaniaLegacy'
 import { HEAD as ARCANIA_HEAD } from '../arcania/content'
-import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
+import { arcaniaLead, isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { arcaniaOffer, heroAction } from '../arcania/offer'
 import { ARCANIA_PARTNER, sellsPartnerPacks } from '../../lib/paidPacks'
 import { useHasMillida } from '../../state/auth'
@@ -927,6 +928,7 @@ function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: s
   const t = useT()
   const [list, setList] = useState<MillidaPack[] | null>(null)
   const row = useRef<HTMLDivElement>(null)
+  const lead = arcaniaLead(useArcania2Live())
   useEffect(() => {
     let alive = true
     loadOwnPacks()
@@ -939,7 +941,7 @@ function MorePacks({ slug, partner, author }: { slug: string; partner: { slug: s
   if (!list) return null
   const others = list.filter((p) => p.slug !== slug && !p.preview)
   const byDl = (a: MillidaPack, b: MillidaPack) => Number(!!b.protectedContent) - Number(!!a.protectedContent) || (b.downloads || 0) - (a.downloads || 0)
-  const same = (partner ? others.filter((p) => p.partner?.slug === partner.slug) : author ? others.filter((p) => p.author === author) : []).sort(byDl)
+  const same = leadFirst((partner ? others.filter((p) => p.partner?.slug === partner.slug) : author ? others.filter((p) => p.author === author) : []).sort(byDl), lead)
   const cards = (same.length >= 2 ? same : others.slice().sort(byDl)).slice(0, 10)
   if (!cards.length) return null
   const title = same.length >= 2 ? t('Ещё от {author}', { author: partner?.name || author || '' }) : t('Похожие сборки')

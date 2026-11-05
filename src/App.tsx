@@ -66,6 +66,7 @@ import {
   ScreenshotsOverlay,
   ServerDetail,
   Tour,
+  LobbyKeeper,
 } from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
@@ -80,7 +81,7 @@ import { initDesktopToasts, showAwayCard, showDesktopToast } from './lib/desktop
 import { parseInvite } from './lib/invite'
 import { parseCallLog } from './lib/call/callLog'
 import { markPreview, parseMark } from './lib/waypointShare'
-import { effectiveNick, getAccount, getMillidaAccount, useAccounts } from './state/accounts'
+import { effectiveNick, getAccount, getMillidaAccount, restoreAccounts, useAccounts } from './state/accounts'
 import { markMillidaEver, useOnboarding } from './state/onboarding'
 import { useEverTrue } from './lib/everTrue'
 import { initAccent } from './lib/accent'
@@ -247,8 +248,8 @@ import { initAutostart } from './lib/autostart'
 import { initStreakActivity } from './lib/streakActivity'
 import { useMods } from './state/mods'
 import { refreshMsAccounts } from './state/msLogin'
-import { enterApp, logoutToLogin } from './lib/session'
-import { initSecrets } from './lib/secure'
+import { enterApp, showLogin } from './lib/session'
+import { initSecrets, refreshSessionState, type SessionCheck } from './lib/secure'
 import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
 import { fixMark, forgetCrash, rememberCrash } from './lib/repair'
@@ -275,6 +276,11 @@ import { flushPrefs, hydratePrefs } from './lib/prefs'
 
 /// The window may be unloaded and rebuilt while the game runs (lib/window.ts): the
 /// start time has to outlive the page for the exit's duration and «calm» check.
+/** Ядро не ответило о сессии: столько раз переспросить на старте (сессии нет — один раз); паузы перед первым и следующими. */
+const START_RECHECKS = 5
+const START_FIRST_RECHECK_MS = 1500
+const START_RECHECK_MS = 10_000
+
 const GAME_START_KEY = 'm-game-started-at'
 const readGameStart = (): number => {
   try {
@@ -500,28 +506,52 @@ export function App() {
     const safety = setTimeout(hideBoot, 4000)
     // The "logged in at least once" flag lives in the durable prefs file, so the
     // disk copy has to land before boot decides whether this account may skip login.
-    void Promise.all([initSecrets(), hydratePrefs()]).then(() => {
-      clearTimeout(safety)
-      syncLocaleFromPrefs()
+    // No way in without a Millida account (owner 27.10.2026: no guest mode, sign-in only).
+    // The browser preview (dev only) has neither the core nor a sign-in.
+    const preview = import.meta.env.DEV && !hasTauri()
+    // Решение о входе ничего не стирает: showLogin только открывает экран входа (lib/session).
+    // «Не смогли проверить» — не «сессии нет» (04.11.2026: «разлогинивает»): ядро не ответило
+    // или хранилище на миг занято (антивирус) — спрашиваем ещё, а не уводим на вход.
+    // Оболочка уже открыта, пока ядро молчало: при подтверждении сессии только догружаем данные.
+    let entered = false
+    const decide = (check: SessionCheck, rechecks: number) => {
       const acc = getAccount()
       const millida = getMillidaAccount()
       if (millida) markMillidaEver()
-      // No way in without a Millida account (owner 27.10.2026: no guest mode, sign-in only).
-      // The browser preview (dev only) has neither the core nor a sign-in.
-      const preview = import.meta.env.DEV && !hasTauri()
-      // Account present but its token did not survive a secret-storage migration:
-      // clear the session once instead of showing a half-logged-in state everywhere.
+      // Ядро не ответило: сессия, скорее всего, жива — открываем лаунчер сразу и переспрашиваем в фоне.
+      if (!preview && millida && check === 'failed') {
+        if (!entered) {
+          entered = true
+          enterApp()
+        }
+        if (rechecks < START_RECHECKS) window.setTimeout(() => void refreshSessionState().then((c) => decide(c, rechecks + 1)), rechecks ? START_RECHECK_MS : START_FIRST_RECHECK_MS)
+        return
+      }
+      if (!preview && millida && !hasMillidaAccount() && rechecks === 0) {
+        window.setTimeout(() => void refreshSessionState().then((c) => decide(c, 1)), START_FIRST_RECHECK_MS)
+        return
+      }
       if (millida && !hasMillidaAccount() && !preview) {
-        logoutToLogin()
-        showToast(t('После обновления войдите в Millida заново — один раз'), 'error')
+        showLogin('start-no-session')
+        showToast(t('Сессия истекла — войди заново'), 'error')
       } else if (!millida && !preview) {
-        logoutToLogin()
+        showLogin('start-no-account')
         if (acc) showToast(t('Войди в аккаунт Millida — это нужно один раз'), 'error')
       } else if (acc && gameStepPending() && !hasGameAccount()) {
         useUi.getState().setLogged(false)
         useFirstRun.setState({ open: true })
-      } else if (acc) enterApp()
-      else logoutToLogin()
+      } else if (acc) {
+        enterApp(entered)
+        entered = true
+      } else showLogin('start-no-account')
+    }
+    void Promise.all([initSecrets(), hydratePrefs()]).then(([check]) => {
+      clearTimeout(safety)
+      syncLocaleFromPrefs()
+      // Список аккаунтов стёрт вместе с хранилищем вебвью — берём копию с диска; сессии её
+      // игровых аккаунтов спрашиваем заново (первый вопрос был по пустому списку).
+      if (restoreAccounts()) void refreshSessionState()
+      decide(check, 0)
       void refreshProfiles()
       loadLiveRating()
       warmHeads(useAccounts.getState().list.filter((x) => !x.avatar).map((x) => x.nick))
@@ -607,7 +637,9 @@ export function App() {
       // телеметрия, синк) идут и до входа в оболочку, и без очистки аккаунт
       // остаётся наполовину залогиненным до перезапуска.
       const wasLogged = useUi.getState().logged
-      logoutToLogin()
+      // Настоящий отказ: ядро уже стёрло токены на 401 продления. Строку аккаунта не трогаем —
+      // новый вход займёт её же, а лаунчер не «забывает» аккаунт.
+      showLogin('expired')
       if (wasLogged) showToast(t('Сессия истекла — войди заново'), 'error')
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
@@ -1109,6 +1141,8 @@ export function App() {
             <InstancePage />
           </Suspense>
         )}
+        {/* 3D-персонаж лобби переживает уход с главной: возврат без пересборки сцены. */}
+        <LobbyKeeper />
         <MilliDock />
         <ImportModal />
         <MoveBuildsModal />

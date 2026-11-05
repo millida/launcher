@@ -200,26 +200,51 @@ pub async fn ms_validate(token: String) -> Result<Value, String> {
     }))
 }
 
-/// Silent renewal via the stored refresh_token; returns a fresh Minecraft token
-/// and the rotated refresh_token when Microsoft issues one.
-// Refreshes the login: the refresh token goes to Microsoft, new tokens come back.
-pub async fn ms_refresh(refresh_token: String) -> Result<Value, String> {
+/// Microsoft refused to renew. A revoked or expired grant reads as the session having ended (the
+/// caller wipes it and asks to sign in); anything else — a busy or throttled service, a request
+/// loop — keeps Microsoft's own code and description, so the session is kept and tried later.
+/// Every refusal used to read "истекла" and wiped a live session (04.11.2026).
+pub(crate) fn ms_token_refusal(j: &Value) -> String {
+    let code = j["error"].as_str().filter(|c| !c.is_empty()).unwrap_or("no_access_token");
+    let desc: String = j["error_description"].as_str().unwrap_or("").lines().next().unwrap_or("").chars().take(200).collect();
+    if code == "invalid_grant" || code == "interaction_required" || grant_gone(&desc) {
+        "Сессия Microsoft истекла — войди заново".into()
+    } else {
+        format!("microsoft token refresh refused ({}): {}", code, desc)
+    }
+}
+
+/// AADSTS codes that mean the grant itself is gone: expired, revoked by a password change, or the
+/// account needs an interactive sign-in. Throttling, loops and outages (AADSTS50196, 90033, ...)
+/// are not here.
+const GRANT_GONE_AADSTS: [&str; 8] = ["aadsts70000", "aadsts70008", "aadsts700082", "aadsts700084", "aadsts50173", "aadsts50076", "aadsts50079", "aadsts50034"];
+
+pub(crate) fn grant_gone(text: &str) -> bool {
+    let t = text.to_lowercase();
+    // A code is followed by ':' or the end, so AADSTS70000 does not match AADSTS700001.
+    GRANT_GONE_AADSTS.iter().any(|c| t.match_indices(c).any(|(i, m)| !t[i + m.len()..].starts_with(|ch: char| ch.is_ascii_digit())))
+}
+
+/// The Microsoft step of a silent renewal: the stored refresh_token for a Microsoft access token and
+/// the rotated refresh_token (the old one when Microsoft keeps it). The Xbox and Minecraft steps
+/// follow in `ms_session_refresh`, which keeps the rotated token even if they fail.
+pub(crate) async fn ms_refresh_token(refresh_token: &str) -> Result<(String, String), String> {
     let client_id = ms_client_id();
     let r = client()
         .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
         .form(&[
             ("client_id", client_id),
             ("grant_type", "refresh_token"),
-            ("refresh_token", &refresh_token),
+            ("refresh_token", refresh_token),
             ("scope", "XboxLive.signin offline_access"),
         ])
         .send().await.map_err(|e| net_err(&e))?;
     let j: Value = r.json().await.map_err(|e| e.to_string())?;
-    let ms_token = j["access_token"].as_str().ok_or("Сессия Microsoft истекла — войди заново")?.to_string();
-    let new_refresh = j["refresh_token"].as_str().unwrap_or(&refresh_token).to_string();
-    let mut out = xbox_chain(&ms_token).await?;
-    out["refresh_token"] = Value::String(new_refresh);
-    Ok(out)
+    let Some(ms_token) = j["access_token"].as_str() else {
+        return Err(ms_token_refusal(&j));
+    };
+    let new_refresh = j["refresh_token"].as_str().filter(|t| !t.is_empty()).unwrap_or(refresh_token).to_string();
+    Ok((ms_token.to_string(), new_refresh))
 }
 
 /// XSTS answers refusals with an XErr code; each has a different fix for the user.

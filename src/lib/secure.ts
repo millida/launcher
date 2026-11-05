@@ -10,7 +10,12 @@ export const SECRETS_CHANGED_EVENT = 'millida-secrets-changed'
 // that a session exists, so an XSS has nothing to steal.
 let millida = false
 const accounts = new Map<string, boolean>()
-let readyPromise: Promise<void> | null = null
+let readyPromise: Promise<SessionCheck> | null = null
+
+/** Ответ ядра о сессии: `ok` — ответ есть (вход есть или нет), `failed` — ядро не ответило. */
+export type SessionCheck = 'ok' | 'failed'
+/** Паузы между повторами проверки, мс: «не смогли спросить» — не «сессии нет» (04.11.2026). */
+const CHECK_RETRY_MS = [300, 800, 1500]
 
 function announce() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(SECRETS_CHANGED_EVENT))
@@ -51,27 +56,38 @@ function dropLegacyTokens() {
   } catch {}
 }
 
-export async function refreshSessionState(): Promise<void> {
+/**
+ * Спросить ядро, есть ли сессии. Сбой вызова — `failed`, и прежнее знание остаётся: раньше он молча
+ * давал «входа нет», и старт уводил на вход, стирая живую сессию. `retries` — сколько раз повторить.
+ */
+export async function refreshSessionState(retries = 0): Promise<SessionCheck> {
   if (!hasTauri()) {
     millida = false
     accounts.clear()
     announce()
-    return
+    return 'ok'
   }
-  try {
-    const s = await sessionStatus(knownAccountIds())
-    millida = !!s.millida
-    accounts.clear()
-    Object.entries(s.accounts || {}).forEach(([id, present]) => accounts.set(id, !!present))
-  } catch {
-    return
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const s = await sessionStatus(knownAccountIds())
+      millida = !!s.millida
+      accounts.clear()
+      Object.entries(s.accounts || {}).forEach(([id, present]) => accounts.set(id, !!present))
+      announce()
+      return 'ok'
+    } catch (e) {
+      if (attempt >= retries) {
+        console.warn('[secure] session status is unknown', e)
+        return 'failed'
+      }
+      await new Promise((r) => setTimeout(r, CHECK_RETRY_MS[Math.min(attempt, CHECK_RETRY_MS.length - 1)]))
+    }
   }
-  announce()
 }
 
-export function initSecrets(): Promise<void> {
+export function initSecrets(): Promise<SessionCheck> {
   if (readyPromise) return readyPromise
   dropLegacyTokens()
-  readyPromise = refreshSessionState()
+  readyPromise = refreshSessionState(CHECK_RETRY_MS.length)
   return readyPromise
 }

@@ -65,7 +65,7 @@
 .lobby-char canvas { display: block; width: 100%; height: 100%; }
 /* Лёгкая графика (lib/gpuLite): плоская фигурка скина вместо 3D. */
 .lobby-char-flat { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 3%; }
-.lobby-char-flat canvas.flat-figure { width: auto; height: 76% !important; }
+.lobby-char-flat > canvas.flat-figure { width: auto; height: 76% !important; }
 .lobby-flat-tag { position: relative; width: 0; height: 0; margin-bottom: 14px; }
 
 .lobby-who {
@@ -845,7 +845,16 @@
 /* Плашка-уведомление на главной не должна лежать на «Играть» и сундуке: у лобби она сверху справа. */
 body:has(#s-play.on) #toast { bottom: auto; top: 72px; }
 
-/* Заглушка персонажа (components/lobby/LobbyFigure): снимок прошлой сцены лежит ровно там же,
-   где потом встанет 3D, и сменяется им без скачка. Не перехватывает мышь у настоящей сцены. */
-.lobby-char-still { cursor: pointer; touch-action: auto; }
-.lobby-char-still img { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }
+/* Заглушка персонажа (components/lobby/LobbyFigure): снимок прошлой сцены подогнан под окно
+   (место и размер считает lib/lobbyStill) и лежит ровно там, где встанет 3D, — 3D проявляется
+   поверх без скачка. Не перехватывает мышь у настоящей сцены. */
+.lobby-char-still { cursor: pointer; touch-action: auto; overflow: hidden; }
+.lobby-char-still img { position: absolute; display: block; max-width: none; pointer-events: none; user-select: none; }
+/* Плоская фигурка не похожа на 3D: она тает навстречу проявляющейся сцене, а не лежит под ней. */
+.lobby-char-still.standin-flat.leaving { opacity: 0; transition-timing-function: ease-out; }
+/* Плоская фигурка на месте 3D-фигуры (components/lobby/FlatStand): top и height — из lobbyFrame. */
+.lobby-flat-stand { position: absolute; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
+.lobby-flat-stand canvas.flat-figure { width: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .lobby-char, .lobby-char-still { transition: none; }
+}

@@ -6476,5 +6476,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Graphismes allégés activés : le launcher ramait sur ce PC",
   "Лог пустой": "Le journal est vide",
   "Достижение «{title}»": "Succès « {title} »",
-  "{n} очков достижений": "{n} points de succès"
+  "{n} очков достижений": "{n} points de succès",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "le stockage de connexion est utilisé par un autre programme en ce moment (antivirus ?) — réessaie dans quelques secondes"
 }

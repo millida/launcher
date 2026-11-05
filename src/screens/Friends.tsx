@@ -7,7 +7,7 @@ import { PROFILE_URL, api, openExt } from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import { apiErrorText } from '../lib/apiError'
 import { trackFailure } from '../lib/telemetry'
-import { logoutToLogin } from '../lib/session'
+import { showLogin } from '../lib/session'
 import { showToast } from '../state/ui'
 import { useHasMillida } from '../state/auth'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
@@ -347,7 +347,7 @@ export function Friends({ on }: { on: boolean }) {
               {t('Звонки')}
             </span>
           </div>
-          <button className="btn md primary gate-btn" id="frLoginCta" data-track="login" onClick={() => logoutToLogin()}>
+          <button className="btn md primary gate-btn" id="frLoginCta" data-track="login" onClick={() => showLogin()}>
             <Icon id="i-login" />
             {t('Войти')}
           </button>

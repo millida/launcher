@@ -6475,5 +6475,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Hafif grafiklere geçtik: başlatıcı bu bilgisayarda takılıyordu",
   "Лог пустой": "Günlük boş",
   "Достижение «{title}»": "Başarım “{title}”",
-  "{n} очков достижений": "{n} başarım puanı"
+  "{n} очков достижений": "{n} başarım puanı",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "giriş deposu şu anda başka bir program tarafından kullanılıyor (antivirüs?) — birkaç saniye sonra tekrar dene"
 }
