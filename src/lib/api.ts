@@ -77,6 +77,13 @@ export function hasMillidaAccount(): boolean {
 /// Signalled by event rather than calling session.ts directly, which would be a circular import.
 export const SESSION_EXPIRED_EVENT = 'millida-session-expired'
 
+/**
+ * Вход действительно кончился: ядро отвечает ровно `unauthorized` только на 401 продления или
+ * без refresh-токена. Раньше хватало этого слова в любом тексте ошибки сервера — и игрока
+ * выкидывало на чужой 403 или 5xx с таким словом в сообщении.
+ */
+export const isUnauthorized = (e: unknown): boolean => /^(error:\s*)?unauthorized$/i.test(String(e).trim())
+
 export async function api<T = any>(pathname: string, opts?: RequestInit): Promise<T> {
   // Витрина экономики в dev-приложении (VITE_ECONOMY_SHOWCASE): на проде новых
   // адресов магазина ещё нет, поэтому подменяем их и в Tauri, а не только в
@@ -101,7 +108,7 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
       const run = () => millidaApi<T>(pathname, method, body, market, lang)
       return await (method === 'GET' ? sharedGet(pathname, (market ?? '') + '|' + (lang ?? ''), run) : run())
     } catch (e) {
-      if (String(e).includes('unauthorized')) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+      if (isUnauthorized(e)) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
       throw e
     }
   }

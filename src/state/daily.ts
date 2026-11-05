@@ -18,7 +18,7 @@ import { openPaymentUrl } from '../lib/openPayment'
 import { MILLIDA_USER_KEY } from './accounts'
 import { apiErrorText } from '../lib/apiError'
 import { buyPlusMonth, loadPlus, subscribePlus, type PlusStatus, type PlusTier } from '../lib/gameProfile'
-import { logoutToLogin } from '../lib/session'
+import { showLogin } from '../lib/session'
 import { watchPlusPurchase } from './plusWatch'
 import { purchaseFlow } from '../lib/purchaseTrack'
 import { trackFailure } from '../lib/telemetry'
@@ -215,7 +215,7 @@ export const useDaily = create<DailyState>((set, get) => ({
   claim: async (want) => {
     if (get().busy) return
     if (!hasMillidaAccount()) {
-      logoutToLogin()
+      showLogin()
       return
     }
     const cur = get().status
@@ -250,7 +250,7 @@ export const useDaily = create<DailyState>((set, get) => ({
   /** Тот же путь, что у кнопок PLUS в магазине и на «Персонаже». */
   startPlus: async (tier = 'PLUS') => {
     if (!hasMillidaAccount()) {
-      logoutToLogin()
+      showLogin()
       return
     }
     // Свежая неоплаченная ссылка — та же: новая подписка на каждый клик
@@ -316,7 +316,7 @@ export const useDaily = create<DailyState>((set, get) => ({
 
   openOne: async (id) => {
     if (!hasMillidaAccount()) {
-      logoutToLogin()
+      showLogin()
       return { error: t('Войди в аккаунт Millida') }
     }
     const drop = () => {

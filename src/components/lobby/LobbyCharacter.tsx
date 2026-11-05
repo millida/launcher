@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { whenIdle } from '../../lib/idle'
 import { mark3dLoaded } from '../../lib/lazy3d'
-import { saveLobbyStill } from '../../lib/lobbyStill'
+import { saveLobbyStill, stageGeom, type StageGeom } from '../../lib/lobbyStill'
 import { loadMine3d } from '../../lib/mine3d'
 import { headLook } from '../../lib/headLook'
 import type { Mine3dModule } from '../../lib/mine3d'
@@ -9,13 +9,15 @@ import type { SkinAnimation, SkinViewEngine } from '../../vendor/mine3d'
 import { textureSource } from '../../lib/textureSource'
 import { loadImg } from '../../lib/skinArms'
 import { loadLookSkin, nickLookSkin, type LookSkin } from '../../lib/lobbySkin'
-import { keepLookSkin, keptLookSkin } from '../../lib/lookCache'
+import { keepLookOutfit, keepLookSkin, keptLookOutfit, keptLookSkin } from '../../lib/lookCache'
+import { lookHint } from '../../lib/lookHint'
+import { playerUuid } from '../../lib/playerUuid'
 import { noted } from '../../lib/noted'
 import { useViewPrefs } from '../../state/viewPrefs'
-import { LOOK_EVENT, catalogKnowing, gameProfile, loadCosmeticCatalog, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
+import { LOOK_EVENT, catalogKnowing, loadCosmeticCatalog, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
-import { getAccount, useAccounts } from '../../state/accounts'
+import { getAccount, lookOwner, useAccounts } from '../../state/accounts'
 import { buildCosmetic } from '../../lib/cosmeticModel'
 import { SHOP_YAW } from '../../lib/outfitSnapshot'
 import { hidesRegularCape, maskUrls, pieceCover } from '../../lib/cosmeticCover'
@@ -28,6 +30,7 @@ import { lookStages } from '../../lib/lobbyLook'
 import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
 import { FlatFigure } from '../character/FlatFigure'
+import { FlatStand } from './FlatStand'
 import { gpuLite, noteContextCreated, noteContextLost, useGpuLite } from '../../lib/gpuLite'
 import { webviewFailure } from '../../lib/webviewHealth'
 import { Vector3 } from 'three'
@@ -67,6 +70,10 @@ interface Look {
   show: CosmeticItem[]
   /** Витрина: для какого состава вещей собран образ. */
   dressKey?: string
+  /** Образ с прошлого раза, пока не ответила сеть: показываем, но в снимок следующему запуску не берём. */
+  provisional?: boolean
+  /** Каталог или надетые вещи не ответили: пустой список тут значит «не знаем», а не «ничего не надето». */
+  outfitFailed?: boolean
 }
 
 /**
@@ -114,8 +121,17 @@ let lastSkin: { nick: string; key: string; src: string; picture: HTMLImageElemen
 const dressed = new WeakSet<object>()
 
 /** Тот же ли образ: иначе повторное надевание дёргает кадр на ровном месте. */
+/** Состав вещей: по нему вещи надеваются заново. Другой адрес той же картинки скина их не снимает. */
+const outfitKey = (l: Look | null) =>
+  l ? [l.slim, l.dressKey ?? '', l.items.map((x) => x.item.id + ':' + (x.texture || '')).join(',')].join('|') : ''
+
 const lookKey = (l: Look | null) =>
   l ? [l.skin, l.slim, l.cape, l.items.map((x) => x.item.id + ':' + (x.texture || '')).join(',')].join('|') : ''
+
+/** Сколько раз пробуем снять заглушку лобби за показ (эмоции, пустой кадр). */
+const STILL_TRIES = 5
+/** Тишина перед снимком заглушки, мс: короткая — игрок, быстро ушедший с главной, снимок всё равно оставит. */
+const STILL_QUIET_MS = 300
 
 type Movable = { position?: { x: number; z: number } }
 
@@ -153,7 +169,7 @@ const WARDROBE_WAIT_MS = 3500
 
 function loadLook(nick: string, signedIn: boolean): { first: Promise<Look>; full: Promise<Look> } {
   const skin = loadLookSkin(nick, signedIn)
-  const staged = lookStages<LookSkin, Pick<Look, 'items' | 'show'>>(
+  const staged = lookStages<LookSkin, Pick<Look, 'items' | 'show' | 'outfitFailed'>>(
     {
       skin,
       nickSkin: () => nickLookSkin(nick),
@@ -163,24 +179,60 @@ function loadLook(nick: string, signedIn: boolean): { first: Promise<Look>; full
     { skinMs: WARDROBE_WAIT_MS, outfitMs: OUTFIT_WAIT_MS },
   )
   void skin.then((s) => keepLookSkin(nick, s), noted('lobby-look-keep'))
-  const first = keptLookSkin(nick).then((k): Promise<Look> => (k ? Promise.resolve({ ...k, items: [], show: [] }) : staged.first))
+  // С прошлого раза — скин и вещи: первый кадр уже одет, а не голый скин до ответа сети.
+  const first = Promise.all([keptLookSkin(nick), signedIn ? keptLookOutfit<Look['items'][number]>(nick) : []]).then(
+    ([k, items]): Promise<Look> => (k ? Promise.resolve({ ...k, items, show: [] }) : staged.first),
+  )
   return { first, full: staged.full }
 }
 
-async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | 'show'>> {
-  const look: Pick<Look, 'items' | 'show'> = { items: [], show: [] }
-  const catalogAsked = loadCosmeticCatalog().catch(() => ({ items: [] as CosmeticItem[] }))
+/** Образ, запрошенный заранее (prefetchLobbyLook): сцена берёт его, а не просит заново. */
+let prefetched: { key: string; at: number; look: ReturnType<typeof loadLook> } | null = null
+/** Заранее запрошенный образ годен недолго: заход в лобби должен видеть свежий (смена на сайте). */
+const PREFETCH_FRESH_MS = 15_000
+const lookAsk = (nick: string, signedIn: boolean) => nick + '|' + signedIn + '|' + lookVersion
+
+/** Начать грузить образ, пока сцена ещё не собрана (первый кадр лобби, LobbyFigure). */
+export function prefetchLobbyLook(nick: string, signedIn: boolean): void {
+  const key = lookAsk(nick, signedIn)
+  if (prefetched?.key !== key || Date.now() - prefetched.at > PREFETCH_FRESH_MS) prefetched = { key, at: Date.now(), look: loadLook(nick, signedIn) }
+}
+
+function takeLook(nick: string, signedIn: boolean): ReturnType<typeof loadLook> {
+  const p = prefetched
+  prefetched = null
+  return p && p.key === lookAsk(nick, signedIn) && Date.now() - p.at <= PREFETCH_FRESH_MS ? p.look : loadLook(nick, signedIn)
+}
+
+/** Вне лобби образ меняют гардероб и магазин («Надеть»): отложенная сцена переодевается, когда
+ *  интерфейс затих, — не в такте, где открывается гардероб и надеваются вещи (кнопки подвисали). */
+const AWAY_LOOK_QUIET_MS = 1000
+const AWAY_LOOK_MAX_MS = 8000
+
+async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | 'show' | 'outfitFailed'>> {
+  const look: Pick<Look, 'items' | 'show' | 'outfitFailed'> = { items: [], show: [] }
+  let failed = false
+  const catalogAsked = loadCosmeticCatalog().catch(() => {
+    failed = true
+    return { items: [] as CosmeticItem[] }
+  })
   const pickShow = (items: CosmeticItem[]) =>
     LOBBY_EMOTES.map((id) => items.find((c) => c.id === id)).filter((c): c is CosmeticItem => Boolean(c && c.model))
   if (!signedIn) {
     look.show = pickShow((await catalogAsked).items || [])
     return look
   }
+  // Вещи только что надели здесь же (lib/lookHint) — тот список, что приняла служба, без запросов.
+  const applied = lookHint(lookOwner())?.worn
   const [catalog, worn] = await Promise.all([
     catalogAsked,
-    gameProfile()
-      .then((p) => (p.uuid ? loadWornCosmetics(p.uuid) : []))
-      .catch(() => []),
+    applied ??
+      playerUuid()
+        .then((uuid) => (uuid ? loadWornCosmetics(uuid) : []))
+        .catch(() => {
+          failed = true
+          return []
+        }),
   ])
   look.show = pickShow(catalog.items || [])
   // Каталог в памяти живёт час: надетую вещь, которой в нём ещё нет, досматриваем в свежем.
@@ -198,6 +250,7 @@ async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | '
     const variant = list.find((v) => v.name === w.variant) ?? (list.length ? defaultVariant(list) : null)
     look.items.push({ item, texture: variant?.texture ?? item.texture, glow: variant?.emissive ?? item.emissive })
   }
+  if (failed) look.outfitFailed = true
   return look
 }
 
@@ -229,6 +282,7 @@ export function LobbyCharacter({
   shop,
   onDressed,
   onShown,
+  onHidden,
 }: {
   on: boolean
   /**
@@ -241,6 +295,8 @@ export function LobbyCharacter({
   onDressed?: (n: number) => void
   /** Лобби: фигура одета и показана — снимок-заглушка (LobbyFigure) можно убирать. */
   onShown?: () => void
+  /** Лобби: показанной 3D-фигуры больше нет (контекст WebGL потерян, новый не дали) — нужна заглушка. */
+  onHidden?: () => void
 }) {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -293,7 +349,7 @@ export function LobbyCharacter({
   // появлялся голым, а потом кадр перескакивал под плащ и вещи.
   const [skinFor, setSkinFor] = useState('')
   const [dressedFor, setDressedFor] = useState('')
-  const shown = !!look && skinFor === lookKey(look) && dressedFor === lookKey(look)
+  const shown = !!look && skinFor === lookKey(look) && dressedFor === outfitKey(look)
   const [shownOn, setShownOn] = useState(0)
   useEffect(() => {
     if (shown && ready) setShownOn(ready)
@@ -302,6 +358,12 @@ export function LobbyCharacter({
   const [emoting, setEmoting] = useState(false)
   const onShownRef = useRef(onShown)
   onShownRef.current = onShown
+  const onHiddenRef = useRef(onHidden)
+  onHiddenRef.current = onHidden
+  const onRef = useRef(on)
+  onRef.current = on
+  // Контекст отобрали, пока сцена отложена (лобби закрыто): собираем её по возврату, не сразу.
+  const lostAway = useRef(false)
   const [maskShow, setMaskShow] = useState<CosmeticItem | null>(null)
   const skinMasks = useMemo(() => {
     if (!look) return ''
@@ -337,21 +399,35 @@ export function LobbyCharacter({
     return () => window.removeEventListener(LOOK_EVENT, on)
   }, [])
 
-  // Образ перечитываем при каждом заходе на главную: человек только что мог
-  // переодеться в гардеробе.
+  // Образ перечитываем при каждом заходе на главную и сразу, как он сменился в гардеробе, — и у
+  // отложенной сцены (LobbyKeeper): к возврату в лобби новые вещи уже надеты (04.11.2026).
+  const readVer = useRef(-1)
   useEffect(() => {
-    if (!on) return
+    if (!on && readVer.current === lookVer) return
     let alive = true
-    const { first, full } = loadLook(nick, signedIn)
-    void first.then((l) => alive && setLook((cur) => cur ?? l))
-    void full.then((l) => {
-      if (!alive) return
-      if (lookKey(l) === lookKey(lastLook) && lastLook) return setLook((cur) => cur ?? lastLook)
-      lastLook = l
-      setLook(l)
-    })
+    const read = () => {
+      const { first, full } = takeLook(nick, signedIn)
+      void first.then((l) => alive && setLook((cur) => cur ?? { ...l, provisional: true }))
+      void full.then((l) => {
+        if (!alive) return
+        // Сеть не ответила: фигура остаётся как есть, кэш вещей и снимок не трогаем, образ прочтётся при следующем заходе.
+        if (l.outfitFailed) return setLook((cur) => cur ?? lastLook ?? { ...l, provisional: true })
+        // Прочитанным образ считается, только когда он пришёл: ушли из лобби до ответа — чтение
+        // отменилось, и отложенная сцена прочтёт его снова, а не останется раздетой.
+        readVer.current = lookVer
+        if (signedIn) void keepLookOutfit(nick, l.items)
+        if (lookKey(l) === lookKey(lastLook) && lastLook) return setLook((cur) => (cur && !cur.provisional ? cur : lastLook))
+        lastLook = l
+        setLook(l)
+      })
+    }
+    // Первое чтение — сразу; повторное вне лобби (смена в гардеробе) — в простое.
+    const now = on || readVer.current < 0
+    if (now) read()
+    const cancel = now ? () => {} : whenIdle(read, AWAY_LOOK_QUIET_MS, AWAY_LOOK_MAX_MS)
     return () => {
       alive = false
+      cancel()
     }
   }, [on, nick, activeId, signedIn, lookVer])
 
@@ -360,33 +436,86 @@ export function LobbyCharacter({
   useEffect(() => {
     if (!ready || !look || shown) return
     const key = lookKey(look)
+    const outfit = outfitKey(look)
     const t = window.setTimeout(() => {
       setSkinFor(key)
-      setDressedFor(key)
+      setDressedFor(outfit)
     }, 5000)
     return () => window.clearTimeout(t)
   }, [ready, look, shown])
 
   // Фигура показана: сообщаем лобби и, в простое, снимаем её для следующего запуска (lib/lobbyStill).
   const shownKey = shown ? lookKey(look) : ''
+  // Образ с прошлого раза, пока сеть не ответила, снимком не становится: иначе следующий запуск
+  // начинался бы с него, даже если вещи с тех пор сменились.
+  const stillKey = shown && !look?.provisional ? shownKey : ''
+  const shownKeyRef = useRef(stillKey)
+  shownKeyRef.current = stillKey
+  // Место сцены при последней подгонке кадра: отложенную сцену (LobbyKeeper, вне страницы) снимаем по нему.
+  const geomRef = useRef<StageGeom | null>(null)
+  // Что уже лежит снимком: тот же образ того же размера заново не снимаем.
+  const stillRef = useRef('')
+  /** Снять заглушку для следующего запуска (lib/lobbyStill). Кадр и toBlob — в одной задаче:
+   *  буфер WebGL ещё не очищен, даже если цикл пропустил кадр под потолком FPS. */
+  const takeStill = (key: string): Promise<boolean> => {
+    const c = canvasRef.current
+    const engine = viewerRef.current
+    const g = geomRef.current
+    if (!key || !c || !engine || !g) return Promise.resolve(false)
+    const id = key + '@' + [g.w, g.h, g.top, g.scene].join(',')
+    if (stillRef.current === id) return Promise.resolve(true)
+    engine.renderFrame()
+    return saveLobbyStill(c, key, g).then((ok) => {
+      if (ok) stillRef.current = id
+      return ok
+    })
+  }
   useEffect(() => {
-    if (!shownKey || shop) return
-    onShownRef.current?.()
+    if (shownKey && !shop) onShownRef.current?.()
+  }, [shownKey, shop])
+  useEffect(() => {
+    if (!stillKey || shop) return
+    const stage = stageRef.current
     let alive = true
-    const cancel = whenIdle(() => {
-      // Кадр движка уже зарегистрирован, наш — после него: буфер WebGL ещё не очищен.
-      setTimeout(() => {
-        requestAnimationFrame(() => {
-          const c = canvasRef.current
-          if (alive && c && !pausedRef.current && !busyRef.current) saveLobbyStill(c, shownKey)
-        })
-      }, 0)
-    }, 1500)
+    let tries = 0
+    let cancel = () => {}
+    const snap = () => {
+      cancel()
+      cancel = whenIdle(() => {
+        if (!alive) return
+        // Идёт эмоция — поза не та: снимаем в следующем простое, а не никогда. Стоящую сцену снимать
+        // можно (renderFrame рисует кадр сам): так отложенная сцена, переодетая в гардеробе, оставляет
+        // свежий снимок следующему запуску.
+        if (busyRef.current) return void (++tries < STILL_TRIES && snap())
+        void takeStill(stillKey).then((ok) => alive && !ok && ++tries < STILL_TRIES && snap())
+      }, STILL_QUIET_MS)
+    }
+    snap()
+    // Окно сменило размер — переснимаем: следующий запуск не будет растягивать старый снимок.
+    // Первый вызов при observe и нулевой размер отложенной сцены (лобби закрыто) — не смена.
+    let resized = 0
+    let size = stage ? stage.clientWidth + 'x' + stage.clientHeight : ''
+    const ro =
+      stage && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            const now = stage.clientWidth + 'x' + stage.clientHeight
+            if (!stage.clientWidth || !stage.clientHeight || now === size) return
+            size = now
+            window.clearTimeout(resized)
+            resized = window.setTimeout(() => {
+              tries = 0
+              snap()
+            }, 1000)
+          })
+        : null
+    ro?.observe(stage!)
     return () => {
       alive = false
       cancel()
+      ro?.disconnect()
+      window.clearTimeout(resized)
     }
-  }, [shownKey, shop])
+  }, [stillKey, shop])
 
   // Лёгкая графика после сбоя видеокарты: без WebGL, плоская фигурка.
   const lite = useGpuLite()
@@ -396,7 +525,8 @@ export function LobbyCharacter({
     if (flatShown && !shop) onShownRef.current?.()
   }, [flatShown, shop])
   useEffect(() => {
-    if (!on || m3d || lite) return
+    // Лобби собирает сцену и в фоне (LobbyKeeper): ушли с главной до показа — вернутся к готовой.
+    if ((!on && shop) || m3d || lite) return
     let alive = true
     // Сначала узнаём, не убил ли прошлое окно сбой видеокарты: тогда WebGL
     // не создаём вовсе (иначе окно падало снова и снова).
@@ -449,17 +579,21 @@ export function LobbyCharacter({
   const fit = () => {
     const engine = viewerRef.current
     const stage = stageRef.current
-    if (!engine || !stage) return
+    // Отложенная сцена (LobbyKeeper, лобби закрыто) вне страницы: мерить нечего, кадр подгонится по возврату.
+    if (!engine || !stage || !stage.isConnected) return
     try {
-      const w = stage.clientWidth || 300
-      const h = stage.clientHeight || 430
+      // Та же мерка, что у заглушки лобби (LobbyFigure, FlatStand): фигура встаёт ровно на её место.
+      const g = stageGeom(stage)
+      const w = g.w || 300
+      const h = g.h || 430
       engine.setSize(w, h)
       // Кадр — по одному телу: крылья, питомец и плащ его не двигают. Ник —
       // над самой высокой вещью в нейтральной стойке, по центру тела.
-      const scene = (stage.offsetParent as HTMLElement | null)?.clientHeight || h
-      const frame = shop ? { fillY: 0.6, offsetY: 1 - 2 * 0.86 + 0.6 } : lobbyFrame(h, stage.offsetTop, scene)
+      const scene = g.scene || h
+      const frame = shop ? { fillY: 0.6, offsetY: 1 - 2 * 0.86 + 0.6 } : lobbyFrame(h, g.top, scene)
       // Размер фигуры всегда один, при любых вещах (владелец 22:35).
       const r = engine.fitPlayerToFrame(frame)
+      if (!shop) geomRef.current = { w, h, top: g.top, scene }
       if (r) {
         setTag(nametagSpot(tagBox(r), w, h))
         headRest.current = headScreen()
@@ -498,7 +632,13 @@ export function LobbyCharacter({
       noteContextLost()
       setSkinFor('')
       setDressedFor('')
-      setGlEpoch((n) => n + 1)
+      // Фигура пропала до пересборки — лобби показывает снимок, а не пустоту и не 2D.
+      if (!shop) onHiddenRef.current?.()
+      // Браузер держит лишь несколько контекстов и выкидывает самый старый (lib/gpuLite): отложенную
+      // сцену вытесняет 3D открытого экрана (гардероб, магазин, сундуки). Новый контекст сейчас
+      // вытеснил бы уже его, поэтому сцена соберётся, когда лобби откроют снова.
+      if (!shop && !onRef.current) lostAway.current = true
+      else setGlEpoch((n) => n + 1)
     }
     canvas.addEventListener('webglcontextlost', onLost)
     let engine: SkinViewEngine
@@ -517,6 +657,7 @@ export function LobbyCharacter({
       releaseSnapshotGl()
       setGlTry(false)
       setGlFail((n) => n + 1)
+      if (!shop) onHiddenRef.current?.()
       return
     }
     setGlFail(0)
@@ -660,7 +801,7 @@ export function LobbyCharacter({
       if (revealed) return
       revealed = true
       fit()
-      setDressedFor(lookKey(look))
+      setDressedFor(outfitKey(look))
     }
     const dressOne = (got: (typeof worn)[number] & { file: Awaited<ReturnType<typeof cosmeticModel>> }) => {
       if (got.item.slot === 'EMOTE' && !wornEmoteLoops(!!shop)) return
@@ -728,7 +869,8 @@ export function LobbyCharacter({
       clearTimeout(emoteDone)
       engine.clearCosmetics()
     }
-  }, [look, ready])
+    // Вещи — по составу: смена одного адреса скина (сохранённая картинка → свежая) их не снимает и не мигает.
+  }, [outfitKey(look), ready])
 
   // Покой и изредка эмоция: стоит спокойно, а время от времени сам играет
   // «67», жест или танец из каталога. Эмоции нет — встроенное движение.
@@ -879,6 +1021,10 @@ export function LobbyCharacter({
     const setPaused = (v: boolean) => {
       const engine = viewerRef.current
       if (!engine) return
+      // Уход с главной (или окно спрятали) — последний кадр снимаем сразу: простоя после быстрого
+      // клика могло не случиться, а 3D следующего экрана может тут же вытеснить наш контекст —
+      // отложенный снимок вышел бы пустым. Тот же образ того же размера заново не снимается.
+      if (v && !pausedRef.current && !shop && !busyRef.current) void takeStill(shownKeyRef.current)
       pausedRef.current = v
       if (v) engine.stop()
       else engine.start()
@@ -910,7 +1056,16 @@ export function LobbyCharacter({
   const drag = useRef<{ x: number; yaw: number } | null>(null)
   const stageParty = usePartyStage(ready ? viewerRef.current : null, m3d, ready, !shop && on)
 
-  if (lite || (glFail > 0 && !glTry)) {
+  // Возврат в лобби: сцена, потерявшая контекст вне лобби, собирается заново.
+  useEffect(() => {
+    if (!on || !lostAway.current) return
+    lostAway.current = false
+    setGlEpoch((n) => n + 1)
+  }, [on])
+
+  // Плоская фигурка — лёгкая графика насовсем, а в витрине и пока не дали контекст. В лобби на время
+  // повторов стоит заглушка LobbyFigure (снимок той же сцены), а не мелькающий 2D-скин.
+  if (lite || (shop && glFail > 0 && !glTry)) {
     if (shop) queueMicrotask(() => onDressedRef.current?.(0))
     return (
       <div className={'lobby-char lobby-char-flat' + (shop ? ' shop-stage' : '') + (flatShown ? ' shown' : '')} onClick={() => (shop ? undefined : setScreen('skins'))}>
@@ -919,7 +1074,11 @@ export function LobbyCharacter({
             <Nametag nick={nick} at={{ x: 0, y: 0 }} />
           </span>
         )}
-        {look ? <FlatFigure url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} /> : null}
+        {!look ? null : shop ? (
+          <FlatFigure url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} />
+        ) : (
+          <FlatStand url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} />
+        )}
       </div>
     )
   }

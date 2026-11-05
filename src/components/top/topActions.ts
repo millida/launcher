@@ -1,6 +1,6 @@
 import { api, hasMillidaAccount } from '../../lib/api'
 import { apiErrorText } from '../../lib/apiError'
-import { logoutToLogin } from '../../lib/session'
+import { showLogin } from '../../lib/session'
 import { showToast } from '../../state/ui'
 import { openChat, useFriends } from '../../state/friends'
 import { sendRequest } from '../friends/FriendSearch'
@@ -13,7 +13,7 @@ export const friendIdOf = (nick: string): string | null =>
 
 const signed = (): boolean => {
   if (hasMillidaAccount()) return true
-  logoutToLogin()
+  showLogin()
   return false
 }
 

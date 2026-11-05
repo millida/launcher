@@ -9,6 +9,9 @@ import { gzipSync } from 'node:zlib'
 // (в одном коммите с причиной). Цель владельца — index ≤300 КБ; пока он выше, это «долг»,
 // лимит ниже его не опускается без работы над кодом. 27.10.2026: окно живого лога ушло в ленивый чанк
 // (liveLogStore.ts остался в старте), набор 829 → 825 КБ, лимит опущен вслед за ним.
+// 04.11.2026: +1 КБ на хост LobbyKeeper (3D лобби живёт между заходами), сам он — свой чанк.
+// 04.11.2026: +2 КБ на защиту входа: старт, проверка сессии и выход должны работать с первого кадра.
+// Gzip вслед за ним: 314 → 316 КБ (локально Bun 1.2 даёт 312,5 КБ, в CI свежий Bun — на ~1,4 КБ больше).
 //
 // Запуск: после `vite build` из корня репозитория: `bun scripts/check-startup-budget.mjs`.
 
@@ -16,12 +19,12 @@ const LIMITS = {
   /** Входной index-*.js, байт. Цель 300 000 (react-dom ≈183 КБ из них). */
   entryJs: 350_000,
   /** Whole startup JS (index + modulepreload), bytes. */
-  startJs: 830_000,
+  startJs: 833_000,
   /** Весь стартовый CSS, байт. */
   startCss: 415_000,
   /** Startup JS in gzip, bytes. Measured with the Bun that CI installs (setup-bun latest): its gzip
    *  comes out about 1.4 KB above Bun 1.2 for the same files. */
-  startJsGzip: 314_000,
+  startJsGzip: 316_000,
 }
 const TARGET_ENTRY_JS = 300_000
 

@@ -259,7 +259,7 @@ export function Play({ on }: { on: boolean }) {
         <LobbyAmbience on={on} />
 
       </div>
-      <LobbyFigure on={on} />
+      <LobbyFigure />
       <PartyBar on={on} />
       <EmoteBubble />
       {/* Баннер справа виден всем, и новичкам тоже: реклама на самом видном месте (владелец 11.10.2026). */}

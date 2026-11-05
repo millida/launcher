@@ -16,8 +16,9 @@ const FLAG_STRONG_ENCRYPTION: u16 = 0x0040;
 const METHOD_STORED: u16 = 0;
 const METHOD_DEFLATED: u16 = 8;
 
-/// Past this share of the archive one sequential download is cheaper than many ranges.
-const DELTA_SHARE_LIMIT: f64 = 0.4;
+/// Past this share of the archive one sequential download is cheaper than many ranges. A release that replaces a few
+/// big files needs about half of the archive in a couple of dozen ranges, which still saves a gigabyte.
+const DELTA_SHARE_LIMIT: f64 = 0.85;
 const MAX_REQUESTS: usize = 2000;
 /// Unchanged bytes between two changed entries are downloaded rather than paid for with another round trip.
 const MERGE_GAP: u64 = 1 << 20;
@@ -280,7 +281,8 @@ fn read_u16(b: &[u8], at: usize) -> u16 {
 /// no further than its CRC: a local header that disagrees with the index or
 /// data that does not inflate to the declared bytes refuses the entry.
 pub(crate) fn extract_entry<R: Read + Seek, W: Write>(src: &mut R, base: u64, e: &DeltaEntry, out: &mut W) -> Result<(), String> {
-    let bad = |why: &str| format!("запись «{}»: {}", e.rel, why);
+    use sha2::Digest as _;
+    let bad =|why: &str| format!("запись «{}»: {}", e.rel, why);
     src.seek(SeekFrom::Start(e.offset - base)).map_err(|err| bad(&err.to_string()))?;
     let mut head = [0u8; LOCAL_HEADER_LEN as usize];
     src.read_exact(&mut head).map_err(|_| bad("кусок архива короче заголовка"))?;
@@ -310,6 +312,7 @@ pub(crate) fn extract_entry<R: Read + Seek, W: Write>(src: &mut R, base: u64, e:
         _ => return Err(bad("метод сжатия не поддерживается при обновлении по частям")),
     };
     let mut crc = flate2::Crc::new();
+    let mut sha256 = e.sha256.map(|_| sha2::Sha256::new());
     let mut written = 0u64;
     let mut buf = vec![0u8; 256 * 1024];
     loop {
@@ -322,10 +325,19 @@ pub(crate) fn extract_entry<R: Read + Seek, W: Write>(src: &mut R, base: u64, e:
             return Err(bad("распаковывается больше, чем заявлено"));
         }
         crc.update(&buf[..n]);
+        if let Some(hasher) = sha256.as_mut() {
+            hasher.update(&buf[..n]);
+        }
         out.write_all(&buf[..n]).map_err(|err| bad(&err.to_string()))?;
     }
     if written != e.size || crc.sum() != e.crc {
         return Err(bad("контрольная сумма не сошлась"));
+    }
+    if let (Some(hasher), Some(want)) = (sha256, e.sha256) {
+        let got: [u8; 32] = hasher.finalize().into();
+        if got != want {
+            return Err(bad("the file does not match its recorded hash"));
+        }
     }
     Ok(())
 }
@@ -389,23 +401,40 @@ pub(crate) fn content_range_ok(header: Option<&str>, from: u64, to_exclusive: u6
     a.parse::<u64>().ok() == Some(from) && b.parse::<u64>().ok() == Some(to_exclusive - 1) && whole.parse::<u64>().ok() == Some(total)
 }
 
-async fn fetch_span_once(url: &str, group: &Group, total: u64, dest: &Path, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
+struct SpanTarget<'a> {
+    url: &'a str,
+    allow: fn(&str) -> bool,
+    archive_size: u64,
+    file: &'a Path,
+}
+
+fn span_bytes_on_disk(file: &Path) -> Result<u64, String> {
+    std::fs::metadata(file).map(|m| m.len()).map_err(|e| io_fail("Обновление", file, &e))
+}
+
+async fn fetch_span_once(target: &SpanTarget<'_>, group: &Group, have: u64, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
     let cancel = Some(job.cancel_flag());
+    let from = group.from + have;
     // Requests a part of the archive (Range header) from an address that already passed the check.
-    let req = client().get(url).header(reqwest::header::RANGE, format!("bytes={}-{}", group.from, group.to - 1));
+    let req = client().get(target.url).header(reqwest::header::RANGE, format!("bytes={}-{}", from, group.to - 1));
     let resp = or_pause(req.send(), cancel).await?.map_err(|e| net_err(&e))?;
-    if !super::catalog_pack::pack_url_allowed(resp.url().as_str()) {
+    if !(target.allow)(resp.url().as_str()) {
         return Err("хранилище перенаправило на чужой адрес".into());
     }
-    if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-        return Err(format!("хранилище ответило {} вместо куска архива", resp.status()));
+    let status = resp.status();
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+        return Err(format!("storage is busy: {}", status));
+    }
+    if status != reqwest::StatusCode::PARTIAL_CONTENT {
+        return Err(format!("хранилище ответило {} вместо куска архива", status));
     }
     let range = resp.headers().get(reqwest::header::CONTENT_RANGE).and_then(|v| v.to_str().ok()).map(String::from);
-    if !content_range_ok(range.as_deref(), group.from, group.to, total) {
+    if !content_range_ok(range.as_deref(), from, group.to, target.archive_size) {
         return Err(format!("хранилище прислало не тот кусок ({})", range.unwrap_or_default()));
     }
-    let want = group.to - group.from;
-    let mut file = std::fs::File::create(dest).map_err(|e| io_fail("Обновление", dest, &e))?;
+    let dest = target.file;
+    let want = group.to - from;
+    let mut file = std::fs::OpenOptions::new().append(true).open(dest).map_err(|e| io_fail("Обновление", dest, &e))?;
     let mut got = 0u64;
     let mut resp = resp;
     while let Some(chunk) = or_pause(resp.chunk(), cancel).await?.map_err(|e| format!("обрыв загрузки ({})", net_err(&e)))? {
@@ -423,39 +452,34 @@ async fn fetch_span_once(url: &str, group: &Group, total: u64, dest: &Path, job:
     Ok(())
 }
 
-async fn fetch_span(url: &str, group: &Group, total: u64, dest: &Path, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
-    let mut last = String::new();
-    let mut attempt = 1;
-    let best = std::sync::atomic::AtomicU64::new(0);
-    while attempt <= RANGE_TRIES {
-        // Each try rewrites the group from its start: only bytes past the best
-        // mark are new, or a resumed group would push the bar past real bytes.
-        let mine = std::sync::atomic::AtomicU64::new(0);
-        let counted = |n: u64| {
-            let now = mine.fetch_add(n, Ordering::Relaxed) + n;
-            let grown = now.saturating_sub(best.fetch_max(now, Ordering::Relaxed));
-            if grown > 0 {
-                on(grown);
-            }
-        };
-        match fetch_span_once(url, group, total, dest, job, &counted).await {
+/// A cut connection continues from the bytes already on disk, so one file of hundreds of megabytes survives a poor
+/// line. Only tries that brought nothing are counted: a slow download that keeps moving is not a failing one.
+async fn fetch_span(target: &SpanTarget<'_>, group: &Group, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
+    // All groups share one span file: the previous group's bytes must not pass for this one's.
+    std::fs::File::create(target.file).map_err(|e| io_fail("Обновление", target.file, &e))?;
+    let want = group.to - group.from;
+    let mut tries = 0;
+    loop {
+        let have = span_bytes_on_disk(target.file)?;
+        if have == want {
+            return Ok(());
+        }
+        let why = match fetch_span_once(target, group, have, job, on).await {
             Ok(()) => return Ok(()),
             Err(e) if e == CANCELLED || job.cancelled() => return Err(CANCELLED.into()),
-            // A group is rewritten from its start, so a pause costs at most one
-            // group and never an attempt.
             Err(e) if e == PAUSED => {
                 job.cancel_flag().gate().await?;
                 continue;
             }
             Err(e) if e.contains("вместо куска") || e.contains("не тот кусок") || e.contains("чужой адрес") => return Err(e),
-            Err(e) => last = e,
+            Err(e) => e,
+        };
+        tries = if span_bytes_on_disk(target.file)? > have { 1 } else { tries + 1 };
+        if tries >= RANGE_TRIES {
+            return Err(why);
         }
-        if attempt < RANGE_TRIES {
-            tokio::time::sleep(std::time::Duration::from_millis(500 * attempt as u64)).await;
-        }
-        attempt += 1;
+        tokio::time::sleep(std::time::Duration::from_millis(500 * tries as u64)).await;
     }
-    Err(last)
 }
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
@@ -471,12 +495,22 @@ pub(crate) struct DeltaSource<'a> {
     pub(crate) span_file: &'a Path,
 }
 
+/// CRC32 catches a damaged download, not a forged one, and these bytes include jars that will be executed. The whole
+/// archive carries its sha512, so without a SHA-256 for every file the update takes that road.
+fn index_for_update(answer: &Value, archive_size: u64) -> Result<DeltaIndex, String> {
+    let index = parse_index(answer, archive_size)?;
+    if !index.fully_hashed() {
+        return Err("index has no file hashes yet".into());
+    }
+    Ok(index)
+}
+
 /// Builds the next version of an installed pack from the files it already has
 /// plus the changed entries of the new archive. Any error leaves the caller to
 /// download the archive whole; a cancel is passed through as is.
 pub(crate) async fn build_by_delta(app: &AppHandle, job: &Job, s: DeltaSource<'_>) -> Result<DeltaReport, String> {
     let answer = millida_api_auth(format!("/catalog/packs/files/{}/index", s.file_id), "GET".into(), None).await?;
-    let index = std::sync::Arc::new(parse_index(&answer, s.archive_size)?);
+    let index = std::sync::Arc::new(index_for_update(&answer, s.archive_size)?);
     job.emit(app, 10.0, "Сверяем файлы сборки…");
     let (idx, installed) = (index.clone(), s.installed.to_path_buf());
     let plan = std::sync::Arc::new(blocking(move || make_plan(&idx, &installed)).await?);
@@ -505,8 +539,9 @@ pub(crate) async fn build_by_delta(app: &AppHandle, job: &Job, s: DeltaSource<'_
         }
     };
     job.emit(app, 12.0, "Скачиваем изменения…");
+    let target = SpanTarget { url: s.url, allow: super::catalog_pack::pack_url_allowed, archive_size: index.size, file: s.span_file };
     for group in spans {
-        fetch_span(s.url, &group, index.size, s.span_file, job, &report).await?;
+        fetch_span(&target, &group, job, &report).await?;
         let (idx, span, into) = (index.clone(), s.span_file.to_path_buf(), s.into.to_path_buf());
         blocking(move || extract_group(&span, &group, &idx, &into)).await?;
         job.check()?;
@@ -680,6 +715,44 @@ mod tests {
         }
     }
 
+    /// File bytes against the recorded SHA-256. A forged file can keep the CRC32 of the real one, and only this hash
+    /// stands between it and a jar the game will run.
+    #[test]
+    fn a_file_that_keeps_its_crc_but_not_its_hash_is_refused() {
+        use sha2::Digest as _;
+        let body = b"max_players=12\n".repeat(300);
+        let bytes = zip_of(&[("mods/a.jar", &body, zip::CompressionMethod::Deflated)]);
+        let index = parse_index(&index_json(&bytes), bytes.len() as u64).unwrap();
+        let e = &index.entries[0];
+        let span = bytes[e.offset as usize..e.end as usize].to_vec();
+        let cases: &[(Option<[u8; 32]>, bool, &str)] = &[
+            (Some(sha2::Sha256::digest(&body).into()), true, "the recorded hash matches the file"),
+            (Some([0; 32]), false, "the CRC agrees and the hash does not: a forged file"),
+        ];
+        for (sha256, accepted, why) in cases {
+            let entry = DeltaEntry { sha256: *sha256, ..e.clone() };
+            let result = extract_entry(&mut Cursor::new(span.clone()), e.offset, &entry, &mut Vec::new());
+            assert_eq!(result.is_ok(), *accepted, "{why}: {result:?}");
+        }
+    }
+
+    /// Index -> may the update use it. Without a hash for every file the bytes could only be checked by CRC32, so the
+    /// update must take the whole archive with its sha512.
+    #[test]
+    fn an_update_needs_a_hash_for_every_file() {
+        let sha = "ab".repeat(32);
+        let doc = |rows: Value| serde_json::json!({ "v": 1, "size": 1000, "directoryOffset": 900, "entries": rows });
+        let cases: &[(Value, bool, &str)] = &[
+            (doc(serde_json::json!([["mods/a.jar", 1, 10, 10, 0, 0, sha], ["config/", 0, 0, 0, 100, 0]])), true, "a folder needs no hash"),
+            (doc(serde_json::json!([["mods/a.jar", 1, 10, 10, 0, 0]])), false, "the server has not computed the hashes yet"),
+            (doc(serde_json::json!([["mods/a.jar", 1, 10, 10, 0, 0, sha], ["mods/b.jar", 1, 10, 10, 100, 0]])), false, "one file without a hash is enough to refuse"),
+        ];
+        for (answer, accepted, why) in cases {
+            let result = index_for_update(answer, 1000);
+            assert_eq!(result.is_ok(), *accepted, "{why}: {:?}", result.err());
+        }
+    }
+
     /// A failed entry leaves no file behind: a half-written jar must not look
     /// like a present one.
     #[test]
@@ -781,16 +854,17 @@ mod tests {
         out
     }
 
-    /// Share of the archive -> delta or whole download. OneBlock 1.0.10 needs
-    /// 3.9% of its archive; a release that rewrote half the pack is cheaper as
-    /// one sequential download.
+    /// Share of the archive -> delta or whole download. A release that replaces
+    /// a few big files must not cost the player the whole archive; only one
+    /// that rewrote nearly everything is cheaper as one sequential download.
     #[test]
     fn a_large_change_goes_to_the_full_download() {
         let index = DeltaIndex { size: 1000, entries: Vec::new() };
         let span = |from: u64, to: u64| Group { from, to, members: vec![0] };
         assert!(worth_it(&index, &[span(0, 39)]).is_ok(), "мелкая правка качается по частям");
-        assert!(worth_it(&index, &[span(0, 300), span(500, 600)]).is_ok(), "40% ровно ещё по частям");
-        assert!(worth_it(&index, &[span(0, 401)]).is_err(), "больше 40% — целиком");
+        assert!(worth_it(&index, &[span(0, 416)]).is_ok(), "a release with new protected files: taking the whole archive costs a gigabyte more");
+        assert!(worth_it(&index, &[span(0, 500), span(600, 950)]).is_ok(), "85% ровно ещё по частям");
+        assert!(worth_it(&index, &[span(0, 851)]).is_err(), "больше 85% — целиком");
         let many: Vec<Group> = (0..=MAX_REQUESTS as u64).map(|i| span(i, i + 1)).collect();
         let index = DeltaIndex { size: u64::MAX / 2, entries: Vec::new() };
         assert!(worth_it(&index, &many).is_err(), "тысячи мелких запросов дороже одного архива");
@@ -887,7 +961,7 @@ mod tests {
             (Err("хранилище ответило 200 OK вместо куска архива"), "full", "щит не отдал Range"),
             (Err("хранилище ответило 416 Range Not Satisfiable вместо куска архива"), "full", "запрошенный кусок вне файла"),
             (Err("404 от /catalog/packs/files/x/index"), "full", "старый trade-api без оглавления"),
-            (Err("изменилось 63% архива"), "full", "большая правка дешевле целиком"),
+            (Err("изменилось 90% архива"), "full", "большая правка дешевле целиком"),
         ];
         for (input, want, why) in cases {
             let got = match after_delta((*input).map(|_| report()).map_err(String::from)) {
@@ -896,6 +970,127 @@ mod tests {
                 AfterDelta::Full(_) => "full",
             };
             assert_eq!(got, *want, "{why}");
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum Answer {
+        CutAfter(usize),
+        Status(u16),
+    }
+
+    /// Answers each request by the script in order, then serves the asked range in full.
+    /// Returns the address and the first byte of every request that arrived.
+    async fn range_server(bytes: Vec<u8>, script: Vec<Answer>) -> (std::net::SocketAddr, std::sync::Arc<std::sync::Mutex<Vec<u64>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = asked.clone();
+        tokio::spawn(async move {
+            let mut turn = 0;
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { return };
+                let mut buf = vec![0u8; 4096];
+                let n = sock.read(&mut buf).await.unwrap_or(0);
+                let head = String::from_utf8_lossy(&buf[..n]).to_lowercase();
+                let Some(range) = head.lines().find_map(|l| l.strip_prefix("range: bytes=")) else { continue };
+                let (a, b) = range.trim().split_once('-').unwrap();
+                let (a, b): (usize, usize) = (a.parse().unwrap(), b.parse().unwrap());
+                log.lock().unwrap().push(a as u64);
+                let body = &bytes[a..=b];
+                let answer = script.get(turn).copied();
+                turn += 1;
+                if let Some(Answer::Status(code)) = answer {
+                    let _ = sock.write_all(format!("HTTP/1.1 {code} Nope\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await;
+                    let _ = sock.shutdown().await;
+                    continue;
+                }
+                let sent = match answer {
+                    Some(Answer::CutAfter(limit)) => limit.min(body.len()),
+                    _ => body.len(),
+                };
+                let head = format!(
+                    "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {a}-{b}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    bytes.len(),
+                    body.len()
+                );
+                let _ = sock.write_all(head.as_bytes()).await;
+                let _ = sock.write_all(&body[..sent]).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        (addr, asked)
+    }
+
+    fn pattern(len: usize) -> Vec<u8> {
+        (0..len as u32).map(|i| (i.wrapping_mul(2654435761) >> 11) as u8).collect()
+    }
+
+    fn any_host(_: &str) -> bool {
+        true
+    }
+
+    /// Four cuts in a row on one file. More cuts than tries are allowed, because each of them moved on. Every new request
+    /// starts past the bytes on disk: restarting would cost a slow line the same hundreds of megabytes on every cut.
+    #[tokio::test]
+    async fn a_cut_span_continues_from_the_bytes_on_disk() {
+        let bytes = pattern(1_000_000);
+        let group = Group { from: 100, to: 900_000, members: vec![0] };
+        let script = [300_000, 200_000, 100_000, 50_000].map(Answer::CutAfter).to_vec();
+        let (addr, asked) = range_server(bytes.clone(), script).await;
+        let base = scratch("resume");
+        let file = base.join("span");
+        std::fs::write(&file, b"bytes of the previous group").unwrap();
+        let url = format!("http://{addr}/pack.zip");
+        let target = SpanTarget { url: &url, allow: any_host, archive_size: bytes.len() as u64, file: &file };
+        let job = Job::start("test-pack-delta-resume".to_string(), "resume").unwrap();
+        let counted = std::sync::atomic::AtomicU64::new(0);
+        let on = |n: u64| {
+            counted.fetch_add(n, Ordering::Relaxed);
+        };
+        fetch_span(&target, &group, &job, &on).await.expect("every cut moved on, so the span must finish");
+
+        assert!(std::fs::read(&file).unwrap() == bytes[100..900_000], "the span must be exactly the asked bytes, with nothing left of the previous group");
+        let asked = asked.lock().unwrap().clone();
+        assert_eq!(asked.len(), 5, "four cuts and the answer that finished: {asked:?}");
+        assert_eq!(asked[0], 100);
+        assert!(asked.windows(2).all(|w| w[1] > w[0]), "each request must start further on, not from the start of the span: {asked:?}");
+        assert_eq!(counted.load(Ordering::Relaxed), 899_900, "the bar counts each byte once");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Answers of the storage -> outcome and how many requests it took. A passing 502 must not send the player to
+    /// the whole archive; an answer that will not get better must not be asked three times.
+    #[tokio::test]
+    async fn only_tries_that_brought_nothing_use_up_the_attempts() {
+        use Answer::{CutAfter, Status};
+        let cases: &[(&[Answer], bool, usize, &str)] = &[
+            (&[Status(502), Status(503)], true, 3, "the shield's passing errors are waited out"),
+            (&[Status(429)], true, 2, "rate limiting is waited out"),
+            (&[CutAfter(0), CutAfter(0)], true, 3, "a connection that drops at once is tried again"),
+            (&[Status(502), Status(502), Status(502)], false, 3, "three tries with nothing: the whole archive takes over"),
+            (&[CutAfter(0), CutAfter(0), CutAfter(0)], false, 3, "three cuts with nothing: the whole archive takes over"),
+            (&[CutAfter(1000), Status(502), CutAfter(1000), Status(502)], true, 5, "bytes that arrived give the attempts back"),
+            (&[Status(200)], false, 1, "a storage that ignores Range cannot be helped by asking again"),
+            (&[Status(416)], false, 1, "a refused range cannot be helped by asking again"),
+        ];
+        let bytes = pattern(50_000);
+        let group = Group { from: 0, to: 50_000, members: vec![0] };
+        for (n, (script, finishes, requests, why)) in cases.iter().enumerate() {
+            let (addr, asked) = range_server(bytes.clone(), script.to_vec()).await;
+            let base = scratch(&format!("tries-{n}"));
+            let file = base.join("span");
+            let url = format!("http://{addr}/pack.zip");
+            let target = SpanTarget { url: &url, allow: any_host, archive_size: bytes.len() as u64, file: &file };
+            let job = Job::start(format!("test-pack-delta-tries-{n}"), "tries").unwrap();
+            let result = fetch_span(&target, &group, &job, &|_: u64| {}).await;
+            assert_eq!(result.is_ok(), *finishes, "{why}: {result:?}");
+            assert_eq!(asked.lock().unwrap().len(), *requests, "{why}");
+            if *finishes {
+                assert!(std::fs::read(&file).unwrap() == bytes, "{why}: the span must be whole");
+            }
+            let _ = std::fs::remove_dir_all(&base);
         }
     }
 

@@ -6475,5 +6475,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Ativamos os gráficos leves: o launcher estava travando neste PC",
   "Лог пустой": "O log está vazio",
   "Достижение «{title}»": "Conquista “{title}”",
-  "{n} очков достижений": "{n} pontos de conquistas"
+  "{n} очков достижений": "{n} pontos de conquistas",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "o armazenamento de login está sendo usado por outro programa agora (antivírus?) — tente de novo em alguns segundos"
 }

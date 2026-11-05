@@ -56,3 +56,13 @@ export async function idbSet<T>(key: string, value: T): Promise<void> {
     // квота или закрытая база: кэш необязателен
   }
 }
+
+export async function idbDel(key: string): Promise<void> {
+  const db = await open()
+  if (!db) return
+  try {
+    db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key)
+  } catch {
+    // закрытая база: удалить не вышло — запись просто останется
+  }
+}

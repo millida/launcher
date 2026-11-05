@@ -2,7 +2,8 @@ import { splitVariantCode, variantCode, variantTitles } from './variantNames'
 import { idbGet, idbSet } from './idbCache'
 import { api, hasMillidaAccount } from './api'
 import type { Quote } from './money'
-import { getAccount } from '../state/accounts'
+import { getAccount, lookOwner } from '../state/accounts'
+import { forgetWorn, noteTexture, noteWorn } from './lookHint'
 import { getLocale } from '../i18n'
 
 export type SkinSource = 'millida' | 'mojang'
@@ -58,11 +59,21 @@ const TEXTURE_ATTEMPTS = 3
  */
 export const LOOK_EVENT = 'm-look-changed'
 export let lookVersion = 0
-export function bumpLook(): void {
+/** Растёт только при смене скина или плаща: смена одних вещей картинку скина мимо кэша не качает. */
+export let textureVersion = 0
+export function bumpLook(texture = false): void {
   lookVersion = Date.now()
+  if (texture) textureVersion = lookVersion
   window.dispatchEvent(new Event(LOOK_EVENT))
 }
-const bumped = <T,>(p: Promise<T>): Promise<T> => p.then((r) => (bumpLook(), r))
+const who = () => lookOwner()
+/** Скин или плащ применён: лобби надевает ответ сразу (lib/lookHint), не перечитывая гардероб. */
+const texturePut = (p: Promise<AppliedTexture>): Promise<AppliedTexture> =>
+  p.then((r) => {
+    noteTexture(r, who())
+    bumpLook(true)
+    return r
+  })
 
 /// A rejected upload is the user's skin lost, so anything that is not a verdict
 /// on the request itself (auth, validation) is worth another try.
@@ -77,7 +88,7 @@ export async function uploadTexture(
   let last: unknown
   for (let attempt = 1; attempt <= TEXTURE_ATTEMPTS; attempt++) {
     try {
-      return await bumped(
+      return await texturePut(
         api<AppliedTexture>('/launcher/game-texture', {
           method: 'POST',
           body: JSON.stringify({ type, pngBase64, slim, name }),
@@ -122,7 +133,7 @@ export function addToWardrobe(input: {
 }
 
 export function applyWardrobeItem(id: string): Promise<AppliedTexture> {
-  return bumped(api<AppliedTexture>('/launcher/wardrobe/' + encodeURIComponent(id) + '/apply', { method: 'POST' }))
+  return texturePut(api<AppliedTexture>('/launcher/wardrobe/' + encodeURIComponent(id) + '/apply', { method: 'POST' }))
 }
 
 export function removeWardrobeItem(id: string): Promise<unknown> {
@@ -431,12 +442,16 @@ export async function loadWornCosmetics(uuid: string): Promise<WornCosmetic[]> {
 /// Гардероб целиком: сервер перезаписывает набор, поэтому шлём всё надетое, а
 /// не разницу.
 export function applyCosmetics(items: WornCosmetic[]): Promise<{ ok: boolean; applied: number }> {
-  return bumped(
-    api<{ ok: boolean; applied: number }>('/cosmetics/wardrobe', {
-      method: 'POST',
-      body: JSON.stringify({ items: items.map(toServer) }),
-    }),
-  )
+  return api<{ ok: boolean; applied: number }>('/cosmetics/wardrobe', {
+    method: 'POST',
+    body: JSON.stringify({ items: items.map(toServer) }),
+  }).then((r) => {
+    // Служба приняла всё — лобби надевает этот список сразу; приняла не всё — читает службу.
+    if (r.ok && r.applied >= items.length) noteWorn(items, who())
+    else forgetWorn(who())
+    bumpLook()
+    return r
+  })
 }
 
 /// Подписка PLUS: состояние, оформление и отмена.

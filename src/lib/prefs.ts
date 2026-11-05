@@ -52,6 +52,9 @@ const DURABLE = [
   'm-gfx-preset',
   // Отказ от статистики: потерянная запись молча включает отправку снова.
   'm-telemetry-off',
+  // Копия списка аккаунтов (без токенов): стёртое хранилище вебвью не «забывает» аккаунт
+  // (state/accounts, restoreAccounts). Подставляется, только если своего списка нет.
+  'm-accounts-backup',
 ] as const
 
 export type PrefKey = (typeof DURABLE)[number]
@@ -88,6 +91,10 @@ function schedule() {
   }, WRITE_DELAY_MS)
 }
 
+/** Столько раз подряд пробуем записать ключ, потом бросаем: ядро, которое не пишет, не крутит повтор вечно. */
+const MAX_FAILS = 5
+const fails = new Map<PrefKey, number>()
+
 export async function flushPrefs(): Promise<void> {
   if (!hasTauri() || !pending.size) return
   const batch = [...pending]
@@ -95,9 +102,17 @@ export async function flushPrefs(): Promise<void> {
   const { setUiPref } = await ipc()
   await Promise.all(
     batch.map(([key, value]) =>
-      setUiPref(key, value).catch(() => {
-        if (!pending.has(key)) pending.set(key, value)
-      }),
+      Promise.resolve()
+        .then(() => setUiPref(key, value))
+        .then(
+          () => void fails.delete(key),
+          (e: unknown) => {
+            const n = (fails.get(key) ?? 0) + 1
+            fails.set(key, n)
+            if (n >= MAX_FAILS) return console.warn('[prefs] ' + key + ' was not saved to disk', e)
+            if (!pending.has(key)) pending.set(key, value)
+          },
+        ),
     ),
   )
   schedule()

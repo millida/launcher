@@ -2,7 +2,7 @@ import { Icon } from '../components/Icon'
 import { intlTag, useT } from '../i18n'
 import { Ruby } from '../components/Ruby'
 import { TopbarPortal } from '../components/TopbarPortal'
-import { logoutToLogin } from '../lib/session'
+import { showLogin } from '../lib/session'
 import { Packs } from '../components/shop/Packs'
 import { PlusChip } from '../components/shop/PlusBanner'
 import { Shard } from '../components/shop/parts'
@@ -55,7 +55,7 @@ export function Rubies({ on }: { on: boolean }) {
         <>
           <div className="card sh-block sh-guest">
             <Ruby size={40} />
-            <button className="btn md primary" id="rubiesLoginCta" data-track="login" onClick={() => logoutToLogin()}>
+            <button className="btn md primary" id="rubiesLoginCta" data-track="login" onClick={() => showLogin()}>
               <Icon id="i-login" />
               {t('Войти')}
             </button>

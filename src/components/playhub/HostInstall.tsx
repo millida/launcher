@@ -5,7 +5,7 @@ import { HostPlanPicker } from '../HostPlanPicker'
 import { ServerIcon, StatusBadge, buildLabel } from '../hosting/HostKit'
 import { api, hasMillidaAccount } from '../../lib/api'
 import { backdropClose } from '../../lib/dismiss'
-import { logoutToLogin } from '../../lib/session'
+import { showLogin } from '../../lib/session'
 import { setScreen, showToast } from '../../state/ui'
 import { track } from '../../lib/telemetry'
 import { errText, host, P } from '../../screens/hosting/api'
@@ -235,7 +235,7 @@ export function HostInstall({
       <div className="hi-empty">
         <Icon id="i-server" />
         <b>{t('Серверы привязаны к аккаунту Millida')}</b>
-        <button className="btn md primary" data-track="login" onClick={() => logoutToLogin()}>
+        <button className="btn md primary" data-track="login" onClick={() => showLogin()}>
           <Icon id="i-login" /> {t('Войти')}
         </button>
       </div>

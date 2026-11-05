@@ -66,3 +66,8 @@ export const PlayhubBar = lazyHost(
 export const PixelTip = lateMount(() => import('./PixelTip').then((m) => ({ default: m.PixelTip })), 800)
 export const Tour = lateMount(() => import('./Tour').then((m) => ({ default: m.Tour })), 1200)
 export const CommandPalette = lateMount(() => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })), 1200)
+// 3D-персонаж лобби переживает уход с главной (components/lobby/LobbyKeeper); чанк — с первым заходом в лобби.
+export const LobbyKeeper = lazyHost(
+  () => import('./lobby/LobbyKeeper').then((m) => ({ default: m.LobbyKeeper })),
+  () => useUi((s) => s.screen === 'play'),
+)

@@ -1,5 +1,7 @@
 import { nickSkinUrl } from './characterStage'
-import { loadWardrobe, lookVersion } from './gameProfile'
+import { loadWardrobe, textureVersion } from './gameProfile'
+import { lookHint } from './lookHint'
+import { lookOwner } from '../state/accounts'
 import { detectSlimFromUrl } from './skinArms'
 
 /** Скин, плащ и тип рук игрока: то, во что одета фигура на главной до косметики. */
@@ -18,9 +20,13 @@ export async function nickLookSkin(nick: string): Promise<LookSkin> {
 
 export async function loadLookSkin(nick: string, signedIn: boolean): Promise<LookSkin> {
   if (!signedIn) return nickLookSkin(nick)
-  const wardrobe = await loadWardrobe().catch(() => null)
-  const fresh = (u: string) => (lookVersion && !/^(data|blob):/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'v=' + lookVersion : u)
-  const cape = wardrobe?.active.capeUrl ? fresh(wardrobe.active.capeUrl) : null
-  if (wardrobe?.active.skinUrl) return { skin: fresh(wardrobe.active.skinUrl), slim: wardrobe.active.model === 'slim', cape }
+  // Скин только что применили здесь же (lib/lookHint) — берём ответ применения, гардероб не спрашиваем.
+  const applied = lookHint(lookOwner())?.texture
+  const active = applied ?? (await loadWardrobe().catch(() => null))?.active
+  // Мимо кэша — только после смены скина или плаща: адрес на аккаунте бывает тем же, а смена одних
+  // вещей скин не меняет, и картинка берётся из памяти (lib/textureSource).
+  const fresh = (u: string) => (textureVersion && !/^(data|blob):/i.test(u) ? u + (u.includes('?') ? '&' : '?') + 'v=' + textureVersion : u)
+  const cape = active?.capeUrl ? fresh(active.capeUrl) : null
+  if (active?.skinUrl) return { skin: fresh(active.skinUrl), slim: active.model === 'slim', cape }
   return { ...(await nickLookSkin(nick)), cape }
 }
