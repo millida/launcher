@@ -36,6 +36,7 @@ let disk: string | null = null
 const prefWrites: Array<[string, string]> = []
 /// Содержимое файла настроек ядра, как его отдаёт uiPrefs.
 let diskPrefs: Record<string, string> = {}
+const remembered: Array<[string, unknown]> = []
 
 mock.module('../ipc/tauri', () => ({ hasTauri: () => true }))
 mock.module('../ipc/commands', () => ({
@@ -44,7 +45,7 @@ mock.module('../ipc/commands', () => ({
   uiPrefs: async () => diskPrefs,
   setUiPref: async (k: string, v: string) => void prefWrites.push([k, v]),
   rememberInstallId: async () => {},
-  rememberBeat: async () => {},
+  rememberBeat: async (path: string, body: unknown) => void remembered.push([path, body]),
   deviceSpecs: async () => ({ os: 'windows', os_version: '11', arch: 'x86_64' }),
   diskKind: async () => {
     if (disk === null) throw new Error('no core')
@@ -196,6 +197,24 @@ describe('очередь телеметрии', () => {
   test('выключенная телеметрия не уезжает и внутри стука присутствия', async () => {
     T.setTelemetryEnabled(false)
     expect(await T.liveBeatPayload('idle', {}, true)).toBeNull()
+    T.setTelemetryEnabled(true)
+  })
+
+  test('ядро получает стук онлайна и после недавнего стука, иначе вошедший лаунчер без окна пропадёт из счётчика', async () => {
+    remembered.length = 0
+    await T.liveBeatPayload('playing', {}, true)
+    await T.rememberLiveBeat('playing', { build: 'b', mc: '1.21.1', server: 'mc.example' })
+    expect(remembered).toHaveLength(1)
+    expect(remembered[0]![0]).toBe('/launcher/heartbeat')
+    expect(remembered[0]![1]).toMatchObject({ status: 'playing', build: 'b', mc: '1.21.1', server: 'mc.example' })
+    expect((remembered[0]![1] as { installId?: string }).installId).toBeTruthy()
+  })
+
+  test('выключенная телеметрия не передаёт ядру стук онлайна', async () => {
+    remembered.length = 0
+    T.setTelemetryEnabled(false)
+    await T.rememberLiveBeat('idle', {})
+    expect(remembered).toHaveLength(0)
     T.setTelemetryEnabled(true)
   })
 
