@@ -19,7 +19,7 @@ import { showToast, useUi } from '../state/ui'
 import { useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
 import { setLaunchBusy, surfaceLaunchFailure } from './launchHold'
-import { liveBeat, liveBeatPayload, trackFailure, trackTimed } from './telemetry'
+import { liveBeat, liveBeatPayload, rememberLiveBeat, trackFailure, trackTimed } from './telemetry'
 import { launchAttribution } from './uiTrack'
 import { failedHost } from './userEnvError'
 import { buildTag } from './telemetryPrivacy'
@@ -190,6 +190,7 @@ export function heartbeat(status?: string, server?: string | null) {
       // Without a window during the game the core repeats this beat (the socket
       // that carries presence otherwise is gone with the page).
       if (hasTauri()) void Promise.resolve(rememberBeat('/friends/presence/heartbeat', state)).catch((e) => console.warn('[launch] presence beat was not handed to the core', e))
+      void rememberLiveBeat(liveStatus, meta).catch((e) => console.warn('[launch] online beat was not handed to the core', e))
       const key = beatKey(state)
       if (!presenceBeatDue(isPresenceTracked(), key, sentBeat, sendingBeat)) return
       sendingBeat = key

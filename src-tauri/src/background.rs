@@ -1,6 +1,6 @@
 // Light background: when nobody looks at the launcher (tray, running game) the main window
 // and its WebView2 are destroyed, and the tray click builds them again. While there is no
-// window only this core works: the in-game presence beat, one process-memory sample every
+// window only this core works: the in-game presence beat, the live-online beat, one process-memory sample every
 // 30 minutes (only when usage statistics are on), an update check every 6 hours and, when a
 // release is found and no game runs, its download to the updates folder (checked by signature,
 // installed when the player quits from the tray). The network calls go through the same API
@@ -44,6 +44,9 @@ pub const MAIN: &str = "main";
 
 /// The server keeps a friend online for 60 s after the last beat.
 const BEAT_EVERY: Duration = Duration::from_secs(50);
+/// The online counter keeps a launcher for 3 minutes: one lost beat must not take it off the counter.
+const LIVE_BEAT_EVERY: Duration = Duration::from_secs(90);
+const LIVE_BEAT_PATH: &str = "/launcher/heartbeat";
 const SAMPLE_EVERY: Duration = Duration::from_secs(30 * 60);
 /// WebView2 processes take a moment to exit after the window is gone.
 const SAMPLE_AFTER_UNLOAD: Duration = Duration::from_secs(20);
@@ -84,6 +87,7 @@ static QUEUE: Mutex<Queue> = Mutex::new(Queue::new());
 /// The window the app started with is always considered listening, as before.
 static PAGE_UP: AtomicBool = AtomicBool::new(true);
 static BEAT: Mutex<Option<(String, serde_json::Value)>> = Mutex::new(None);
+static LIVE_BEAT: Mutex<Option<serde_json::Value>> = Mutex::new(None);
 static NOTIFIED_UPDATE: Mutex<Option<String>> = Mutex::new(None);
 
 /// A result nobody can act on is still written to the log with its reason, never dropped silently.
@@ -609,7 +613,8 @@ pub fn take_resume() -> WindowResume {
     }
 }
 
-/// The page's last presence beat, repeated by the core while the game runs without a window.
+/// The page's last beats, repeated by the core without a window: presence while the game runs,
+/// live online for as long as the launcher runs.
 pub fn remember_beat(path: String, body: serde_json::Value) -> Result<(), String> {
     if !BEAT_PATHS.contains(&path.as_str()) || !body.is_object() {
         return Err("bad beat".into());
@@ -617,7 +622,11 @@ pub fn remember_beat(path: String, body: serde_json::Value) -> Result<(), String
     if body.to_string().len() > MAX_BEAT_BYTES {
         return Err("beat too large".into());
     }
-    *lock(&BEAT) = Some((path, body));
+    if path == LIVE_BEAT_PATH {
+        *lock(&LIVE_BEAT) = Some(body);
+    } else {
+        *lock(&BEAT) = Some((path, body));
+    }
     Ok(())
 }
 
@@ -659,11 +668,30 @@ fn beat_body(mut body: serde_json::Value) -> serde_json::Value {
 
 async fn send_beat() {
     let Some((path, body)) = lock(&BEAT).clone() else { return };
-    if path == "/launcher/heartbeat" && !crate::engine::game_telemetry_enabled() {
-        return;
-    }
     let body = beat_body(body);
     let _ = crate::engine::millida_api_auth_in(path, "POST".into(), Some(body), None, None).await;
+}
+
+/// A launcher in the tray is online and idle: what the game was doing does not outlive the game.
+fn live_beat_body(mut body: serde_json::Value, playing: bool) -> serde_json::Value {
+    if let Some(obj) = body.as_object_mut() {
+        obj.insert("status".into(), serde_json::json!(if playing { "playing" } else { "idle" }));
+        if !playing {
+            for key in ["build", "mc", "server"] {
+                obj.remove(key);
+            }
+        }
+    }
+    body
+}
+
+async fn send_live_beat(playing: bool) {
+    if !crate::engine::game_telemetry_enabled() {
+        return;
+    }
+    let Some(body) = lock(&LIVE_BEAT).clone() else { return };
+    let body = live_beat_body(body, playing);
+    let _ = crate::engine::millida_api_auth_in(LIVE_BEAT_PATH.into(), "POST".into(), Some(body), None, None).await;
 }
 
 /// Wakes the tray loop when the core has finished staging an update: the quiet-install clock starts from there.
@@ -675,6 +703,7 @@ fn run_background(app: AppHandle, reason: Reason) {
         let live = || EPOCH.load(Ordering::SeqCst) == epoch && unloaded() && !crate::exiting();
         let start = Instant::now();
         let mut next_beat = start;
+        let mut next_live_beat = start;
         let mut next_sample = start + SAMPLE_AFTER_UNLOAD;
         let mut next_update = start + UPDATE_FIRST;
         let mut first_sample = true;
@@ -691,6 +720,10 @@ fn run_background(app: AppHandle, reason: Reason) {
             if playing && now >= next_beat {
                 send_beat().await;
                 next_beat = now + BEAT_EVERY;
+            }
+            if now >= next_live_beat {
+                send_live_beat(playing).await;
+                next_live_beat = now + LIVE_BEAT_EVERY;
             }
             if now >= next_sample {
                 let why = if first_sample { reason.as_str() } else { "timer" };
@@ -715,8 +748,7 @@ fn run_background(app: AppHandle, reason: Reason) {
                     watch = crate::engine::tray_should_watch(&app);
                 }
             }
-            // Only a running game needs a short tick; the tray sleeps until the next sample.
-            let mut wake = next_sample.min(next_update);
+            let mut wake = next_sample.min(next_update).min(next_live_beat);
             if playing {
                 wake = wake.min(next_beat);
             }
@@ -1203,6 +1235,33 @@ mod tests {
         follow_server_in(&mut beat, "other.example");
         assert_eq!(beat.as_ref().unwrap().1["server"], "other.example");
         follow_server_in(&mut None, "nobody.example");
+    }
+
+    #[test]
+    fn live_beat_keeps_a_windowless_launcher_on_the_online_counter() {
+        let presence = serde_json::json!({"status": "playing", "server": "friends.example"});
+        remember_beat("/friends/presence/heartbeat".into(), presence).unwrap();
+        let page = serde_json::json!({"installId": "abc", "status": "idle", "build": "b", "mc": "1.21.1", "server": "s"});
+        remember_beat(LIVE_BEAT_PATH.into(), page.clone()).unwrap();
+        assert_eq!(
+            lock(&BEAT).as_ref().map(|(path, _)| path.clone()).as_deref(),
+            Some("/friends/presence/heartbeat"),
+            "the online beat must not replace the presence beat: friends would stop seeing the game",
+        );
+        assert_eq!(lock(&LIVE_BEAT).as_ref(), Some(&page), "a signed-in launcher has no other online signal without a window");
+
+        let in_game = live_beat_body(page.clone(), true);
+        assert_eq!(in_game["status"], "playing");
+        assert_eq!(in_game["installId"], "abc", "the counter is keyed by the install id");
+        assert_eq!(in_game["build"], "b", "the admin panel's builds in play come from this beat");
+
+        let tray = live_beat_body(page, false);
+        assert_eq!(tray["status"], "idle", "a tray launcher with no game counts as online, not as playing");
+        assert!(tray.get("build").is_none() && tray.get("mc").is_none() && tray.get("server").is_none());
+        assert!(
+            LIVE_BEAT_EVERY * 2 <= Duration::from_secs(180),
+            "the counter's window is 3 minutes: one lost beat must not take the launcher off",
+        );
     }
 
     #[test]
