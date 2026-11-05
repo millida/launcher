@@ -353,6 +353,7 @@ export function InstancePage() {
   const [shotCount, setShotCount] = useState('—')
   const [mpSlug, setMpSlug] = useState('')
   const [mpVersion, setMpVersion] = useState('')
+  const [catalogVersion, setCatalogVersion] = useState('')
   const [group, setGroup] = useState('')
   const [servers, setServers] = useState<ServerEntry[]>([])
   const [pings, setPings] = useState<Record<string, PingResult | null>>({})
@@ -692,6 +693,7 @@ export function InstancePage() {
     setShotCount('—')
     setMpSlug('')
     setMpVersion('')
+    setCatalogVersion('')
     setWFilter('all')
     setCoreEdit(false)
     setServerForm(false)
@@ -737,6 +739,7 @@ export function InstancePage() {
         .catch(() => setPackRam({ min: 0, max: 0 }))
       loadProfileSettings(profile)
         .then((cfg) => {
+          setCatalogVersion(catalogPackSlug(cfg) ? (cfg.catalogPackVersion || '').trim() : '')
           setJvm(cfg.jvmArgs || '')
           setW(cfg.width ? String(cfg.width) : '')
           setH(cfg.height ? String(cfg.height) : '')
@@ -2612,6 +2615,12 @@ export function InstancePage() {
                   {t('Версии')}
                 </button>
               </div>
+              {catalogVersion ? (
+                <div className="set-row" id="bsCatalogVersion">
+                  <span className="lab">{t('Версия модпака')}</span>
+                  <span className="set-val">{catalogVersion}</span>
+                </div>
+              ) : null}
               {profile ? <PackAutoUpdateRow profile={profile} /> : null}
               {profile ? <PackwizRow profile={profile} running={thisRunning} onUpdated={() => loadMods()} /> : null}
               <div className="bx-opts-cap">{t('Игра')}</div>
