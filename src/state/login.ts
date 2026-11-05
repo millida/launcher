@@ -236,7 +236,8 @@ export async function startWebLogin(reopen = false) {
     if (r.status === 'ok') {
       const nick = nickFromUser(r.user)
       adoptUser(r.user)
-      await refreshSessionState()
+      // Сбой проверки сразу после входа оставлял «входа нет» до перезапуска — повторяем.
+      await refreshSessionState(3)
       const returning = millidaEver()
       markMillidaEver()
       useAccounts.getState().add({ nick, kind: 'millida' })

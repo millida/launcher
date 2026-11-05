@@ -37,7 +37,7 @@ import type { PlusTier } from '../../lib/gameProfile'
 import { useAccounts } from '../../state/accounts'
 import { showToast, useUi } from '../../state/ui'
 import { showReward, type RewardEntry } from '../reward/RewardReveal'
-import { logoutToLogin } from '../../lib/session'
+import { showLogin } from '../../lib/session'
 import { Ruby } from '../Ruby'
 import { Guard } from '../Guard'
 import { MonthOfferBlock, PackArt, PackCount, Packs } from './Packs'
@@ -269,7 +269,7 @@ export function useShop(on: boolean) {
 
   /** Вещь витрины: окно с вещью на игроке, после оплаты — вспышка и «Надеть». */
   const doBuy = (card: ShopCard, source: ShopSource) => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     const result = purchaseFlow('item', card.item.code, card.price, 'rubies')
     if (short(card.price, result)) return
     openSheet({
@@ -300,7 +300,7 @@ export function useShop(on: boolean) {
 
   /** Набор: окно с набором на игроке, после оплаты — вспышка и «Надеть». */
   const doBuySet = (set: SetView, way: SetColorwayView) => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     const result = purchaseFlow('bundle', set.id + (way.name ? '~' + way.name : ''), way.price, 'rubies')
     if (short(way.price, result)) return
     const all = way.items.map((x) => x.item)
@@ -338,7 +338,7 @@ export function useShop(on: boolean) {
    * за девять в том же окне; бесплатный первый — сразу открытие, без окна.
    */
   const doOpenCase = (c: CaseView, mode: CaseMode = 'one') => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     const shards = c.currency === 'shards'
     const price = casePriceOf(c, mode)
     const result = purchaseFlow('case', c.id + (mode === 'one' ? '' : ':' + mode), price, shards ? 'shards' : 'rubies')
@@ -448,7 +448,7 @@ export function useShop(on: boolean) {
    * праздник после оплаты).
    */
   const doPlus = (_want: PlusTier = 'PLUS') => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     const choice = (tier: PlusTier) => ({
       key: tier.toLowerCase(),
       tone: tier === 'DIAMOND' ? 'var(--m-rarity-rare)' : 'var(--m-rarity-legendary)',
@@ -473,19 +473,19 @@ export function useShop(on: boolean) {
   }, [on, wantPlus, !!day])
   /** Свой тариф — продлить и управлять: экран подписки. */
   const doManage = () => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     useUi.getState().setScreen('plus')
   }
 
   const doWalletTopUp = (s: MoneyShortfall) => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     openTopup(s.topup)
     showToast(s.topup ? t('Пополни счёт на {sum} и вернись за пакетом', { sum: formatMoney(s.topup.amountMinor, s.topup.currency) }) : shortfallText(s), 'ok')
   }
 
   /** Пакет: окно с мешком рубинов, после оплаты рубины досчитываются. */
   const doPack = async (pack: ShopPack, art: string) => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     const result = purchaseFlow('ruby_pack', pack.code, pack.kopecks, 'kopecks')
     const quote = rubyQuote(pack.code)
     let missing: MoneyShortfall | null = null
@@ -537,7 +537,7 @@ export function useShop(on: boolean) {
   }, [on, signedIn])
   /** Осколки → половина фрагментов вещи; остаток докупается рубинами. */
   const doCraft = (w: { item: ItemRef; cost: number }) => {
-    if (!signedIn) return logoutToLogin()
+    if (!signedIn) return showLogin()
     if (workshop && w.cost > workshop.shards) return showToast(t('Не хватает осколков'), 'error')
     const result = purchaseFlow('craft', w.item.code, w.cost, 'shards')
     openSheet({

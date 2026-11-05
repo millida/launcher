@@ -5,7 +5,7 @@ import { TopbarPortal } from '../components/TopbarPortal'
 import { HostingManage } from './HostingManage'
 import { api, hasMillidaAccount, openExt } from '../lib/api'
 import { HostPlanPicker } from '../components/HostPlanPicker'
-import { loadMillidaProfile, logoutToLogin } from '../lib/session'
+import { loadMillidaProfile, showLogin } from '../lib/session'
 import { hasTauri } from '../ipc/tauri'
 import { addServer, pinServerDat } from '../ipc/commands'
 import { rememberServerName } from '../state/playStats'
@@ -468,7 +468,7 @@ export function Hosting({ on }: { on: boolean }) {
         {view === 'gate' ? (
           // Сервер живёт в аккаунте Millida: обе дороги ведут на вход, после него
           // человек вернётся сюда и выберет тариф по-настоящему.
-          <HostRoads paidId="hostLoginCta" freeId="hostLoginFree" onPaid={() => logoutToLogin()} onFree={() => logoutToLogin()} />
+          <HostRoads paidId="hostLoginCta" freeId="hostLoginFree" onPaid={() => showLogin()} onFree={() => showLogin()} />
         ) : null}
         {view === 'error' ? (
           <div className="card hs-state" data-err={err}>

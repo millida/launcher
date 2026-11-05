@@ -6479,5 +6479,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Grafis ringan diaktifkan: launcher tersendat di PC ini",
   "Лог пустой": "Log kosong",
   "Достижение «{title}»": "Pencapaian “{title}”",
-  "{n} очков достижений": "{n} poin pencapaian"
+  "{n} очков достижений": "{n} poin pencapaian",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "penyimpanan login sedang dipakai program lain (antivirus?) — coba lagi dalam beberapa detik"
 }

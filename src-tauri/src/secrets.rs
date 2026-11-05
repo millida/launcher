@@ -87,7 +87,10 @@ fn create_new_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         opts.mode(0o600);
     }
     let mut f = opts.open(path)?;
-    f.write_all(bytes)
+    f.write_all(bytes)?;
+    // The vault itself is synced; a key lost to a power cut right after it was written
+    // would leave a durable vault nobody can decrypt.
+    f.sync_all()
 }
 
 #[cfg(windows)]
@@ -239,7 +242,10 @@ const KEY_READ_RETRY_MS: [u64; 5] = [25, 50, 100, 200, 400];
 fn read_key_file_patiently(path: &Path) -> KeyFile {
     let mut got = read_key_file(path);
     for pause in KEY_READ_RETRY_MS {
-        if got != KeyFile::Unreadable {
+        // A DPAPI unwrap can fail for a moment too (the profile not loaded yet at autostart): a key
+        // taken for corrupt is replaced, and every stored sign-in with it.
+        let again = got == KeyFile::Unreadable || (cfg!(windows) && got == KeyFile::Corrupt);
+        if !again {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(pause));
@@ -405,11 +411,14 @@ enum Stored {
     /// Present but not ours to interpret: a newer `v`, or bytes we cannot parse.
     /// Its records may still be real tokens, so it must be left exactly as is.
     Foreign,
+    /// There, but not readable right now (antivirus or a backup holding it on Windows): its
+    /// records are real and readable later. Neither written over nor moved aside.
+    Busy,
 }
 
 impl Stored {
     fn writable(&self) -> bool {
-        !matches!(self, Stored::Foreign)
+        !matches!(self, Stored::Foreign | Stored::Busy)
     }
 }
 
@@ -435,17 +444,44 @@ fn classify(text: &str, mask_present: bool) -> Stored {
     if looks_like_v1 { Stored::V1(raw) } else { Stored::Foreign }
 }
 
-/// Only a missing file is empty. Any other read failure may hide real tokens,
-/// so it is treated like a foreign file and never written over.
+/// Only a missing file is empty. A read failure is retried (scanners hold the file for a moment
+/// after a write) and then reported as busy: it hides real tokens, so nothing writes over it, and
+/// the session it holds is not taken for gone (04.11.2026: "the launcher logs me out").
 fn read_stored_at(path: &Path, mask_present: bool) -> Stored {
-    match std::fs::read(path) {
+    let mut read = std::fs::read(path);
+    // Right after a busy read the file is most likely still held: one try, not the whole wait under
+    // the vault lock again, or every secret call would queue ~0.8 s behind it.
+    let recently_busy = unix_millis().saturating_sub(BUSY_AT.load(Ordering::SeqCst)) < BUSY_QUIET_MS;
+    for pause in KEY_READ_RETRY_MS {
+        let retry = !recently_busy && matches!(&read, Err(e) if e.kind() != std::io::ErrorKind::NotFound);
+        if !retry {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(pause));
+        read = std::fs::read(path);
+    }
+    match read {
         Ok(bytes) => match String::from_utf8(bytes) {
             Ok(text) => classify(&text, mask_present),
             Err(_) => Stored::Foreign,
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Stored::Absent,
-        Err(_) => Stored::Foreign,
+        Err(_) => {
+            BUSY_AT.store(unix_millis(), Ordering::SeqCst);
+            Stored::Busy
+        }
     }
+}
+
+/// When the vault last read as busy, ms since the epoch; reads within BUSY_QUIET_MS skip the retries.
+static BUSY_AT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+const BUSY_QUIET_MS: u64 = 2000;
+
+fn unix_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or_default()
 }
 
 fn read_stored() -> Stored {
@@ -564,10 +600,13 @@ struct Vault {
 /// foreign file yields no records and forbids writing, so nothing is lost when
 /// an older build meets a vault it does not understand.
 fn items() -> Vault {
-    let stored = read_stored();
+    vault_of(read_stored())
+}
+
+fn vault_of(stored: Stored) -> Vault {
     let writable = stored.writable();
     let items = match stored {
-        Stored::Absent | Stored::Foreign => Map::new(),
+        Stored::Absent | Stored::Foreign | Stored::Busy => Map::new(),
         Stored::V2(items) => items,
         Stored::V1(raw) => migrate_v1(&raw),
     };
@@ -577,17 +616,46 @@ fn items() -> Vault {
 const FOREIGN_VAULT: &str =
     "хранилище секретов повреждено или создано другой версией лаунчера — удали secrets.bin, чтобы войти заново";
 
+pub(crate) const VAULT_BUSY: &str =
+    "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд";
+
 pub fn get(key: &str) -> Option<String> {
     let _guard = vault_lock();
     decrypt(key, items().items.get(key)?)
 }
 
-/// A foreign vault holds nothing this build can read, so signing out succeeds
-/// without touching the file: failing a sign-out would be worse than a no-op.
+/// Records for a decision about a session: a vault that cannot be read right now is an error,
+/// not "nothing stored", so the caller does not take a live session for a gone one.
+fn readable_items() -> Result<Map<String, Value>, String> {
+    match read_stored() {
+        Stored::Busy => Err(VAULT_BUSY.into()),
+        Stored::Absent | Stored::Foreign => Ok(Map::new()),
+        Stored::V2(items) => Ok(items),
+        Stored::V1(raw) => Ok(migrate_v1(&raw)),
+    }
+}
+
+/// Several keys from one read of the vault, in the order asked: a pair read with two reads could
+/// see the second one fail and the session look half gone.
+pub fn get_many(keys: &[&str]) -> Result<Vec<Option<String>>, String> {
+    let _guard = vault_lock();
+    let all = readable_items()?;
+    Ok(keys.iter().map(|k| all.get(*k).and_then(|rec| decrypt(k, rec))).collect())
+}
+
+/// A foreign vault holds nothing this build can read, so signing out succeeds without touching the
+/// file. A busy one still holds the real tokens: reporting success would leave them on disk.
+fn vault_for_delete(stored: Stored) -> Result<Vault, String> {
+    if matches!(stored, Stored::Busy) {
+        return Err(VAULT_BUSY.into());
+    }
+    Ok(vault_of(stored))
+}
+
 pub fn delete(key: &str) -> Result<(), String> {
     let _guard = vault_lock();
     key_usable()?;
-    let mut vault = items();
+    let mut vault = vault_for_delete(read_stored())?;
     if vault.items.remove(key).is_some() && vault.writable {
         write_items(&vault.items)?;
     }
@@ -608,6 +676,7 @@ fn insert_pairs(items: &mut Map<String, Value>, pairs: Vec<(String, String)>) ->
 fn set_many_at(path: &Path, mask_present: bool, pairs: Vec<(String, String)>) -> Result<(), String> {
     let mut items = match read_stored_at(path, mask_present) {
         Stored::Foreign => return Err(FOREIGN_VAULT.into()),
+        Stored::Busy => return Err(VAULT_BUSY.into()),
         Stored::Absent => Map::new(),
         Stored::V2(items) => items,
         Stored::V1(raw) => migrate_v1(&raw),
@@ -633,6 +702,13 @@ fn store_login_at(
 ) -> Result<Option<PathBuf>, String> {
     let (mut items, moved) = match read_stored_at(path, mask_present) {
         Stored::Foreign => (Map::new(), Some(quarantine(path, stamp)?)),
+        // Still unreadable after the retries. A file an antivirus holds cannot be renamed either, so
+        // this fails and loses nothing; one that is unreadable for good (wrong owner or ACL) is moved
+        // aside like a foreign one, or the player could never sign in again.
+        Stored::Busy => match quarantine(path, stamp) {
+            Ok(moved) => (Map::new(), Some(moved)),
+            Err(_) => return Err(VAULT_BUSY.into()),
+        },
         Stored::Absent => (Map::new(), None),
         Stored::V2(items) => (items, None),
         Stored::V1(raw) => (migrate_v1(&raw), None),
@@ -665,15 +741,16 @@ pub fn store_login(pairs: Vec<(String, String)>) -> Result<(), String> {
 
 /// Existence only: the frontend is told which sessions are stored, never their
 /// values.
-pub fn present(keys: &[String]) -> HashMap<String, bool> {
+pub fn present(keys: &[String]) -> Result<HashMap<String, bool>, String> {
     let _guard = vault_lock();
-    let all = items().items;
-    keys.iter()
+    let all = readable_items()?;
+    Ok(keys
+        .iter()
         .map(|k| {
             let ok = all.get(k).and_then(|rec| decrypt(k, rec)).is_some_and(|v| !v.is_empty());
             (k.clone(), ok)
         })
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]
@@ -875,6 +952,24 @@ mod tests {
     type VaultCase = (&'static str, fn(&Path), Stored, &'static str);
 
     #[test]
+    fn delete_refuses_only_a_vault_that_still_holds_tokens_it_cannot_reach() {
+        // (what was read, may delete go on, is it allowed to write, why this case is pinned)
+        let cases: Vec<(Stored, bool, bool, &str)> = vec![
+            (Stored::Busy, false, false, "the tokens are there and readable later: success would leave a signed-out player's session on disk"),
+            (Stored::Foreign, true, false, "nothing this build can read, and failing the sign-out would be worse than a no-op"),
+            (Stored::Absent, true, true, "nothing stored, nothing to lose"),
+            (Stored::V2(Map::new()), true, true, "an ordinary vault"),
+        ];
+        for (stored, proceeds, writable, why) in cases {
+            let vault = vault_for_delete(stored);
+            assert_eq!(vault.is_ok(), proceeds, "{why}");
+            if let Ok(vault) = vault {
+                assert_eq!(vault.writable, writable, "{why}");
+            }
+        }
+    }
+
+    #[test]
     fn read_failure_verdicts() {
         // (what lies at the vault path, expected verdict, why this case is pinned)
         let cases: &[VaultCase] = &[
@@ -882,8 +977,8 @@ mod tests {
             (
                 "directory",
                 |p| std::fs::create_dir_all(p).expect("dir"),
-                Stored::Foreign,
-                "a read error is not an empty vault: writing over it could destroy live tokens",
+                Stored::Busy,
+                "a read error is not an empty vault: writing over it could destroy live tokens, and the session in it is not gone",
             ),
             (
                 "non-utf8",
@@ -949,6 +1044,21 @@ mod tests {
             }
             assert!(scratch.temp_leftovers().is_empty(), "sign-in over {name} left temp files behind");
         }
+    }
+
+    #[test]
+    fn unreadable_vault_survives_background_writes_and_yields_to_a_sign_in() {
+        // A directory at the vault path reads with an error, like a file with a broken owner or ACL.
+        let scratch = Scratch::new("busy");
+        let vault = scratch.vault();
+        std::fs::create_dir_all(vault.join("inside")).expect("dir");
+        assert!(set_many_at(&vault, false, login_pairs()).is_err(), "a background write over an unreadable vault must fail");
+        assert!(vault.join("inside").is_dir(), "a background write must leave the unreadable vault where it is");
+        // An explicit sign-in moves it aside intact, or a vault unreadable for good would block every sign-in.
+        let moved = store_login_at(&vault, false, login_pairs(), 42).expect("sign-in over an unreadable vault");
+        let moved = moved.expect("the unreadable vault must be moved aside");
+        assert!(moved.join("inside").is_dir(), "the moved vault must keep its contents");
+        assert_eq!(stored_token(&vault).as_deref(), Some("fresh-access"), "the sign-in must leave a readable token");
     }
 
     #[test]

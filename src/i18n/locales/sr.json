@@ -6475,5 +6475,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Uključili smo laku grafiku: launcher je seckao na ovom računaru",
   "Лог пустой": "Dnevnik je prazan",
   "Достижение «{title}»": "Dostignuće „{title}“",
-  "{n} очков достижений": "{n} poena dostignuća"
+  "{n} очков достижений": "{n} poena dostignuća",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "skladište prijave trenutno koristi drugi program (antivirus?) — pokušaj ponovo za nekoliko sekundi"
 }

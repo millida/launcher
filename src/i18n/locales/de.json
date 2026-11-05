@@ -6475,5 +6475,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Leichte Grafik eingeschaltet: Der Launcher hat auf diesem PC geruckelt",
   "Лог пустой": "Log ist leer",
   "Достижение «{title}»": "Erfolg „{title}“",
-  "{n} очков достижений": "{n} Erfolgspunkte"
+  "{n} очков достижений": "{n} Erfolgspunkte",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "der Anmeldespeicher wird gerade von einem anderen Programm benutzt (Antivirus?) — versuche es in ein paar Sekunden erneut"
 }

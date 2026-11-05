@@ -16,7 +16,7 @@ const CSL_OPTOUT: &str = ".millida-skip";
 const MILLIDA_OPTOUT: &str = ".millida-mod-skip";
 
 pub(crate) fn is_skin_mod_file(name: &str) -> bool {
-    name == CSL_JAR
+    name.eq_ignore_ascii_case(CSL_JAR)
 }
 /// Mods that decide where the player's skin comes from. Two of them in one
 /// build patch the same texture path, and a downloaded pack that ships its own

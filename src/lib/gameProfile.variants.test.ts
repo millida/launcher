@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test'
 
-mock.module('../state/accounts', () => ({ getAccount: () => null }))
+mock.module('../state/accounts', () => ({ getAccount: () => null, lookOwner: () => '' }))
 mock.module('./api', () => ({ api: async () => null, hasMillidaAccount: () => false }))
 
 const { expandCatalog } = await import('./gameProfile')

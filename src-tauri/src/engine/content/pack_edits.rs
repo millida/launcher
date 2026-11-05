@@ -27,9 +27,9 @@ fn mod_file(name: &str) -> bool {
 }
 
 /// Jars the launcher itself puts into every build at launch: their coming and
-/// going is not the player's edit.
-fn launcher_placed(name: &str) -> bool {
-    is_millida_mod_file(name) || is_skin_mod_file(name)
+/// going is not the player's edit, and a shared build does not carry them.
+pub(crate) fn launcher_placed(name: &str) -> bool {
+    is_millida_mod_file(&name.to_ascii_lowercase()) || is_skin_mod_file(name)
 }
 
 /// Enabled mod files of a build, `mods/` and one level below it (1.7.10 packs
