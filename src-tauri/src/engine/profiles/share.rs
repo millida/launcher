@@ -210,7 +210,9 @@ pub fn build_manifest(profile: &str, with_overrides: bool) -> Result<(PackManife
         let Ok(rd) = std::fs::read_dir(pdir.join(sub)) else { continue };
         for entry in rd.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if !entry.path().is_file() || name.ends_with(".disabled") {
+            // The Millida mod and the skin mod are put in by the launcher at launch, the
+            // friend's launcher puts in its own: sent along they read as the author's unchecked jar.
+            if !entry.path().is_file() || name.ends_with(".disabled") || launcher_placed(&name) {
                 continue;
             }
             let rel = format!("{}/{}", sub, name);
@@ -518,6 +520,8 @@ pub(crate) fn parse_manifest_report(raw: &Value) -> Result<(PackManifest, Vec<St
     manifest.files.truncate(MAX_FILES);
     manifest.files.retain_mut(|f| {
         let kept = match shared_entry_path(&f.kind, &f.path) {
+            // The author names a file freely: under the launcher's own name it would pass for the launcher's mod.
+            Ok(path) if launcher_placed(&file_name_of(&path)) => return false,
             Ok(path) if url_allowed(&f.url) && sha1_ok(&f.sha1) => {
                 f.path = path;
                 f.sha1 = f.sha1.to_ascii_lowercase();
@@ -535,6 +539,11 @@ pub(crate) fn parse_manifest_report(raw: &Value) -> Result<(PackManifest, Vec<St
     dropped.extend(refused);
     let mut seen_jars: HashSet<String> = HashSet::new();
     for mut j in std::mem::take(&mut manifest.jars) {
+        // Packs shared before the author's launcher left these out still list them. The
+        // launcher installs its own copy, so the author's is neither shown nor installed.
+        if launcher_placed(&file_name_of(&j.path)) {
+            continue;
+        }
         match jar_ok(&j) {
             Ok(path) if manifest.jars.len() < MAX_JARS && seen_jars.insert(path.to_lowercase()) => {
                 j.path = path;
@@ -989,6 +998,9 @@ pub(crate) async fn install_manifest(
     for f in &manifest.files {
         let rel = shared_entry_path(&f.kind, &f.path)
             .map_err(|why| format!("Сборка содержит небезопасный путь {}: {}", shown_path(&f.path), why))?;
+        if launcher_placed(&file_name_of(&rel)) {
+            continue;
+        }
         if !sha1_ok(&f.sha1) {
             return Err(format!("У файла {} нет контрольной суммы — сборку не поставить", shown_path(&f.path)));
         }
@@ -1919,5 +1931,50 @@ mod tests {
         let (m, dropped) = parse_manifest_report(&raw).expect("манифест должен разобраться");
         assert_eq!(m.jars.iter().map(|j| j.path.as_str()).collect::<Vec<_>>(), vec!["mods/strata.jar"], "a duplicate path and an escaping path must not survive");
         assert_eq!(dropped.len(), 2, "the player must see what the pack arrives without");
+    }
+
+    /// Catalogue file name -> kept. The hash only proves the file is public somewhere, the name is the
+    /// author's: a jar called like the launcher's mod would skip the check for foreign mods.
+    #[test]
+    fn a_catalogue_file_cannot_take_the_name_of_a_launcher_mod() {
+        let cases: [(&str, bool, &str); 5] = [
+            ("mods/CustomSkinLoader.jar", false, "the skin mod's exact name"),
+            ("mods/customskinloader.JAR", false, "Windows and macOS treat this as the same file"),
+            ("mods/millida-mod-1.4.2.jar", false, "the Millida mod's name"),
+            ("mods/Millida-Mod-1.4.2.jar", false, "the same name in another case"),
+            ("mods/sodium.jar", true, "an ordinary catalogue mod stays"),
+        ];
+        for (path, kept, why) in cases {
+            let raw = serde_json::json!({
+                "formatVersion": 1,
+                "name": "pack",
+                "game": "1.21.1",
+                "loader": "fabric",
+                "files": [{"kind": "mod", "path": path, "url": "https://cdn.modrinth.com/data/a/versions/b/c.jar", "sha1": "a".repeat(40), "size": 10}],
+                "jars": []
+            });
+            let (m, dropped) = parse_manifest_report(&raw).expect("манифест должен разобраться");
+            assert_eq!(m.files.len() == 1, kept, "{path}: {why}");
+            assert!(dropped.is_empty(), "{path}: the launcher brings its own copy, the player misses nothing");
+        }
+    }
+
+    #[test]
+    fn launcher_jars_in_an_old_pack_are_neither_shown_nor_installed() {
+        let raw = serde_json::json!({
+            "formatVersion": 1,
+            "name": "pack",
+            "game": "1.21.1",
+            "loader": "fabric",
+            "files": [],
+            "jars": [
+                {"path": "mods/millida-mod-1.4.2+fabric-1.21.1.jar", "sha1": "a".repeat(40), "sha512": "b".repeat(128), "size": 10},
+                {"path": "mods/CustomSkinLoader.jar", "sha1": "a".repeat(40), "sha512": "c".repeat(128), "size": 10},
+                {"path": "mods/strata.jar", "sha1": "a".repeat(40), "sha512": "d".repeat(128), "size": 10}
+            ]
+        });
+        let (m, dropped) = parse_manifest_report(&raw).expect("манифест должен разобраться");
+        assert_eq!(m.jars.iter().map(|j| j.path.as_str()).collect::<Vec<_>>(), vec!["mods/strata.jar"], "the launcher brings its own Millida and skin mods");
+        assert!(dropped.is_empty(), "nothing the player would miss: the launcher puts these in itself");
     }
 }

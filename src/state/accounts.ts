@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { msSessionForget } from '../ipc/commands'
 import { hasAccountSession, refreshSessionState } from '../lib/secure'
+import { writePref } from '../lib/prefs'
 
 export interface Account {
   id: string
@@ -49,7 +50,12 @@ function readAccounts(): Account[] {
 
 function persist(list: Account[]) {
   const clean = list.map((a) => (isHeadAvatar(a.avatar, a.avatarFrom) ? a : { ...a, avatar: undefined, avatarFrom: undefined }))
-  localStorage.setItem('m-accounts', JSON.stringify(clean))
+  const json = JSON.stringify(clean)
+  localStorage.setItem('m-accounts', json)
+  // И на диск ядра (lib/prefs): хранилище вебвью и хранилище токенов живут в разных папках, и
+  // чистильщики стирали первое — лаунчер «забывал» аккаунт при живой сессии (04.11.2026).
+  // Лица в копии нет: это самая длинная часть строки, и лаунчер рисует его заново.
+  writePref('m-accounts-backup', JSON.stringify(clean.map(({ avatar: _avatar, avatarFrom: _from, ...row }) => row)))
 }
 
 function readActive(): string {
@@ -169,10 +175,38 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   },
 }))
 
+/**
+ * Список аккаунтов пропал из вебвью, а копия на диске есть — вернуть её (зови после hydratePrefs).
+ * Копия повторяет каждое сохранение, удаления тоже, поэтому убранный аккаунт не воскресает.
+ */
+export function restoreAccounts(): boolean {
+  if (useAccounts.getState().list.length) return false
+  try {
+    const saved = JSON.parse(localStorage.getItem('m-accounts-backup') || 'null')
+    if (!Array.isArray(saved) || !saved.length) return false
+    localStorage.setItem('m-accounts', JSON.stringify(saved))
+    const state = loadState()
+    if (!state.list.length) return false
+    localStorage.setItem('m-active', state.active || state.list[0].id)
+    useAccounts.setState({ list: state.list, active: state.active || state.list[0].id })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function getAccount(): Account | null {
   const { list, active } = useAccounts.getState()
   if (!list.length) return null
   return list.find((a) => a.id === active) || list[0]
+}
+
+/**
+ * Чей образ на экране. Строка Millida сохраняет id при входе другим пользователем (add), поэтому
+ * одного id мало: кэши образа показали бы новому игроку вещи и uuid прежнего.
+ */
+export function lookOwner(account: Account | null = getAccount()): string {
+  return account ? account.id + ':' + account.nick : ''
 }
 
 export function getMillidaAccount(): Account | null {

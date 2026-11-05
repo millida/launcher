@@ -6,7 +6,7 @@ import { ChatRow, openChatItem } from '../components/friends/ChatRow'
 import { chatList, matchFriend, norm } from '../components/friends/friendsView'
 import { chatItems, chatKey } from '../lib/overlayChats'
 import type { OverlayChatItem } from '../lib/overlayChats'
-import { logoutToLogin } from '../lib/session'
+import { showLogin } from '../lib/session'
 import { useHasMillida } from '../state/auth'
 import { loadFriends, openChat, openRoomChat, useFriends } from '../state/friends'
 import { loadRooms, openRoomCreate, useRooms } from '../state/rooms'
@@ -123,7 +123,7 @@ export function Messages({ on }: { on: boolean }) {
       <section className={'screen' + (on ? ' on' : '')} id="s-chat">
         <div className="card gate-card">
           <div className="gate-title">{t('Сообщения — после входа')}</div>
-          <button className="btn md primary gate-btn" data-track="login" onClick={() => logoutToLogin()}>
+          <button className="btn md primary gate-btn" data-track="login" onClick={() => showLogin()}>
             <Icon id="i-login" />
             {t('Войти')}
           </button>

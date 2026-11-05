@@ -23,3 +23,24 @@ export async function keepLookSkin(nick: string, look: LookSkin): Promise<void> 
   if (!isData(skin)) return
   await idbSet<LookSkin>(KEY + nick, { skin, slim: look.slim, cape: isData(cape) ? cape : null })
 }
+
+const OUTFIT_KEY = 'lobby-outfit:v1:'
+
+/**
+ * Вещи последнего образа по нику: первый кадр лобби до ответа сети встаёт уже одетым, а не голым
+ * скином (04.11.2026: «при перезапуске первым кадром голый персонаж»). Вещи — как их собрала
+ * сцена (карточка каталога и текстура варианта); любой сбой — просто «вещей нет».
+ */
+export async function keptLookOutfit<T>(nick: string): Promise<T[]> {
+  try {
+    const row = await idbGet<T[]>(OUTFIT_KEY + nick)
+    if (!row || Date.now() - row.at > MAX_AGE_MS) return []
+    return Array.isArray(row.value) ? row.value : []
+  } catch {
+    return []
+  }
+}
+
+export function keepLookOutfit<T>(nick: string, items: T[]): Promise<void> {
+  return idbSet<T[]>(OUTFIT_KEY + nick, items).catch(() => {})
+}

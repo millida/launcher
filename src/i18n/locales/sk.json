@@ -6475,5 +6475,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Zapli sme odľahčenú grafiku: launcher sa na tomto PC sekal",
   "Лог пустой": "Log je prázdny",
   "Достижение «{title}»": "Úspech „{title}“",
-  "{n} очков достижений": "{n} bodov úspechov"
+  "{n} очков достижений": "{n} bodov úspechov",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "úložisko prihlásenia práve používa iný program (antivírus?) — skús to znova o pár sekúnd"
 }

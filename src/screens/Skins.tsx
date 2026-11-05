@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { t, tx, useT } from '../i18n'
 import { PixelField } from '../components/lobby/PixelField'
 import { SKINS_IMPORT_EVENT, SKINS_TAKE_OFF_EVENT, SKINS_UPLOAD_EVENT, useTopBar } from '../state/topbar'
-import { HEAD_FROM_CPU, getAccount, useAccounts } from '../state/accounts'
+import { HEAD_FROM_CPU, getAccount, lookOwner, useAccounts } from '../state/accounts'
 import type { Account } from '../state/accounts'
 import { noteCosmeticsSeen } from '../state/newHint'
 import { setScreen, showToast } from '../state/ui'
@@ -40,7 +40,6 @@ import {
   applyCosmetics,
   loadPlus,
   subscribePlus,
-  gameProfile,
   loadCosmeticCatalog,
   loadCosmeticOwned,
   loadWornCosmetics,
@@ -65,10 +64,14 @@ import type {
   WornCosmetic,
 } from '../lib/gameProfile'
 import { refreshGameNick, useGameNick } from '../state/gameNick'
+import { keptLookOutfit, keptLookSkin } from '../lib/lookCache'
+import { lookHint } from '../lib/lookHint'
+import { playerUuid } from '../lib/playerUuid'
+import { splitVariantCode } from '../lib/variantNames'
 import { hasMillidaAccount, LAUNCHER_API, openExt, SUPPORT_URL } from '../lib/api'
 import { track, trackFailure } from '../lib/telemetry'
 import { purchaseFlow } from '../lib/purchaseTrack'
-import { loadMillidaProfile, logoutToLogin } from '../lib/session'
+import { loadMillidaProfile, showLogin } from '../lib/session'
 import { ensureMsAuth } from '../state/msLogin'
 import { apiErrorText } from '../lib/apiError'
 import { buildCosmetic } from '../lib/cosmeticModel'
@@ -503,6 +506,15 @@ function readVariants(): Record<string, string> {
 
 // Ручной выбор рук больше не учитываем: руки определяются по текстуре
 // (правка владельца 23.09.2026), старые сохранённые выборы игнорируются.
+/** Дольше этого фигура не ждёт надетого, мс: дальше показывается как есть. */
+const DRESS_WAIT_MS = 2500
+
+/** Тот же ли состав надетого: вещи и расцветки, порядок не важен. */
+function sameWorn(a: WornCosmetic[], b: WornCosmetic[]): boolean {
+  const key = (l: WornCosmetic[]) => l.map((w) => w.id + '~' + (w.variant || '')).sort().join(',')
+  return a.length === b.length && key(a) === key(b)
+}
+
 function recallVariant(_key: string): string | null {
   return null
 }
@@ -798,6 +810,14 @@ export function Skins({ on }: { on: boolean }) {
   const [cosReady, setCosReady] = useState(0)
   const wearRefs = useWearIntent((s) => s.refs)
   const [worn, setWorn] = useState<WornCosmetic[]>([])
+  // Надетое уже известно (служба ответила или взяли образ с прошлого раза): до этого фигуру не
+  // показываем голой (04.11.2026: «в "Мой скин" персонаж при первом рендере голый»).
+  const wornKnown = useRef(false)
+  const [dressReady, setDressReady] = useState(false)
+  // Гардероб службы уже пришёл: скин с прошлого раза его не перебивает.
+  const wardrobeIn = useRef(false)
+  // Каталог уже есть (или не пришёл совсем): без него надетое не во что превратить.
+  const catalogIn = useRef(false)
 
   const [cosmeticQuery, setCosmeticQuery] = useState('')
   const [cosmeticsFailed, setCosmeticsFailed] = useState(false)
@@ -909,6 +929,7 @@ export function Skins({ on }: { on: boolean }) {
     if (!hasMillidaAccount()) return
     try {
       const w = await withRetry(loadWardrobe)
+      wardrobeIn.current = true
       setWardrobe(w.items)
       setMillidaTex(
         w.active.skinUrl
@@ -950,8 +971,10 @@ export function Skins({ on }: { on: boolean }) {
     setCosmeticsFailed(false)
     try {
       const catalog = await withRetry(loadCosmeticCatalog)
+      catalogIn.current = true
       setCosmetics(catalog.items || [])
     } catch {
+      catalogIn.current = true
       setCosmetics([])
       // Пустой каталог и не доехавший каталог - разные вещи: во втором случае
       // человеку нужна кнопка, а не сообщение о том, что вещей нет.
@@ -962,19 +985,24 @@ export function Skins({ on }: { on: boolean }) {
       setCosReady((n) => n + 1)
       return
     }
-    try {
-      const owned = await loadCosmeticOwned()
-      setCosmeticOwned(owned.items || [])
-    } catch {
-      setCosmeticOwned([])
-    }
-    try {
-      // uuid игрового профиля, а не аккаунта: «кто что носит» спрашивают по нему.
-      const profile = await gameProfile()
-      if (profile.uuid) setWorn(await loadWornCosmetics(profile.uuid))
-    } catch {
+    // Права и надетое — разом, а не друг за другом. uuid игрового профиля, а не аккаунта: «кто что
+    // носит» спрашивают по нему, и спрашивается он раз на аккаунт (lib/playerUuid).
+    const [owned, served] = await Promise.allSettled([
+      loadCosmeticOwned(),
+      playerUuid().then((uuid) => (uuid ? loadWornCosmetics(uuid) : [])),
+    ])
+    setCosmeticOwned(owned.status === 'fulfilled' ? owned.value.items || [] : [])
+    if (served.status === 'fulfilled') {
+      const list = served.value
+      // Тот же состав, что уже на фигуре (образ с прошлого раза), — не переодеваем: вещи не мигают.
+      setWorn((now) => (sameWorn(now, list) ? now : list))
+      if (!list.length) setDressReady(true)
+    } else if (!wornKnown.current) {
       setWorn([])
+      setDressReady(true)
     }
+    // Служба не ответила — остаётся образ с прошлого раза, а не голая фигура.
+    wornKnown.current = true
     setCosReady((n) => n + 1)
   }
 
@@ -1011,13 +1039,18 @@ export function Skins({ on }: { on: boolean }) {
       .filter((w) => !mine.some((c) => c.slot === w.slot))
       .concat(mine.map((c) => ({ id: c.id, slot: c.slot, variant: variantOf(c)?.name })))
     setCosmeticBusy('fitting')
+    // Своё — сразу на фигуру, не дожидаясь службы (04.11.2026: «надевание набора очень долгое»);
+    // служба отказала — снимаем обратно и говорим почему.
+    const before = worn
+    // Примерка на тех же местах уходит вместе с надеванием и возвращается, если служба откажет.
+    const tried = fitting.filter((c) => mine.some((m) => m.slot === c.slot))
+    setWorn(next)
+    setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot)))
     applyCosmetics(next)
-      .then(() => {
-        setWorn(next)
-        setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot)))
-        showToast(t('Надето — видят игроки с Millida'), 'ok')
-      })
+      .then(() => showToast(t('Надето — видят игроки с Millida'), 'ok'))
       .catch((e) => {
+        setWorn((now) => (now === next ? before : now))
+        setFitting((now) => now.concat(tried.filter((c) => !now.some((x) => x.slot === c.slot))))
         trackFailure('skins', e, { step: 'cosmetic_wear' })
         showToast(apiErrorText(e, t('Не удалось надеть')), 'error')
       })
@@ -1323,6 +1356,45 @@ export function Skins({ on }: { on: boolean }) {
     void refreshRubies()
     noteCosmeticsSeen()
   }, [])
+
+  // Первый кадр — в том, во что игрок одет, пока служба не ответила: только что надетое здесь же
+  // (lib/lookHint) или образ, который запомнило лобби (lib/lookCache). Ответ службы потом сверяет.
+  useEffect(() => {
+    if (!hasMillidaAccount()) return
+    let alive = true
+    const hint = lookHint(lookOwner())
+    void Promise.all([keptLookSkin(nick), keptLookOutfit<{ item: CosmeticItem }>(nick)]).then(([kept, outfit]) => {
+      if (!alive) return
+      if (!userPicked.current && !wardrobeIn.current) {
+        const applied = hint?.texture
+        const skin = applied?.skinUrl ? { url: applied.skinUrl, slim: applied.model === 'slim' } : kept ? { url: kept.skin, slim: kept.slim } : null
+        if (skin) {
+          setSkinSrc(skin.url)
+          setVariant(skin.slim ? 'slim' : 'classic')
+        }
+      }
+      if (wornKnown.current) return
+      const fromOutfit = outfit.map(({ item }): WornCosmetic => {
+        const { variant } = splitVariantCode(item.id)
+        return variant ? { id: item.id, slot: item.slot, variant } : { id: item.id, slot: item.slot }
+      })
+      const seed = hint?.worn ?? (fromOutfit.length ? fromOutfit : null)
+      if (!seed) return
+      wornKnown.current = true
+      setWorn(seed)
+      if (!seed.length) setDressReady(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Сторож: служба и образ с прошлого раза молчат — через DRESS_WAIT_MS показываем фигуру как есть.
+  useEffect(() => {
+    if (!modelShown || dressReady) return
+    const t = window.setTimeout(() => setDressReady(true), DRESS_WAIT_MS)
+    return () => window.clearTimeout(t)
+  }, [modelShown, dressReady])
 
   useEffect(
     () =>
@@ -2074,6 +2146,8 @@ export function Skins({ on }: { on: boolean }) {
         // Кадр движок держит по телу — примерка персонажа не сдвигает; пересчёт
         // нужен только нику, чтобы встать над новой шляпой.
         fitViewer()
+        // Надетое известно и уже на фигуре — её можно показать (гость вещей не носит).
+        if ((wornKnown.current && catalogIn.current) || !hasMillidaAccount()) setDressReady(true)
       },
     )
     return () => {
@@ -3255,7 +3329,7 @@ export function Skins({ on }: { on: boolean }) {
             <div className="ch-warn">
               <Icon id="i-lock" />
               <span>{t('Скины только на этом компьютере')}</span>
-              <button className="btn sm secondary" onClick={() => logoutToLogin()}>
+              <button className="btn sm secondary" onClick={() => showLogin()}>
                 <Icon id="i-login" />
                 {t('Войти')}
               </button>
@@ -3495,11 +3569,11 @@ export function Skins({ on }: { on: boolean }) {
               style={{
                 imageRendering: 'auto',
                 display: use3d ? undefined : 'none',
-                opacity: modelShown ? 1 : 0,
+                opacity: modelShown && dressReady ? 1 : 0,
                 transition: 'opacity var(--m-t-base)',
               }}
             ></canvas>
-            {use3d && !modelShown ? <span className="skin-loader" aria-label={t('Загружаем модель')}></span> : null}
+            {use3d && !(modelShown && dressReady) ? <span className="skin-loader" aria-label={t('Загружаем модель')}></span> : null}
             {fitLoading.length ? (
               <span className="stage-note" aria-live="polite">
                 <span className="stage-spin" aria-hidden="true"></span>
@@ -3550,14 +3624,14 @@ export function Skins({ on }: { on: boolean }) {
             }}
             onTone={(id, tone) => setVariantById((now) => ({ ...now, [id]: tone }))}
             onClear={() => setFitting([])}
-            onBuy={() => (!hasMillidaAccount() ? logoutToLogin() : void buyFitting())}
+            onBuy={() => (!hasMillidaAccount() ? showLogin() : void buyFitting())}
             onTopUp={() => setScreen('rubies')}
             onWear={() => void wearFitting()}
             offer={
               setOffer
                 ? {
                     price: setList.find((x) => x.id === setOffer.setId)?.colorways.find((c) => c.name === setOffer.colorway)?.price ?? setOffer.price,
-                    onBuy: () => (!hasMillidaAccount() ? logoutToLogin() : void buySetOffer()),
+                    onBuy: () => (!hasMillidaAccount() ? showLogin() : void buySetOffer()),
                   }
                 : undefined
             }

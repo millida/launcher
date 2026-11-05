@@ -35,7 +35,17 @@ export const useWearIntent = create<WearIntent>((set) => ({
   set: (refs, opts) => set({ refs, fit: !!opts?.fit, offer: opts?.offer ?? null }),
 }))
 
+/**
+ * Надеть и открыть гардероб. Открытие гардероба тяжёлое (3D-сцена, вещи): экран сначала притухает
+ * (navPending, как у любого перехода), и только следующим кадром начинается переход — нажатие
+ * видно сразу, даже если потом главный поток занят (04.11.2026: «кнопки подвисают»).
+ */
 export function wearNow(refs: WearRef[], opts?: { fit?: boolean; offer?: SetOffer }) {
   useWearIntent.getState().set(refs.length ? refs : null, opts)
-  useUi.getState().setScreen('skins')
+  // Модели и картинки вещей — сразу, пока открывается гардероб (lib/wearPrefetch, своим чанком).
+  if (refs.length) void import('../lib/wearPrefetch').then((m) => m.prefetchWear(refs)).catch(() => {})
+  useUi.setState({ navPending: true })
+  requestAnimationFrame(() => {
+    window.setTimeout(() => useUi.getState().setScreen('skins'), 0)
+  })
 }

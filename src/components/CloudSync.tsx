@@ -8,7 +8,7 @@ import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { useProfiles } from '../state/profiles'
 import { cloudForget, cloudPull, cloudPush, cloudStatus, type CloudStatus } from '../ipc/commands'
-import { logoutToLogin } from '../lib/session'
+import { showLogin } from '../lib/session'
 import { useT } from '../i18n'
 
 // The server sends an ISO date, while whenText counts in epoch seconds.
@@ -67,7 +67,7 @@ export function CloudSync() {
   if (!status.signedIn) {
     return (
       <Row title={t('Сборки в облаке')} hint={t('Нужен аккаунт Millida')} keys="облако облачный профиль синхронизация сборки выгрузить забрать">
-        <button className="btn sm primary" onClick={() => logoutToLogin()}>
+        <button className="btn sm primary" onClick={() => showLogin()}>
           <Icon id="i-login" /> {t('Войти')}
         </button>
       </Row>

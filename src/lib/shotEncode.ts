@@ -46,6 +46,30 @@ function encodeHere(canvas: HTMLCanvasElement): Promise<Blob | null> {
   })
 }
 
+/** Кадр, уже снятый с холста (createImageBitmap в такте отрисовки), — в картинку в worker'е. */
+export async function encodeBitmap(bitmap: ImageBitmap): Promise<Blob | null> {
+  const w = encodeWorker()
+  if (w) {
+    const id = ++seq
+    const blob = await new Promise<Blob | null>((ok) => {
+      pending.set(id, ok)
+      w.postMessage({ id, bitmap }, [bitmap])
+    })
+    if (blob) return blob
+    // The worker failed after taking the bitmap: it is gone, nothing left to encode here.
+    return null
+  }
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0)
+    return await encodeHere(canvas)
+  } finally {
+    bitmap.close()
+  }
+}
+
 export async function encodeStrip(canvas: HTMLCanvasElement): Promise<Blob | null> {
   const w = encodeWorker()
   if (w) {

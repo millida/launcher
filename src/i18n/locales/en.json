@@ -6475,5 +6475,6 @@
   "Включили облегчённую графику: лаунчер тормозил на этом ПК": "Switched to light graphics: the launcher was lagging on this PC",
   "Лог пустой": "Log is empty",
   "Достижение «{title}»": "Achievement “{title}”",
-  "{n} очков достижений": "{n} achievement points"
+  "{n} очков достижений": "{n} achievement points",
+  "хранилище входа сейчас занято другой программой (антивирус?) — повтори через несколько секунд": "the sign-in storage is busy with another program right now (antivirus?) — try again in a few seconds"
 }

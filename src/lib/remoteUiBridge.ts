@@ -1,7 +1,7 @@
 // The only door between a website screen (src/lib/remoteUi.ts) and the launcher. The screen gets plain
 // functions: API calls go through the launcher's own api() (the token stays in the Rust core), links open
 // in the browser, installs ask the player first. No IPC, file paths or tokens are handed out.
-import { SESSION_EXPIRED_EVENT, api, openExt } from './api'
+import { SESSION_EXPIRED_EVENT, api, isUnauthorized, openExt } from './api'
 import { getLocale } from '../i18n'
 import { showToast } from '../state/ui'
 import { installFromCatalog } from './catalogInstall'
@@ -62,7 +62,7 @@ export function makeRemoteBridge(host: {
         try {
           last = await millidaUploadRaw(part.path, method, id, new Uint8Array(await file.slice(part.start, part.end).arrayBuffer()))
         } catch (e) {
-          if (String(e).includes('unauthorized')) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+          if (isUnauthorized(e)) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
           throw remoteApiError(e)
         } finally {
           unlisten?.()

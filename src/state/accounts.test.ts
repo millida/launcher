@@ -11,7 +11,7 @@ Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
 })
 
-const { launchAuthKind, pinnedOfflineNick, retireElyby, useAccounts } = await import('./accounts')
+const { launchAuthKind, lookOwner, pinnedOfflineNick, retireElyby, useAccounts } = await import('./accounts')
 
 const acc = (kind: string) => ({ id: 'a1', nick: 'Steve', kind })
 
@@ -166,6 +166,14 @@ describe('single Millida row', () => {
     expect(list[0].nick, 'the row names whoever is signed in now').toBe('steve')
     expect(list[0].balance, "the previous user's balance must not follow the new login").toBeUndefined()
     expect(acc.id, 'the row keeps its id so the active account stays addressable').toBe('a1')
+  })
+
+  test('another user in the same Millida row is another owner of the cached look', () => {
+    reset([{ id: 'a1', nick: 'durov', kind: 'millida' }], 'a1')
+    const before = lookOwner()
+    useAccounts.getState().add({ nick: 'steve', kind: 'millida' })
+    expect(useAccounts.getState().active, 'the row keeps its id, so the id alone cannot tell the users apart').toBe('a1')
+    expect(lookOwner(), "the previous user's uuid, outfit and still must not show for the new one").not.toBe(before)
   })
 
   test('a tg row is the same slot as a millida row', () => {

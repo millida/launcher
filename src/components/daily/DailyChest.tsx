@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { openShopAt } from '../../lib/openShopAt'
 import { Icon } from '../Icon'
 import { hasMillidaAccount } from '../../lib/api'
-import { logoutToLogin } from '../../lib/session'
+import { showLogin } from '../../lib/session'
 import { useAccounts } from '../../state/accounts'
 import { dailyReady, useDaily } from '../../state/daily'
 import { usePlus } from '../../state/plus'
@@ -95,7 +95,7 @@ export function DailyChest({
   // Лобби: плитка «Ежедневный бонус» того же вида, что «Магазин» (правка
   // владельца 23.09.2026 — без «Battle Pass», по-доброму, для Minecraft).
   if (hero) {
-    const open = () => (signedIn ? openShopAt() : logoutToLogin())
+    const open = () => (signedIn ? openShopAt() : showLogin())
     const guest = !signedIn
     const wait = !guest && (loading || !status)
     return (
@@ -124,7 +124,7 @@ export function DailyChest({
         <span className="dc-body">
           <b className="dc-title">{hero ? t('Награды каждый день') : t('Сундук каждый день')}</b>
         </span>
-        <button className="btn sm primary dc-act" data-track="login" onClick={() => logoutToLogin()}>
+        <button className="btn sm primary dc-act" data-track="login" onClick={() => showLogin()}>
           {t('Войти')}
         </button>
       </div>

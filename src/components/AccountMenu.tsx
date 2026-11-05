@@ -10,7 +10,7 @@ import { SECRETS_CHANGED_EVENT } from '../lib/secure'
 import { refreshMsAccounts, startMsLogin } from '../state/msLogin'
 import { openModal, setScreen, showToast } from '../state/ui'
 import { uiConfirm } from '../state/confirm'
-import { logoutToLogin } from '../lib/session'
+import { signOut } from '../lib/session'
 import { useT } from '../i18n'
 
 /** Ширина меню (.acc-menu): по ней меню прижимается к правому краю окна. */
@@ -132,7 +132,7 @@ export function AccountMenu({
                     remove(a.id)
                     // Без аккаунта Millida лаунчер не работает (владелец 27.10.2026):
                     // вышел из него — на экран входа, игровые аккаунты остаются в списке.
-                    if (!getMillidaAccount()) logoutToLogin()
+                    if (!getMillidaAccount()) signOut()
                   }
                 }}
               >

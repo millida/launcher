@@ -320,6 +320,13 @@ export async function liveBeatPayload(
   if (!force && status === lastBeatStatus && now - lastBeatAt < BEAT_MIN_MS) return null
   lastBeatAt = now
   lastBeatStatus = status
+  return liveBeatBody(status, meta)
+}
+
+async function liveBeatBody(
+  status: 'idle' | 'playing',
+  meta?: { build?: string | null; mc?: string | null; server?: string | null },
+): Promise<LiveBeatPayload> {
   const dev = await initDevice()
   return {
     installId: dev.installId,
@@ -332,6 +339,15 @@ export async function liveBeatPayload(
     mc: (meta && meta.mc) || undefined,
     server: (meta && meta.server) || undefined,
   }
+}
+
+/** A signed-in page reports online through the socket, which dies with the window: the core repeats this beat instead. */
+export async function rememberLiveBeat(
+  status: 'idle' | 'playing',
+  meta?: { build?: string | null; mc?: string | null; server?: string | null },
+): Promise<void> {
+  if (!hasTauri() || !telemetryEnabled()) return
+  await rememberBeat('/launcher/heartbeat', await liveBeatBody(status, meta))
 }
 
 /** What the socket token names this launcher by; the install id stays home when telemetry is off. */

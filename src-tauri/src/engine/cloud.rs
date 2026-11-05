@@ -84,7 +84,7 @@ pub fn build_snapshot() -> Result<Snapshot, String> {
         let Ok((manifest, _)) = build_manifest(&p.name, false) else { continue };
         profiles.push(CloudProfile { group: group_of(&groups, &p.name), name: p.name, manifest });
     }
-    let prefs = serde_json::to_value(ui_prefs()).unwrap_or(Value::Null);
+    let prefs = serde_json::to_value(cloud_prefs()).unwrap_or(Value::Null);
     Ok(Snapshot { format_version: SNAPSHOT_FORMAT, device: device_name(), profiles, prefs, themes: vec![] })
 }
 
@@ -201,6 +201,9 @@ pub async fn cloud_pull(app: AppHandle, only: Option<Vec<String>>, apply_prefs: 
         if let Some(map) = snapshot.prefs.as_object() {
             for (k, v) in map {
                 let Some(value) = v.as_str() else { continue };
+                if device_only_pref(k) {
+                    continue;
+                }
                 if set_ui_pref(k.clone(), value.to_string()).is_ok() {
                     report.prefs_applied += 1;
                 }
