@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { liteOn, useLiteMode } from '../../lib/liteMode'
 import { useT } from '../../i18n'
 import { ARCANIA_POSTER, ARCANIA_VERSION, artClip } from './content'
@@ -41,13 +41,8 @@ export function warmArcaniaCover(): void {
   })
 }
 
-export function ArcaniaCover({ className = '' }: { className?: string }) {
-  const ref = useRef<HTMLVideoElement>(null)
-  const lite = useLiteMode()
-  // The live cover comes from the media cache; until it lands the poster is the picture. Weak machines never fetch it.
-  const clip = useMedia(lite ? null : COVER_VIDEO)
-
-  // The tilt follows the pointer over the whole card, not only over the video.
+// The tilt follows the pointer over the whole card, not only over the video.
+function useCardTilt(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const card = ref.current?.closest<HTMLElement>('.arc2-skin')
     if (!card) return
@@ -68,7 +63,15 @@ export function ArcaniaCover({ className = '' }: { className?: string }) {
       card.removeEventListener('pointermove', move)
       card.removeEventListener('pointerleave', leave)
     }
-  }, [])
+  }, [ref])
+}
+
+export function ArcaniaCover({ className = '' }: { className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const lite = useLiteMode()
+  // The live cover comes from the media cache; until it lands the poster is the picture. Weak machines never fetch it.
+  const clip = useMedia(lite ? null : COVER_VIDEO)
+  useCardTilt(ref)
 
   if (lite) {
     // Лёгкий режим: тот же кадр, что был постером ролика, без декодирования видео.
@@ -85,6 +88,31 @@ export function ArcaniaCover({ className = '' }: { className?: string }) {
       loop
       playsInline
       preload="auto"
+      disablePictureInPicture
+      aria-hidden="true"
+    />
+  )
+}
+
+/** Live cover of any pack whose catalog entry carries a video; the cover picture is its poster and the lite-mode frame. */
+export function PackLiveCover({ video, poster, className = '' }: { video: string | null | undefined; poster: string | null | undefined; className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const lite = useLiteMode()
+  useCardTilt(ref)
+  if (lite || !video) {
+    return poster ? <img ref={ref as unknown as RefObject<HTMLImageElement>} className={'arc2-video ' + className} src={poster} alt="" aria-hidden="true" /> : null
+  }
+  return (
+    <video
+      ref={ref}
+      className={'arc2-video ' + className}
+      src={video}
+      poster={poster ?? undefined}
+      autoPlay
+      muted
+      loop
+      playsInline
+      preload="metadata"
       disablePictureInPicture
       aria-hidden="true"
     />
@@ -122,20 +150,51 @@ export function ArcaniaFx() {
   )
 }
 
-export function ArcaniaCard({ meta, pos, onClick }: { meta: string; pos: number; onClick: () => void }) {
+type SkinCardProps = { id: string; art: ReactNode; title: ReactNode; meta: string; pos: number; onClick: () => void }
+
+function SkinCard({ id, art, title, meta, pos, onClick }: SkinCardProps) {
   return (
-    <button className="ph-card fy-card arc2-skin" data-sound="open" data-kind="premium" data-id="arcania" data-pos={pos} data-src="foryou" onClick={onClick}>
-      <span className="ph-card-art arc2-art">
-        <ArcaniaCover />
-        <ArcaniaTag />
-      </span>
+    <button className="ph-card fy-card arc2-skin" data-sound="open" data-kind="premium" data-id={id} data-pos={pos} data-src="foryou" onClick={onClick}>
+      <span className="ph-card-art arc2-art">{art}</span>
       <span className="ph-card-body">
-        <b>
-          <ArcaniaName />
-        </b>
+        <b>{title}</b>
         <span className="ph-card-meta">{meta}</span>
       </span>
       <ArcaniaFx />
     </button>
+  )
+}
+
+/** For You card of a pack the catalog marks `premiumCard`: the Arcania skin over the pack's own cover and video. */
+export function PremiumSkinCard({ video, poster, ...card }: Omit<SkinCardProps, 'art'> & { video: string | null | undefined; poster: string | null | undefined }) {
+  const t = useT()
+  return (
+    <SkinCard
+      {...card}
+      art={
+        <>
+          <PackLiveCover video={video} poster={poster} />
+          <span className="arc2-tag">{t('Премиум')}</span>
+        </>
+      }
+    />
+  )
+}
+
+export function ArcaniaCard({ meta, pos, onClick }: { meta: string; pos: number; onClick: () => void }) {
+  return (
+    <SkinCard
+      id="arcania"
+      meta={meta}
+      pos={pos}
+      onClick={onClick}
+      title={<ArcaniaName />}
+      art={
+        <>
+          <ArcaniaCover />
+          <ArcaniaTag />
+        </>
+      }
+    />
   )
 }
