@@ -5714,7 +5714,7 @@
   "Мод {0} не совпал с тем, что ты подтвердил, и не удалился ({1}) — удали его из сборки вручную": "Mod {0} stimmt nicht mit dem überein, was Sie bestätigt haben, und wurde nicht gelöscht ({1}) – löschen Sie ihn manuell aus dem Modpack",
   "В этой сборке не осталось файлов, которые можно скачать": "In diesem Modpack sind keine herunterladbaren Dateien mehr übrig",
   "Делиться можно только логами сборки": "Teilen lassen sich nur Modpack-Logs",
-  "mclo.gs отклонил лог": "mclo.gs hat das Log abgelehnt",
+  "logs.millida.net отклонил лог": "logs.millida.net hat das Log abgelehnt",
   "Не удалось сохранить список сборок: {0} / {1}": "Die Modpack-Liste konnte nicht gespeichert werden: {0} / {1}",
   "Импортированная сборка": "Importiertes Modpack",
   "Некорректная версия сборки": "Ungültige Modpack-Version",

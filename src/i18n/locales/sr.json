@@ -5714,7 +5714,7 @@
   "Мод {0} не совпал с тем, что ты подтвердил, и не удалился ({1}) — удали его из сборки вручную": "Mod {0} se ne poklapa sa onim što si potvrdio i nije obrisan ({1}) — obriši ga iz modpaka ručno",
   "В этой сборке не осталось файлов, которые можно скачать": "U ovom modpaku nisu ostali fajlovi koji mogu da se preuzmu",
   "Делиться можно только логами сборки": "Deliti se mogu samo logovi modpaka",
-  "mclo.gs отклонил лог": "mclo.gs je odbio log",
+  "logs.millida.net отклонил лог": "logs.millida.net je odbio log",
   "Не удалось сохранить список сборок: {0} / {1}": "Lista modpakova nije sačuvana: {0} / {1}",
   "Импортированная сборка": "Uvezeni modpak",
   "Некорректная версия сборки": "Neispravna verzija modpaka",

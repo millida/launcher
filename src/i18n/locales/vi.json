@@ -5715,7 +5715,7 @@
   "Мод {0} не совпал с тем, что ты подтвердил, и не удалился ({1}) — удали его из сборки вручную": "Mod {0} không khớp với những gì bạn đã xác nhận và không xóa được ({1}) — hãy tự gỡ nó khỏi gói mod",
   "В этой сборке не осталось файлов, которые можно скачать": "Gói mod này không còn tệp nào có thể tải xuống",
   "Делиться можно только логами сборки": "Chỉ có thể chia sẻ nhật ký của gói mod",
-  "mclo.gs отклонил лог": "mclo.gs từ chối nhật ký",
+  "logs.millida.net отклонил лог": "logs.millida.net từ chối nhật ký",
   "Не удалось сохранить список сборок: {0} / {1}": "Không lưu được danh sách gói mod: {0} / {1}",
   "Импортированная сборка": "Gói mod đã nhập",
   "Некорректная версия сборки": "Phiên bản gói mod không hợp lệ",

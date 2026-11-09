@@ -203,7 +203,7 @@ fn evidence_text(evidence: &Evidence) -> String {
     text
 }
 
-/// mclo.gs keeps 1.9 MB of a log and drops the head: four parts under this cap
+/// Share log keeps the last SHARE_LOG_MAX_BYTES and drops the head: four parts under this cap
 /// fit whole, so the launcher capture is never the part that gets cut away.
 const SNAPSHOT_PART_MAX: usize = 448 * 1024;
 const CRASH_SNAPSHOTS_KEPT: usize = 10;
@@ -2739,8 +2739,8 @@ mod tests {
         }
         let four: Evidence = ["a", "b", "c", "d"].iter().map(|_| (LAUNCH_CAPTURE, "x".repeat(SNAPSHOT_PART_MAX * 2))).collect();
         assert!(
-            snapshot_body(&four).len() < 1_900_000,
-            "mclo.gs drops the head past 1.9 MB: the launcher capture would be lost"
+            snapshot_body(&four).len() < SHARE_LOG_MAX_BYTES,
+            "share log drops the head past SHARE_LOG_MAX_BYTES: the launcher capture would be lost"
         );
     }
 
