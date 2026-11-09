@@ -1,4 +1,4 @@
-// Builds the support request text after a crash: a link to the log (the log is uploaded to the public mclo.gs by the core command shareLog)
+// Builds the support request text after a crash: a link to the log (the log is uploaded to the public logs.millida.net by the core command shareLog)
 // and the system diagnostics from diag.ts. Runs on the player's button.
 import { listLogs, shareLog } from '../ipc/commands'
 import type { CrashInfo } from '../ipc/events'

@@ -96,7 +96,7 @@ pub fn get_play_stats() -> engine::PlayStats { engine::get_play_stats() }
 pub fn label_server(addr: String, name: String) { engine::label_server(&addr, &name) }
 
 #[tauri::command]
-// The game log goes to the public mclo.gs only when the user clicks. Before that the token and the home folder are cut out (engine/profiles/sharelog.rs).
+// The game log goes to the public logs.millida.net only when the user clicks. Before that the token and the home folder are cut out (engine/profiles/sharelog.rs).
 pub async fn share_log(profile: String, name: String) -> Result<String, String> { engine::share_log(profile, name).await }
 
 #[tauri::command(async)]

@@ -6090,7 +6090,7 @@
   "Java этой сборки не доверяет сертификату сервера входа Millida, поэтому игра закрылась на старте. Чаще всего сертификат подменяет антивирус с проверкой защищённых соединений (Kaspersky, ESET, Dr.Web, AdGuard) — выключи в нём проверку HTTPS. Если на компьютере старая версия Java, поставь свежую кнопкой ниже.": "Java tohto modpacku nedôveruje certifikátu prihlasovacieho servera Millida, a tak sa hra pri štarte zavrela. Najčastejšie certifikát nahrádza antivírus, ktorý skenuje zabezpečené spojenia (Kaspersky, ESET, Dr.Web, AdGuard) — vypni jeho skenovanie HTTPS. Ak má počítač starú verziu Javy, nainštaluj novú tlačidlom nižšie.",
   "level.dat не похож на файл мира": "level.dat nevyzerá ako súbor sveta",
   "level.dat не читается — мир повреждён": "level.dat sa nedá prečítať — svet je poškodený",
-  "mclo.gs отклонил лог": "mclo.gs odmietol log",
+  "logs.millida.net отклонил лог": "logs.millida.net odmietol log",
   "Microsoft даёт лаунчеру ключ": "Microsoft dá launcheru kľúč",
   "Microsoft не выдал код устройства": "Microsoft neposkytol kód zariadenia",
   "Microsoft не ответила — повтори попытку": "Microsoft neodpovedal, skús znova",

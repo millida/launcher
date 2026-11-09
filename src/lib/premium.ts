@@ -74,6 +74,8 @@ export interface PremiumPack {
   source?: 'premium' | 'catalog'
   /// Продавец сборки выдаёт свои ключи: рядом с подпиской остаётся ввод ключа.
   acceptsKeys?: boolean
+  coverVideo?: string | null
+  premiumCard?: boolean
 }
 
 export interface PremiumPatch {
@@ -143,6 +145,8 @@ export function packFromCatalog(p: MillidaPack): PremiumPack {
     hasServer: !!p.hasServer,
     author: p.author || null,
     source: 'catalog',
+    coverVideo: p.coverVideo ?? null,
+    premiumCard: !!p.premiumCard,
   }
 }
 
