@@ -115,7 +115,7 @@ export const marketOf = (code: Locale): Market => (code === 'ru' ? 'RU' : CIS_LO
 
 const RU_ONLY: ReadonlySet<MarketFeature> = new Set(['trade', 'market', 'partners', 'ru-content', 'paid-packs'])
 
-const CIS_OFFERS: ReadonlySet<MarketFeature> = new Set(['ru-content', 'paid-packs'])
+const CIS_OFFERS: ReadonlySet<MarketFeature> = new Set(['trade', 'market', 'ru-content', 'paid-packs'])
 
 export const marketOffers = (market: Market, feature: MarketFeature): boolean =>
   market === 'RU' || !RU_ONLY.has(feature) || (market === 'CIS' && CIS_OFFERS.has(feature))

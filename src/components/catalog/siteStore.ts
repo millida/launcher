@@ -334,6 +334,9 @@ function createSiteStore(linked: boolean): SiteStore {
         if (st.sort === 'relevance' && q.length >= 2) got = byRelevance(got, q)
         if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
         else if (!more && packs && pinsLead(st.sort)) got = pinArcania(got, premium, st, q, arcaniaLead(live))
+        const pageBefore = got.length
+        if (!more && packs && searching && st.access === 'all') got = paidSearchHits(got, premium, st, q)
+        const paidAdded = got.length - pageBefore
         // «Рекомендуемые», первая страница: полка переводов сверху и ещё несколько — в ленте.
         let ruShelf: SiteCard[] = []
         if (!more && packs && st.sort === 'recommended' && st.access === 'all' && !searching) {
@@ -356,7 +359,7 @@ function createSiteStore(linked: boolean): SiteStore {
         set({
           items,
           ...(Array.isArray(listing.sorts) ? { serverSorts: listing.sorts } : {}),
-          total: Math.max(0, listing.total - hidden),
+          total: Math.max(0, listing.total - hidden) + paidAdded,
           page: listing.page,
           pages: listing.pages,
           ...(keepTail ? {} : lazyTail),
@@ -463,6 +466,13 @@ function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState
   const pack = premium.find((p) => p.slug === lead)
   const top = hit || (pack && matchesFilters(pack, st, q) ? premiumCard(pack) : null)
   return top ? [top, ...page.filter((c) => c.slug !== lead)] : page
+}
+
+/** Paid launcher packs never come back from the site search, so a query that names one puts it on top. */
+export function paidSearchHits(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string): SiteCard[] {
+  const hits = premium.filter((p) => matchesFilters(p, st, q) && !page.some((c) => c.slug === p.slug))
+  const named = (p: MillidaPack): boolean => p.title.toLowerCase().includes(q.toLowerCase())
+  return [...hits.filter(named).map(premiumCard), ...page, ...hits.filter((p) => !named(p)).map(premiumCard)]
 }
 
 /** Сколько переводов на полке над лентой и сколько ещё вплетено в первую страницу. */

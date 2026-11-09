@@ -62,12 +62,12 @@ export function langHeaders(): Record<string, string> {
 }
 
 /// The API keeps a separate server rating per market and picks it by header, the
-/// same way cobblo.net asks for the English one. The premium shelf follows the
+/// same way cobblo.net asks for the English one. The CIS reads the Russian-speaking one. The premium shelf follows the
 /// paid-pack market: abroad it holds only the packs of worldwide partners.
 export function marketFor(pathname: string): ApiMarket | undefined {
   if (pathname.startsWith('/launcher/premium')) return sellsPaidPacks() ? undefined : 'EN'
   if (!pathname.startsWith('/rating/')) return undefined
-  return getMarket() === 'RU' ? undefined : 'EN'
+  return getMarket() === 'INTL' ? 'EN' : undefined
 }
 
 export function hasMillidaAccount(): boolean {
