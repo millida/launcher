@@ -40,6 +40,7 @@ import {
   applyCosmetics,
   loadPlus,
   subscribePlus,
+  catalogKnowing,
   loadCosmeticCatalog,
   loadCosmeticOwned,
   loadWornCosmetics,
@@ -991,7 +992,15 @@ export function Skins({ on }: { on: boolean }) {
       loadCosmeticOwned(),
       playerUuid().then((uuid) => (uuid ? loadWornCosmetics(uuid) : [])),
     ])
-    setCosmeticOwned(owned.status === 'fulfilled' ? owned.value.items || [] : [])
+    const ownedIds = owned.status === 'fulfilled' ? owned.value.items || [] : []
+    setCosmeticOwned(ownedIds)
+    if (ownedIds.length) {
+      void catalogKnowing(ownedIds)
+        .then((known) => {
+          if (known.items?.length) setCosmetics(known.items)
+        })
+        .catch(() => {})
+    }
     if (served.status === 'fulfilled') {
       const list = served.value
       // Тот же состав, что уже на фигуре (образ с прошлого раза), — не переодеваем: вещи не мигают.

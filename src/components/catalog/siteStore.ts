@@ -302,7 +302,15 @@ function createSiteStore(linked: boolean): SiteStore {
           const pack = paid.get(c.slug)
           const ours = mine.get(c.slug)
           const marked: SiteCard = pack ? { ...c, premium: true, partner: pack.partner ?? null } : c
-          if (ours) return { ...marked, ru: isRuPack(ours) || undefined, ruBy: isTranslation(ours) ? ours.partner?.name : undefined, exclusive: ours.protectedContent || undefined }
+          if (ours)
+            return {
+              ...marked,
+              ru: isRuPack(ours) || undefined,
+              ruBy: isTranslation(ours) ? ours.partner?.name : undefined,
+              exclusive: ours.protectedContent || undefined,
+              coverVideo: ours.coverVideo ?? null,
+              premiumCard: ours.premiumCard || undefined,
+            }
           // Оригинал с Modrinth, который мы перевели, — на его месте встаёт перевод (владелец
           // 12.10.2026: «нахуй мы их тогда переводили», если в выдаче только английские).
           const tr = ru.length ? translationOf(c) : undefined

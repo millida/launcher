@@ -5714,7 +5714,7 @@
   "Мод {0} не совпал с тем, что ты подтвердил, и не удалился ({1}) — удали его из сборки вручную": "Mod {0} doesn't match what you confirmed and couldn't be deleted ({1}) — remove it from the modpack manually",
   "В этой сборке не осталось файлов, которые можно скачать": "There are no downloadable files left in this modpack",
   "Делиться можно только логами сборки": "Only modpack logs can be shared",
-  "mclo.gs отклонил лог": "mclo.gs rejected the log",
+  "logs.millida.net отклонил лог": "logs.millida.net rejected the log",
   "Не удалось сохранить список сборок: {0} / {1}": "Couldn't save the modpack list: {0} / {1}",
   "Импортированная сборка": "Imported modpack",
   "Некорректная версия сборки": "Invalid modpack version",

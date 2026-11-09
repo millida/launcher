@@ -5714,7 +5714,7 @@
   "Мод {0} не совпал с тем, что ты подтвердил, и не удалился ({1}) — удали его из сборки вручную": "{0} modu onayladığınla eşleşmedi ve silinemedi ({1}) — onu mod paketinden elle sil",
   "В этой сборке не осталось файлов, которые можно скачать": "Bu mod paketinde indirilebilecek dosya kalmadı",
   "Делиться можно только логами сборки": "Yalnızca mod paketi günlükleri paylaşılabilir",
-  "mclo.gs отклонил лог": "mclo.gs günlüğü reddetti",
+  "logs.millida.net отклонил лог": "logs.millida.net günlüğü reddetti",
   "Не удалось сохранить список сборок: {0} / {1}": "Mod paketi listesi kaydedilemedi: {0} / {1}",
   "Импортированная сборка": "İçe aktarılan mod paketi",
   "Некорректная версия сборки": "Geçersiz mod paketi sürümü",

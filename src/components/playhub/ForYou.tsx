@@ -20,7 +20,7 @@ import type { FeaturedSpot } from './featured'
 import { useAnarchy } from '../../lib/anarchy'
 import { usePromo, type ForYouCard } from '../../state/promo'
 import type { HubPack } from './data'
-import { ArcaniaCard } from '../arcania/ArcaniaCard'
+import { ArcaniaCard, PremiumSkinCard } from '../arcania/ArcaniaCard'
 import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { PackTileArt } from './packArt'
 import { trackImpression } from '../../lib/uiTrack'
@@ -329,6 +329,17 @@ export function ForYou({
     ? head.map((p, i) =>
         p === arcania && isArcania2(p.slug || p.id, arc2) ? (
           <ArcaniaCard key={'excl:' + p.id} meta={priceLabel(p) || t('Премиум')} pos={fyHead.length + i} onClick={() => onPack(p)} />
+        ) : p.premium && p.premiumCard ? (
+          <PremiumSkinCard
+            key={'excl:' + p.id}
+            id={p.slug || p.id}
+            title={p.title}
+            meta={priceLabel(p) || t('Премиум')}
+            video={p.coverVideo}
+            poster={p.coverUrl}
+            pos={fyHead.length + i}
+            onClick={() => onPack(p)}
+          />
         ) : p.premium ? (
           <Card
             key={'excl:' + p.id}

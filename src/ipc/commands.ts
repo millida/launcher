@@ -665,6 +665,10 @@ export interface MillidaPack {
   partner?: { slug: string; name: string } | null
   /** Players right now, polled by the server from the partner's own counter. */
   online?: number | null
+  /** Looping mp4 over the cover on cards; the cover is its poster. */
+  coverVideo?: string | null
+  /** Cards of this pack wear the premium skin. */
+  premiumCard?: boolean
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */
