@@ -2,9 +2,9 @@
 use super::cover::{CoverCache, MAX_SOURCE_BYTES};
 use super::protocol::{clip, Command, Cover, NowPlaying};
 use super::{Control, Controller, Reading};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::watch;
 use windows::Foundation::TypedEventHandler;
 use windows::Media::Control::{
@@ -17,6 +17,7 @@ use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITH
 
 const TICKS_PER_MS: i64 = 10_000;
 const UNIX_EPOCH_TICKS: i64 = 116_444_736_000_000_000;
+const RESCAN: Duration = Duration::from_secs(2);
 
 enum Event {
     Control(Control),
@@ -59,7 +60,7 @@ struct Watched {
 
 impl Watched {
     fn attach(manager: &Manager, events: &Sender<Event>) -> Option<Watched> {
-        let session = manager.GetCurrentSession().ok()?;
+        let session = preferred(manager)?;
         let media = session.MediaPropertiesChanged(&notify(events, || Event::Media)).ok()?;
         let playback = session.PlaybackInfoChanged(&notify(events, || Event::Playback)).unwrap_or_default();
         let timeline = session.TimelinePropertiesChanged(&notify(events, || Event::Playback)).unwrap_or_default();
@@ -85,16 +86,55 @@ where
     })
 }
 
+fn is_playing(session: &Session) -> bool {
+    session.GetPlaybackInfo().and_then(|p| p.PlaybackStatus()).is_ok_and(|s| s == Status::Playing)
+}
+
+fn playing_elsewhere(manager: &Manager) -> Option<Session> {
+    let sessions = manager.GetSessions().ok()?;
+    (0..sessions.Size().ok()?).filter_map(|i| sessions.GetAt(i).ok()).find(is_playing)
+}
+
+fn preferred(manager: &Manager) -> Option<Session> {
+    let current = manager.GetCurrentSession().ok();
+    if current.as_ref().is_some_and(is_playing) {
+        return current;
+    }
+    playing_elsewhere(manager).or(current)
+}
+
+fn should_switch(manager: &Manager, watched: Option<&Watched>) -> bool {
+    if watched.is_some_and(|w| is_playing(&w.session)) {
+        return false;
+    }
+    match playing_elsewhere(manager) {
+        Some(candidate) => watched.is_none_or(|w| w.session != candidate),
+        None => watched.is_none() && manager.GetCurrentSession().is_ok(),
+    }
+}
+
 fn run(events: &Sender<Event>, rx: Receiver<Event>, publish: &watch::Sender<Reading>) {
     let Ok(manager) = Manager::RequestAsync().and_then(|op| op.get()) else { return };
     let session_token = manager.CurrentSessionChanged(&notify(events, || Event::Session)).ok();
+    let sessions_token = manager.SessionsChanged(&notify(events, || Event::Session)).ok();
     let mut covers = CoverCache::default();
     let mut watched = Watched::attach(&manager, events);
     let mut media = watched.as_ref().and_then(|w| read_media(&w.session, &mut covers));
     publish_reading(publish, read(watched.as_ref(), media.as_ref()));
-    while let Ok(first) = rx.recv() {
+    loop {
+        let first = match rx.recv_timeout(RESCAN) {
+            Ok(event) => Some(event),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
         let (mut session_changed, mut media_changed) = (false, false);
-        let mut next = Some(first);
+        if first.is_none() {
+            if !should_switch(&manager, watched.as_ref()) {
+                continue;
+            }
+            session_changed = true;
+        }
+        let mut next = first;
         while let Some(event) = next {
             match event {
                 Event::Control(Control::Stop) => {
@@ -103,6 +143,9 @@ fn run(events: &Sender<Event>, rx: Receiver<Event>, publish: &watch::Sender<Read
                     }
                     if let Some(token) = session_token {
                         let _ = manager.RemoveCurrentSessionChanged(token);
+                    }
+                    if let Some(token) = sessions_token {
+                        let _ = manager.RemoveSessionsChanged(token);
                     }
                     return;
                 }

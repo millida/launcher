@@ -1,4 +1,4 @@
-// "Share log": on the player's button, sends the chosen log to the public site mclo.gs and returns the link.
+// "Share log": on the player's button, sends the chosen log to logs.millida.net and returns the public link.
 // Before sending, the home folder and the --accessToken value are cut out of the text. Only .log and .txt from logs/ and crash-reports/ of the modpack are taken.
 use crate::engine::*;
 use serde_json::Value;
@@ -14,33 +14,64 @@ pub(crate) fn is_log_path(name: &str) -> bool {
 /// The text is matched by the interface, which then tries the next log: keep it in step with src/lib/crashSupport.ts.
 pub(crate) const EMPTY_LOG: &str = "Лог пустой";
 
+/// The service keeps at most 2 000 000 characters and cuts the head; staying under it
+/// in bytes means the tail, where the crash is, always arrives as the launcher sent it.
+pub(crate) const SHARE_LOG_MAX_BYTES: usize = 1_900_000;
+
+const SHARE_ENDPOINT: &str = "https://logs.millida.net/v2/logs";
+const SHARE_HOST: &str = "logs.millida.net";
+const SHARE_SOURCE: &str = "millida-launcher";
+const SHARE_REJECTED: &str = "logs.millida.net отклонил лог";
+const SHARE_TOO_OFTEN: &str = "Слишком часто — попробуй позже";
+
 pub async fn share_log(profile: String, name: String) -> Result<String, String> {
     // path arrives over IPC and is uploaded publicly, so confine it to the profile
     let path = safe_join(&profile_dir(&profile), &name)?;
     if !is_log_path(&name) { return Err("Делиться можно только логами сборки".into()); }
     let mut content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    if content.len() > 1_900_000 {
-        let cut = content.len() - 1_900_000;
+    if content.len() > SHARE_LOG_MAX_BYTES {
+        let cut = content.len() - SHARE_LOG_MAX_BYTES;
         let start = (cut..content.len()).find(|i| content.is_char_boundary(*i)).unwrap_or(content.len());
         content = content[start..].to_string();
     }
-    // mclo.gs answers an empty text with "Required field 'content' is empty": the request is not sent at all.
+    // The service rejects an empty text with 400, and the interface needs EMPTY_LOG to try the next log.
     if content.trim().is_empty() { return Err(EMPTY_LOG.into()); }
     let home = dirs::home_dir().map(|h| h.to_string_lossy().into_owned());
     let content = redact_log(&content, home.as_deref());
-    // Third-party service mclo.gs, not Millida: the log becomes a public page. Sent only after the button click.
-    let resp: Value = client().post("https://api.mclo.gs/1/log")
-        .form(&[("content", content)])
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| e.to_string())?;
-    if resp["success"] == true {
-        Ok(resp["url"].as_str().unwrap_or("").to_string())
-    } else {
-        Err(resp["error"].as_str().unwrap_or("mclo.gs отклонил лог").to_string())
+    // The log becomes a public page, so it is sent only after the button click.
+    let res = client().post(SHARE_ENDPOINT)
+        .json(&serde_json::json!({ "content": content, "source": SHARE_SOURCE }))
+        .send().await.map_err(|e| net_err(&e))?;
+    let status = res.status();
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS { return Err(SHARE_TOO_OFTEN.into()); }
+    if !status.is_success() {
+        // 413 and proxy errors come as HTML, so a body that is not JSON only loses the server's wording.
+        let body: Value = res.json().await.unwrap_or(Value::Null);
+        return Err(rejection_message(&body).unwrap_or_else(|| SHARE_REJECTED.to_string()));
     }
+    let body: Value = res.json().await.map_err(|e| net_err(&e))?;
+    share_url(&body).ok_or_else(|| SHARE_REJECTED.to_string())
 }
 
-/// Лог уходит на публичный mclo.gs: домашняя папка (в ней имя пользователя)
+/// The link is opened in the browser, so only an https page on the service itself is accepted.
+fn share_url(body: &Value) -> Option<String> {
+    let raw = body["url"].as_str()?;
+    let url = url::Url::parse(raw).ok()?;
+    let trusted = url.scheme() == "https" && url.host_str() == Some(SHARE_HOST) && url.port().is_none();
+    trusted.then(|| url.to_string())
+}
+
+/// Validation errors carry "message" as a string or as a list of strings.
+fn rejection_message(body: &Value) -> Option<String> {
+    let text = match &body["message"] {
+        Value::String(s) => s.trim().to_string(),
+        Value::Array(items) => items.iter().filter_map(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("; "),
+        _ => return None,
+    };
+    (!text.is_empty()).then_some(text)
+}
+
+/// Лог уходит на публичную страницу logs.millida.net: домашняя папка (в ней имя пользователя)
 /// заменяется на «~», а значение --accessToken вырезается (аудит 24.09.2026, R8).
 pub(crate) fn redact_log(content: &str, home: Option<&str>) -> String {
     let mut out = content.to_string();
@@ -171,7 +202,37 @@ fn hide_flag_value(text: &str, flag: &str) -> String {
 
 #[cfg(test)]
 mod redact_tests {
-    use super::{redact_log, EMPTY_LOG};
+    use super::{redact_log, rejection_message, share_url, EMPTY_LOG};
+    use serde_json::json;
+
+    #[test]
+    fn only_a_service_page_is_handed_to_the_browser() {
+        let cases: [(serde_json::Value, Option<&str>, &str); 6] = [
+            (json!({ "url": "https://logs.millida.net/aB3xK9qLm2" }), Some("https://logs.millida.net/aB3xK9qLm2"), "the documented answer"),
+            (json!({ "url": "http://logs.millida.net/aB3xK9qLm2" }), None, "plain http would leak the link on the way"),
+            (json!({ "url": "https://logs.millida.net.evil.example/x" }), None, "a lookalike host must not be opened"),
+            (json!({ "url": "https://logs.millida.net:8443/x" }), None, "a foreign port is not the public page"),
+            (json!({ "raw": "https://logs.millida.net/x/raw" }), None, "without url there is no link to show"),
+            (json!({ "url": "not a url" }), None, "garbage must not reach openUrl"),
+        ];
+        for (body, want, why) in cases {
+            assert_eq!(share_url(&body).as_deref(), want, "{why}");
+        }
+    }
+
+    #[test]
+    fn the_server_wording_reaches_the_player() {
+        let cases: [(serde_json::Value, Option<&str>, &str); 5] = [
+            (json!({ "message": "content should not be empty" }), Some("content should not be empty"), "a single message"),
+            (json!({ "message": ["content too long", "source invalid"] }), Some("content too long; source invalid"), "validation sends a list"),
+            (json!({ "message": ["", "  "] }), None, "blank items fall back to the launcher text"),
+            (json!({ "error": "Bad Request" }), None, "no message field"),
+            (serde_json::Value::Null, None, "the body was not JSON"),
+        ];
+        for (body, want, why) in cases {
+            assert_eq!(rejection_message(&body).as_deref(), want, "{why}");
+        }
+    }
 
     #[test]
     fn the_empty_log_message_is_the_one_the_interface_matches() {

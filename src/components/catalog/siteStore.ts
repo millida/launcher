@@ -302,7 +302,15 @@ function createSiteStore(linked: boolean): SiteStore {
           const pack = paid.get(c.slug)
           const ours = mine.get(c.slug)
           const marked: SiteCard = pack ? { ...c, premium: true, partner: pack.partner ?? null } : c
-          if (ours) return { ...marked, ru: isRuPack(ours) || undefined, ruBy: isTranslation(ours) ? ours.partner?.name : undefined, exclusive: ours.protectedContent || undefined }
+          if (ours)
+            return {
+              ...marked,
+              ru: isRuPack(ours) || undefined,
+              ruBy: isTranslation(ours) ? ours.partner?.name : undefined,
+              exclusive: ours.protectedContent || undefined,
+              coverVideo: ours.coverVideo ?? null,
+              premiumCard: ours.premiumCard || undefined,
+            }
           // Оригинал с Modrinth, который мы перевели, — на его месте встаёт перевод (владелец
           // 12.10.2026: «нахуй мы их тогда переводили», если в выдаче только английские).
           const tr = ru.length ? translationOf(c) : undefined
@@ -326,6 +334,7 @@ function createSiteStore(linked: boolean): SiteStore {
         if (st.sort === 'relevance' && q.length >= 2) got = byRelevance(got, q)
         if (packs && st.access === 'free') got = got.filter((c) => !c.premium)
         else if (!more && packs && pinsLead(st.sort)) got = pinArcania(got, premium, st, q, arcaniaLead(live))
+        if (!more && packs && searching && st.access === 'all') got = paidSearchHits(got, premium, st, q)
         // «Рекомендуемые», первая страница: полка переводов сверху и ещё несколько — в ленте.
         let ruShelf: SiteCard[] = []
         if (!more && packs && st.sort === 'recommended' && st.access === 'all' && !searching) {
@@ -455,6 +464,12 @@ function pinArcania(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState
   const pack = premium.find((p) => p.slug === lead)
   const top = hit || (pack && matchesFilters(pack, st, q) ? premiumCard(pack) : null)
   return top ? [top, ...page.filter((c) => c.slug !== lead)] : page
+}
+
+/** Paid launcher packs never come back from the site search, so a query that names one puts it on top. */
+export function paidSearchHits(page: SiteCard[], premium: MillidaPack[], st: Pick<SiteState, 'version' | 'loader' | 'category'> & Partial<Pick<SiteState, 'use' | 'price'>>, q: string): SiteCard[] {
+  const hits = premium.filter((p) => matchesFilters(p, st, q) && !page.some((c) => c.slug === p.slug)).map(premiumCard)
+  return [...hits, ...page]
 }
 
 /** Сколько переводов на полке над лентой и сколько ещё вплетено в первую страницу. */
