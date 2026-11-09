@@ -12,7 +12,7 @@ import type { LobbyMode } from '../../state/lobbyMode'
 import type { HostServer } from '../../screens/Hosting'
 import { HostPlanPicker } from '../HostPlanPicker'
 import { ONEBLOCK_ART } from './modeIcon'
-import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
+import { ONEBLOCK_PACK, exclusiveOrder, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
 import { headCells, libraryShelf } from './placement'
@@ -324,7 +324,7 @@ export function ForYou({
   const pinned = arcania ? pinnedPacks(packs) : []
   const rest0 = exclusives.filter((p) => p !== arcania && p.id !== arcania?.id)
   const rot = rest0.length ? Math.floor(rng(hashStr(ab.seed + ':head'))() * rest0.length) : 0
-  const head = [arcania, ...pinned, ...rest0.slice(rot), ...rest0.slice(0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL + pinned.length)
+  const head = [arcania, ...pinned, ...exclusiveOrder(rest0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL + pinned.length)
   const labs: ReactNode[] = head.length
     ? head.map((p, i) =>
         p === arcania && isArcania2(p.slug || p.id, arc2) ? (
