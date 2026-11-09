@@ -183,6 +183,9 @@ export interface SiteCard {
   aiGenerated?: boolean
   /** Код сборки лаунчера — установка идёт путём «Сборки по коду». */
   packCode?: string | null
+  /** From `/catalog/packs`: looping mp4 over the cover and the premium skin of the card. */
+  coverVideo?: string | null
+  premiumCard?: boolean
 }
 
 /**

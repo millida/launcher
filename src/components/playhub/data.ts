@@ -418,6 +418,14 @@ export const isPinnedPack = (slug: string | null | undefined): boolean => !!slug
 export const pinnedPacks = <T extends { slug?: string | null }>(packs: T[]): T[] =>
   PINNED_PACKS.flatMap((slug) => packs.filter((p) => p.slug === slug).slice(0, 1))
 
+/** Paid packs for the slots after Arcania: a release with its own premium card first, the rest rotated from `rot`. */
+export const exclusiveOrder = <T extends { premiumCard?: boolean | null }>(packs: T[], rot: number): T[] => {
+  const featured = packs.filter((p) => p.premiumCard)
+  const rest = packs.filter((p) => !p.premiumCard)
+  const at = rest.length ? rot % rest.length : 0
+  return [...featured, ...rest.slice(at), ...rest.slice(0, at)]
+}
+
 /**
  * Catalogue packs that are a server we run with a partner: the feed tags them
  * like OneBlock and shows a short line instead of the loader and version.

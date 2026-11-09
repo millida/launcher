@@ -5587,7 +5587,7 @@
   "Мод {0} не совпал с тем, что ты подтвердил, и не удалился ({1}) — удали его из сборки вручную": "Mod {0} tidak cocok dengan yang kamu konfirmasi dan gagal dihapus ({1}) — hapus dari modpack secara manual",
   "В этой сборке не осталось файлов, которые можно скачать": "Modpack ini tidak lagi berisi file yang bisa diunduh",
   "Делиться можно только логами сборки": "Yang bisa dibagikan hanya log modpack",
-  "mclo.gs отклонил лог": "mclo.gs menolak log",
+  "logs.millida.net отклонил лог": "logs.millida.net menolak log",
   "Не удалось сохранить список сборок: {0} / {1}": "Gagal menyimpan daftar modpack: {0} / {1}",
   "Импортированная сборка": "Modpack impor",
   "Некорректная версия сборки": "Versi modpack tidak valid",

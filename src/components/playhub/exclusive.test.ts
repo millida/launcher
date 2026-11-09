@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ONEBLOCK_PACK, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
+import { ONEBLOCK_PACK, exclusiveOrder, isExclusive, isOwnServerPack, ownServerTagline, pinnedPacks } from './data'
 
 const cases: Array<[string | null | undefined, boolean, string]> = [
   [ONEBLOCK_PACK, true, 'the OneBlock catalog pack wears the purple badge in For You, catalog rows and the lobby card'],
@@ -61,5 +61,19 @@ describe('pinnedPacks', () => {
   for (const [packs, want, why] of cases)
     test(why, () => {
       expect(pinnedPacks(packs).map((p) => p.slug), why).toEqual(want)
+    })
+})
+
+describe('exclusiveOrder', () => {
+  const pack = (slug: string, premiumCard = false) => ({ slug, premiumCard })
+  const cases: Array<[Array<{ slug: string; premiumCard: boolean }>, number, string[], string]> = [
+    [[pack('tlou'), pack('immortal'), pack('abonent', true)], 0, ['abonent', 'tlou', 'immortal'], 'a release with a premium card takes the first paid slot instead of waiting for its turn in the rotation'],
+    [[pack('tlou'), pack('immortal'), pack('lost-souls')], 1, ['immortal', 'lost-souls', 'tlou'], 'the other paid packs still rotate per player'],
+    [[pack('tlou'), pack('abonent', true)], 7, ['abonent', 'tlou'], 'a rotation past the end wraps instead of dropping packs'],
+    [[], 3, [], 'no paid packs leaves the slots empty'],
+  ]
+  for (const [packs, rot, want, why] of cases)
+    test(why, () => {
+      expect(exclusiveOrder(packs, rot).map((p) => p.slug), why).toEqual(want)
     })
 })
