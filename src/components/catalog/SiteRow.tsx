@@ -47,7 +47,7 @@ import { StarButton } from './StarButton'
 import { Milli } from '../milli/Milli'
 import { aiPackCode, installPackCode } from '../../lib/catalogInstall'
 import { t, useT } from '../../i18n'
-import { ArcaniaCover, ArcaniaFx, ArcaniaName, ArcaniaTag } from '../arcania/ArcaniaCard'
+import { ArcaniaCover, ArcaniaFx, ArcaniaName, ArcaniaTag, PackLiveCover } from '../arcania/ArcaniaCard'
 import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 
 /** Плитка ленты: одна главная кнопка, остальное — на странице материала. */
@@ -581,9 +581,10 @@ export function SiteRow(props: RowProps) {
   const logo = card.icon || card.cover
   const starrable = useCatalogCtx().target.kind !== 'server'
   const arc = isArcania2(card.slug, useArcania2Live())
+  const skin = arc || !!card.premiumCard
   return (
     <article
-      className={['card mr-row', starrable ? 'has-star' : '', arc ? 'arc2-skin' : card.premium ? 'is-premium' : '', arc ? '' : partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
+      className={['card mr-row', starrable ? 'has-star' : '', skin ? 'arc2-skin' : card.premium ? 'is-premium' : '', skin ? '' : partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
       data-track="row_open"
       data-kind={trackKind(card, sec)}
       data-id={card.slug}
@@ -625,7 +626,7 @@ export function SiteRow(props: RowProps) {
         <RowActions card={card} sec={sec} hit={hit} resolve={resolve} />
       </div>
       <StarButton section={sec.slug} card={card} />
-      {arc ? <ArcaniaFx /> : null}
+      {skin ? <ArcaniaFx /> : null}
     </article>
   )
 }
@@ -666,6 +667,8 @@ export function SiteGalleryCard(props: RowProps) {
   const dl = Math.max(ownDownloads(card) || 0, card.sourceDownloads || 0, card.mrHit?.dl || 0) || null
   const logo = card.icon || card.cover
   const arc = isArcania2(card.slug, useArcania2Live())
+  const skin = arc || !!card.premiumCard
+  const live = !arc && !!card.coverVideo
   // Arcania — «Эксклюзив» (своя сборка студии), а не «Премиум» (владелец 12.10.2026).
   const badge = arc ? (
     <ArcaniaTag />
@@ -681,7 +684,7 @@ export function SiteGalleryCard(props: RowProps) {
   return (
     <CompactCtx.Provider value={true}>
       <article
-        className={['card mr-gal', shot ? 'has-shot' : 'no-shot', arc ? 'arc2-skin' : card.premium ? 'is-premium' : '', arc ? '' : partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
+        className={['card mr-gal', shot || live ? 'has-shot' : 'no-shot', skin ? 'arc2-skin' : card.premium ? 'is-premium' : '', skin ? '' : partnerFrame(card.partner) || (card.ru ? 'px-ru' : '')].filter(Boolean).join(' ')}
         data-track="row_open"
         data-kind={trackKind(card, sec)}
         data-id={card.slug}
@@ -695,9 +698,15 @@ export function SiteGalleryCard(props: RowProps) {
             {badge}
           </span>
         ) : null}
+        {live ? (
+          <span className="mr-gal-cover" aria-hidden="true">
+            <PackLiveCover video={card.coverVideo} poster={card.cover} />
+            {badge}
+          </span>
+        ) : null}
         {/* В «визуальных» разделах полоса картинки есть у всех — иначе ряды разной высоты:
             нет скриншота — логотип на своей размытой копии. */}
-        {!arc && !shot && visual && logo ? (
+        {!arc && !live && !shot && visual && logo ? (
           <span className="mr-gal-cover" aria-hidden="true">
             <span className="mr-gal-iconcover">
               {img(logo)}
@@ -706,7 +715,7 @@ export function SiteGalleryCard(props: RowProps) {
             {badge}
           </span>
         ) : null}
-        {!arc && shot ? (
+        {!arc && !live && shot ? (
           <span className="mr-gal-cover" aria-hidden="true">
             <img
               src={shot}
@@ -744,7 +753,7 @@ export function SiteGalleryCard(props: RowProps) {
                 ) : null}
               </span>
             </span>
-            {arc || shot || (visual && logo) ? null : badge}
+            {arc || live || shot || (visual && logo) ? null : badge}
           </span>
           {card.summary ? <span className="mr-gal-summary">{card.summary}</span> : null}
           <Tags tags={tags.slice(0, 3)} className="mr-gal-tags" />
@@ -756,7 +765,7 @@ export function SiteGalleryCard(props: RowProps) {
           </span>
         </span>
         <StarButton section={sec.slug} card={card} undo={props.list === 'favorites'} />
-        {arc ? <ArcaniaFx /> : null}
+        {skin ? <ArcaniaFx /> : null}
       </article>
     </CompactCtx.Provider>
   )
