@@ -31,6 +31,7 @@ import { arcaniaLead, isArcania2, useArcania2Live } from '../../lib/arcaniaRelea
 import { ArcaniaCover, ArcaniaFx, ArcaniaName } from '../arcania/ArcaniaCard'
 import { enterArcania } from '../arcania/transition'
 import { liveInterval } from '../../lib/liveInterval'
+import { ABONENT_SLUG } from '../abonent/content'
 
 type PackFace = PrisonFace
 
@@ -46,7 +47,7 @@ export function Recommend({ on }: { on: boolean }) {
   const partners = useMarketOffers('partners')
   const ruContent = useMarketOffers('ru-content')
   const arc2 = useArcania2Live()
-  const [packs, setPacks] = useState<{ prison: PackFace | null; arcania: PackFace | null; arcaniaSlug: string } | undefined>(undefined)
+  const [packs, setPacks] = useState<{ prison: PackFace | null; arcania: PackFace | null; arcaniaSlug: string; abonent: PackFace | null } | undefined>(undefined)
   const [step, setStep] = useState(0)
   // Направление последней смены: слайд въезжает с той стороны, куда листали.
   const [dir, setDir] = useState<1 | -1>(1)
@@ -56,9 +57,9 @@ export function Recommend({ on }: { on: boolean }) {
   const swipe = useRef<{ x: number; moved: boolean } | null>(null)
   const rewards = useChatRewards(on && shown)
   const invite = useInviteOffer(on && shown)
-  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
+  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent, abonent: !!packs.abonent }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
   const seed = promoSeed()
-  const start = slides ? promoStart(slides.length, seed.day, seed.salt) : 0
+  const start = slides ? (slides[0] === 'abonent' ? 0 : promoStart(slides.length, seed.day, seed.salt)) : 0
   const slide = slides ? promoAt(slides, start, step) : null
 
   useEffect(() => {
@@ -77,9 +78,9 @@ export function Recommend({ on }: { on: boolean }) {
       p ? { title: p.title, coverUrl: p.cover, online: typeof p.online === 'number' ? p.online : null } : null
     void loadCatalogPacks().then((list) => {
       const arc = list.find((x) => x.slug === arcaniaLead(arc2))
-      if (alive) setPacks({ prison: face(list.find((x) => x.slug === PRISON_SLUG)), arcania: face(arc), arcaniaSlug: arc?.slug ?? ARCANIA_SLUG })
+      if (alive) setPacks({ prison: face(list.find((x) => x.slug === PRISON_SLUG)), arcania: face(arc), arcaniaSlug: arc?.slug ?? ARCANIA_SLUG, abonent: face(list.find((x) => x.slug === ABONENT_SLUG)) })
     }).catch(() => {
-      if (alive) setPacks({ prison: null, arcania: null, arcaniaSlug: ARCANIA_SLUG })
+      if (alive) setPacks({ prison: null, arcania: null, arcaniaSlug: ARCANIA_SLUG, abonent: null })
     })
     return () => {
       alive = false
@@ -88,7 +89,7 @@ export function Recommend({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (!on || !shown || !slide) return
-    const id = slide === 'anarchy' ? 'own_server:' + ANARCHY.mode : slide === 'prisonrpg' || slide === 'arcania' ? 'pack:' + (slide === 'arcania' ? (packs?.arcaniaSlug ?? ARCANIA_SLUG) : PRISON_SLUG) : 'promo:' + slide
+    const id = slide === 'anarchy' ? 'own_server:' + ANARCHY.mode : slide === 'abonent' ? 'pack:' + ABONENT_SLUG : slide === 'prisonrpg' || slide === 'arcania' ? 'pack:' + (slide === 'arcania' ? (packs?.arcaniaSlug ?? ARCANIA_SLUG) : PRISON_SLUG) : 'promo:' + slide
     trackImpression('recommend', [id], 'play')
   }, [on, shown, slide])
 
@@ -109,6 +110,7 @@ export function Recommend({ on }: { on: boolean }) {
   let body: ReactNode
   if (slide === 'prisonrpg' && packs?.prison) body = <PrisonRecommend pack={packs.prison} hover={hover} dots={null} />
   else if (slide === 'arcania' && packs?.arcania) body = <PackPromo slug={packs.arcaniaSlug} pack={packs.arcania} hover={hover} dots={null} />
+  else if (slide === 'abonent' && packs?.abonent) body = <PackPromo slug={ABONENT_SLUG} pack={{ ...packs.abonent, title: t('Абонент') + ' ' + t('вышел') }} hover={hover} dots={null} />
   else if (slide === 'discord' || slide === 'telegram') body = <ChatPromo kind={slide} reward={rewards[slide]} />
   else if (slide === 'smp') body = <SmpPromo hover={hover} dots={null} />
   else if (slide === 'invite' && invite) body = <InvitePromo plusDays={invite.plusDays} />

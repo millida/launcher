@@ -5,7 +5,7 @@ import { RECS_UID_KEY, dayIndex, hashStr } from '../../lib/recsMix'
  * в минуту меняется»): чат игроков в Discord, подписка на Telegram, наша анархия, Аркания, PrisonRPG и
  * сервер PvP-тиров. Порядок — как сказал владелец.
  */
-export type PromoSlide = 'discord' | 'telegram' | 'anarchy' | 'arcania' | 'prisonrpg' | 'smp' | 'invite'
+export type PromoSlide = 'abonent' | 'discord' | 'telegram' | 'anarchy' | 'arcania' | 'prisonrpg' | 'smp' | 'invite'
 
 export const PROMO_ORDER: PromoSlide[] = ['discord', 'telegram', 'anarchy', 'arcania', 'prisonrpg', 'smp', 'invite']
 /** Слайд держится 7 секунд (владелец 11.10.2026: «минута — слишком долго»); наведение держит. */
@@ -18,15 +18,17 @@ export const TELEGRAM_CHAT = 'https://t.me/millida'
 export { ARCANIA_SLUG } from '../../lib/arcaniaRelease'
 
 /** Слайды, которые сейчас можно показать: сборка без карточки в каталоге выпадает. */
-export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invite: boolean; partners: boolean; ruContent: boolean }): PromoSlide[] {
-  return PROMO_ORDER.filter((s) =>
+/** A fresh release of a partner pack opens the carousel (Abonent, 10.11.2026), ahead of the owner-ordered slides. */
+export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invite: boolean; partners: boolean; ruContent: boolean; abonent?: boolean }): PromoSlide[] {
+  const release: PromoSlide[] = ready.abonent && ready.partners ? ['abonent'] : []
+  return release.concat(PROMO_ORDER.filter((s) =>
     s === 'arcania' ? ready.arcania
     : s === 'prisonrpg' ? ready.prisonrpg && ready.partners
     : s === 'anarchy' ? ready.partners
     : s === 'telegram' ? ready.ruContent
     : s === 'invite' ? ready.invite
     : true,
-  )
+  ))
 }
 
 /** С какого слайда начать: у каждого игрока свой день — так все слайды получают показы поровну. */
