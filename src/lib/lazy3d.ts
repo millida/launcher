@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { currentDeviceTier } from './deviceTier'
 import { whenIdle } from './idle'
-import { weakOn } from './liteMode'
 
 /*
  * Когда можно грузить three.js (≈735 КБ) и собирать WebGL-сцену. Правило (26.10.2026):
@@ -24,8 +23,11 @@ export const QUIET_RETURN_MS = 250
 let loaded = false
 let firstIdle: Promise<void> | null = null
 
-/** Можно ли вообще грузить 3D. */
-export const lobby3dAllowed = () => !weakOn()
+/**
+ * The character is always 3D (owner, 10.11.2026): players took the flat 2D stand-in for a broken launcher.
+ * A weak PC still waits the longest quiet before the scene (firstQuietMs), so the screen draws first.
+ */
+export const lobby3dAllowed = () => true
 
 /** Первая 3D-сцена показана: дальше код в памяти, ждать тишину долго не нужно. */
 export const mark3dLoaded = () => {

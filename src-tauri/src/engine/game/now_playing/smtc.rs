@@ -90,13 +90,33 @@ fn is_playing(session: &Session) -> bool {
     session.GetPlaybackInfo().and_then(|p| p.PlaybackStatus()).is_ok_and(|s| s == Status::Playing)
 }
 
+const MESSENGERS: [&str; 6] = ["telegram", "discord", "whatsapp", "viber", "skype", "slack"];
+
+fn is_messenger(id: &str) -> bool {
+    let id = id.to_lowercase();
+    MESSENGERS.iter().any(|name| id.contains(name))
+}
+
+fn is_media(session: &Session) -> bool {
+    session.SourceAppUserModelId().map(|id| !is_messenger(&id.to_string())).unwrap_or(true)
+}
+
+fn media_sessions(manager: &Manager) -> Vec<Session> {
+    let Ok(sessions) = manager.GetSessions() else { return Vec::new() };
+    let count = sessions.Size().unwrap_or(0);
+    (0..count).filter_map(|i| sessions.GetAt(i).ok()).filter(is_media).collect()
+}
+
+fn current_media(manager: &Manager) -> Option<Session> {
+    manager.GetCurrentSession().ok().filter(is_media)
+}
+
 fn playing_elsewhere(manager: &Manager) -> Option<Session> {
-    let sessions = manager.GetSessions().ok()?;
-    (0..sessions.Size().ok()?).filter_map(|i| sessions.GetAt(i).ok()).find(is_playing)
+    media_sessions(manager).into_iter().find(is_playing)
 }
 
 fn preferred(manager: &Manager) -> Option<Session> {
-    let current = manager.GetCurrentSession().ok();
+    let current = current_media(manager);
     if current.as_ref().is_some_and(is_playing) {
         return current;
     }
@@ -109,7 +129,7 @@ fn should_switch(manager: &Manager, watched: Option<&Watched>) -> bool {
     }
     match playing_elsewhere(manager) {
         Some(candidate) => watched.is_none_or(|w| w.session != candidate),
-        None => watched.is_none() && manager.GetCurrentSession().is_ok(),
+        None => watched.is_none() && current_media(manager).is_some(),
     }
 }
 
@@ -328,6 +348,20 @@ mod tests {
         ];
         for ((start, ms), expected, why) in cases {
             assert_eq!(seek_ticks(start, ms), expected, "{}", why);
+        }
+    }
+
+    #[test]
+    fn messengers_never_reach_the_island() {
+        let cases = [
+            ("TelegramDesktop.TelegramDesktop_t4vj0pshhgkwm!Telegram.TelegramDesktop.Store", true, "a paused voice message is not music"),
+            ("C:\\Users\\me\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe", true, "the plain Telegram build too"),
+            ("com.squirrel.Discord.Discord", true, "a call or a clip in Discord is not music"),
+            ("Spotify.exe", false, "Spotify stays"),
+            ("Chrome", false, "a browser can play YouTube Music"),
+        ];
+        for (id, expected, why) in cases {
+            assert_eq!(is_messenger(id), expected, "{}: {}", why, id);
         }
     }
 
