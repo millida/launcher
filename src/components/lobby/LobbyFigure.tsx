@@ -4,10 +4,7 @@ import { getAccount, useAccounts } from '../../state/accounts'
 import { setScreen } from '../../state/ui'
 import { MAX_WAIT_MS, lobby3dAllowed, mark3dLoaded, preloadQuietMs } from '../../lib/lazy3d'
 import { whenIdle } from '../../lib/idle'
-import { loadLookSkin } from '../../lib/lobbySkin'
-import { keptLookSkin } from '../../lib/lookCache'
 import { readLobbyStill, stageGeom, stillPlacement, type LobbyStill, type StillPlace } from '../../lib/lobbyStill'
-import { FlatStand } from './FlatStand'
 import { hostEl, keep, notify, subscribe } from './lobbyKeep'
 import { noted } from '../../lib/noted'
 import { loadMine3d } from '../../lib/mine3d'
@@ -17,11 +14,10 @@ import { loadMine3d } from '../../lib/mine3d'
  * (≈735 КБ) и собирает WebGL-контекст — по телеметрии это ≈190 тыс. долгих кадров в сутки
  * (293–412 мс). Теперь:
  *   1. первый кадр — снимок прошлой сцены, подогнанный под нынешний размер окна
- *      (lib/lobbyStill), а если снимка нет — плоская фигурка скина на месте 3D-фигуры;
+ *      (lib/lobbyStill); если снимка нет, место пустует до 3D;
  *   2. 3D-сцена (LobbyCharacter, отдельные чанки) подгружается после простоя и проявляется
- *      поверх, когда фигура одета и показана; снимок уходит под ней, плоская фигурка тает навстречу;
- *   3. на слабом ПК (≤4 ГБ, ≤2 ядра, программная графика, упавший WebGL)
- *      three.js не грузится вообще — остаётся плоская фигурка, клик по ней ведёт в «Мой скин».
+ *      поверх, когда фигура одета и показана; снимок уходит под ней;
+ *   3. плоской 2D-фигурки больше нет (владелец, 10.11.2026): игроки принимали её за поломку.
  *
  * Сцена переживает уход с главной (04.11.2026: «возврат к персонажу 2–3 секунды без движения»).
  * Экран лобби снимается при каждом переходе, и раньше с ним снималась сцена: возврат заново
@@ -42,11 +38,9 @@ export function LobbyFigure() {
   // Сцена уже показана в прошлый заход и ждала на паузе — заглушка не нужна.
   const [live, setLive] = useState(() => keep.shown)
   const [still, setStill] = useState<(LobbyStill & { url: string }) | null>(null)
-  const [stillTried, setStillTried] = useState(false)
   // undefined — снимок ещё не померили (до первой отрисовки); null — на этот размер окна он не ляжет.
   const [place, setPlace] = useState<StillPlace | null | undefined>(undefined)
   const [leaving, setLeaving] = useState(false)
-  const [flat, setFlat] = useState<{ skin: string; slim: boolean } | null>(null)
   const box = useRef<HTMLDivElement>(null)
   const slot = useRef<HTMLSpanElement>(null)
   // Сцену сняли, пока лобби открыто (сбой, лёгкая графика) — заглушка возвращается со свежим снимком.
@@ -99,12 +93,11 @@ export function LobbyFigure() {
 
   // Снимок прошлой сцены (на слабом ПК его не бывает — сцены нет).
   useEffect(() => {
-    if (!allowed || keep.shown) return setStillTried(true)
+    if (!allowed || keep.shown) return
     let alive = true
     let url = ''
     void readLobbyStill().then((s) => {
       if (!alive) return
-      setStillTried(true)
       if (!s) return setStill(null)
       url = URL.createObjectURL(s.blob)
       setStill({ ...s, url })
@@ -128,20 +121,6 @@ export function LobbyFigure() {
     return () => ro.disconnect()
   }, [still])
 
-  // Нет подходящего снимка — плоская фигурка по скину, пока не пришёл 3D (а на слабом ПК — насовсем).
-  const needFlat = stillTried && !live && !(still && place !== null)
-  useEffect(() => {
-    if (!needFlat || flat) return
-    let alive = true
-    void keptLookSkin(nick)
-      .then((kept) => kept ?? loadLookSkin(nick, signedIn))
-      .then((l) => alive && setFlat({ skin: l.skin, slim: l.slim }))
-      .catch(noted('lobby-figure'))
-    return () => {
-      alive = false
-    }
-  }, [needFlat, nick, signedIn, flat])
-
   // Сцена сообщает о показе через LobbyKeeper: заглушка этого захода уходит.
   useEffect(() => {
     const handoff = () => {
@@ -159,18 +138,15 @@ export function LobbyFigure() {
 
   const goSkins = () => setScreen('skins')
   const stillOn = !!still && !!place
-  const flatOn = needFlat && !!flat
 
   return (
     <>
-      {/* Заглушка: снимок сцены или плоская фигурка. Уходит, когда 3D показал фигуру: снимок — под
-          проявившимся 3D (картинка та же, просвета нет), плоская фигурка — тает навстречу. */}
-      {!live && (still || flatOn) ? (
-        <div ref={box} className={'lobby-char lobby-char-still shown' + (flatOn ? ' standin-flat' : '') + (leaving ? ' leaving' : '')} onClick={goSkins}>
+      {/* Заглушка — снимок сцены. Уходит под проявившимся 3D: картинка та же, просвета нет. */}
+      {!live && still ? (
+        <div ref={box} className={'lobby-char lobby-char-still shown' + (leaving ? ' leaving' : '')} onClick={goSkins}>
           {stillOn ? (
             <img src={still!.url} alt="" draggable={false} style={{ left: place!.left, top: place!.top, width: place!.width, height: place!.height }} />
           ) : null}
-          {flatOn && flat ? <FlatStand url={flat.skin} slim={flat.slim} /> : null}
         </div>
       ) : null}
       {/* Место 3D-сцены (LobbyKeeper): после заглушки, чтобы проявляться поверх неё. */}

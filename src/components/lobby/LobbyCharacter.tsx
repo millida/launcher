@@ -29,9 +29,7 @@ import { emoteShowMs, showPicker, skinMaskEmote, wornEmoteLoops } from '../../li
 import { lookStages } from '../../lib/lobbyLook'
 import { defaultVariant } from '../../lib/cosmeticVariants'
 import { Nametag, nametagSpot } from '../character/Nametag'
-import { FlatFigure } from '../character/FlatFigure'
-import { FlatStand } from './FlatStand'
-import { gpuLite, noteContextCreated, noteContextLost, useGpuLite } from '../../lib/gpuLite'
+import { noteContextCreated, noteContextLost } from '../../lib/gpuLite'
 import { webviewFailure } from '../../lib/webviewHealth'
 import { Vector3 } from 'three'
 import { setScreen } from '../../state/ui'
@@ -517,21 +515,12 @@ export function LobbyCharacter({
     }
   }, [stillKey, shop])
 
-  // Лёгкая графика после сбоя видеокарты: без WebGL, плоская фигурка.
-  const lite = useGpuLite()
-  const [flatShown, setFlatShown] = useState(false)
-  // Плоская фигурка вместо 3D (нет контекста WebGL) — тоже «показано», заглушка лобби может уйти.
-  useEffect(() => {
-    if (flatShown && !shop) onShownRef.current?.()
-  }, [flatShown, shop])
   useEffect(() => {
     // Лобби собирает сцену и в фоне (LobbyKeeper): ушли с главной до показа — вернутся к готовой.
-    if ((!on && shop) || m3d || lite) return
+    if ((!on && shop) || m3d) return
     let alive = true
-    // Сначала узнаём, не убил ли прошлое окно сбой видеокарты: тогда WebGL
-    // не создаём вовсе (иначе окно падало снова и снова).
     webviewFailure()
-      .then(() => (gpuLite() ? null : loadMine3d()))
+      .then(() => loadMine3d())
       .then((mod) => {
         if (!mod) return
         mark3dLoaded()
@@ -541,7 +530,7 @@ export function LobbyCharacter({
     return () => {
       alive = false
     }
-  }, [on, m3d, lite])
+  }, [on, m3d])
 
   const headScreen = (): { x: number; y: number } | null => {
     const engine = viewerRef.current as unknown as {
@@ -625,7 +614,7 @@ export function LobbyCharacter({
   }, [shown, awake])
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!m3d || !canvas || lite) return
+    if (!m3d || !canvas) return
     const onLost = (ev: Event) => {
       ev.preventDefault()
       console.warn('[lobby] webgl context lost')
@@ -691,7 +680,7 @@ export function LobbyCharacter({
       setReady(0)
       releaseEngine(engine)
     }
-  }, [m3d, glEpoch, lite])
+  }, [m3d, glEpoch])
 
   useEffect(() => {
     const engine = viewerRef.current
@@ -1045,13 +1034,13 @@ export function LobbyCharacter({
 
   // Нет контекста — снова через 1,5 / 3 / 4,5… с, не дольше 10 попыток.
   useEffect(() => {
-    if (!glFail || glFail > 10 || lite) return
+    if (!glFail || glFail > 10) return
     const t = window.setTimeout(() => {
       setGlTry(true)
       setGlEpoch((n) => n + 1)
     }, 1500 * Math.min(glFail, 4))
     return () => window.clearTimeout(t)
-  }, [glFail, lite])
+  }, [glFail])
 
   const drag = useRef<{ x: number; yaw: number } | null>(null)
   const stageParty = usePartyStage(ready ? viewerRef.current : null, m3d, ready, !shop && on)
@@ -1063,24 +1052,10 @@ export function LobbyCharacter({
     setGlEpoch((n) => n + 1)
   }, [on])
 
-  // Плоская фигурка — лёгкая графика насовсем, а в витрине и пока не дали контекст. В лобби на время
-  // повторов стоит заглушка LobbyFigure (снимок той же сцены), а не мелькающий 2D-скин.
-  if (lite || (shop && glFail > 0 && !glTry)) {
-    if (shop) queueMicrotask(() => onDressedRef.current?.(0))
-    return (
-      <div className={'lobby-char lobby-char-flat' + (shop ? ' shop-stage' : '') + (flatShown ? ' shown' : '')} onClick={() => (shop ? undefined : setScreen('skins'))}>
-        {shop ? null : (
-          <span className="lobby-flat-tag">
-            <Nametag nick={nick} at={{ x: 0, y: 0 }} />
-          </span>
-        )}
-        {!look ? null : shop ? (
-          <FlatFigure url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} />
-        ) : (
-          <FlatStand url={look.skin} slim={look.slim} onReady={() => setFlatShown(true)} />
-        )}
-      </div>
-    )
+  // No WebGL context in the shop yet: the stage shows the item previews (ShopStage) until a retry gets one.
+  if (shop && glFail > 0 && !glTry) {
+    queueMicrotask(() => onDressedRef.current?.(0))
+    return <div className="lobby-char shop-stage" />
   }
 
   return (

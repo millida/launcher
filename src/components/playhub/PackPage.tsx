@@ -48,6 +48,8 @@ import { installReviewCandidate } from '../ModRow'
 import { reviewCandidateFor } from '../../state/mods'
 import { useT } from '../../i18n'
 import { ArcaniaPage } from '../arcania/ArcaniaPage'
+import { AbonentPage } from '../abonent/AbonentPage'
+import { ABONENT_SLUG } from '../abonent/content'
 import { leadFirst } from './placement'
 import { ArcaniaLegacy } from '../arcania/ArcaniaLegacy'
 import { HEAD as ARCANIA_HEAD } from '../arcania/content'
@@ -690,6 +692,40 @@ export function PackPage({
       </div>
     )
   }
+
+  if (slug === ABONENT_SLUG)
+    return (
+      <div className="ci" data-section="pack_page" data-kind="abonent" data-id={slug}>
+        <StickyCta watch={heroEnd} icon={icon} title={full.title}>
+          {cta}
+        </StickyCta>
+        <Back label={t('Сборки')} onBack={onBack} />
+        <AbonentPage
+          cta={cta}
+          installed={!!installed}
+          onPlay={() => installed && onPlay(installed)}
+          heroEnd={heroEnd}
+          extra={
+            <>
+              {pack.premium ? <PayNote packId={full.id} /> : null}
+              {keyEntry ? (
+                <div className="pkb-key">
+                  <PackKeyField
+                    slug={slug}
+                    title={t('Уже купили на arcania.fun? Введите ключ')}
+                    onUnlocked={() => {
+                      showToast(t('Ключ активирован'))
+                      reloadDetail()
+                    }}
+                  />
+                </div>
+              ) : null}
+            </>
+          }
+        />
+        {hostOpen && hostTarget ? <HostInstall target={hostTarget} onClose={() => setHostOpen(false)} /> : null}
+      </div>
+    )
 
   return (
     <div className="ci" data-section="pack_page" data-kind={pack.premium ? 'premium' : 'pack'} data-id={slug || pack.id}>
