@@ -40,3 +40,10 @@ test('start is spread by day and player, never out of range', () => {
   expect(promoStart(5, 1, 0)).not.toBe(promoStart(5, 2, 0))
   expect(promoStart(0, 1, 1)).toBe(0)
 })
+
+test('a fresh partner release opens the carousel only where partner packs are sold', () => {
+  const RU = { partners: true, ruContent: true }
+  expect(promoSlides({ arcania: true, prisonrpg: true, invite: false, abonent: true, ...RU })[0], 'the released pack must be the first slide players see').toBe('abonent')
+  expect(promoSlides({ arcania: true, prisonrpg: true, invite: false, abonent: true, partners: false, ruContent: false }), 'abroad the partner pack is not on sale').not.toContain('abonent')
+  expect(promoSlides({ arcania: true, prisonrpg: true, invite: false, abonent: false, ...RU }), 'no pack in the list, no slide').not.toContain('abonent')
+})
