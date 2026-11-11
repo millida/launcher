@@ -2720,6 +2720,7 @@
   "Открыть мод": "Otwórz mod",
   "Открыть моды": "Otwórz mody",
   "Открыть оплату": "Otwórz płatność",
+  "Зарубежной картой": "Kartą zagraniczną",
   "Открыть папку": "Otwórz folder",
   "Открыть папку с музыкой": "Otwórz folder muzyki",
   "Открыть папку сборки": "Otwórz folder modpacka",
@@ -6527,5 +6528,8 @@
   "ЧАЭС": "Elektrownia Czarnobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Przez Millida Launcher: znajdź \"Abonent\" i wpisz klucz ze swojego konta.",
   "Шахматы": "Szachy",
-  "Шашки": "Warcaby"
+  "Шашки": "Warcaby",
+  "Есть промокод?": "Masz kod promocyjny?",
+  "Убрать промокод": "Usuń kod promocyjny",
+  "Промокод не подходит": "Ten kod promocyjny nie działa"
 }

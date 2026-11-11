@@ -65,7 +65,7 @@ interface DailyState {
   load: () => Promise<void>
   /** Забрать клетку сезона или всё открытое; без цели — первую открытую. */
   claim: (target?: ClaimTarget) => Promise<void>
-  startPlus: (tier?: PlusTier) => Promise<void>
+  startPlus: (tier?: PlusTier, gateway?: 'stripe') => Promise<void>
   setPlusCard: (open: boolean) => void
   /**
    * Неоткрытые сундуки службы (GET /rubies/chests): за часы игры, промокод,
@@ -248,7 +248,7 @@ export const useDaily = create<DailyState>((set, get) => ({
   },
 
   /** Тот же путь, что у кнопок PLUS в магазине и на «Персонаже». */
-  startPlus: async (tier = 'PLUS') => {
+  startPlus: async (tier = 'PLUS', gateway) => {
     if (!hasMillidaAccount()) {
       showLogin()
       return
@@ -256,11 +256,11 @@ export const useDaily = create<DailyState>((set, get) => ({
     // Свежая неоплаченная ссылка — та же: новая подписка на каждый клик
     // плодила «ожидает оплаты» (разбор 24.09.2026).
     const fresh = get().pay && savedPay()
-    if (fresh && (fresh.tier ?? 'PLUS') === tier && Date.now() - fresh.at < PAY_TTL) {
+    if (!gateway && fresh && (fresh.tier ?? 'PLUS') === tier && Date.now() - fresh.at < PAY_TTL) {
       openPaymentUrl(fresh.url)
       return
     }
-    if (plusCheckout(plusQuote(tier), get().plus?.quote) === 'balance') {
+    if (!gateway && plusCheckout(plusQuote(tier), get().plus?.quote) === 'balance') {
       set({ busy: 'plus' })
       const paid = purchaseFlow('plus', 'plus')
       if (affords(plusQuote(tier)) === false) {
@@ -291,7 +291,7 @@ export const useDaily = create<DailyState>((set, get) => ({
     // Воронка PLUS: исход — только настоящая оплата (её ловит опрос ниже) или ошибка.
     const result = purchaseFlow('plus', 'plus')
     try {
-      const started = await subscribePlus(tier)
+      const started = await subscribePlus(tier, gateway)
       const pay = { url: started.paymentUrl, at: Date.now(), tier }
       keepPay(pay)
       set({ pay })

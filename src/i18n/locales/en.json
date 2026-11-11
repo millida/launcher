@@ -704,6 +704,7 @@
   "Открываем…": "Opening…",
   "Открыть лаунчер": "Open launcher",
   "Открыть оплату": "Open payment",
+  "Зарубежной картой": "By foreign card",
   "Открыть с PLUS": "Unlock with PLUS",
   "Открыть страницу": "Open page",
   "Открыть чат": "Open chat",
@@ -6527,5 +6528,8 @@
   "Найди напарника для игры": "Find a partner to play with",
   "Зайти в Discord": "Join Discord",
   "Анонсы и ивенты": "Announcements and events",
-  "Новости в Telegram": "News on Telegram"
+  "Новости в Telegram": "News on Telegram",
+  "Есть промокод?": "Have a promo code?",
+  "Убрать промокод": "Remove promo code",
+  "Промокод не подходит": "This promo code does not apply"
 }

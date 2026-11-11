@@ -3650,6 +3650,7 @@
   "Открыть мод": "Otvoriť mod",
   "Открыть моды": "Otvoriť mody",
   "Открыть оплату": "Otvoriť platbu",
+  "Зарубежной картой": "Zahraničnou kartou",
   "Открыть папку": "Otvoriť priečinok",
   "Открыть папку игры": "Otvoriť priečinok hry",
   "Открыть папку с музыкой": "Otvoriť priečinok s hudbou",
@@ -6527,5 +6528,8 @@
   "ЧАЭС": "Elektráreň Černobyľ",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Cez Millida Launcher: nájdi \"Abonent\" a zadaj kľúč zo svojho účtu.",
   "Шахматы": "Šachy",
-  "Шашки": "Dáma"
+  "Шашки": "Dáma",
+  "Есть промокод?": "Máš promo kód?",
+  "Убрать промокод": "Odstrániť promo kód",
+  "Промокод не подходит": "Tento promo kód sa nedá uplatniť"
 }
