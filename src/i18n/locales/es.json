@@ -2720,6 +2720,7 @@
   "Открыть мод": "Abrir mod",
   "Открыть моды": "Abrir mods",
   "Открыть оплату": "Abrir pago",
+  "Зарубежной картой": "Con tarjeta extranjera",
   "Открыть папку": "Abrir carpeta",
   "Открыть папку с музыкой": "Abrir carpeta de música",
   "Открыть папку сборки": "Abrir carpeta del modpack",
@@ -6527,5 +6528,8 @@
   "ЧАЭС": "Planta de Chernóbil",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "A través de Millida Launcher: busca \"Abonent\" e introduce la clave de tu cuenta.",
   "Шахматы": "Ajedrez",
-  "Шашки": "Damas"
+  "Шашки": "Damas",
+  "Есть промокод?": "¿Tienes un código promocional?",
+  "Убрать промокод": "Quitar código promocional",
+  "Промокод не подходит": "Este código promocional no aplica"
 }
