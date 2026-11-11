@@ -464,7 +464,7 @@ export interface PlusStatus {
   /** Уровень оплаченной подписки (магазин v2). */
   tier?: 'PLUS' | 'DIAMOND' | null
   checkout?: 'gateway' | 'dollar-wallet'
-  checkoutOptions?: ('gateway' | 'dollar-wallet')[]
+  checkoutOptions?: ('gateway' | 'dollar-wallet' | 'stripe')[]
   quote?: Quote
 }
 
@@ -479,10 +479,10 @@ export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidU
 
 export type PlusTier = 'PLUS' | 'DIAMOND'
 
-export function subscribePlus(tier: PlusTier = 'PLUS'): Promise<{ subscriptionId: string; paymentUrl: string }> {
+export function subscribePlus(tier: PlusTier = 'PLUS', gateway?: 'stripe'): Promise<{ subscriptionId: string; paymentUrl: string }> {
   return api<{ subscriptionId: string; paymentUrl: string }>('/launcher/plus/subscribe', {
     method: 'POST',
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify(gateway ? { tier, gateway } : { tier }),
   })
 }
 
