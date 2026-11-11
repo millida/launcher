@@ -704,6 +704,7 @@
   "Открываем…": "Otvaramo…",
   "Открыть лаунчер": "Otvori launcher",
   "Открыть оплату": "Otvori plaćanje",
+  "Зарубежной картой": "Страном картицом",
   "Открыть с PLUS": "Otključaj sa PLUS-om",
   "Открыть страницу": "Otvori stranicu",
   "Открыть чат": "Otvori čat",
@@ -6527,5 +6528,8 @@
   "ЧАЭС": "Černobiljska elektrana",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Preko Millida Launcher-a: pronađi \"Abonent\" i unesi ključ sa svog naloga.",
   "Шахматы": "Šah",
-  "Шашки": "Dama"
+  "Шашки": "Dama",
+  "Есть промокод?": "Imaš promo kod?",
+  "Убрать промокод": "Ukloni promo kod",
+  "Промокод не подходит": "Ovaj promo kod se ne primenjuje"
 }

@@ -34,6 +34,14 @@ pub const GC_FLAGS: &[&str] = &[
 /// the explicit boost mode, not for the default.
 pub const PRETOUCH_FLAG: &str = "-XX:+AlwaysPreTouch";
 
+/// The JIT keeps compiled code in a cache of 240 MB by default. A big modded pack fills it, and
+/// then HotSpot stops compiling and runs the hot render and tick code in the interpreter: the FPS
+/// drops a few minutes into a session and never comes back. 400 MB is the size the client flag
+/// guides settle on. It is only reserved address space, committed as code actually gets compiled,
+/// so vanilla pays nothing; below a 4 GB heap the machine is short of RAM and the default stays.
+pub const CODE_CACHE_FLAG: &str = "-XX:ReservedCodeCacheSize=400M";
+const CODE_CACHE_MIN_HEAP_MB: u32 = 4096;
+
 /// Left for the system, the launcher itself and everything else the player has
 /// open. Below this Windows starts swapping and the game stutters far worse
 /// than it would with a smaller heap. A flat four gigabytes took half of an
@@ -213,7 +221,7 @@ pub fn tune_profile(profile: &str) -> Tuning {
 
     Tuning {
         ram_mb,
-        flags: GC_FLAGS.iter().map(|f| f.to_string()).collect(),
+        flags: tuned_flags_for(true, "", false, ram_mb),
         reasons,
         total_ram_mb: total,
         mods,
@@ -265,18 +273,21 @@ pub fn set_auto_tune(profile: &str, on: bool) {
 /// by hand and anything the boost mode is about to add: with the JVM the last
 /// occurrence of a flag wins, so a duplicate would silently override the
 /// player's own value.
-pub fn tuned_flags(profile: &str, own_args: &str, boost_on: bool) -> Vec<String> {
-    tuned_flags_for(auto_tune_on(profile), own_args, boost_on)
+pub fn tuned_flags(profile: &str, own_args: &str, boost_on: bool, heap_mb: u32) -> Vec<String> {
+    tuned_flags_for(auto_tune_on(profile), own_args, boost_on, heap_mb)
 }
 
-/// `tuned_flags` with the build's auto-tuning switch already read.
-pub(crate) fn tuned_flags_for(auto_tune: bool, own_args: &str, boost_on: bool) -> Vec<String> {
-    if !auto_tune || boost_on {
+/// `tuned_flags` with the build's auto-tuning switch already read. The GC profile comes from
+/// auto-tuning only (the boost mode places its own); the code cache comes with either of them.
+pub(crate) fn tuned_flags_for(auto_tune: bool, own_args: &str, boost_on: bool, heap_mb: u32) -> Vec<String> {
+    if !auto_tune && !boost_on {
         return vec![];
     }
+    let gc: &[&str] = if boost_on { &[] } else { GC_FLAGS };
+    let jit: &[&str] = if heap_mb >= CODE_CACHE_MIN_HEAP_MB { &[CODE_CACHE_FLAG] } else { &[] };
     let taken: Vec<&str> = own_args.split_whitespace().collect();
-    GC_FLAGS
-        .iter()
+    gc.iter()
+        .chain(jit)
         .filter(|f| !taken.iter().any(|a| flag_name(a) == flag_name(f)))
         .map(|f| f.to_string())
         .collect()
@@ -869,6 +880,29 @@ mod tests {
             let mut a = boost.clone();
             fit_jvm_args(&mut a, major);
             assert!(a.contains(&PRETOUCH_FLAG.to_string()), "на Java {major:?} предзаполнение — выбор буста: {a:?}");
+        }
+    }
+
+    /// (auto-tuning, boost, heap, player's own args) -> is the larger code cache added, is our G1 added.
+    #[test]
+    fn code_cache_grows_only_where_the_machine_has_room() {
+        let cases: [(bool, bool, u32, &str, bool, bool, &str); 7] = [
+            (true, false, 6144, "", true, true, "a big pack on auto: the JIT must not run out of room mid-session"),
+            (true, false, 4096, "", true, true, "4 GB heap is the smallest that gets it"),
+            (true, false, 3072, "", false, true, "a short machine keeps the 240 MB default: the cache comes out of the same RAM"),
+            (false, true, 6144, "", true, false, "boost places its own GC profile, the cache still comes"),
+            (false, false, 8192, "", false, false, "auto-tuning off and no boost: the launcher adds nothing"),
+            (true, false, 8192, "-XX:ReservedCodeCacheSize=256M", false, true, "the player's own size wins"),
+            (true, true, 8192, "", true, false, "boost on top of auto: one GC profile, from the boost"),
+        ];
+        for (auto, boost, heap, own, want_cache, want_gc, why) in cases {
+            let got = tuned_flags_for(auto, own, boost, heap);
+            assert_eq!(got.contains(&CODE_CACHE_FLAG.to_string()), want_cache, "{why}: {got:?}");
+            assert_eq!(got.contains(&"-XX:+UseG1GC".to_string()), want_gc, "{why}: {got:?}");
+            assert!(
+                got.iter().filter(|f| f.starts_with("-XX:ReservedCodeCacheSize")).count() <= 1,
+                "the JVM keeps the last of two sizes, a duplicate would silently replace the player's: {got:?}",
+            );
         }
     }
 

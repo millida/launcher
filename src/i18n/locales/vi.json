@@ -708,6 +708,7 @@
   "Открываем…": "Đang mở…",
   "Открыть лаунчер": "Mở launcher",
   "Открыть оплату": "Mở thanh toán",
+  "Зарубежной картой": "Bằng thẻ nước ngoài",
   "Открыть с PLUS": "Mở khóa với PLUS",
   "Открыть страницу": "Mở trang",
   "Открыть чат": "Mở trò chuyện",
@@ -6530,5 +6531,8 @@
   "ЧАЭС": "Nhà máy Chernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Qua Millida Launcher: tìm \"Abonent\" và nhập key từ tài khoản của bạn.",
   "Шахматы": "Cờ vua",
-  "Шашки": "Cờ đam"
+  "Шашки": "Cờ đam",
+  "Есть промокод?": "Bạn có mã khuyến mãi?",
+  "Убрать промокод": "Xóa mã khuyến mãi",
+  "Промокод не подходит": "Mã khuyến mãi này không áp dụng được"
 }
