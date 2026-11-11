@@ -59,6 +59,13 @@
 .sv-was { margin-left: 2px; font-size: 0.78em; font-weight: 700; opacity: 0.65; text-decoration-thickness: 2px; }
 .bs-extra { display: grid; }
 .bs-extra .btn { width: 100%; }
+.bs-promo { display: flex; align-items: center; gap: 8px; }
+.bs-promo .input { flex: 1; min-width: 0; }
+.bs-promo .input input { letter-spacing: 0.06em; }
+.bs-extra .bs-promo .btn { width: auto; flex: none; }
+.bs-promo.is-on { justify-content: center; color: var(--m-accent); }
+.bs-promo.is-on b { color: var(--m-fg); font-weight: 800; letter-spacing: 0.04em; }
+.bs-promo-err { margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--m-danger); }
 .sv-pbtn { gap: 6px; font-variant-numeric: tabular-nums; }
 .sv-pbtn.btn.lg { min-width: 150px; font-size: 20px; }
 

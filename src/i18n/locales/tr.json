@@ -2720,6 +2720,7 @@
   "Открыть мод": "Modu aç",
   "Открыть моды": "Modları aç",
   "Открыть оплату": "Ödemeyi aç",
+  "Зарубежной картой": "Yabancı kartla",
   "Открыть папку": "Klasörü aç",
   "Открыть папку с музыкой": "Müzik klasörünü aç",
   "Открыть папку сборки": "Mod paketi klasörünü aç",
@@ -6527,5 +6528,8 @@
   "ЧАЭС": "Çernobil santrali",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Millida Launcher üzerinden: \"Abonent\"i bul ve hesabındaki anahtarı gir.",
   "Шахматы": "Satranç",
-  "Шашки": "Dama"
+  "Шашки": "Dama",
+  "Есть промокод?": "Promosyon kodun var mı?",
+  "Убрать промокод": "Promosyon kodunu kaldır",
+  "Промокод не подходит": "Bu promosyon kodu geçerli değil"
 }

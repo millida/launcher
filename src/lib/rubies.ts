@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { Quote } from './money'
 import { t } from '../i18n'
 
 /**
@@ -397,11 +398,23 @@ export const buyCosmetic = (code: string) =>
     return api<{ balance: number; granted?: ItemRef[] }>('/rubies/shop/buy', { method: 'POST', body: JSON.stringify({ code }) })
   })
 
-export const buyPack = (pack: string) =>
+export const buyPack = (pack: string, promo?: string) =>
   api<{ pack: string; rubies: number; kopecks: number; balance: number }>('/rubies/packs/buy', {
     method: 'POST',
-    body: JSON.stringify({ pack }),
+    body: JSON.stringify(promo ? { pack, promo } : { pack }),
   })
+
+/** A pack priced with a discount code by the server, the same way the purchase will charge it. */
+export interface PackPromo {
+  code: string
+  percent: number
+  pack: string
+  kopecks: number
+  quote: Quote
+}
+
+export const previewPackPromo = (pack: string, code: string) =>
+  api<PackPromo>('/rubies/packs/promo', { method: 'POST', body: JSON.stringify({ pack, code }) })
 
 export const redeemPromo = (code: string) =>
   api<{ code: string; rubies: number; chest: string | null; item: string | null; balance: number }>(

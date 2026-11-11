@@ -729,6 +729,7 @@
   "Открываем…": "Ouverture…",
   "Открыть лаунчер": "Ouvrir le launcher",
   "Открыть оплату": "Ouvrir le paiement",
+  "Зарубежной картой": "Par carte étrangère",
   "Открыть с PLUS": "Débloquer avec PLUS",
   "Открыть страницу": "Ouvrir la page",
   "Открыть чат": "Ouvrir le chat",
@@ -6528,5 +6529,8 @@
   "ЧАЭС": "Centrale de Tchernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Via Millida Launcher : trouve « Abonent » et saisis la clé de ton compte.",
   "Шахматы": "Échecs",
-  "Шашки": "Dames"
+  "Шашки": "Dames",
+  "Есть промокод?": "Vous avez un code promo ?",
+  "Убрать промокод": "Supprimer le code promo",
+  "Промокод не подходит": "Ce code promo ne s'applique pas"
 }
