@@ -708,6 +708,7 @@
   "Открываем…": "Đang mở…",
   "Открыть лаунчер": "Mở launcher",
   "Открыть оплату": "Mở thanh toán",
+  "Зарубежной картой": "Bằng thẻ nước ngoài",
   "Открыть с PLUS": "Mở khóa với PLUS",
   "Открыть страницу": "Mở trang",
   "Открыть чат": "Mở trò chuyện",
@@ -1538,7 +1539,7 @@
   "Тестовые версии": "Phiên bản thử nghiệm",
   "Экспериментальные экраны": "Màn hình thử nghiệm",
   "Хостинг — новый вид с сайта": "Hosting — giao diện mới từ trang web",
-  "Раньше всех, бывают поломки": "Sớm nhất, có thể có lỗi",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher và mod Millida sớm nhất, có thể có lỗi",
   "Запускать вместе с системой": "Khởi động cùng hệ thống",
   "Запускать вместе с системой?": "Khởi động cùng hệ thống?",
   "Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.": "Launcher sẽ chờ trong khay hệ thống và nhắc bạn về rương và chuỗi ngày. Có thể tắt trong Cài đặt.",
@@ -6530,5 +6531,13 @@
   "ЧАЭС": "Nhà máy Chernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Qua Millida Launcher: tìm \"Abonent\" và nhập key từ tài khoản của bạn.",
   "Шахматы": "Cờ vua",
-  "Шашки": "Cờ đam"
+  "Шашки": "Cờ đam",
+  "Есть промокод?": "Bạn có mã khuyến mãi?",
+  "Убрать промокод": "Xóa mã khuyến mãi",
+  "Промокод не подходит": "Mã khuyến mãi này không áp dụng được",
+  "не запускается с NeoForge 26.3.0.65 и новее": "không khởi động được với NeoForge 26.3.0.65 trở lên",
+  "Убрали {0}: {1}": "Đã gỡ {0}: {1}",
+  "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, nhưng không gỡ được tệp: {2}",
+  "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium không hoạt động với phiên bản NeoForge này (26.3.0.65 trở lên): game bị crash ngay khi khởi động. Hãy tắt Sodium bằng nút bên dưới — không có nó, gói mod sẽ khởi động được.",
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Tăng FPS đã gỡ khỏi gói mod một mod khiến game không khởi động được: {0}"
 }

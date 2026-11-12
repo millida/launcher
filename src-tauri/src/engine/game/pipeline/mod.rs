@@ -229,6 +229,12 @@ async fn mods_step(
             warn(&app, why);
         }
     }
+    if touch_mods && modded {
+        let gone = take_back_broken_boost_mods(&profile);
+        if !gone.is_empty() {
+            warn(&app, &format!("Буст FPS убрал из сборки мод, с которым игра не запускается: {}", gone.join("; ")));
+        }
+    }
     if loader == "forge" {
         let off = resolve_legacy_duplicates(&profile, &game_version).await;
         if !off.is_empty() {

@@ -20,6 +20,9 @@ const calls = { stage: 0, stageSkipsDelta: [] as Array<boolean | undefined>, del
 let manifest = { version: '2.0.302', critical: false }
 let stageFails = false
 let pluginFindsVersion: string | null = '2.0.302'
+let pluginHangs = false
+const pluginCheckOptions: Array<{ timeout?: number } | undefined> = []
+const toasts: Array<[string, string | undefined]> = []
 
 mock.module('../ipc/tauri', () => ({ hasTauri: () => true, tauri: () => null }))
 mock.module('../ipc/commands', () => ({
@@ -46,8 +49,10 @@ mock.module('../ipc/commands', () => ({
   },
 }))
 mock.module('@tauri-apps/plugin-updater', () => ({
-  check: async () => {
+  check: async (opts?: { timeout?: number }) => {
     calls.pluginCheck++
+    pluginCheckOptions.push(opts)
+    if (pluginHangs) return new Promise(() => {})
     if (!pluginFindsVersion) return null
     return {
       version: pluginFindsVersion,
@@ -63,7 +68,7 @@ mock.module('@tauri-apps/plugin-process', () => ({
   relaunch: async () => {},
 }))
 mock.module('./prefs', () => ({ readPref: (_k: string, d: string) => d, writePref: () => {}, hydratePrefs: async () => {} }))
-mock.module('../state/ui', () => ({ showToast: () => {} }))
+mock.module('../state/ui', () => ({ showToast: (text: string, kind?: string) => void toasts.push([text, kind]) }))
 mock.module('./api', () => ({ openExt: () => {} }))
 mock.module('./crash', () => ({ reportError: async () => {} }))
 mock.module('./telemetry', () => ({
@@ -85,6 +90,9 @@ describe('обновление лаунчера лежит на диске у я
     stageFails = false
     manifest = { version: '2.0.302', critical: false }
     pluginFindsVersion = '2.0.302'
+    pluginHangs = false
+    pluginCheckOptions.length = 0
+    toasts.length = 0
     calls.stage = 0
     calls.stageSkipsDelta = []
     calls.deltaAsked = 0
@@ -176,5 +184,19 @@ describe('обновление лаунчера лежит на диске у я
     await U.applyUpdate()
     expect(calls.run).toEqual([['/updates/x.exe', undefined]])
     expect(calls.showAfter).toBe(1)
+  })
+
+  test('проверка плагина ограничена таймаутом: иначе зависшее соединение держит её вечно', async () => {
+    pluginFindsVersion = null
+    manifest = { version: '2.0.300', critical: false }
+    await U.checkForUpdate()
+    expect(pluginCheckOptions[0]?.timeout).toBeGreaterThan(0)
+  })
+
+  test('кнопка «Проверить» отвечает за предел, даже если проверка повисла', async () => {
+    pluginHangs = true
+    const res = await U.checkForUpdate(true)
+    expect(res).toBeNull()
+    expect(toasts).toEqual([['Сервер не ответил вовремя — повтори попытку', 'error']])
   })
 })

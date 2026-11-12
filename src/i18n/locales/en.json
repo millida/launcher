@@ -704,6 +704,7 @@
   "Открываем…": "Opening…",
   "Открыть лаунчер": "Open launcher",
   "Открыть оплату": "Open payment",
+  "Зарубежной картой": "By foreign card",
   "Открыть с PLUS": "Unlock with PLUS",
   "Открыть страницу": "Open page",
   "Открыть чат": "Open chat",
@@ -1534,7 +1535,7 @@
   "Тестовые версии": "Beta versions",
   "Экспериментальные экраны": "Experimental screens",
   "Хостинг — новый вид с сайта": "Hosting: new look from the website",
-  "Раньше всех, бывают поломки": "Earliest access, things may break",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher and Millida mod before everyone, things may break",
   "Запускать вместе с системой": "Start with the system",
   "Запускать вместе с системой?": "Start with the system?",
   "Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.": "The launcher will wait in the tray and remind you about the chest and your streak. You can turn it off in Settings.",
@@ -6527,5 +6528,13 @@
   "Найди напарника для игры": "Find a partner to play with",
   "Зайти в Discord": "Join Discord",
   "Анонсы и ивенты": "Announcements and events",
-  "Новости в Telegram": "News on Telegram"
+  "Новости в Telegram": "News on Telegram",
+  "Есть промокод?": "Have a promo code?",
+  "Убрать промокод": "Remove promo code",
+  "Промокод не подходит": "This promo code does not apply",
+  "не запускается с NeoForge 26.3.0.65 и новее": "doesn't start with NeoForge 26.3.0.65 and newer",
+  "Убрали {0}: {1}": "Removed {0}: {1}",
+  "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, but the file couldn't be removed: {2}",
+  "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium doesn't work with this NeoForge version (26.3.0.65 and newer): the game crashes on startup. Turn off Sodium with the button below — the modpack will start without it.",
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS boost removed a mod that stops the game from starting: {0}"
 }

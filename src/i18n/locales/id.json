@@ -620,6 +620,7 @@
   "Открываем…": "Membuka…",
   "Открыть лаунчер": "Buka launcher",
   "Открыть оплату": "Buka pembayaran",
+  "Зарубежной картой": "Dengan kartu luar negeri",
   "Открыть с PLUS": "Buka dengan PLUS",
   "Открыть страницу": "Buka halaman",
   "Открыть чат": "Buka chat",
@@ -1450,7 +1451,7 @@
   "Тестовые версии": "Versi uji coba",
   "Экспериментальные экраны": "Layar eksperimental",
   "Хостинг — новый вид с сайта": "Hosting — tampilan baru dari situs",
-  "Раньше всех, бывают поломки": "Lebih awal dari semua, bisa ada kerusakan",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher dan mod Millida lebih awal, bisa ada kerusakan",
   "Запускать вместе с системой": "Jalankan bersama sistem",
   "Запускать вместе с системой?": "Jalankan bersama sistem?",
   "Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.": "Launcher akan menunggu di tray dan mengingatkan soal peti dan rentetan. Bisa dimatikan di Pengaturan.",
@@ -6531,5 +6532,13 @@
   "ЧАЭС": "Pembangkit Chernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Lewat Millida Launcher: cari \"Abonent\" dan masukkan key dari akunmu.",
   "Шахматы": "Catur",
-  "Шашки": "Dam"
+  "Шашки": "Dam",
+  "Есть промокод?": "Punya kode promo?",
+  "Убрать промокод": "Hapus kode promo",
+  "Промокод не подходит": "Kode promo ini tidak berlaku",
+  "не запускается с NeoForge 26.3.0.65 и новее": "tidak bisa berjalan dengan NeoForge 26.3.0.65 dan yang lebih baru",
+  "Убрали {0}: {1}": "{0} dihapus: {1}",
+  "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, tetapi file tidak bisa dihapus: {2}",
+  "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium tidak berfungsi dengan versi NeoForge ini (26.3.0.65 dan yang lebih baru): game crash saat dimulai. Matikan Sodium dengan tombol di bawah — tanpanya modpack akan berjalan.",
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Boost FPS menghapus dari modpack sebuah mod yang membuat game tidak bisa dimulai: {0}"
 }

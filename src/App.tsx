@@ -67,6 +67,7 @@ import {
   ServerDetail,
   Tour,
   LobbyKeeper,
+  McNewsModal,
 } from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
@@ -239,7 +240,6 @@ import { initUiTracking } from './lib/uiTrack'
 import { initWindowResume, windowReopened } from './lib/windowResume'
 import { initCli } from './lib/cli'
 import { initSessionKick } from './lib/sessionKick'
-import { McNewsModal } from './components/McNews'
 import { initA11y } from './lib/a11y'
 import { initGameInvites } from './lib/gameInvite'
 import { initOverlayLink } from './lib/overlayLink'

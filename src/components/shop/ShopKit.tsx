@@ -32,6 +32,7 @@ import {
   type ShopSource,
   type ShopPack,
   type ShopTier,
+  type PackPromo,
 } from '../../lib/rubies'
 import type { PlusTier } from '../../lib/gameProfile'
 import { useAccounts } from '../../state/accounts'
@@ -83,7 +84,8 @@ const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code
 import { ShardsSection } from './Shards'
 import { craftItem, loadWorkshop, type Workshop } from '../../lib/rubies'
 import { affords, openTopup, plusPrice, refreshMoney, rubyPackPrice, rubyQuote, shortfallFor, useMoney } from '../../lib/useMoney'
-import { formatMoney, moneyShortfall, shortfallText, type MoneyShortfall } from '../../lib/money'
+import { formatMoney, isQuote, moneyShortfall, quoteText, scaleQuote, shortfallText, type MoneyShortfall } from '../../lib/money'
+import { PackPromoField, forgetPackPromo } from './PackPromo'
 import { fragmentWord } from './rarity'
 import { noted } from '../../lib/noted'
 
@@ -484,10 +486,10 @@ export function useShop(on: boolean) {
   }
 
   /** Пакет: окно с мешком рубинов, после оплаты рубины досчитываются. */
-  const doPack = async (pack: ShopPack, art: string) => {
+  const doPack = async (pack: ShopPack, art: string, promo: PackPromo | null = null) => {
     if (!signedIn) return showLogin()
-    const result = purchaseFlow('ruby_pack', pack.code, pack.kopecks, 'kopecks')
-    const quote = rubyQuote(pack.code)
+    const result = purchaseFlow('ruby_pack', pack.code, promo?.kopecks ?? pack.kopecks, 'kopecks')
+    const quote = promo ? (isQuote(promo.quote) ? promo.quote : scaleQuote(rubyQuote(pack.code), pack.kopecks, promo.kopecks)) : rubyQuote(pack.code)
     let missing: MoneyShortfall | null = null
     if (affords(quote) === false) {
       await refreshMoney()
@@ -501,7 +503,10 @@ export function useShop(on: boolean) {
           <PackCount n={pack.rubies} />
         </span>
       ),
-      confirm: missing?.topup ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) }) : (rubyPackPrice(pack.code, pack.kopecks) ?? ''),
+      confirm: missing?.topup
+        ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) })
+        : ((promo ? quoteText(quote) : rubyPackPrice(pack.code, pack.kopecks)) ?? ''),
+      extra: <PackPromoField key={promo?.code ?? ''} pack={pack.code} applied={promo} onApplied={(next) => void doPack(pack, art, next)} />,
       onCancel: () => result(false, 'cancel'),
       run: async () => {
         if (missing) {
@@ -512,8 +517,9 @@ export function useShop(on: boolean) {
         setBusy(pack.code)
         const from = balance
         try {
-          const res = await buyPack(pack.code)
+          const res = await buyPack(pack.code, promo?.code)
           result(true)
+          if (promo) forgetPackPromo()
           setDay((d) => (d ? { ...d, balance: res.balance } : d))
           return { rubies: { from, to: res.balance } }
         } catch (e) {

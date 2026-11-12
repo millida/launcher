@@ -81,6 +81,7 @@ interface Device {
 const ID_KEY = 'm-install-id'
 const OPT_OUT_KEY = 'm-telemetry-off'
 const QUEUE_KEY = 'm-telemetry-queue'
+const FORGET_KEY = 'm-telemetry-forget'
 const FLUSH_MS = 120_000
 const MAX_QUEUE = 200
 const BEAT_MIN_MS = 40_000
@@ -157,13 +158,59 @@ function syncGame(on: boolean) {
   } catch {}
 }
 
+function forgetPending(): boolean {
+  try {
+    return localStorage.getItem(FORGET_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function setForgetPending(pending: boolean) {
+  try {
+    if (pending) localStorage.setItem(FORGET_KEY, '1')
+    else localStorage.removeItem(FORGET_KEY)
+  } catch (e) {
+    noted('telemetry-forget')(e)
+  }
+}
+
+async function postForget(body: { installId: string }): Promise<void> {
+  if (hasTauri()) {
+    await millidaApi('/launcher/telemetry/forget', 'POST', body)
+    return
+  }
+  const res = await fetch(LAUNCHER_API + '/launcher/telemetry/forget', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`forget answered ${res.status}`)
+}
+
+/// Waits for a batch already in flight, or it would land after the server forgot the install.
+/// A failed request stays pending and is retried on the next start, so being offline at the
+/// moment of the switch does not leave the data on the server.
+export async function forgetSentTelemetry(): Promise<void> {
+  if (!forgetPending() || telemetryEnabled()) return
+  await (flushing ?? Promise.resolve())
+  try {
+    await postForget({ installId: installId() })
+    if (!telemetryEnabled()) setForgetPending(false)
+  } catch (e) {
+    noted('telemetry-forget')(e)
+  }
+}
+
 export function setTelemetryEnabled(on: boolean) {
   writePref(OPT_OUT_KEY, on ? '0' : '1')
   syncGame(on)
+  setForgetPending(!on)
   if (!on) {
     queue = []
     unstamped = []
     saveQueue()
+    void forgetSentTelemetry()
   }
 }
 
@@ -527,6 +574,7 @@ export async function initTelemetry(bootMs: number, reopened = false): Promise<v
     console.warn('[telemetry] the old opt-out was not moved to the settings file', e)
   }
   if (!isOverlayWindow()) syncGame(telemetryEnabled())
+  if (!isOverlayWindow()) void forgetSentTelemetry()
   if (!telemetryEnabled() || inited || isOverlayWindow()) return
   // Один раз на страницу: повторный вызов вешал бы ещё один слушатель выхода.
   inited = true
