@@ -337,6 +337,8 @@ permissions = [
   "allow-seed-video-options",
   "allow-tune-profile",
   "allow-set-auto-tune",
+  "allow-auto-tune-global",
+  "allow-set-auto-tune-global",
   "allow-set-profile-ram",
   "allow-screenshot-gallery",
   "allow-delete-screenshot",

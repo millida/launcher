@@ -21,6 +21,7 @@ import { PackUpdateRow } from '../components/PackUpdateRow'
 import { ShadersRow } from '../components/ShadersRow'
 import { BuildGfxPresets } from '../components/GfxPresets'
 import { GRAPHICS_PRESETS_PUBLIC } from '../lib/graphicsRelease'
+import { gpuClass } from '../lib/perfTier'
 import { ShortcutRow } from '../components/ShortcutRow'
 import { CommonShareRows } from '../components/CommonShareRows'
 import { PackAutoUpdateRow } from '../components/PackAutoUpdateRow'
@@ -291,6 +292,7 @@ export function InstancePage() {
   const [tab, setTab] = useState('content')
   const [kind, setKind] = useState('mod')
   const [items, setItems] = useState<ModFile[]>([])
+  const [contentRev, setContentRev] = useState(0)
   const [contentQuery, setContentQuery] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [dlOpen, setDlOpen] = useState(false)
@@ -315,11 +317,16 @@ export function InstancePage() {
   const [playtime, setPlaytime] = useState('')
   const [ram, setRam] = useState(0)
   const [ramMax, setRamMax] = useState(RAM_MAX_GB)
+  // A discrete card in the PC: then a build on the integrated one is worth a word (gpuNote).
+  const [hasDiscrete, setHasDiscrete] = useState(false)
 
   useEffect(() => {
     if (!hasTauri()) return
     void deviceSpecs()
-      .then((specs) => setRamMax(maxRamGb(specs.ram_mb)))
+      .then((specs) => {
+        setRamMax(maxRamGb(specs.ram_mb))
+        setHasDiscrete((specs.gpus || []).some((g) => ['weak', 'mid', 'high'].includes(gpuClass(g))))
+      })
       .catch(() => {})
   }, [])
 
@@ -345,6 +352,26 @@ export function InstancePage() {
   const [javaMajor, setJavaMajor] = useState(0)
   const [gpu, setGpu] = useState<GpuPref>('auto')
   const [gpuOk, setGpuOk] = useState(true)
+  const pickGpu = (v: GpuPref) => {
+    if (!profile) return
+    const prev = gpu
+    setGpu(v)
+    setProfileGpu(profile, v)
+      .then((saved) => {
+        setGpu(saved)
+        showToast(
+          saved === 'discrete'
+            ? t('Запускаем на дискретной карте')
+            : saved === 'integrated'
+              ? t('Запускаем на встроенной карте')
+              : t('Карту выбирает система'),
+        )
+      })
+      .catch((e) => {
+        setGpu(prev)
+        showToast(t('Не удалось сохранить выбор карты: {error}', { error: tx(e) }), 'error')
+      })
+  }
   const [javaAll, setJavaAll] = useState<number[]>([])
   const [javaVendor, setJavaVendor] = useState<JavaVendorId>('temurin')
   const [vendorBusy, setVendorBusy] = useState(false)
@@ -507,6 +534,7 @@ export function InstancePage() {
       listContent(profile, kk)
         .then((list) => {
           setItems(list)
+          setContentRev((n) => n + 1)
           setEmptyList(!list.length)
           if (list.some((i) => !i.scanned)) {
             scanContentLocal(profile, kk)
@@ -2621,7 +2649,7 @@ export function InstancePage() {
                   <span className="set-val">{catalogVersion}</span>
                 </div>
               ) : null}
-              {profile ? <PackAutoUpdateRow profile={profile} /> : null}
+              {profile ? <PackAutoUpdateRow profile={profile} revision={contentRev} /> : null}
               {profile ? <PackwizRow profile={profile} running={thisRunning} onUpdated={() => loadMods()} /> : null}
               <div className="bx-opts-cap">{t('Игра')}</div>
               {profile ? <LinuxToolsRows profile={profile} /> : null}
@@ -2682,28 +2710,17 @@ export function InstancePage() {
                     { value: 'discrete', label: t('Дискретная'), sub: t('NVIDIA или AMD — больше FPS') },
                     { value: 'integrated', label: t('Встроенная'), sub: t('Тише и дольше от батареи') },
                   ]}
-                  onChange={(v) => {
-                    if (!profile) return
-                    const prev = gpu
-                    setGpu(v as GpuPref)
-                    setProfileGpu(profile, v as GpuPref)
-                      .then((saved) => {
-                        setGpu(saved)
-                        showToast(
-                          saved === 'discrete'
-                            ? t('Запускаем на дискретной карте')
-                            : saved === 'integrated'
-                              ? t('Запускаем на встроенной карте')
-                              : t('Карту выбирает система'),
-                        )
-                      })
-                      .catch((e) => {
-                        setGpu(prev)
-                        showToast(t('Не удалось сохранить выбор карты: {error}', { error: tx(e) }), 'error')
-                      })
-                  }}
+                  onChange={(v) => pickGpu(v as GpuPref)}
                 />
               </div>
+              {gpuOk && gpu === 'integrated' && hasDiscrete ? (
+                <p className="faint-note">
+                  {t('Сборка запускается на встроенной видеокарте, поэтому FPS ниже. Лаунчер мог выбрать её сам, когда игра вылетела при открытии окна.')}{' '}
+                  <button type="button" className="btn sm ghost" onClick={() => pickGpu('auto')}>
+                    {t('Вернуть «Авто»')}
+                  </button>
+                </p>
+              ) : null}
               {GRAPHICS_PRESETS_PUBLIC && profile && pr ? (
                 <BuildGfxPresets
                   profile={profile}

@@ -1260,6 +1260,13 @@ pub(crate) struct LaunchDeps {
     /// Mod ids it put nothing in for: no file for this build, or the mod is in the build in a form
     /// the jars do not show (another name, switched off).
     pub unresolved: Vec<String>,
+    /// A removed mod is still required by an enabled mod. The player must
+    /// choose which of those mods to keep; launch must not restore it silently.
+    pub removed_required: Vec<(String, String)>,
+}
+
+fn removed_requirements(missing: Vec<(String, String)>, removed: &std::collections::BTreeSet<String>) -> Vec<(String, String)> {
+    missing.into_iter().filter(|(id, _)| removed.contains(&id.to_ascii_lowercase())).collect()
 }
 
 /// The enabled mods of the build: their files without `.disabled`.
@@ -1364,6 +1371,13 @@ pub(crate) async fn settle_launch_deps(app: &AppHandle, profile: &str) -> Launch
     if known_complete(profile, &key) {
         return out;
     }
+    let removed = removed_mod_ids(profile);
+    if !removed.is_empty() {
+        if let Some((_, missing)) = launch_requirements(profile).await {
+            out.removed_required = removed_requirements(missing, &removed);
+            if !out.removed_required.is_empty() { return out; }
+        }
+    }
     let Some((ctx, missing)) = launch_requirements(profile).await else { return out };
     if missing.is_empty() {
         mark_complete(profile, key);
@@ -1454,7 +1468,19 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, retry_dep, BreakRule, DepNode, LocalMeta};
+    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, removed_requirements, retry_dep, BreakRule, DepNode, LocalMeta};
+
+    #[test]
+    fn a_player_removed_dependency_is_not_restored_at_launch() {
+        let removed = ["create".to_string()].into_iter().collect();
+        let addon = LocalMeta { mod_id: "createaddition".into(), title: "Create Crafts & Additions".into(), requires: vec!["create".into()], ..Default::default() };
+        let runs = ["forge".to_string()];
+        let missing = launch_missing(&[addon], &runs, "forge", None);
+        assert_eq!(removed_requirements(missing, &removed), vec![("create".into(), "Create Crafts & Additions".into())]);
+        let create = LocalMeta { mod_id: "create".into(), ..Default::default() };
+        let addon = LocalMeta { mod_id: "createaddition".into(), requires: vec!["create".into()], ..Default::default() };
+        assert!(removed_requirements(launch_missing(&[addon, create], &runs, "forge", None), &removed).is_empty());
+    }
 
     /// Required dependency of a Modrinth version -> whether the audit drops it as another loader's.
     #[test]

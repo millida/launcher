@@ -1,5 +1,6 @@
 // Installs a ready modpack from the Millida catalog: the card and the archive link come from api.millida.net, the archive is downloaded from garage.millida.net and unpacked into the modpack folder.
 // Launcher service files are dropped from the foreign archive, except the launch description that the catalog check reads.
+use super::pack_link::{storage_refused, PackLink};
 use super::{pack_delta, pack_install};
 use crate::engine::*;
 use serde_json::Value;
@@ -16,6 +17,9 @@ use tauri::AppHandle;
 const PACK_HOST: &str = "garage.millida.net";
 
 const MANIFEST_NAME: &str = "millida.pack.json";
+
+/// The storage refused even a fresh address: the player reads this, not the signed URL.
+const STORAGE_REFUSED_TEXT: &str = "Хранилище не отдало архив сборки по ссылке на скачивание — попробуй ещё раз через минуту";
 const LOADERS: [&str; 5] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
 pub(crate) fn job_key_catalog_pack(slug: &str) -> String {
@@ -106,10 +110,13 @@ fn meta_from(api: &Value, local: Option<&Value>) -> Result<PackMeta, String> {
 /// server half into a game folder.
 pub(super) fn client_file(view: &Value) -> Result<(String, u64, String), String> {
     let files = view["files"].as_array().cloned().unwrap_or_default();
+    let version = view["version"].as_str().unwrap_or("").trim();
+    let clients: Vec<_> = files.iter().filter(|f| f["side"].as_str() == Some("client")).collect();
     let file = files
         .iter()
-        .find(|f| f["side"].as_str() == Some("client"))
-        .ok_or("У этой сборки нет клиентской части — её ставят только на сервер")?;
+        .find(|f| f["side"].as_str() == Some("client") && (version.is_empty() || f["version"].as_str() == Some(version)))
+        .or_else(|| clients.first().copied().filter(|f| clients.len() == 1 && f["version"].is_null()))
+        .ok_or("У опубликованной версии сборки нет клиентского файла")?;
     let id = file["id"].as_str().unwrap_or("").to_string();
     if id.is_empty() {
         return Err("Ответ сервера не содержит файла сборки".into());
@@ -166,6 +173,7 @@ fn view_from_candidate(slug: &str, answer: &Value) -> Result<Value, String> {
         "files": [{
             "id": c["fileId"],
             "side": "client",
+            "version": c["version"],
             "size": c["size"],
             "sha512": c["sha512"],
         }],
@@ -198,7 +206,7 @@ struct Fetched {
 /// A paid pack opens the key window only on an answer of our API. A timeout or
 /// a dead DNS is not a refusal: the window would tell a player who already has
 /// access to buy the pack again.
-fn link_error(paid: bool, e: String) -> String {
+pub(super) fn link_error(paid: bool, e: String) -> String {
     if paid && e != CANCELLED && !e.contains("Войди") && !transient_failure(&e) {
         format!("{}{}", PACK_ACCESS_PREFIX, e)
     } else {
@@ -223,26 +231,12 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
     job.rename(&title);
 
     job.emit(app, 8.0, "Получаем ссылку…");
-    /*
-     * Отказ по доступу помечается маркером, а не опознаётся по словам: текст
-     * приходит с сервера и правится там же, а окно ввода ключа обязано
-     * открыться и после того, как формулировку перепишут.
-     */
-    let link = millida_api_auth(
-        format!("/catalog/packs/files/{}/link", file_id),
-        "POST".into(),
-        None,
-    )
-    .await
-    .map_err(|e| link_error(view["accessRequired"].as_bool().unwrap_or(false), e))?;
-    let url = link["url"].as_str().unwrap_or("").to_string();
-    if !pack_url_allowed(&url) {
-        return Err("Сервер вернул ссылку на чужой адрес — установка остановлена".into());
-    }
+    // Signed and short-lived: every road below takes its address from `link` per request (pack_link).
+    let (link, answer) = PackLink::ask(&file_id, view["accessRequired"].as_bool().unwrap_or(false)).await?;
     // The link answer is the fresher of the two: it is produced from the same
     // row the file will be served from, while the card may be cached.
-    let sha512 = link["sha512"].as_str().unwrap_or(&sha512).to_string();
-    let size = link["size"].as_u64().unwrap_or(size);
+    let sha512 = answer["sha512"].as_str().unwrap_or(&sha512).to_string();
+    let size = answer["size"].as_u64().unwrap_or(size);
     if !sha512_ok(&sha512) {
         return Err("У сборки нет контрольной суммы — ставить такой архив нельзя".into());
     }
@@ -257,7 +251,7 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
         let built = pack_delta::delta_dir(installed)?;
         let span_file = tmp_dir.join(format!("pack-{}.span", slug));
         temp.0.extend([built.clone(), span_file.clone()]);
-        let source = pack_delta::DeltaSource { file_id: &file_id, url: &url, archive_size: size, installed, into: &built, span_file: &span_file };
+        let source = pack_delta::DeltaSource { file_id: &file_id, link: &link, archive_size: size, installed, into: &built, span_file: &span_file };
         match pack_delta::after_delta(pack_delta::build_by_delta(app, job, source).await) {
             pack_delta::AfterDelta::Built(r) => {
                 eprintln!(
@@ -292,7 +286,7 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
         let archive_id = sha512.to_ascii_lowercase();
         let source = pack_install::IndexSource {
             file_id: &file_id,
-            url: &url,
+            link: &link,
             archive_size: size,
             archive_id: &archive_id,
             staging: &idx_staging,
@@ -315,10 +309,9 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
             Err(pack_install::IndexError::Cancelled) => return Err(CANCELLED.into()),
             Err(pack_install::IndexError::Failed(e)) => return Err(e),
             Err(pack_install::IndexError::Interrupted(why)) => {
-                // What came is kept in the staging folder; the next try continues from it instead of taking the archive.
-                eprintln!("[pack] «{}» по оглавлению оборвалась на сети ({}), скачанное сохранено", slug, why);
-                // Two texts that are already translated everywhere; the second try goes on from the files on disk by itself.
-                return Err(["Связь оборвалась", "попробуй ещё раз"].join("; "));
+                // Keep the verified files until the whole archive succeeds. A failed first
+                // route must not force the player to press Install a second time.
+                eprintln!("[pack] «{}» по оглавлению оборвалась на сети ({}), пробуем архив целиком", slug, why);
             }
             Err(pack_install::IndexError::Unavailable(why)) => {
                 eprintln!("[pack] «{}» по оглавлению не вышла ({}), качаем архив целиком", slug, why);
@@ -339,15 +332,25 @@ async fn fetch_pack(app: &AppHandle, job: &Job, slug: &str, review: bool, reuse:
             job.emit_eta(app, pct, &format!("Скачиваем сборку… {}", fmt_bytes(done, total)), eta);
         }
     };
-    download_checked_progress(
-        &url,
-        &archive,
-        Some(Sum::Sha512(&sha512)),
-        if size > 0 { Some(size) } else { None },
-        Some(job.cancel_flag()),
-        &report,
-    )
-    .await?;
+    // The roads above may have run for long enough to outlive the address: it is checked here, and
+    // one refusal of the storage gets a new address and a second try.
+    let url = link.current().await;
+    let expected = if size > 0 { Some(size) } else { None };
+    let mut fetched = download_checked_progress(&url, &archive, Some(Sum::Sha512(&sha512)), expected, Some(job.cancel_flag()), &report).await;
+    if matches!(&fetched, Err(e) if storage_refused(e)) && link.renewable() {
+        let fresh = link.renew(&url).await?;
+        eprintln!("[pack] «{}»: хранилище не приняло адрес архива, скачиваем по новому", slug);
+        fetched = download_checked_progress(&fresh, &archive, Some(Sum::Sha512(&sha512)), expected, Some(job.cancel_flag()), &report).await;
+    }
+    fetched
+        .map_err(|e| if storage_refused(&e) { STORAGE_REFUSED_TEXT.to_string() } else { without_signature(&e) })
+        .map_err(|e| {
+            if idx_staging.is_dir() {
+                format!("{}. Уже скачанные файлы сохранены — следующая попытка продолжит загрузку", e)
+            } else {
+                e
+            }
+        })?;
     job.check()?;
 
     job.emit(app, 70.0, "Распаковываем…");
@@ -1051,6 +1054,11 @@ mod tests {
         let server_only = serde_json::json!({ "files": [{ "id": "abc1234567", "side": "server" }] });
         assert!(client_file(&server_only).is_err(), "серверную половину нельзя ставить как клиент");
         assert!(client_file(&serde_json::json!({ "files": [] })).is_err(), "пустой список файлов — не установка");
+        let mixed = serde_json::json!({ "version": "2.1.3", "files": [
+            { "id": "old", "side": "client", "version": "2.1.2" },
+            { "id": "new", "side": "client", "version": "2.1.3" }
+        ] });
+        assert_eq!(client_file(&mixed).unwrap().0, "new", "the published version wins over API ordering");
     }
 
     /// error -> what the player reads. Before the switch the installed version

@@ -225,7 +225,7 @@ pub async fn ensure_custom_skin_loader(
     if !present {
         match absent_action(
             skin_mod_on(profile),
-            mods.join(CSL_DISABLED).exists(),
+            mods.join(CSL_DISABLED).exists() || disabled_csl_in(&mods),
             profile_settings(profile)["skinModInstalled"].as_bool().unwrap_or(false),
         ) {
             Absent::Install => {}
@@ -293,6 +293,30 @@ fn signed_universal_asset(rel: &Value) -> Option<(String, String)> {
 /// so the bare `CustomSkinLoader.jar` name marks the copy the launcher added.
 fn is_csl(file_name: &str) -> bool {
     file_name.to_lowercase().replace([' ', '-', '_'], "").contains("customskinloader")
+}
+
+/// A CustomSkinLoader the player switched off, whatever its file name. Only the
+/// launcher's own name used to count: a pack's `CustomSkinLoader_Forge-14.x.jar`
+/// switched off in the launcher was read as «no skin mod» and the launcher put
+/// its own copy in on the next launch (11.11.2026, «I can't remove it»).
+fn disabled_csl_in(mods: &std::path::Path) -> bool {
+    let Ok(rd) = std::fs::read_dir(mods) else { return false };
+    rd.flatten().any(|e| {
+        let name = e.file_name().to_string_lossy().to_lowercase();
+        name.ends_with(".jar.disabled") && is_csl(&name)
+    })
+}
+
+/// Any CustomSkinLoader jar the player deletes, the pack's own copy included.
+pub fn is_custom_skin_loader_jar(file: &str) -> bool {
+    file.to_lowercase().ends_with(".jar") && is_csl(file)
+}
+
+/// The player deleted a CustomSkinLoader that is not the launcher's copy: the
+/// launcher must not put its own in instead. The Millida mod is not touched;
+/// only removing the launcher's own jar says no to it (`note_skin_mod_removed`).
+pub fn note_csl_removed(profile: &str) {
+    opt_out(profile, b"removed");
 }
 
 fn skin_owning_mod(mods: &std::path::Path) -> Option<String> {
@@ -468,6 +492,23 @@ pub fn in_game_skin_blocker(loader: &str, online: bool, want_skin: bool) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A pack's own CustomSkinLoader switched off or deleted by the player is a
+    /// «no» like the launcher's copy, whatever the file is called.
+    #[test]
+    fn any_custom_skin_loader_the_player_turned_off_counts() {
+        let dir = std::env::temp_dir().join(format!("millida-csl-off-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!disabled_csl_in(&dir));
+        std::fs::write(dir.join("CustomSkinLoader_Forge-14.20.jar.disabled"), b"x").unwrap();
+        assert!(disabled_csl_in(&dir), "выключенная копия сборки — отказ игрока");
+        assert!(is_custom_skin_loader_jar("CustomSkinLoader_Forge-14.20.jar"));
+        assert!(is_custom_skin_loader_jar("customskinloader-fabric-15.0.jar"));
+        assert!(!is_custom_skin_loader_jar("sodium-0.6.jar"));
+        assert!(!is_custom_skin_loader_jar("CustomSkinLoader_Forge-14.20.jar.disabled"), "выключенный файл удалением не считается");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn names(list: &[Value]) -> Vec<String> {
         list.iter().map(|s| s["name"].as_str().unwrap_or("").to_string()).collect()

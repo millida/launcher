@@ -130,7 +130,7 @@ async fn install_catalog_file_job(
         let zip = tmp_dir.join(format!("millida-world-{}.zip", slug));
         let work = tmp_dir.join(format!("millida-world-{}", slug));
         let _temp = TempPaths(vec![zip.clone(), work.clone()]);
-        download_checked_cancellable(&url, &zip, sum, size, Some(job.cancel_flag())).await?;
+        download_checked_cancellable(&url, &zip, sum, size, Some(job.cancel_flag())).await.map_err(|e| without_signature(&e))?;
         job.check()?;
         job.emit(app, 75.0, "Переносим мир…");
         let saves = profile_dir(profile).join("saves");
@@ -140,7 +140,7 @@ async fn install_catalog_file_job(
         let dir = profile_dir(profile).join(content_dir(kind));
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let dest = safe_child(&dir, &fname)?;
-        download_checked_cancellable(&url, &dest, sum, size, Some(job.cancel_flag())).await?;
+        download_checked_cancellable(&url, &dest, sum, size, Some(job.cancel_flag())).await.map_err(|e| without_signature(&e))?;
         (fname.clone(), std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0))
     };
 

@@ -4,6 +4,7 @@
 // checked against the hash the server recorded when the pack was uploaded. There is no second pass over the archive.
 // Anything this road cannot do (no hashes in the index, one huge file, a refusal) hands the install back to the whole-archive road.
 use super::pack_delta::{self, DeltaEntry, DeltaIndex};
+use super::pack_link::PackLink;
 use super::pack_stream::{Extractor, Failure, Finished, Spec};
 use crate::engine::*;
 use std::collections::HashSet;
@@ -21,6 +22,9 @@ const MAX_GROUPS: usize = 4000;
 /// A download of this size or more that is mostly one group would run on a single connection; the archive road uses four.
 const SINGLE_STREAM_BYTES: u64 = 256 << 20;
 const TRIES: u32 = 3;
+/// New addresses one range may ask for after the storage refused the old one (pack_link). More
+/// refusals than that are not an expired signature, and the range gives up like any failed one.
+const RENEWALS: u32 = 2;
 /// The body of a range goes quiet for this long: the connection is cut and the range asked again.
 const CHUNK_STALL: Duration = Duration::from_secs(20);
 const CHUNKS_IN_FLIGHT: usize = 8;
@@ -32,7 +36,7 @@ const BAR_SPAN: f32 = 74.0;
 
 pub(crate) struct IndexSource<'a> {
     pub(crate) file_id: &'a str,
-    pub(crate) url: &'a str,
+    pub(crate) link: &'a PackLink,
     pub(crate) archive_size: u64,
     /// Names the archive version: leftovers of another version are never reused.
     pub(crate) archive_id: &'a str,
@@ -237,7 +241,7 @@ struct Member {
 type Arrived = Arc<Mutex<Vec<(usize, Option<String>)>>>;
 
 struct Ctx<'a> {
-    url: &'a str,
+    link: &'a PackLink,
     archive_size: u64,
     job: &'a Job,
     say: &'a Say<'a>,
@@ -281,6 +285,8 @@ enum Step {
     Done,
     Paused,
     Retry(String),
+    /// The storage refused this signed address (403): a new one is asked and the range tried again.
+    Refused(String),
     Fatal(GroupErr),
 }
 
@@ -299,7 +305,8 @@ async fn fetch_range(ctx: &Ctx<'_>, members: &[&Member]) -> Step {
     let (Some(first), Some(last)) = (members.first(), members.last()) else { return Step::Done };
     let (from, to) = (first.spec.offset, last.spec.end);
     let cancel = Some(ctx.job.cancel_flag());
-    let req = client().get(ctx.url).header(reqwest::header::RANGE, format!("bytes={}-{}", from, to - 1));
+    let url = ctx.link.current().await;
+    let req = client().get(&url).header(reqwest::header::RANGE, format!("bytes={}-{}", from, to - 1));
     let mut resp = match or_pause(tokio::time::timeout(CHUNK_STALL, req.send()), cancel).await {
         Err(e) if e == PAUSED => return Step::Paused,
         Err(_) => return Step::Fatal(GroupErr::Cancelled),
@@ -321,6 +328,10 @@ async fn fetch_range(ctx: &Ctx<'_>, members: &[&Member]) -> Step {
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
             pressure();
             return Step::Retry(format!("storage answered {}", status));
+        }
+        // An expired signature, not bad data: the files already written stay (11.11.2026, Arcania).
+        if status == reqwest::StatusCode::FORBIDDEN && ctx.link.renewable() {
+            return Step::Refused(url);
         }
         return Step::Fatal(GroupErr::Data(format!("storage answered {} instead of a range", status)));
     }
@@ -408,6 +419,7 @@ async fn fetch_range(ctx: &Ctx<'_>, members: &[&Member]) -> Step {
 async fn run_group(ctx: &Ctx<'_>, members: &[Member], pace: &Arc<Pace>) -> Result<(), GroupErr> {
     let mut place = Some(pace.enter().await);
     let mut tries = 0u32;
+    let mut renewals = 0u32;
     loop {
         if ctx.job.cancelled() {
             return Err(GroupErr::Cancelled);
@@ -429,6 +441,17 @@ async fn run_group(ctx: &Ctx<'_>, members: &[Member], pace: &Arc<Pace>) -> Resul
                 ctx.job.cancel_flag().gate().await.map_err(|_| GroupErr::Cancelled)?;
             }
             Step::Fatal(e) => return Err(e),
+            Step::Refused(used) => {
+                renewals += 1;
+                let renewed = if renewals > RENEWALS { Err("storage keeps refusing new addresses".to_string()) } else { ctx.link.renew(&used).await };
+                if let Err(why) = renewed {
+                    if let Some(p) = place.take() {
+                        p.bad();
+                    }
+                    // Network, not Data: what came stays for the next try.
+                    return Err(GroupErr::Network(format!("storage refused the address ({})", why)));
+                }
+            }
             Step::Retry(why) => {
                 // an attempt that finished some files is not a failed attempt: the range moved on
                 let moved = members.iter().filter(|m| !ctx.done[m.entry].load(Ordering::SeqCst)).count() < left.len();
@@ -520,7 +543,7 @@ pub(crate) async fn install_with_index(
     }
 
     let ctx = Ctx {
-        url: s.url,
+        link: s.link,
         archive_size: s.archive_size,
         job,
         say,
@@ -706,8 +729,8 @@ mod tests {
         let index = Arc::new(index_of(bytes));
         let job = Job::start(format!("test-pack-install-{name}"), name).unwrap();
         let (staging, marker) = (dir.join("pack.idx"), dir.join("pack.idx-id"));
-        let url = format!("http://{}/pack.zip", server.addr);
-        let src = IndexSource { file_id: "f", url: &url, archive_size: bytes.len() as u64, archive_id: "v1", staging: &staging, marker: &marker };
+        let link = PackLink::fixed(&format!("http://{}/pack.zip", server.addr));
+        let src = IndexSource { file_id: "f", link: &link, archive_size: bytes.len() as u64, archive_id: "v1", staging: &staging, marker: &marker };
         let res = install_with_index(&job, &quiet, src, index, store, allow_any).await;
         (res, staging, server)
     }
@@ -810,8 +833,8 @@ mod tests {
             let (index, bytes_len, staging, marker, store) = (Arc::new(index_of(&bytes)), bytes.len() as u64, staging.clone(), marker.clone(), StoreIndex::open_at(scratch(store)));
             async move {
                 let job = Job::start(format!("test-pack-interrupted-{}", addr.port()), "interrupted").unwrap();
-                let url = format!("http://{addr}/pack.zip");
-                let src = IndexSource { file_id: "f", url: &url, archive_size: bytes_len, archive_id: "v1", staging: &staging, marker: &marker };
+                let link = PackLink::fixed(&format!("http://{addr}/pack.zip"));
+                let src = IndexSource { file_id: "f", link: &link, archive_size: bytes_len, archive_id: "v1", staging: &staging, marker: &marker };
                 install_with_index(&job, &quiet, src, index, store, allow_any).await
             }
         };
@@ -889,7 +912,8 @@ mod tests {
         let dir = scratch("nohash");
         let job = Job::start("test-pack-install-nohash", "t").unwrap();
         let (staging, marker) = (dir.join("s"), dir.join("m"));
-        let src = IndexSource { file_id: "f", url: "http://127.0.0.1:1/x", archive_size: bytes.len() as u64, archive_id: "v1", staging: &staging, marker: &marker };
+        let link = PackLink::fixed("http://127.0.0.1:1/x");
+        let src = IndexSource { file_id: "f", link: &link, archive_size: bytes.len() as u64, archive_id: "v1", staging: &staging, marker: &marker };
         let res = install_with_index(&job, &quiet, src, index, StoreIndex::open_at(scratch("nohash-store")), allow_any).await;
         assert!(matches!(res, Err(IndexError::Unavailable(_))), "{res:?}");
         assert!(!staging.exists(), "nothing is created before the index is accepted");

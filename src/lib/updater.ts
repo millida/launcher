@@ -126,11 +126,15 @@ function checkWorked(via: 'plugin' | 'core', ms: number, found: boolean, critica
   track('perf', { what: 'update_check', where: via, found, ...(critical ? { critical: true } : {}) }, { durationMs: Math.round(ms), ok: true })
 }
 
+/// The plugin sets no request timeout of its own, so a connection that stalls after the handshake
+/// kept the check (and the Settings "Check" spinner) waiting forever.
+const PLUGIN_CHECK_TIMEOUT_MS = 20_000
+
 /// The plugin's check, timed. A failure is left for the caller to report with its own step name.
 async function timedCheck(): Promise<Update | null> {
   const t0 = performance.now()
   try {
-    const upd = await check()
+    const upd = await check({ timeout: PLUGIN_CHECK_TIMEOUT_MS })
     lastCheckMs = Math.round(performance.now() - t0)
     checkWorked('plugin', lastCheckMs, !!upd, !!upd && isCriticalRelease(upd.rawJson))
     return upd
@@ -748,27 +752,46 @@ export async function applyUpdate(): Promise<void> {
   }
 }
 
+/// The core's own check retries every manifest and can take minutes on a bad network: the button
+/// pressed by hand answers within this limit, and the check finishes quietly in the background.
+const MANUAL_CHECK_LIMIT_MS = 45_000
+
 export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
+  if (!loud) return runCheck(() => false)
+  let late = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const limit = new Promise<'late'>((res) => {
+    timer = setTimeout(() => res('late'), MANUAL_CHECK_LIMIT_MS)
+  })
+  const res = await Promise.race([runCheck(() => !late), limit])
+  clearTimeout(timer)
+  if (res !== 'late') return res
+  late = true
+  showToast(t('Сервер не ответил вовремя — повтори попытку'), 'error')
+  return pending
+}
+
+async function runCheck(loud: () => boolean): Promise<UpdateInfo | null> {
   if (!updatesAllowed()) {
-    if (loud) showToast(hasTauri() ? t('В дев-запуске обновления отключены') : t('Обновления доступны в приложении лаунчера'), 'error')
+    if (loud()) showToast(hasTauri() ? t('В дев-запуске обновления отключены') : t('Обновления доступны в приложении лаунчера'), 'error')
     return null
   }
   if (await updatesManagedOutside()) {
     const f = await noticeManagedUpdate()
-    if (f && loud) showManagedUpdateHint()
-    else if (loud) showToast(t('Установлена последняя версия'))
+    if (f && loud()) showManagedUpdateHint()
+    else if (loud()) showToast(t('Установлена последняя версия'))
     return f ? pending : null
   }
   try {
     if (await pluginGaveUp()) {
       const f = await probeFallback()
-      if (!f && loud) showToast(t('Установлена последняя версия'))
+      if (!f && loud()) showToast(t('Установлена последняя версия'))
       return pending
     }
     const upd = await timedCheck()
     if (!upd) {
       const f = await probeFallback()
-      if (!f && loud) showToast(t('Установлена последняя версия'))
+      if (!f && loud()) showToast(t('Установлена последняя версия'))
       return f ? pending : null
     }
     if (!current || current.version !== upd.version) remember(upd)
@@ -782,7 +805,7 @@ export async function checkForUpdate(loud = false): Promise<UpdateInfo | null> {
     updateFailed('updater', e)
     const f = await probeFallback()
     if (f) return pending
-    if (loud) showToast(t('Не удалось проверить обновления: {error}', { error: tx(e) }), 'error')
+    if (loud()) showToast(t('Не удалось проверить обновления: {error}', { error: tx(e) }), 'error')
     return null
   }
 }

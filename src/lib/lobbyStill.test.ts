@@ -46,3 +46,18 @@ describe('readLobbyStill', () => {
     expect(deleted).toEqual(['lobby-still:v1:guest'])
   })
 })
+
+describe('dropLobbyStill', () => {
+  test('a changed look deletes the still of the old one', async () => {
+    const { dropLobbyStill } = await import('./lobbyStill')
+    deleted.length = 0
+    await dropLobbyStill()
+    expect(deleted).toEqual(['lobby-still:v2:guest'])
+  })
+
+  test('the event name is the one the wardrobe sends', async () => {
+    const { STILL_LOOK_EVENT } = await import('./lobbyStill')
+    const { LOOK_EVENT } = await import('./gameProfile')
+    expect(STILL_LOOK_EVENT).toBe(LOOK_EVENT)
+  })
+})

@@ -202,7 +202,18 @@ export function NewBuildModal() {
                 : showToast(t('Шаблон применён: {n} файлов', { n: r.installed.length }), 'ok'),
             )
             .catch((e) => showToast(apiErrorText(e, t('Не удалось применить шаблон')), 'error'))
-        if (withFps) await setFpsBoost(p.name, true, false, await hardwareVideo()).catch((e) => console.error('[new-build] fps', e))
+        if (withFps)
+          await setFpsBoost(p.name, true, false, await hardwareVideo())
+            .then((st) => {
+              if (st.skipped.length)
+                showToast(
+                  t('Буст FPS включён: {n} мод(ов), профиль JVM и лёгкая графика. Без сборки под эту версию: {list}', { n: st.mods.length, list: st.skipped.join(', ') }),
+                )
+            })
+            .catch((e) => {
+              trackFailure('build_create', e, { step: 'fps', mc: ver, loader })
+              showToast(t('Не удалось переключить буст FPS: {error}', { error: tx(e) }), 'error')
+            })
         if (horizon && horizonSt?.available)
           await setHorizon(p.name, true).catch((e) => showToast(apiErrorText(e, t('Не удалось сохранить настройку')), 'error'))
         await useProfiles.getState().refresh()

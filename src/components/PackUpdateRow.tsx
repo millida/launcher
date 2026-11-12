@@ -75,13 +75,19 @@ export function PackUpdateRow({ profile, onUpdated }: { profile: string; onUpdat
   }
 
   const start = async (u: PackUpdate) => {
-    const edited = await packAutoUpdate(profile).then(
-      (s) => s.modified,
-      () => true,
+    const changes = await packAutoUpdate(profile).then(
+      (s) => ({ edited: s.modified, removed: s.removedMods, added: s.addedMods }),
+      () => ({ edited: true, removed: [] as string[], added: [] as string[] }),
     )
+    const removed = changes.removed
+    const added = changes.added
+    const shortList = (files: string[]) => files.slice(0, 3).join(', ') + (files.length > 3 ? ` (+${files.length - 3})` : '')
     const ok = await uiConfirm(
       t('Поставим версию {version} рядом со старой и перенесём миры, скриншоты и настройки игры. Старая версия удалится, только когда новая встанет на место.', { version: u.to }) +
-        (edited ? ' ' + t('Моды придут в версии автора: добавленные тобой моды не перенесутся.') : ''),
+        ' ' + t('Папка модов заменится набором автора. При совпадении модов останется версия автора.') +
+        (removed.length ? ' ' + t('Удалённые тобой моды будут скачаны снова: {mods}.', { mods: shortList(removed) }) : '') +
+        (added.length ? ' ' + t('Добавленные тобой моды будут удалены: {mods}.', { mods: shortList(added) }) : '') +
+        (changes.edited && !removed.length && !added.length ? ' ' + t('Моды придут в версии автора: добавленные тобой моды не перенесутся.') : ''),
       { title: t('Обновить «{name}»?', { name: profile }), confirmLabel: t('Обновить'), danger: false },
     )
     if (ok) run(u)

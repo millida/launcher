@@ -143,6 +143,7 @@ export function Plus({ on }: { on: boolean }) {
   const [hold, setHold] = useState(false)
   const busy = useDaily((s) => s.busy)
   const pay = useDaily((s) => s.pay)
+  const stripeOffered = useDaily((s) => !!s.plus?.checkoutOptions?.includes('stripe'))
   useAccounts()
   const acc = getAccount()
   const gameName = useGameNick((s) => s.name)
@@ -614,6 +615,16 @@ export function Plus({ on }: { on: boolean }) {
                   {waiting ? t('Открыть оплату') : t('Оформить')}
                 </button>
               )}
+              {!active && stripeOffered ? (
+                <button
+                  className="btn sm ghost"
+                  disabled={busy === 'plus'}
+                  data-track={'plus_subscribe_stripe_' + tier.toLowerCase()}
+                  onClick={() => void useDaily.getState().startPlus(tier, 'stripe')}
+                >
+                  {t('Зарубежной картой')}
+                </button>
+              ) : null}
             </div>
           ))}
           <div className="lp-buy-card">

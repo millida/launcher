@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import { horizonState, horizonStateFor, setHorizon } from '../../ipc/commands'
 import type { HorizonState } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
@@ -8,11 +9,32 @@ import { showToast } from '../../state/ui'
 import { tx, useT } from '../../i18n'
 import '../../styles/pixel/horizon.css'
 
-function HorizonRow({ st, on, busy, onFlip, className }: { st: HorizonState; on: boolean; busy: boolean; onFlip: () => void; className: string }) {
+type RowProps = { st: HorizonState; on: boolean; busy: boolean; onFlip: () => void; className: string; wholeRow?: boolean }
+
+function HorizonRow({ st, on, busy, onFlip, className, wholeRow = false }: RowProps) {
   const t = useT()
   const usable = st.available || on
+  const flip = () => usable && !busy && onFlip()
+  const switchProps = {
+    role: 'switch',
+    'aria-checked': on,
+    'aria-disabled': !usable || busy,
+    'aria-label': t('Horizon (бета)'),
+  } as const
+  const rowSwitch = wholeRow
+    ? {
+        ...switchProps,
+        tabIndex: usable ? 0 : -1,
+        onClick: flip,
+        onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+          if (e.key !== ' ' && e.key !== 'Enter') return
+          e.preventDefault()
+          flip()
+        },
+      }
+    : {}
   return (
-    <div className={className + ' hz-row' + (usable ? '' : ' off')}>
+    <div className={className + ' hz-row' + (usable ? '' : ' off') + (on ? ' on' : '')} {...rowSwitch}>
       <span className="lab hz-lab">
         <span className="hz-title">
           <b>Horizon</b>
@@ -20,14 +42,11 @@ function HorizonRow({ st, on, busy, onFlip, className }: { st: HorizonState; on:
         </span>
         <small>{st.available ? t('Без модов · нужен Vulkan') : st.reason ? tx(st.reason) : ''}</small>
       </span>
-      <span
-        className={'tgl' + (on ? ' on' : '')}
-        role="switch"
-        aria-checked={on}
-        aria-disabled={!usable || busy}
-        aria-label={t('Horizon (бета)')}
-        onClick={() => usable && !busy && onFlip()}
-      />
+      {wholeRow ? (
+        <span className={'tgl' + (on ? ' on' : '')} aria-hidden="true" />
+      ) : (
+        <span className={'tgl' + (on ? ' on' : '')} {...switchProps} onClick={flip} />
+      )}
     </div>
   )
 }
@@ -51,7 +70,7 @@ export function useHorizonFor(version: string, loader: string, open: boolean) {
 }
 
 export function HorizonNewBuildRow({ st, on, onChange }: { st: HorizonState; on: boolean; onChange: (on: boolean) => void }) {
-  return <HorizonRow st={st} on={on && st.available} busy={false} onFlip={() => onChange(!on)} className="hz-new" />
+  return <HorizonRow st={st} on={on && st.available} busy={false} onFlip={() => onChange(!on)} className="hz-new" wholeRow />
 }
 
 /** Build settings: the switch is the build's own setting in the core. */

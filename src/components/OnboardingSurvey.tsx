@@ -82,9 +82,9 @@ export function OnboardingSurvey() {
         </div>
       ))}
       <div className="set-row">
-        <span className="lab">{t('Делиться анонимной статистикой')}</span>
+        <span className="lab">{t('Статистика использования')}</span>
         <Toggle
-          label={t('Делиться анонимной статистикой')}
+          label={t('Статистика использования')}
           on={stats}
           onChange={() => {
             const next = !stats

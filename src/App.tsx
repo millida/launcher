@@ -67,6 +67,7 @@ import {
   ServerDetail,
   Tour,
   LobbyKeeper,
+  McNewsModal,
 } from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
@@ -239,7 +240,6 @@ import { initUiTracking } from './lib/uiTrack'
 import { initWindowResume, windowReopened } from './lib/windowResume'
 import { initCli } from './lib/cli'
 import { initSessionKick } from './lib/sessionKick'
-import { McNewsModal } from './components/McNews'
 import { initA11y } from './lib/a11y'
 import { initGameInvites } from './lib/gameInvite'
 import { initOverlayLink } from './lib/overlayLink'
@@ -305,7 +305,7 @@ import { pickReplies, replyText } from './lib/bugReplies'
 import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
 import { useSlidingSegs } from './lib/slidingSegs'
-import { beatAfterReconnect, gameSession, heartbeat, launchInProgress, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
+import { adoptRunningGame, beatAfterReconnect, gameSession, heartbeat, launchInProgress, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
 import { friendsPollDelayMs, friendsPollWait, pokeGate, safetyRefresh } from './lib/realtimePace'
 import {
@@ -708,7 +708,7 @@ export function App() {
         void reconcileGameSession().then(() => heartbeat('lobby'))
       }, 10_000)
     })
-    syncRunningGame()
+    void syncRunningGame().then(adoptRunningGame)
     let unlisten: (() => void) | null = null
     const onGameStarted = () => {
       gameStartedAt = Date.now()

@@ -355,7 +355,7 @@ pub(crate) fn jvm_args(i: &ArgsInput<'_>) -> Vec<String> {
     // Same order and for the same reason: auto-tuning goes to the left of the
     // player's own arguments and stays quiet once the boost mode has already
     // placed its GC profile.
-    for (n, a) in tuned_flags_for(i.auto_tune, own.unwrap_or(""), i.boost_on).into_iter().enumerate() {
+    for (n, a) in tuned_flags_for(i.auto_tune, own.unwrap_or(""), i.boost_on, i.ram_mb).into_iter().enumerate() {
         args.insert(1 + n, a);
     }
     // Zero means "let the game decide": passing --width/--height 0 makes

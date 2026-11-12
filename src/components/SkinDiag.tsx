@@ -9,7 +9,7 @@ import { Icon } from './Icon'
 import { apiErrorText } from '../lib/apiError'
 import { tx, useT } from '../i18n'
 
-const HEALTHY = new Set(['ok', 'never_launched', 'vanilla'])
+const HEALTHY = new Set(['ok', 'never_launched', 'vanilla', 'own_mod'])
 
 const mark = (v?: boolean) => (v ? 'ок' : 'нет')
 
@@ -32,8 +32,10 @@ function reportText(r: SkinDiagReport): string {
   const lines = ['=== Скин в игре · проверка ===', 'Ник: ' + r.nick, 'Вердикт: ' + r.verdict + ' — ' + r.text]
   if (r.server) lines.push('Сервер: ' + serverLine(r.server))
   if (r.session) lines.push('Аккаунт: ' + sessionLine(r.session))
+  if (r.owned != null) lines.push('Вещей на аккаунте: ' + r.owned)
   r.builds.forEach((b) => {
     lines.push('- ' + b.build + ' (' + b.mc + ' · ' + b.loader + '): ' + b.text)
+    if (b.ownMod) lines.push('    мод Millida, вход в прошлом запуске: ' + (b.modToken || 'нет данных'))
     b.problems.forEach((p) => lines.push('    ' + p))
   })
   return lines.join('\n')
