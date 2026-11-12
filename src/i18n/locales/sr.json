@@ -704,6 +704,7 @@
   "Открываем…": "Otvaramo…",
   "Открыть лаунчер": "Otvori launcher",
   "Открыть оплату": "Otvori plaćanje",
+  "Зарубежной картой": "Страном картицом",
   "Открыть с PLUS": "Otključaj sa PLUS-om",
   "Открыть страницу": "Otvori stranicu",
   "Открыть чат": "Otvori čat",
@@ -1534,7 +1535,7 @@
   "Тестовые версии": "Test verzije",
   "Экспериментальные экраны": "Eksperimentalni ekrani",
   "Хостинг — новый вид с сайта": "Hosting — novi izgled sa sajta",
-  "Раньше всех, бывают поломки": "Pre svih, mogući su kvarovi",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher i Millida mod pre svih, mogući su kvarovi",
   "Запускать вместе с системой": "Pokreći zajedno sa sistemom",
   "Запускать вместе с системой?": "Pokretati zajedno sa sistemom?",
   "Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.": "Launcher će čekati u trayu i podsetiti na kovčeg i niz. Isključuje se u Podešavanjima.",
@@ -6527,5 +6528,13 @@
   "ЧАЭС": "Černobiljska elektrana",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Preko Millida Launcher-a: pronađi \"Abonent\" i unesi ključ sa svog naloga.",
   "Шахматы": "Šah",
-  "Шашки": "Dama"
+  "Шашки": "Dama",
+  "Есть промокод?": "Imaš promo kod?",
+  "Убрать промокод": "Ukloni promo kod",
+  "Промокод не подходит": "Ovaj promo kod se ne primenjuje",
+  "не запускается с NeoForge 26.3.0.65 и новее": "ne pokreće se sa NeoForge 26.3.0.65 i novijim",
+  "Убрали {0}: {1}": "Uklonjeno {0}: {1}",
+  "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, ali fajl nije mogao da se ukloni: {2}",
+  "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium ne radi sa ovom verzijom NeoForge-a (26.3.0.65 i novije): igra pada pri pokretanju. Isključi Sodium dugmetom ispod — bez njega će se modpak pokrenuti.",
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS boost je iz modpaka uklonio mod sa kojim igra ne može da se pokrene: {0}"
 }

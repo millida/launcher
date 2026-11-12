@@ -2720,6 +2720,7 @@
   "Открыть мод": "Mod öffnen",
   "Открыть моды": "Mods öffnen",
   "Открыть оплату": "Zahlung öffnen",
+  "Зарубежной картой": "Mit ausländischer Karte",
   "Открыть папку": "Ordner öffnen",
   "Открыть папку с музыкой": "Musikordner öffnen",
   "Открыть папку сборки": "Modpack-Ordner öffnen",
@@ -3328,7 +3329,7 @@
   "Разовая награда": "Einmalige Belohnung",
   "Разреши доступ к микрофону в системе: Windows — Параметры → Конфиденциальность → Микрофон, macOS — Системные настройки → Конфиденциальность → Микрофон.": "Erlauben Sie den Mikrofonzugriff in Ihrem System: Unter Windows gehen Sie zu Einstellungen → Datenschutz → Mikrofon, unter macOS zu Systemeinstellungen → Datenschutz → Mikrofon.",
   "Раньше": "Früher",
-  "Раньше всех, бывают поломки": "Frühester Zugang, Dinge können kaputtgehen",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher und Millida-Mod als Erste, Dinge können kaputtgehen",
   "Распаковано": "Entpackt",
   "Распаковать": "Entpacken",
   "Распаковать «{name}» в текущую папку?": "„{name}“ in den aktuellen Ordner entpacken?",
@@ -6527,5 +6528,13 @@
   "ЧАЭС": "Kraftwerk Tschernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Über den Millida Launcher: Suchen Sie \"Abonent\" und geben Sie den Schlüssel aus Ihrem Konto ein.",
   "Шахматы": "Schach",
-  "Шашки": "Dame"
+  "Шашки": "Dame",
+  "Есть промокод?": "Haben Sie einen Promo-Code?",
+  "Убрать промокод": "Promo-Code entfernen",
+  "Промокод не подходит": "Dieser Promo-Code gilt nicht",
+  "не запускается с NeoForge 26.3.0.65 и новее": "startet nicht mit NeoForge 26.3.0.65 und neuer",
+  "Убрали {0}: {1}": "{0} entfernt: {1}",
+  "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, aber die Datei ließ sich nicht entfernen: {2}",
+  "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium funktioniert nicht mit dieser NeoForge-Version (26.3.0.65 und neuer): Das Spiel stürzt beim Start ab. Deaktivieren Sie Sodium mit der Schaltfläche unten — ohne Sodium startet das Modpack.",
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Der FPS-Boost hat einen Mod aus dem Modpack entfernt, mit dem das Spiel nicht startet: {0}"
 }

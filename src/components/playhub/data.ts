@@ -407,7 +407,7 @@ export const OWN_SERVER: {
 }
 
 export { ONEBLOCK_PACK }
-export const ONEBLOCK_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs/oneblock-metalabs/2026-09-27/oneblock-banner.jpg'
+export const ONEBLOCK_BANNER = 'https://cdn.millida.net/t/catalog/launcher-packs/oneblock-metalabs/2026-09-27/oneblock-banner.jpg'
 
 const EXCLUSIVE = new Set<string>([ONEBLOCK_PACK, OWN_SERVER.mode, ANARCHY.mode])
 export const isExclusive = (key: string | null | undefined): boolean => !!key && EXCLUSIVE.has(key)

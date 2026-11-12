@@ -47,6 +47,7 @@ pub(crate) use ids::*;
 pub use jobs::*;
 pub(crate) use proc::*;
 pub use selfupdate::*;
+pub(crate) use selfupdate::beta_channel;
 pub use selfdelta::{clean_leftovers, wait_for_parent};
 pub(crate) use selfdelta::sha256_file;
 pub use silentupdate::{busy_now, install_staged_quietly, start_install, tray_install_due, tray_should_watch, Quiet, StartFacts, waiting_tries, TRAY_LOOK};

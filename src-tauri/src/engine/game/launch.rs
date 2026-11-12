@@ -650,6 +650,15 @@ const API_MISMATCH_GAME_REASON: &str =
 
 const API_MISMATCH_LIBRARY_REASON: &str = "Один из модов зовёт код другого мода или библиотеки, которого нет в установленной версии: версии модов не сходятся между собой. Обнови мод из конца лога вместе с модами, от которых он зависит, или убери его.";
 
+const SODIUM_NEOFORGE_REASON: &str =
+    "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.";
+
+/// Every Sodium for 26.3 hooks this NeoForge method, which NeoForge 26.3.0.65
+/// removed; offering another Sodium version only repeats the crash.
+fn sodium_hook_gone_from_neoforge(low: &str) -> bool {
+    low.contains("critical injection failure") && low.contains("extractvisibleblockentities$neoforge")
+}
+
 #[cfg(test)]
 pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
     let v = crash_verdict(&crash_text(game_dir, since));
@@ -722,6 +731,8 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         || low.contains("present in multiple files")
     {
         ("Конфликт модов — есть дубли или несовместимые моды.", "conflict")
+    } else if sodium_hook_gone_from_neoforge(&low) {
+        (SODIUM_NEOFORGE_REASON, "mixin")
     } else if super::crashcause::mixin_failed_fatally(text, &MIXIN_VERDICT_MARKERS) {
         ("Один из модов не подошёл к этой версии игры (ошибка миксина).", "mixin")
     } else if let Some(line) = super::crashcause::fatal_line_with(text, &LINKAGE_MARKERS) {
@@ -2445,6 +2456,23 @@ mod tests {
         let v = crash_verdict(late);
         assert_ne!(v.kind, "gpu", "окно давно открыто — вылет не про него");
         assert!(v.cause.contains("NullPointerException"), "причина достаётся из отчёта: {}", v.cause);
+    }
+
+    /// log -> does the verdict tell the player to turn Sodium off. Every
+    /// Sodium for 26.3 crashes on current NeoForge, so "another version" is no fix.
+    #[test]
+    fn sodium_on_new_neoforge_is_told_to_be_switched_off() {
+        let hook = "org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered\n\
+                    Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Critical injection failure: @Inject annotation on extractVisibleBlockEntities$neoForge could not find any targets matching";
+        let other = "org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered\n\
+                     Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Critical injection failure: @Inject annotation on onRender could not find any targets matching";
+        let cases: [(&str, bool, &str); 2] = [
+            (hook, true, "the NeoForge hook Sodium for 26.3 relies on is gone"),
+            (other, false, "any other mixin failure keeps the general verdict"),
+        ];
+        for (log, want, why) in cases {
+            assert_eq!(crash_verdict(log).reason == SODIUM_NEOFORGE_REASON, want, "{why}");
+        }
     }
 
     /// The line the mod is named on decides whether it is the culprit.

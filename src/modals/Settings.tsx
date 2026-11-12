@@ -38,7 +38,7 @@ import { CloudSync } from '../components/CloudSync'
 import { SharedStore } from '../components/SharedStore'
 import { BackupsFolderRow } from '../components/BackupsFolderRow'
 import { AmbienceRows } from '../components/lobby/AmbienceRows'
-import { openMcNews } from '../components/McNews'
+import { openMcNews } from '../components/mcNewsStore'
 import { A11yRows } from '../components/A11yRows'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
@@ -1183,10 +1183,7 @@ export function Settings({ on }: { on: boolean }) {
               onClick={() => {
                 setUpdBusy(true)
                 void checkForUpdate(true)
-                  .then((u) => {
-                    setUpd(u)
-                    if (!u) showToast(t('Стоит последняя версия'))
-                  })
+                  .then((u) => setUpd(u))
                   .finally(() => setUpdBusy(false))
               }}
             >
@@ -1211,7 +1208,7 @@ export function Settings({ on }: { on: boolean }) {
             {t('Открыть')}
           </button>
         </Row>
-        <Row title={t('Тестовые версии')} hint={beta ? t('Раньше всех, бывают поломки') : undefined} keys="бета тестирование обновления раньше">
+        <Row title={t('Тестовые версии')} hint={t('Лаунчер и мод Millida раньше всех, бывают поломки')} keys="бета тестирование обновления раньше мод">
           <Toggle
             label={t('Тестовые версии')}
             on={beta}

@@ -3650,6 +3650,7 @@
   "Открыть мод": "Otvoriť mod",
   "Открыть моды": "Otvoriť mody",
   "Открыть оплату": "Otvoriť platbu",
+  "Зарубежной картой": "Zahraničnou kartou",
   "Открыть папку": "Otvoriť priečinok",
   "Открыть папку игры": "Otvoriť priečinok hry",
   "Открыть папку с музыкой": "Otvoriť priečinok s hudbou",
@@ -4442,7 +4443,7 @@
   "Рамка выходит за картинку": "Rám presahuje obrázok",
   "Раньше": "Skôr",
   "Раньше было иначе, и мы это не прячем": "Kedysi to bolo inak a neskrývame to",
-  "Раньше всех, бывают поломки": "Najskorší prístup, veci sa môžu pokaziť",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher a mod Millida skôr ako ostatní, veci sa môžu pokaziť",
   "Раскладываем ассеты старой версии…": "Umiestňujem assety pre starú verziu…",
   "Распаковано": "Rozbalené",
   "Распаковать": "Rozbaliť",
@@ -6527,5 +6528,13 @@
   "ЧАЭС": "Elektráreň Černobyľ",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Cez Millida Launcher: nájdi \"Abonent\" a zadaj kľúč zo svojho účtu.",
   "Шахматы": "Šachy",
-  "Шашки": "Dáma"
+  "Шашки": "Dáma",
+  "Есть промокод?": "Máš promo kód?",
+  "Убрать промокод": "Odstrániť promo kód",
+  "Промокод не подходит": "Tento promo kód sa nedá uplatniť",
+  "не запускается с NeoForge 26.3.0.65 и новее": "nespustí sa s NeoForge 26.3.0.65 a novším",
+  "Убрали {0}: {1}": "Odstránené {0}: {1}",
+  "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, ale súbor sa nepodarilo odstrániť: {2}",
+  "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium nefunguje s touto verziou NeoForge (26.3.0.65 a novšie): hra pri štarte spadne. Vypni Sodium tlačidlom nižšie — bez neho sa modpack spustí.",
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Zrýchlenie FPS odstránilo z modpacku mod, s ktorým sa hra nespustí: {0}"
 }
