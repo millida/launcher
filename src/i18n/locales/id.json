@@ -620,6 +620,7 @@
   "Открываем…": "Membuka…",
   "Открыть лаунчер": "Buka launcher",
   "Открыть оплату": "Buka pembayaran",
+  "Зарубежной картой": "Dengan kartu luar negeri",
   "Открыть с PLUS": "Buka dengan PLUS",
   "Открыть страницу": "Buka halaman",
   "Открыть чат": "Buka chat",
@@ -1450,7 +1451,7 @@
   "Тестовые версии": "Versi uji coba",
   "Экспериментальные экраны": "Layar eksperimental",
   "Хостинг — новый вид с сайта": "Hosting — tampilan baru dari situs",
-  "Раньше всех, бывают поломки": "Lebih awal dari semua, bisa ada kerusakan",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher dan mod Millida lebih awal, bisa ada kerusakan",
   "Запускать вместе с системой": "Jalankan bersama sistem",
   "Запускать вместе с системой?": "Jalankan bersama sistem?",
   "Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.": "Launcher akan menunggu di tray dan mengingatkan soal peti dan rentetan. Bisa dimatikan di Pengaturan.",
@@ -6531,5 +6532,8 @@
   "ЧАЭС": "Pembangkit Chernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Lewat Millida Launcher: cari \"Abonent\" dan masukkan key dari akunmu.",
   "Шахматы": "Catur",
-  "Шашки": "Dam"
+  "Шашки": "Dam",
+  "Есть промокод?": "Punya kode promo?",
+  "Убрать промокод": "Hapus kode promo",
+  "Промокод не подходит": "Kode promo ini tidak berlaku"
 }

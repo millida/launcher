@@ -667,7 +667,7 @@ pub(crate) async fn get_json_swr(url: &str, cache: &Path, ttl: Duration) -> Resu
     Ok(copy)
 }
 
-fn refresh_in_background(url: &str, cache: &Path) {
+pub(crate) fn refresh_in_background(url: &str, cache: &Path) {
     {
         let mut busy = REFRESHING.lock().unwrap_or_else(|e| e.into_inner());
         if busy.iter().any(|p| p == cache) {
