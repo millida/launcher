@@ -27,6 +27,7 @@ mock.module('../ipc/commands', () => ({
   loadProfileSettings: async () => null,
   testJava: async () => '',
   tuneProfile: async () => null,
+  autoTuneGlobal: async () => true,
 }))
 
 const { reportError, flushNativeCrashes } = await import('./crash')

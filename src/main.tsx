@@ -74,6 +74,8 @@ if (isOverlay) {
 } else {
   // Премиум-темы PLUS / Diamond: сохранённая рисуется сразу, дальше — по подписке.
   initPremiumTheme()
+  // Новогодняя тема: только тестовая сборка 99.x, пока FESTIVE_IN_PROD = false.
+  void import('./lib/festive').then((m) => m.initFestive())
   // Лёгкий режим по железу — класс на <html> до первого кадра.
   initLiteMode()
   // Окно лаунчера замирает, пока не видно или поверх идёт игра.

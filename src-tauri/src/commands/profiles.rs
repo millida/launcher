@@ -60,6 +60,8 @@ pub fn set_profile_gpu(profile: String, pref: String) -> String {
     let pref = engine::GpuPref::parse(&pref);
     let mut patch = serde_json::Map::new();
     patch.insert("gpu".into(), serde_json::json!(pref.as_str()));
+    // The player chose: the launcher no longer takes the card back by itself.
+    patch.insert(engine::GPU_FALLBACK_KEY.into(), serde_json::Value::Null);
     engine::merge_settings(&profile, patch);
     pref.as_str().to_string()
 }

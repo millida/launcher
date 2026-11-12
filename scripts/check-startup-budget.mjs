@@ -14,6 +14,9 @@ import { gzipSync } from 'node:zlib'
 // Gzip вслед за ним: 314 → 316 КБ (локально Bun 1.2 даёт 312,5 КБ, в CI свежий Bun — на ~1,4 КБ больше).
 // 07.11.2026: +1 КБ на живую обложку и премиум-рамку карточек из каталога (coverVideo, premiumCard):
 // карточки ленты и «Для тебя» рисуются с первого кадра.
+// 11.11.2026: +1 КБ на новогоднюю тему (lib/festive). В старте только её import() (~0,5 КБ в index);
+// модуль, холст снега и стили — ленивые чанки. Остальное — накладные расходы сборщика: общие с ленивым
+// чанком модули (liteMode) он выносит из api в свой стартовый чанк. Было 833,0 КБ, стало 834,1 КБ.
 //
 // Запуск: после `vite build` из корня репозитория: `bun scripts/check-startup-budget.mjs`.
 
@@ -21,7 +24,7 @@ const LIMITS = {
   /** Входной index-*.js, байт. Цель 300 000 (react-dom ≈183 КБ из них). */
   entryJs: 351_000,
   /** Whole startup JS (index + modulepreload), bytes. */
-  startJs: 834_000,
+  startJs: 835_000,
   /** Весь стартовый CSS, байт. */
   startCss: 415_000,
   /** Startup JS in gzip, bytes. Measured with the Bun that CI installs (setup-bun latest): its gzip

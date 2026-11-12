@@ -2,7 +2,8 @@ import { ShotImg } from './LoopShot'
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import type { ItemRef, ShopCard, ShopDay, ShopSource } from '../../lib/rubies'
+import type { ItemRef, Rarity, ShopCard, ShopDay, ShopSource } from '../../lib/rubies'
+import { loadCosmeticCatalog, loadCosmeticOwned, type CosmeticItem } from '../../lib/gameProfile'
 import { focusOf, outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitShotLazy'
 import { shopCards } from './wish'
 import { ItemArt, toneStyle } from './parts'
@@ -212,5 +213,67 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
         </section>
       ) : null}
     </>
+  )
+}
+
+/** Метка подборки в каталоге (`tags`) и её раздел в ленте магазина. */
+export const TREND_TAG = 'TREND'
+
+/**
+ * Карточки подборки из каталога: продаётся только вещь с ценой (цену и ранг
+ * новой подборке задают перед запуском — до тех пор её на витрине нет).
+ * Покупается по базовой цене, источником `wardrobe`: так служба продаёт любую
+ * вещь магазина, а не только витрину дня.
+ */
+export function tagCards(items: CosmeticItem[], tag: string, owned: ReadonlySet<string>): [ShopCard, ShopSource][] {
+  return items
+    .filter((c) => c.tags?.includes(tag) && (c.priceRubies ?? 0) > 0)
+    .map((c) => [
+      {
+        item: { code: c.id, name: c.name, slot: c.slot, rarity: (c.rarity as Rarity | undefined) ?? 'COMMON', preview: c.preview ?? null },
+        price: c.priceRubies!,
+        basePrice: c.priceRubies!,
+        discountPct: 0,
+        owned: owned.has(c.id),
+        leavesAt: '',
+      },
+      'wardrobe',
+    ])
+}
+
+/** «В тренде»: эмоции из трендов одной лентой. Пустой подборки не видно. */
+export function TrendSection({ acts }: { acts: TodayActs }) {
+  const t = useT()
+  const [items, setItems] = useState<CosmeticItem[]>([])
+  const [owned, setOwned] = useState<ReadonlySet<string>>(new Set())
+  useEffect(() => {
+    let alive = true
+    void loadCosmeticCatalog()
+      .then((c) => alive && setItems(c.items.filter((i) => i.tags?.includes(TREND_TAG))))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+  // Купленное перечитывается после каждой покупки: кнопка цены сменяется «Надеть».
+  useEffect(() => {
+    if (acts.busy || !items.length) return
+    let alive = true
+    void loadCosmeticOwned()
+      .then((r) => alive && setOwned(new Set(r.items)))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [acts.busy, items.length])
+  const cards = tagCards(items, TREND_TAG, owned)
+  if (!cards.length) return null
+  return (
+    <section id="shop-trend" className="sv-sec" data-section="trend">
+      <div className="sh-head">
+        <h2>{t('В тренде')}</h2>
+      </div>
+      <CardRail cards={cards} acts={acts} label={t('В тренде')} />
+    </section>
   )
 }

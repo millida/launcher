@@ -313,21 +313,25 @@ fn next_hop(current: &url::Url, location: &str) -> Result<url::Url, String> {
 
 // Version list: try the URLs from MANIFEST_URLS one by one, read at most 64 KB of the answer.
 pub fn fetch_build(client: &Client) -> Result<Build, String> {
+    first_valid_manifest(manifest::MANIFEST_URLS, |url| {
+        let mut body = String::new();
+        fetch(client, url, MAX_MANIFEST_BYTES, true)?
+            .take(MAX_MANIFEST_BYTES)
+            .read_to_string(&mut body)
+            .map_err(|e| format!("не прочитать ответ {}: {}", url, network_error(&e)))?;
+        Ok(body)
+    })
+}
+
+fn first_valid_manifest(urls: &[&str], mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Build, String> {
     let mut failures: Vec<String> = Vec::new();
-    for url in manifest::MANIFEST_URLS {
-        let attempt = fetch(client, url, MAX_MANIFEST_BYTES, true).and_then(|response| {
-            let mut body = String::new();
-            response
-                .take(MAX_MANIFEST_BYTES)
-                .read_to_string(&mut body)
-                .map_err(|e| format!("не прочитать ответ {}: {}", url, network_error(&e)))?;
-            manifest::parse(&body)
-        });
+    for url in urls {
+        let attempt = read(url).and_then(|body| manifest::parse(&body));
         match attempt {
             Ok(build) => return Ok(build),
             // Every reason, not just the last one: the first is usually the
             // real cause and the last one is about the fallback mirror.
-            Err(e) => failures.push(e),
+            Err(e) => failures.push(format!("{}: {}", url.split('?').next().unwrap_or(url), e)),
         }
     }
     Err(if failures.is_empty() { "нет ни одного источника".into() } else { failures.join("; ") })
@@ -349,7 +353,7 @@ pub fn download_verified(
             Err(e) => {
                 // The file failed the signature check or the download is incomplete: delete it.
                 let _ = std::fs::remove_file(dest);
-                failures.push(e);
+                failures.push(format!("{}: {}", url.split('?').next().unwrap_or(url), e));
             }
         }
     }
@@ -591,6 +595,23 @@ pub fn run_installer(file: &Path, cwd: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_failures_continue_to_a_valid_source() {
+        let urls = ["https://github.com/millida/launcher/releases/latest/download/latest.json", "https://launcher-storage.millida.net/v2/install.json", "https://launcher-storage.millida.net/v2/latest.json"];
+        let doc = format!(r#"{{"version":"2.0.300","platforms":{{"{}":{{"url":"https://launcher-storage.millida.net/setup.exe","signature":"c2ln"}}}}}}"#, manifest::PLATFORM_KEY);
+        let mut seen = Vec::new();
+        let build = first_valid_manifest(&urls, |url| {
+            seen.push(url.to_string());
+            if url.contains("github.com") { Err("connection reset".into()) }
+            else if url.contains("install.json") { Err("server answered 403".into()) }
+            else { Ok(doc.clone()) }
+        }).expect("a failed mirror must not block a later valid manifest");
+        assert_eq!(build.version, "2.0.300");
+        assert_eq!(seen.len(), 3);
+        let failed = first_valid_manifest(&urls[..2], |_| Err("server answered 401".into())).unwrap_err();
+        assert!(failed.contains("github.com") && failed.contains("install.json") && failed.contains("401"));
+    }
 
     /// Sabotage check: if next_hop stops checking the host, this is the case
     /// that fails.

@@ -1,5 +1,5 @@
 {
- "rev": 2,
+ "rev": 3,
  "updated": "2026-10-27",
  "source": "Fabulously Optimized INCLUDED-MODS + PERF-research 27.10.2026; pins are Modrinth version ids",
  "never": [
@@ -1788,15 +1788,6 @@
    "loader": "neoforge",
    "game": "26.3",
    "mods": [
-    {
-     "slot": "renderer",
-     "slug": "sodium",
-     "version": "VHtnT9Q4",
-     "number": "mc26.3-0.9.2-neoforge",
-     "sha1": "9015607e5ae2c5b9692ebf05113f9caca6ec41bf",
-     "stable": true,
-     "optifineClash": true
-    },
     {
      "slot": "logic",
      "slug": "lithium",

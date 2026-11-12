@@ -31,6 +31,7 @@ const toasts: string[] = []
 
 mock.module('../ipc/commands', () => ({
   ramCheck: async () => check,
+  autoTuneGlobal: async () => true,
   gfxPresetState: async () => gfx,
   applyGfxPreset: async (profile: string, preset: string) => void applied.push([profile, preset]),
   seedVideoOptions: async () => {},

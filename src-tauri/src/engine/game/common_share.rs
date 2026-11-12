@@ -74,10 +74,15 @@ fn options_into_build(build: &mut Vec<(String, String)>, shared: &[(String, Stri
 }
 
 /// The shared copy keeps keys of every version it has seen, so a 1.12 build
-/// closing does not erase what a 1.21 build set.
-fn options_into_shared(shared: &mut Vec<(String, String)>, build: &[(String, String)]) {
+/// closing does not erase what a 1.21 build set. With `base` (the build's file as
+/// the last sync left it) only the keys the game changed since go back: the rest
+/// may be older than what another build gave the shared copy meanwhile.
+fn options_into_shared(shared: &mut Vec<(String, String)>, build: &[(String, String)], base: Option<&[(String, String)]>) {
     for (k, v) in build {
         if k == "version" {
+            continue;
+        }
+        if base.is_some_and(|b| b.iter().any(|(bk, bv)| bk == k && bv == v)) {
             continue;
         }
         match shared.iter_mut().find(|(sk, _)| sk == k) {
@@ -91,16 +96,41 @@ fn read_opts(path: &Path) -> Option<Options> {
     std::fs::read(path).ok().map(|b| decode_options(&b))
 }
 
+/// The build's options as the last sync left them, next to the build's own file.
+fn options_base(build: &Path) -> PathBuf {
+    build.with_file_name("millida-common-options.txt")
+}
+
 fn sync_options(build: &Path, shared: &Path, into_build: bool) -> Result<(), String> {
-    let (from, to) = if into_build { (shared, build) } else { (build, shared) };
-    let Some(src) = read_opts(from) else { return Ok(()) };
-    let mut dst = read_opts(to).unwrap_or(Options { rows: vec![], bytewise: src.bytewise });
+    let base_path = options_base(build);
+    let base = read_opts(&base_path);
+    let base_rows = base.as_ref().map(|b| b.rows.as_slice());
     if into_build {
+        // A game whose exit the launcher did not see (closed, crashed, restarted while it ran)
+        // never gave its options back, and the next start poured the shared copy over what the
+        // player had changed: «graphics settings are not saved» (11.11.2026). What the game changed
+        // since the last sync goes back first. Not the whole file: a build that was merely newer
+        // than the shared copy put its stale keys over every other build's (13.11.2026).
+        if let (Some(base_rows), Some(own)) = (base_rows, read_opts(build)) {
+            if own.rows != base_rows {
+                let mut dst = read_opts(shared).unwrap_or(Options { rows: vec![], bytewise: own.bytewise });
+                options_into_shared(&mut dst.rows, &own.rows, Some(base_rows));
+                write_bytes_atomic(shared, &encode_options(&dst))?;
+            }
+        }
+        let Some(src) = read_opts(shared) else { return Ok(()) };
+        let mut dst = read_opts(build).unwrap_or(Options { rows: vec![], bytewise: src.bytewise });
         options_into_build(&mut dst.rows, &src.rows);
+        let body = encode_options(&dst);
+        write_bytes_atomic(build, &body)?;
+        write_bytes_atomic(&base_path, &body)
     } else {
-        options_into_shared(&mut dst.rows, &src.rows);
+        let Some(src) = read_opts(build) else { return Ok(()) };
+        let mut dst = read_opts(shared).unwrap_or(Options { rows: vec![], bytewise: src.bytewise });
+        options_into_shared(&mut dst.rows, &src.rows, base_rows);
+        write_bytes_atomic(shared, &encode_options(&dst))?;
+        write_bytes_atomic(&base_path, &encode_options(&src))
     }
-    write_bytes_atomic(to, &encode_options(&dst))
 }
 
 fn mtime(p: &Path) -> Option<std::time::SystemTime> {
@@ -235,6 +265,11 @@ pub fn set_common_share(profile: &str, next: CommonShare) -> Result<CommonShare,
             let theirs = std::fs::read(shared.join(SERVERS)).map(|b| read_servers(&b)).unwrap_or_default();
             write_bytes_atomic(&shared.join(SERVERS), &write_servers(&union_servers(&theirs, &mine)))?;
         }
+        if fresh.options {
+            // A snapshot from an earlier time this build shared: what the player changed while
+            // the switch was off would go back as fresh changes.
+            let _ = std::fs::remove_file(options_base(&build.join(OPTIONS)));
+        }
         let first_out = CommonShare { options: fresh.options && !seeded(OPTIONS), servers: fresh.servers && !seeded(SERVERS), ..fresh };
         sync(profile, first_out, false)?;
         sync(profile, fresh, true)?;
@@ -248,6 +283,39 @@ pub fn set_common_share(profile: &str, next: CommonShare) -> Result<CommonShare,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The game closed while the launcher was not watching: its options were not
+    /// handed back, and the next start must not put the old shared ones over them.
+    /// Only what that game changed goes back: the other keys of the shared copy
+    /// may be newer, set by another build since.
+    #[test]
+    fn a_missed_exit_hands_back_only_what_the_game_changed() {
+        let dir = std::env::temp_dir().join(format!("millida-common-missed-exit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (build, shared) = (dir.join("options.txt"), dir.join("shared-options.txt"));
+        let read = |p: &Path| std::fs::read_to_string(p).unwrap();
+        std::fs::write(&shared, "renderDistance:8\nfov:0.5\n").unwrap();
+        sync_options(&build, &shared, true).unwrap();
+        assert!(read(&build).contains("renderDistance:8"), "the build takes the shared copy");
+        // The game changes the render distance and closes unseen; another build changes fov meanwhile.
+        std::fs::write(&build, "renderDistance:16\nfov:0.5\n").unwrap();
+        std::fs::write(&shared, "renderDistance:8\nfov:0.9\n").unwrap();
+        sync_options(&build, &shared, true).unwrap();
+        assert!(read(&build).contains("renderDistance:16"), "the build keeps what the game wrote last");
+        assert!(read(&shared).contains("renderDistance:16"), "and the shared copy learns it");
+        assert!(read(&shared).contains("fov:0.9") && read(&build).contains("fov:0.9"), "another build's newer fov is not overwritten");
+        // Nothing changed in the game: the shared copy wins whatever the file times say.
+        std::fs::write(&shared, "renderDistance:12\nfov:0.9\n").unwrap();
+        sync_options(&build, &shared, true).unwrap();
+        assert!(read(&build).contains("renderDistance:12"));
+        // A normal exit gives back only the changed keys too.
+        std::fs::write(&build, "renderDistance:12\nfov:0.7\n").unwrap();
+        std::fs::write(&shared, "renderDistance:6\nfov:0.9\n").unwrap();
+        sync_options(&build, &shared, false).unwrap();
+        assert!(read(&shared).contains("fov:0.7") && read(&shared).contains("renderDistance:6"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn rows(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
@@ -275,7 +343,7 @@ mod tests {
     #[test]
     fn the_shared_copy_collects_from_every_build() {
         let mut shared = rows(&[("version", "3955"), ("key_key.jump", "key.keyboard.space"), ("fov", "0.5")]);
-        options_into_shared(&mut shared, &rows(&[("version", "1343"), ("key_key.jump", "57"), ("fov", "0.9")]));
+        options_into_shared(&mut shared, &rows(&[("version", "1343"), ("key_key.jump", "57"), ("fov", "0.9")]), None);
         assert_eq!(get(&shared, "version"), Some("3955"), "version is never copied");
         assert_eq!(get(&shared, "fov"), Some("0.9"), "the last closed build wins");
         assert_eq!(get(&shared, "key_key.jump"), Some("57"), "bindings are kept as written; builds filter them on the way in");

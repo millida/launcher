@@ -5,12 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Millida Launcher</title>
 <script src="/boot.js"></script>
+<script>
+// This runs even when an old WebKit cannot parse the application bundle.
+setTimeout(function () {
+  var boot = document.getElementById('boot');
+  if (!boot || boot.className.indexOf('gone') !== -1) return;
+  var note = document.createElement('p');
+  note.id = 'boot-recovery';
+  note.textContent = 'The launcher could not open. Restart it or download the latest version at millida.net/launcher. / Лаунчер не открылся. Перезапусти его или скачай новую версию на millida.net/launcher.';
+  boot.appendChild(note);
+}, 30000);
+</script>
 <meta name="color-scheme" content="dark">
 <link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <style>
 #boot{position:fixed;top:0;right:0;bottom:0;left:0;z-index:9999;display:grid;place-items:center;background:#161718;transition:opacity .34s ease}
 #boot.gone{opacity:0;pointer-events:none}
 #boot img{width:52px;height:52px;animation:bootPulse 1.8s ease-in-out infinite}
+#boot{flex-direction:column;gap:18px;padding:24px;text-align:center}
+#boot-recovery{max-width:560px;color:#fff;font:16px/1.5 sans-serif}
 @keyframes bootPulse{0%,100%{opacity:.95;transform:scale(1)}50%{opacity:.55;transform:scale(.95)}}
 @media (prefers-reduced-motion: reduce){#boot img{animation:none}}
 </style>

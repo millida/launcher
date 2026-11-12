@@ -4,6 +4,7 @@ import { api } from './api'
 import { hasTauri } from '../ipc/tauri'
 import {
   appVersion,
+  autoTuneGlobal,
   readCrashes,
   clearCrashes,
   defaultJava,
@@ -167,11 +168,12 @@ export interface CrashMeta {
 export async function reportGameCrash(info: CrashInfo, meta: CrashMeta): Promise<void> {
   if (!telemetryEnabled() || !hasTauri() || !info) return
   const name = info.profile || ''
-  const [settings, spec, tuning, release] = await Promise.all([
+  const [settings, spec, tuning, release, autoGlobal] = await Promise.all([
     name ? loadProfileSettings(name).catch(() => null) : Promise.resolve(null),
     machine(),
     name ? tuneProfile(name).catch(() => null) : Promise.resolve(null),
     releaseTag(),
+    autoTuneGlobal().catch(() => true),
   ])
   const hide = (text: string) =>
     maskValues(redactSecrets(text), [
@@ -180,7 +182,7 @@ export async function reportGameCrash(info: CrashInfo, meta: CrashMeta): Promise
     ])
   const pack = (settings?.catalogPackSlug || '').trim()
   const java = await javaFacts(settings)
-  const ram = ramChoice(meta.ramRequestedMb, Number(settings?.ramMb) || 0, settings?.autoTune !== false, tuning?.ramMb ?? null)
+  const ram = ramChoice(meta.ramRequestedMb, Number(settings?.ramMb) || 0, autoGlobal && settings?.autoTune !== false, tuning?.ramMb ?? null)
   const p = meta.profile
   await postScoped('crash', {
     source: 'LAUNCHER',

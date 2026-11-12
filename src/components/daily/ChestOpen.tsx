@@ -17,6 +17,8 @@ import '../../styles/pixel/chestopen.css'
 import { topUpFragments } from '../shop/topUp'
 import { wearNow } from '../../state/wearIntent'
 import { intlTag, useT } from '../../i18n'
+import { loadCosmeticOwned, bumpLook } from '../../lib/gameProfile'
+import { missingGrantedCodes, grantedCodes } from './rewardOwnership'
 
 /*
  * Открытие сундука как в Brawl Stars (жалоба владельца 24.09.2026, 16:48:
@@ -132,6 +134,21 @@ function Opening({ chest, left, onDone, onNext }: { chest: PendingChest; left: n
       const view = viewOf(a.ok)
       setDrops(view.drops)
       setNeed(view.hits)
+      if (grantedCodes(view.drops).length) {
+        void (async () => {
+          // The ownership read may briefly lag the committed chest response.
+          for (let retry = 0; retry < 3; retry++) {
+            if (retry) await new Promise((resolve) => setTimeout(resolve, 1000 * retry))
+            const owned = await loadCosmeticOwned().catch(() => null)
+            if (!owned) return // A failed check says nothing about the grant.
+            const missing = missingGrantedCodes(view.drops, owned.items)
+            if (!missing.length) { bumpLook(); return }
+            if (retry === 2) {
+              showToast(t('Вещь пока не появилась в гардеробе. Напиши в поддержку: сундук {id}, вещь {code}', { id: chest.id, code: missing.join(', ') }), 'error')
+            }
+          }
+        })()
+      }
       return view.drops.map(dropReward)
     })
   }
