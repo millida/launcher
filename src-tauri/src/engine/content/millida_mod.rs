@@ -8,6 +8,8 @@ use std::time::Duration;
 
 // Mod version list on the Millida CDN.
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
+// Mod version list of the testing channel, read only when the player opted into test versions.
+const BETA_MANIFEST_URL: &str = "https://cdn.millida.net/mod/beta.json";
 // Kill switch: mod versions the launcher must not install (crashes).
 const BLOCKED_URL: &str = "https://api.millida.net/v2/launcher/mod/blocked";
 const MOD_BASE: &str = "https://cdn.millida.net/mod";
@@ -95,15 +97,57 @@ enum ManifestSource {
 /// How old the copy of the version list may be before a launch asks the CDN again (in the background).
 const MANIFEST_LAUNCH_TTL: Duration = Duration::from_secs(10 * 60);
 
+/// One release channel of the mod: its list on the CDN and its own copy on disk, so a beta
+/// list never stands in for the stable one after the player leaves the testing channel.
+struct Channel {
+    url: &'static str,
+    copy: &'static str,
+}
+
+const STABLE: Channel = Channel { url: MANIFEST_URL, copy: "millida-mod-variants.json" };
+// Same folder and signing key as the stable list: the testing setting picks a file, never a host.
+const BETA: Channel = Channel { url: BETA_MANIFEST_URL, copy: "millida-mod-variants-beta.json" };
+
 /// Read before every launch of a modded build. Without a copy on disk, a launch
 /// with no network lost the mod the build already had.
 async fn manifest(source: ManifestSource) -> Result<Value, String> {
-    let copy = data_dir().join("millida-mod-variants.json");
+    if !beta_channel() {
+        return channel_manifest(&STABLE, source).await;
+    }
+    let (stable, beta) = futures::future::join(channel_manifest(&STABLE, source), beta_manifest(source)).await;
+    pick_channel(stable, beta)
+}
+
+/// A launch never waits for a beta list it has not seen yet: the build starts on the stable
+/// one and the beta list lands for the next launch.
+async fn beta_manifest(source: ManifestSource) -> Option<Value> {
+    let copy = data_dir().join(BETA.copy);
+    if source == ManifestSource::Launch && !copy.exists() {
+        refresh_in_background(BETA.url, &copy);
+        return None;
+    }
+    channel_manifest(&BETA, source).await.ok()
+}
+
+/// The testing channel takes the beta list only while it is ahead of the stable one. Once a
+/// beta is promoted, or the beta list is missing or broken, testers are on stable like
+/// everyone else.
+fn pick_channel(stable: Result<Value, String>, beta: Option<Value>) -> Result<Value, String> {
+    let Some(beta) = beta else { return stable };
+    let ahead = match &stable {
+        Ok(s) => version_key(beta["version"].as_str().unwrap_or("")) > version_key(s["version"].as_str().unwrap_or("")),
+        Err(_) => true,
+    };
+    if ahead && beta["variants"].is_array() { Ok(beta) } else { stable }
+}
+
+async fn channel_manifest(channel: &Channel, source: ManifestSource) -> Result<Value, String> {
+    let copy = data_dir().join(channel.copy);
     let m = match source {
-        ManifestSource::Fresh => get_json_revalidated(MANIFEST_URL, &copy).await,
+        ManifestSource::Fresh => get_json_revalidated(channel.url, &copy).await,
         // A launch takes the copy it has and lets the newer list land for the next one: a new
         // mod release reaches a build one launch later, and nobody waits for the CDN.
-        ManifestSource::Launch => get_json_swr(MANIFEST_URL, &copy, MANIFEST_LAUNCH_TTL).await,
+        ManifestSource::Launch => get_json_swr(channel.url, &copy, MANIFEST_LAUNCH_TTL).await,
     }
     .map_err(|e| format!("Каталог версий мода недоступен: {}", e))?;
     let seen = data_dir().join("millida-mod-signed");
@@ -1342,6 +1386,37 @@ pub(crate) async fn ensure_millida_mod_with(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// stable list, beta list -> which version the testing channel installs. Leaving the
+    /// channel is covered by `manifest` itself: with the setting off the beta list is not read.
+    #[test]
+    fn the_testing_channel_takes_beta_only_while_it_is_ahead() {
+        type Case<'a> = (Result<Value, String>, Option<Value>, &'a str, &'a str);
+        let list = |v: &str| json!({ "version": v, "variants": [] });
+        let cases: [Case; 7] = [
+            (Ok(list("0.2.47")), Some(list("0.2.48")), "0.2.48", "a newer beta is what testers are there for"),
+            (Ok(list("0.2.48")), Some(list("0.2.48")), "0.2.48", "promoted beta: the same release either way"),
+            (Ok(list("0.2.49")), Some(list("0.2.48")), "0.2.49", "a stable that overtook the beta list must not be held back"),
+            (Ok(list("0.2.9")), Some(list("0.2.10")), "0.2.10", "versions compare as numbers, not as text"),
+            (Ok(list("0.2.47")), None, "0.2.47", "no beta list yet (404, no copy): stable"),
+            (Err("offline".into()), Some(list("0.2.48")), "0.2.48", "stable list unreachable: the beta copy still installs"),
+            (Ok(list("0.2.47")), Some(json!({ "version": "0.3.0" })), "0.2.47", "a beta list without variants is broken, not newer"),
+        ];
+        for (stable, beta, want, why) in cases {
+            let got = pick_channel(stable, beta).ok().map(|m| m["version"].as_str().unwrap_or("").to_string());
+            assert_eq!(got.as_deref(), Some(want), "{why}");
+        }
+    }
+
+    /// Pins the testing channel to the stable list's folder and keeps their copies apart: a
+    /// shared copy would hand the beta jar to a player who has just left the channel.
+    #[test]
+    fn the_beta_list_sits_next_to_the_stable_one_with_its_own_copy() {
+        let folder = |u: &str| u.rsplit_once('/').map(|(h, _)| h.to_string());
+        assert_eq!(folder(BETA.url), folder(STABLE.url), "the beta list must come from the same CDN folder as the stable one");
+        assert_eq!(folder(BETA.url).as_deref(), Some(MOD_BASE), "the beta list must live in the mod folder whose jars it names");
+        assert_ne!(BETA.copy, STABLE.copy, "a shared copy on disk would mix the channels");
+    }
 
     #[test]
     fn repair_brings_back_a_mod_the_player_deleted() {

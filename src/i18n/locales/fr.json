@@ -729,6 +729,7 @@
   "Открываем…": "Ouverture…",
   "Открыть лаунчер": "Ouvrir le launcher",
   "Открыть оплату": "Ouvrir le paiement",
+  "Зарубежной картой": "Par carte étrangère",
   "Открыть с PLUS": "Débloquer avec PLUS",
   "Открыть страницу": "Ouvrir la page",
   "Открыть чат": "Ouvrir le chat",
@@ -1559,7 +1560,7 @@
   "Тестовые версии": "Versions bêta",
   "Экспериментальные экраны": "Écrans expérimentaux",
   "Хостинг — новый вид с сайта": "Hébergement — nouvelle interface du site",
-  "Раньше всех, бывают поломки": "En avant-première, des bugs sont possibles",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher et mod Millida en avant-première, des bugs sont possibles",
   "Запускать вместе с системой": "Lancer au démarrage du système",
   "Запускать вместе с системой?": "Lancer au démarrage du système ?",
   "Лаунчер будет ждать в трее и напомнит о сундуке и серии. Выключается в Настройках.": "Le launcher attendra dans la barre d’état et te rappellera le coffre et ta série. Désactivable dans les Paramètres.",
@@ -6528,5 +6529,8 @@
   "ЧАЭС": "Centrale de Tchernobyl",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "Via Millida Launcher : trouve « Abonent » et saisis la clé de ton compte.",
   "Шахматы": "Échecs",
-  "Шашки": "Dames"
+  "Шашки": "Dames",
+  "Есть промокод?": "Vous avez un code promo ?",
+  "Убрать промокод": "Supprimer le code promo",
+  "Промокод не подходит": "Ce code promo ne s'applique pas"
 }

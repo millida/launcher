@@ -2720,6 +2720,7 @@
   "Открыть мод": "Abrir mod",
   "Открыть моды": "Abrir mods",
   "Открыть оплату": "Abrir pago",
+  "Зарубежной картой": "Con tarjeta extranjera",
   "Открыть папку": "Abrir carpeta",
   "Открыть папку с музыкой": "Abrir carpeta de música",
   "Открыть папку сборки": "Abrir carpeta del modpack",
@@ -3328,7 +3329,7 @@
   "Разовая награда": "Recompensa única",
   "Разреши доступ к микрофону в системе: Windows — Параметры → Конфиденциальность → Микрофон, macOS — Системные настройки → Конфиденциальность → Микрофон.": "Permite el acceso al micrófono en tu sistema: en Windows ve a Configuración → Privacidad → Micrófono, en macOS ve a Ajustes del Sistema → Privacidad → Micrófono.",
   "Раньше": "Antes",
-  "Раньше всех, бывают поломки": "Acceso anticipado, puede que algo falle",
+  "Лаунчер и мод Millida раньше всех, бывают поломки": "Launcher y mod Millida antes que nadie, puede que algo falle",
   "Распаковано": "Extraído",
   "Распаковать": "Extraer",
   "Распаковать «{name}» в текущую папку?": "¿Extraer «{name}» en la carpeta actual?",
@@ -6527,5 +6528,8 @@
   "ЧАЭС": "Planta de Chernóbil",
   "Через лаунчер Millida: найдите «Абонент» и введите ключ из кабинета.": "A través de Millida Launcher: busca \"Abonent\" e introduce la clave de tu cuenta.",
   "Шахматы": "Ajedrez",
-  "Шашки": "Damas"
+  "Шашки": "Damas",
+  "Есть промокод?": "¿Tienes un código promocional?",
+  "Убрать промокод": "Quitar código promocional",
+  "Промокод не подходит": "Este código promocional no aplica"
 }
