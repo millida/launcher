@@ -4,10 +4,10 @@
   "files": [
     {
       "name": "MillidaLauncherSetup.exe",
-      "sha256": "046b8e68ac8a639b95bfd93c65199ec57b037901cdec20b6734fd0e8c2de6241",
+      "sha256": "2c09bf046fad66116614af1dfa535fc9894d4b6038e11adb448c723da0a49429",
       "signed": "authenticode",
       "signer": "Roman Babaskin (Certum)",
-      "built": "вне GitHub, 03.09.2026; замена — подписанный файл из релиза setup-v*"
+      "built": "GitHub Actions, setup-v3 (MillidaLauncherSetup-signed.exe), 13.11.2026"
     },
     {
       "name": "Millida-Launcher-aarch64.dmg",

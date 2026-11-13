@@ -92,7 +92,7 @@ Modrinth, CurseForge и часть сайтов Mojang в России откр�
 
   | Система | Файл с кнопки | Где собран | Кто подписал |
   | --- | --- | --- | --- |
-  | Windows | `MillidaLauncherSetup.exe`, 1,9 МБ, лежит в релизе [setup-signed-1](https://github.com/millida/launcher/releases/tag/setup-signed-1). Лаунчера внутри нет: он скачивает установщик текущей версии — те же байты, что в релизе здесь | вне GitHub, 03.09.2026 | сертификат Certum, Roman Babaskin |
+  | Windows | `MillidaLauncherSetup.exe`, 1,9 МБ, лежит в релизе [setup-signed-2](https://github.com/millida/launcher/releases/tag/setup-signed-2). Лаунчера внутри нет: он скачивает установщик текущей версии — те же байты, что в релизе здесь | здесь, [setup-v3](https://github.com/millida/launcher/releases/tag/setup-v3), 13.11.2026 | сертификат Certum, Roman Babaskin |
   | macOS | `Millida-Launcher-aarch64.dmg`, `Millida-Launcher-x64.dmg`. Дальше лаунчер обновляется сборками из Releases | вне GitHub, 10.09.2026 | Developer ID: Mark Sheremeta (G6P84BXZCC), нотаризован Apple |
   | Linux | `.deb`, `.rpm`, AppImage | здесь, это файлы релиза | не подписаны; сверяются по `SHA256SUMS` и аттестации |
 
