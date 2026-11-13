@@ -126,6 +126,53 @@ fn forge_set_exists(game_version: &str) -> bool {
     key.first() != Some(&1) || key.get(1).is_some_and(|m| *m >= 16)
 }
 
+/// A mod whose files Modrinth tags for a loader and game version, yet which
+/// stops the game on start there. Tags cannot say it: Sodium for 26.3 declares
+/// no NeoForge range, while its NeoForge mixin targets a method NeoForge
+/// 26.3.0.65 removed, and a new build gets the current NeoForge.
+struct Broken {
+    loader: &'static str,
+    line: (u32, u32),
+    slug: &'static str,
+    /// First loader build the mod fails on; a build with no pinned loader
+    /// gets the recommended one, which is past it.
+    loader_from: &'static str,
+    why: &'static str,
+}
+
+const BROKEN: &[Broken] = &[Broken {
+    loader: "neoforge",
+    line: (26, 3),
+    slug: "sodium",
+    loader_from: "26.3.0.65",
+    why: "не запускается с NeoForge 26.3.0.65 и новее",
+}];
+
+fn build_parts(build: &str) -> Vec<u32> {
+    build.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).filter_map(|p| p.parse().ok()).collect()
+}
+
+fn broken_rule(loader: &str, game_version: &str, loader_build: &str) -> impl Iterator<Item = &'static Broken> {
+    let line = version_key(game_version).map(|(major, minor, _)| (major, minor));
+    let build = build_parts(loader_build);
+    let loader = loader.to_string();
+    BROKEN
+        .iter()
+        .filter(move |b| b.loader == loader && Some(b.line) == line && (build.is_empty() || build >= build_parts(b.loader_from)))
+}
+
+/// Why the mode must not install `slug` into this build, if it must not.
+pub(super) fn known_broken(loader: &str, game_version: &str, loader_build: &str, slug: &str) -> Option<&'static str> {
+    broken_rule(loader, game_version, loader_build).find(|b| b.slug == slug).map(|b| b.why)
+}
+
+/// The rule an already installed file of the mode falls under, as "slug — why".
+fn broken_file(loader: &str, game_version: &str, loader_build: &str, file: &str) -> Option<String> {
+    broken_rule(loader, game_version, loader_build)
+        .find(|b| jar_present(&[file.to_string()], b.slug))
+        .map(|b| format!("{} — {}", b.slug, b.why))
+}
+
 /// Моды-ускорители по загрузчику. Slug'и Modrinth; ставится то, у чего есть
 /// сборка под версию профиля, остальное пропускается — режим не должен
 /// разваливаться из-за одного мода, отставшего от новой версии игры.
@@ -286,6 +333,14 @@ pub(super) fn profile_version(profile: &str) -> String {
         .into_iter()
         .find(|p| p.name == profile)
         .map(|p| p.version)
+        .unwrap_or_default()
+}
+
+fn profile_loader_build(profile: &str) -> String {
+    load_profiles()
+        .into_iter()
+        .find(|p| p.name == profile)
+        .and_then(|p| p.loader_version)
         .unwrap_or_default()
 }
 
@@ -569,6 +624,7 @@ fn settle_order(installed: &[String]) -> Vec<String> {
 async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: Vec<(String, String)>) -> Result<FpsBoostState, String> {
     let loader = profile_loader(profile);
     let version = profile_version(profile);
+    let loader_build = profile_loader_build(profile);
     let before_choice = settings_of(profile);
     let vulkan = before_choice["fpsBoostVulkan"].as_bool().unwrap_or(false)
         && !before_choice["shaders"].as_bool().unwrap_or(false);
@@ -613,7 +669,14 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
             continue;
         }
         let mut picked: Option<(&str, Value)> = None;
+        let mut refused: Option<String> = None;
         for slug in slot.install {
+            if let Some(why) = known_broken(&loader, &version, &loader_build, slug) {
+                if refused.is_none() {
+                    refused = Some(format!("{} — {}", slug, why));
+                }
+                continue;
+            }
             if let Ok(all) = project_versions(slug).await {
                 if let Some(v) = stable_pick(&all, &version, &loaders) {
                     picked = Some((*slug, v));
@@ -622,7 +685,7 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
             }
         }
         let Some((slug, ver)) = picked else {
-            skipped.push(name.to_string());
+            skipped.push(refused.unwrap_or_else(|| name.to_string()));
             continue;
         };
         match install_project_version(profile, "mod", slug, &ver).await {
@@ -655,6 +718,10 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
             // stays without it and the interface offers the vendor's driver page.
             if pin.slot == "renderer" && bad_driver.is_some() {
                 skipped.push(format!("{} — старый драйвер видеокарты", pin.slug));
+                continue;
+            }
+            if let Some(why) = known_broken(&loader, &version, &loader_build, &pin.slug) {
+                skipped.push(format!("{} — {}", pin.slug, why));
                 continue;
             }
             let counts: Vec<&str> = if pin.slot == "renderer" {
@@ -712,6 +779,19 @@ async fn enable(app: &AppHandle, profile: &str, keep_options: bool, video_rows: 
     }
 
     emit(app, "fpsboost", 85.0, "Проверяем совместимость…");
+    for file in installed.clone() {
+        let Some(note) = broken_file(&loader, &version, &loader_build, &file) else { continue };
+        match delete_content(profile, "mod", &file) {
+            Ok(()) => {
+                warn(app, &format!("Убрали {}: {}", file, note));
+                installed.retain(|f| f != &file);
+                if !skipped.contains(&note) {
+                    skipped.push(note);
+                }
+            }
+            Err(e) => warn(app, &format!("{}: {}, но убрать файл не вышло: {}", file, note, e)),
+        }
+    }
     let present = enabled_jars(profile);
     for file in settle_order(&installed) {
         if !present.contains(&file) {
@@ -781,6 +861,50 @@ fn disable(profile: &str) -> Result<FpsBoostState, String> {
         ],
     );
     Ok(fps_boost_state(profile))
+}
+
+/// Run before every launch: a build that got a mod before its pair with the
+/// loader was known broken would otherwise crash on each start until the
+/// player found the switch. Returns "slug — why" for every file taken back.
+pub fn take_back_broken_boost_mods(profile: &str) -> Vec<String> {
+    let s = settings_of(profile);
+    if !s["fpsBoost"].as_bool().unwrap_or(false) {
+        return vec![];
+    }
+    let (loader, version, build) = (profile_loader(profile), profile_version(profile), profile_loader_build(profile));
+    let (kept, notes) = split_broken(str_list(&s["fpsBoostMods"]), |file| {
+        broken_file(&loader, &version, &build, file).filter(|_| delete_content(profile, "mod", file).is_ok())
+    });
+    if notes.is_empty() {
+        return notes;
+    }
+    let mut skipped = str_list(&s["fpsBoostSkipped"]);
+    for note in &notes {
+        if !skipped.contains(note) {
+            skipped.push(note.clone());
+        }
+    }
+    patch(
+        profile,
+        vec![
+            ("fpsBoostMods", Value::Array(kept.into_iter().map(Value::String).collect())),
+            ("fpsBoostSkipped", Value::Array(skipped.into_iter().map(Value::String).collect())),
+        ],
+    );
+    notes
+}
+
+/// Files the mode keeps, and notes for the ones `take` took away.
+fn split_broken(files: Vec<String>, mut take: impl FnMut(&str) -> Option<String>) -> (Vec<String>, Vec<String>) {
+    let mut kept = vec![];
+    let mut notes = vec![];
+    for file in files {
+        match take(&file) {
+            Some(note) => notes.push(note),
+            None => kept.push(file),
+        }
+    }
+    (kept, notes)
 }
 
 /// The graphics presets (`presets.rs`) turn the mode on and off for the player.
@@ -1083,6 +1207,46 @@ mod tests {
         for (jar, slug, want, why) in cases {
             assert_eq!(jar_present(&[jar.to_string()], slug), want, "{jar} vs {slug}: {why}");
         }
+    }
+
+    /// (loader, game version, loader build, slug) -> is the mod refused. Pinned
+    /// because Sodium for 26.3 crashed every new NeoForge build on start: the
+    /// mode picked it by Modrinth tags while the current NeoForge breaks its mixin.
+    #[test]
+    fn mods_that_crash_on_the_current_loader_are_not_installed() {
+        let cases: [(&str, &str, &str, &str, bool, &str); 8] = [
+            ("neoforge", "26.3", "", "sodium", true, "a new build gets the recommended NeoForge, past the break"),
+            ("neoforge", "26.3", "26.3.0.102", "sodium", true, "current NeoForge removed the method Sodium hooks"),
+            ("neoforge", "26.3", "26.3.0.70-beta", "sodium", true, "the first broken builds were betas"),
+            ("neoforge", "26.3", "26.3.0.64-beta", "sodium", false, "a pinned older NeoForge still runs Sodium"),
+            ("neoforge", "26.3", "", "ferrite-core", false, "the rest of the set is unaffected"),
+            ("neoforge", "26.2", "", "sodium", false, "26.2 has its own NeoForge line"),
+            ("neoforge", "1.21.1", "", "sodium", false, "1.21.1 keeps Sodium"),
+            ("fabric", "26.3", "", "sodium", false, "Fabric Sodium has no NeoForge mixin"),
+        ];
+        for (loader, version, build, slug, want, why) in cases {
+            assert_eq!(known_broken(loader, version, build, slug).is_some(), want, "{loader} {version} {build:?} {slug}: {why}");
+        }
+        assert!(
+            broken_file("neoforge", "26.3", "", "sodium-neoforge-0.9.2+mc26.3.jar").is_some(),
+            "a Sodium file the mode installed earlier must be taken back, or the build keeps crashing",
+        );
+        assert!(
+            broken_file("neoforge", "26.3", "", "ferritecore-9.0.0-neoforge.jar").is_none(),
+            "only the broken mod is taken back, the rest of the set stays",
+        );
+    }
+
+    /// A build that already has the broken Sodium from the mode loses it on
+    /// the next launch, keeps the rest of the set and learns why.
+    #[test]
+    fn a_launch_takes_back_only_the_broken_mod_of_the_set() {
+        let files = vec!["sodium-neoforge-0.9.2+mc26.3.jar".to_string(), "ferritecore-9.0.0-neoforge.jar".to_string()];
+        let (kept, notes) = split_broken(files.clone(), |f| broken_file("neoforge", "26.3", "", f));
+        assert_eq!(kept, vec!["ferritecore-9.0.0-neoforge.jar".to_string()], "FerriteCore runs fine and must stay");
+        assert_eq!(notes.len(), 1, "exactly Sodium is taken back: {notes:?}");
+        let (kept, notes) = split_broken(files.clone(), |f| broken_file("neoforge", "26.3", "26.3.0.60", f));
+        assert_eq!((kept, notes.len()), (files, 0), "an older pinned NeoForge runs Sodium: nothing is taken");
     }
 
     #[test]

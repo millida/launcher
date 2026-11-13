@@ -8,7 +8,7 @@ import { useServers } from '../state/servers'
 import { openServerDetail } from '../state/serverDetail'
 import { openChat, useFriends } from '../state/friends'
 import { openBuildSettings } from '../state/instance'
-import { openMcNews } from './McNews'
+import { openMcNews } from './mcNewsStore'
 import { t, useT } from '../i18n'
 import '../styles/pixel/cmdk.css'
 

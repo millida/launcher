@@ -98,6 +98,18 @@ const LOBBY_EMOTES = [
   'EVIL_LAUGH',
   'BOW',
   'WHEW',
+  // Тренды (ноябрь 2026). Без «Дикого танца» (размах уводит из кадра),
+  // «Пингвина» (уходит спиной) и «Пиббла» (доска под ногами).
+  'MOG',
+  'SHOULDER_BOUNCE',
+  'LAST_DANCE',
+  'TAKE_PHONE',
+  'NELUBOV',
+  'MURMULI',
+  'SHE_BUGGING',
+  'VIELLEICHT',
+  'KNIGHT_KITTEN',
+  'RUNWAY_WALK',
 ]
 
 /** Встроенные движения, если эмоции не доехали. */
@@ -262,7 +274,26 @@ async function loadLookOutfit(signedIn: boolean): Promise<Pick<Look, 'items' | '
  */
 /** Настроение эмоции по названию: облачко показывает смайл того же тона. */
 export type EmoteMood = 'happy' | 'sad' | 'love' | 'angry' | 'think' | 'cool' | 'wow' | 'sleepy'
-function emoteMood(name: string): EmoteMood {
+
+/**
+ * Настроение, которое название угадывает неверно: «Нелюбовь» по слову —
+ * сердечки, а это грусть.
+ */
+const EMOTE_MOOD: Record<string, EmoteMood> = {
+  MOG: 'cool',
+  SHE_BUGGING: 'cool',
+  KNIGHT_KITTEN: 'cool',
+  SURF_PIBBLE: 'cool',
+  RUNWAY_WALK: 'cool',
+  NELUBOV: 'sad',
+  NIHIL_PENGUIN: 'sad',
+  TAKE_PHONE: 'cool',
+  MANIAC_DANCE: 'wow',
+}
+
+function emoteMood(name: string, id?: string): EmoteMood {
+  const known = id ? EMOTE_MOOD[id] : undefined
+  if (known) return known
   const n = name.toLowerCase()
   if (/sad|cry|tear|груст|плач|слез|печал|рыда/.test(n)) return 'sad'
   if (/love|heart|kiss|hug|любов|серд|поцел|обним/.test(n)) return 'love'
@@ -926,11 +957,11 @@ export function LobbyCharacter({
       props = []
     }
     // Облачко над эмоцией — по её настроению (владелец 24.09.2026, 07:45).
-    const emote = (name: string) => {
+    const emote = (name: string, id?: string) => {
       busyRef.current = true
       // Где голова и какого она размера на экране — облачко встаёт справа
       // от неё (владелец 24.09.2026: «сверху неудобно, справа»).
-      window.dispatchEvent(new CustomEvent('lobby-emote', { detail: { mood: emoteMood(name), head: headBox() } }))
+      window.dispatchEvent(new CustomEvent('lobby-emote', { detail: { mood: emoteMood(name, id), head: headBox() } }))
     }
     const toRest = (dressed: boolean) => {
       busyRef.current = false
@@ -957,7 +988,7 @@ export function LobbyCharacter({
       const clips = file?.animations ? readAnimations(file.animations) : {}
       const sequence = item && file ? emoteSequence(clips, emoteClip(clips, item.animation)) : null
       if (!item || !file || !sequence) return builtin()
-      emote(item.name + ' ' + (item.animation || ''))
+      emote(item.name + ' ' + (item.animation || ''), item.id)
       const playing = pinned(new CosmeticEmote(sequence, file.geometry))
       e.setAnimation(playing as unknown as SkinAnimation)
       const list = item.variants ?? []

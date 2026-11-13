@@ -157,7 +157,7 @@ pub async fn check_updates(profile: String, kind: String) -> Result<Vec<UpdateIn
     Ok(out)
 }
 
-async fn apply_update(profile: &str, kind: &str, file_name: &str, ver: &Value) -> Result<String, String> {
+pub(crate) async fn apply_update(profile: &str, kind: &str, file_name: &str, ver: &Value) -> Result<String, String> {
     let project = ver["project_id"].as_str().unwrap_or("").to_string();
     let project = if project.is_empty() {
         load_content_manifest(profile)

@@ -614,6 +614,22 @@ const GRAPHICS_START_MARKERS: [&str; 2] = ["backend library: lwjgl", "trying gl 
 
 const DISCRETE_FALLBACK_REASON: &str = "Игра закрылась, пока открывала окно. Лаунчер переключил сборку на встроенную видеокарту — запусти игру ещё раз. Вернуть прежний выбор можно в настройках сборки, пункт «Видеокарта».";
 
+const FALLBACK_UNDONE_REASON: &str = "Игра закрылась при открытии окна и на встроенной видеокарте — дело не в видеокарте. Лаунчер вернул выбор «Авто». Посмотри, на чём обрывается лог, или пришли его в поддержку.";
+
+/// The integrated card was the launcher's choice after a crash, not the player's
+/// (`set_profile_gpu` clears it). A build that crashes the same way on it gets
+/// its card back: a one-off crash of a heavy pack used to leave a laptop with an
+/// RTX on its integrated card for good, at a fraction of the FPS (11.11.2026).
+pub const GPU_FALLBACK_KEY: &str = "gpuFallback";
+
+/// `true`: the launcher moved the build to the integrated card. `false`: it did, the
+/// build crashed the same way there and got "Auto" back — the card was not the cause,
+/// so the launcher does not move it again: «Auto → integrated → Auto» went round on
+/// every start. Unset: nothing tried (the player's own choice clears it).
+fn gpu_fallback_state(settings: &serde_json::Value) -> Option<bool> {
+    settings[GPU_FALLBACK_KEY].as_bool()
+}
+
 /// A weak or outdated second card can take the process down while the game
 /// creates its window, with no Java exception at all: the log just stops.
 fn died_bringing_up_graphics(kind: &str, cause: &str, text: &str) -> bool {
@@ -623,7 +639,9 @@ fn died_bringing_up_graphics(kind: &str, cause: &str, text: &str) -> bool {
     }
     match kind {
         "gpu" | "gpu_driver" | "amd_driver" => true,
-        "unknown" | "jvm_fatal" => {
+        // Not "jvm_fatal": a JVM that died inside a video driver is already "gpu_driver",
+        // so a fatal error in any other library says the card is not the cause.
+        "unknown" => {
             GRAPHICS_START_MARKERS.iter().any(|m| low.contains(m))
                 && !cause.split(" | ").any(super::crashcause::is_exception_line)
         }
@@ -649,6 +667,15 @@ const API_MISMATCH_GAME_REASON: &str =
     "Один из модов собран под другую версию игры: он зовёт код, которого в ней нет. Обнови моды сборки под её версию.";
 
 const API_MISMATCH_LIBRARY_REASON: &str = "Один из модов зовёт код другого мода или библиотеки, которого нет в установленной версии: версии модов не сходятся между собой. Обнови мод из конца лога вместе с модами, от которых он зависит, или убери его.";
+
+const SODIUM_NEOFORGE_REASON: &str =
+    "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.";
+
+/// Every Sodium for 26.3 hooks this NeoForge method, which NeoForge 26.3.0.65
+/// removed; offering another Sodium version only repeats the crash.
+fn sodium_hook_gone_from_neoforge(low: &str) -> bool {
+    low.contains("critical injection failure") && low.contains("extractvisibleblockentities$neoforge")
+}
 
 #[cfg(test)]
 pub(crate) fn analyze_crash(game_dir: &Path, since: std::time::SystemTime) -> (String, String) {
@@ -722,6 +749,8 @@ pub(crate) fn crash_verdict(text: &str) -> CrashVerdict {
         || low.contains("present in multiple files")
     {
         ("Конфликт модов — есть дубли или несовместимые моды.", "conflict")
+    } else if sodium_hook_gone_from_neoforge(&low) {
+        (SODIUM_NEOFORGE_REASON, "mixin")
     } else if super::crashcause::mixin_failed_fatally(text, &MIXIN_VERDICT_MARKERS) {
         ("Один из модов не подошёл к этой версии игры (ошибка миксина).", "mixin")
     } else if let Some(line) = super::crashcause::fatal_line_with(text, &LINKAGE_MARKERS) {
@@ -1545,6 +1574,7 @@ pub(crate) async fn start_game(app: AppHandle, spec: StartSpec, perf: &super::la
     // ошибке: в нём ключ подписи сборки.
     let _argfile_guard = ArgfileGuard(argfile.clone());
     let gpu = GpuPref::parse(settings["gpu"].as_str().unwrap_or("auto"));
+    let gpu_fallback = gpu_fallback_state(&settings);
     // Only our mod has the island that reads it, and the key changes every launch.
     // With the music off the socket still carries the island's clip notices.
     let music = settings["gameMedia"].as_bool() != Some(false);
@@ -1663,6 +1693,7 @@ pub(crate) async fn start_game(app: AppHandle, spec: StartSpec, perf: &super::la
         hooks,
         own_mod_jar,
         gpu,
+        gpu_fallback,
         lag_watch,
         media,
         agent,
@@ -1688,6 +1719,8 @@ struct Watch {
     hooks: super::launch_hooks::LaunchHooks,
     own_mod_jar: String,
     gpu: GpuPref,
+    /// What the launcher already did with the card after a crash (`gpu_fallback_state`).
+    gpu_fallback: Option<bool>,
     lag_watch: Option<LagWatch>,
     media: Option<super::now_playing::MediaLink>,
     agent: Option<Arc<GameAgent>>,
@@ -1697,7 +1730,7 @@ struct Watch {
 /// Watch: the game counts as running, its window is timed, its playtime is credited, and when it
 /// exits a crash is read, explained and sent to the window.
 fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
-    let Watch { app, profile, nick, game_dir, java, mut child, start, start_wall, server_now, readers, window_probe, hooks, own_mod_jar, gpu, lag_watch, media, agent, pack_watch } = w;
+    let Watch { app, profile, nick, game_dir, java, mut child, start, start_wall, server_now, readers, window_probe, hooks, own_mod_jar, gpu, gpu_fallback, lag_watch, media, agent, pack_watch } = w;
     let launch_id = format!(
         "{}-{}",
         start_wall.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
@@ -1790,12 +1823,21 @@ fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
                     }
                 }
             }
-            else if auto_runs_on_discrete(gpu) && died_bringing_up_graphics(kind, &verdict.cause, &log_text) {
+            else if gpu_fallback.is_none() && auto_runs_on_discrete(gpu) && died_bringing_up_graphics(kind, &verdict.cause, &log_text) {
                 let mut patch = serde_json::Map::new();
                 patch.insert("gpu".into(), serde_json::json!(GpuPref::Integrated.as_str()));
+                patch.insert(GPU_FALLBACK_KEY.into(), serde_json::json!(true));
                 merge_settings(&pname, patch);
                 reason = DISCRETE_FALLBACK_REASON.into();
                 kind = "gpu_fallback";
+            }
+            else if gpu_fallback == Some(true) && gpu == GpuPref::Integrated && died_bringing_up_graphics(kind, &verdict.cause, &log_text) {
+                let mut patch = serde_json::Map::new();
+                patch.insert("gpu".into(), serde_json::json!(GpuPref::Auto.as_str()));
+                patch.insert(GPU_FALLBACK_KEY.into(), serde_json::json!(false));
+                merge_settings(&pname, patch);
+                reason = FALLBACK_UNDONE_REASON.into();
+                kind = "gpu_fallback_undone";
             }
             // The game died within seconds of starting. The page was told "started" before this
             // could be known, so the failure to start is told here, from the launcher's capture
@@ -2320,12 +2362,13 @@ mod tests {
                                   ---- Minecraft Crash Report ----\nDescription: Initializing game\n\n\
                                   java.lang.IllegalStateException: Failed to bake models\n\tat net.foo.Bar.baz(Bar.java:1)\n\n\
                                   Backend library: LWJGL version 3.3.3+5";
-        let cases: [(&str, &str, bool, &str); 8] = [
+        let cases: [(&str, &str, bool, &str); 9] = [
             ("unknown", fabric_amd, true, "Gobses 25.09: Vega 3 + Radeon 535, лог обрывается на окне, 26.2 Fabric"),
             ("unknown", forge_early, true, "тот же ПК, 26.1 Forge: окно раннего экрана Forge"),
             ("unknown", mod_throw, false, "исключение Java — вылет мода, а не видеокарты"),
             ("unknown", in_menu, false, "игра дошла до меню — окно открылось"),
             ("unknown", "[main/INFO]: Loading 51 mods", false, "до окна игра не дошла вовсе"),
+            ("jvm_fatal", fabric_amd, false, "JVM упала не в драйвере (иначе это gpu_driver) — видеокарта ни при чём"),
             ("amd_driver", "EXCEPTION_ACCESS_VIOLATION", true, "падение внутри драйвера до меню"),
             ("missing_deps", fabric_amd, false, "понятный вердикт по модам не подменяется"),
             (
@@ -2445,6 +2488,23 @@ mod tests {
         let v = crash_verdict(late);
         assert_ne!(v.kind, "gpu", "окно давно открыто — вылет не про него");
         assert!(v.cause.contains("NullPointerException"), "причина достаётся из отчёта: {}", v.cause);
+    }
+
+    /// log -> does the verdict tell the player to turn Sodium off. Every
+    /// Sodium for 26.3 crashes on current NeoForge, so "another version" is no fix.
+    #[test]
+    fn sodium_on_new_neoforge_is_told_to_be_switched_off() {
+        let hook = "org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered\n\
+                    Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Critical injection failure: @Inject annotation on extractVisibleBlockEntities$neoForge could not find any targets matching";
+        let other = "org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered\n\
+                     Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Critical injection failure: @Inject annotation on onRender could not find any targets matching";
+        let cases: [(&str, bool, &str); 2] = [
+            (hook, true, "the NeoForge hook Sodium for 26.3 relies on is gone"),
+            (other, false, "any other mixin failure keeps the general verdict"),
+        ];
+        for (log, want, why) in cases {
+            assert_eq!(crash_verdict(log).reason == SODIUM_NEOFORGE_REASON, want, "{why}");
+        }
     }
 
     /// The line the mod is named on decides whether it is the culprit.

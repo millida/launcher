@@ -290,6 +290,7 @@ fn park(app: &AppHandle, window: &tauri::WebviewWindow, keeper: Keeper) {
     crate::tray::hide_main(app);
     if keeper.sleeps_page() {
         crate::webview_health::set_suspended(window, true);
+        beat_while_asleep();
     }
     crate::tray::set_status(keeper.status());
     if !keeper.polls_core_jobs() {
@@ -692,6 +693,29 @@ async fn send_live_beat(playing: bool) {
     let Some(body) = lock(&LIVE_BEAT).clone() else { return };
     let body = live_beat_body(body, playing);
     let _ = crate::engine::millida_api_auth_in(LIVE_BEAT_PATH.into(), "POST".into(), Some(body), None, None).await;
+}
+
+static ASLEEP_BEATS: AtomicBool = AtomicBool::new(false);
+
+/// A parked window whose page sleeps (an install of the core still runs) sent no beats at all: the
+/// page is suspended, and the background loop starts only once the window is unloaded. A game
+/// played meanwhile earned no time on the server for chests and the cape (11.11.2026). One quiet
+/// loop for the whole run sends the page's last beat while that lasts.
+fn beat_while_asleep() {
+    if ASLEEP_BEATS.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(BEAT_EVERY).await;
+            if crate::exiting() {
+                return;
+            }
+            if parked() && ASLEEP.load(Ordering::SeqCst) && !crate::engine::running_games().is_empty() {
+                send_beat().await;
+            }
+        }
+    });
 }
 
 /// Wakes the tray loop when the core has finished staging an update: the quiet-install clock starts from there.

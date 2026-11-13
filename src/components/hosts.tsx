@@ -8,6 +8,7 @@ import { useCrash } from '../state/crash'
 import { useServerDetail } from '../state/serverDetail'
 import { useCall } from '../state/call'
 import { useLiveLog } from './liveLogStore'
+import { useMcNews } from './mcNewsStore'
 import { useRooms } from '../state/rooms'
 import { usePaid } from './catalog/paidStore'
 import { useReward } from './reward/rewardBus'
@@ -38,6 +39,7 @@ export const DepPlanModal = lazyHost(() => import('./DepPlanModal').then((m) => 
 export const CrashModal = lazyHost(() => import('./CrashModal').then((m) => ({ default: m.CrashModal })), () => useCrash((s) => !!s.info))
 export const ServerDetail = lazyHost(() => import('./ServerDetail').then((m) => ({ default: m.ServerDetail })), () => useServerDetail((s) => !!s.sv))
 export const LiveLog = lazyHost(() => import('./LiveLog').then((m) => ({ default: m.LiveLog })), () => useLiveLog((s) => s.open))
+export const McNewsModal = lazyHost(() => import('./McNews').then((m) => ({ default: m.McNewsModal })), () => useMcNews((s) => s.open))
 export const CallPanel = lazyHost(() => import('./CallPanel').then((m) => ({ default: m.CallPanel })), () => useCall((s) => s.status !== 'idle'))
 export const RoomModals = lazyHost(() => import('./RoomManage').then((m) => ({ default: m.RoomModals })), () => useRooms((s) => !!s.manageId || s.createOpen))
 

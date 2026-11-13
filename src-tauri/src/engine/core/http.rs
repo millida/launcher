@@ -667,7 +667,7 @@ pub(crate) async fn get_json_swr(url: &str, cache: &Path, ttl: Duration) -> Resu
     Ok(copy)
 }
 
-fn refresh_in_background(url: &str, cache: &Path) {
+pub(crate) fn refresh_in_background(url: &str, cache: &Path) {
     {
         let mut busy = REFRESHING.lock().unwrap_or_else(|e| e.into_inner());
         if busy.iter().any(|p| p == cache) {
@@ -779,6 +779,45 @@ fn is_stale_cdn_miss(err: &str) -> bool {
     err.contains("404 Not Found") || err.contains("403 Forbidden")
 }
 
+/// An address signed for a few minutes (X-Amz-* in the query, our pack storage). Any change to
+/// its query breaks the signature, so it never gets the cache-busting parameter.
+fn is_signed(url: &str) -> bool {
+    let low = url.to_ascii_lowercase();
+    low.contains("x-amz-signature=") || low.contains("x-amz-credential=")
+}
+
+/// A signed address shows up in an error as its path: the query is a short-lived credential, and
+/// in a toast it read as an AWS failure (11.11.2026, Arcania); in a report it only splits one error into many.
+fn shown_url(url: &str) -> &str {
+    if is_signed(url) {
+        url.split('?').next().unwrap_or(url)
+    } else {
+        url
+    }
+}
+
+/// The same cut for a whole error text that already carries the address.
+pub(crate) fn without_signature(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(q) = rest.find('?') {
+        let end = rest[q..].find(char::is_whitespace).map_or(rest.len(), |i| q + i);
+        let query = &rest[q..end];
+        out.push_str(&rest[..q]);
+        if query.to_ascii_lowercase().contains("x-amz-") {
+            // «<url>: reason» keeps its colon.
+            if query.ends_with(':') || query.ends_with(',') {
+                out.push_str(&query[query.len() - 1..]);
+            }
+        } else {
+            out.push_str(query);
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 fn bypass_cdn_cache(url: &str) -> String {
     let salt = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -856,7 +895,7 @@ async fn fetch_via(
         let has_next = ri + 1 < routes.len();
         let mut attempt = 1;
         while attempt <= TRIES {
-            let target = if attempt > 1 && is_stale_cdn_miss(&last) {
+            let target = if attempt > 1 && is_stale_cdn_miss(&last) && !is_signed(route) {
                 bypass_cdn_cache(route)
             } else {
                 route.clone()
@@ -940,8 +979,8 @@ fn status_failure(url: &str, resp: &reqwest::Response) -> String {
 
 fn status_text(url: &str, status: reqwest::StatusCode, retry_after: Option<&str>) -> String {
     match retry_after.and_then(parse_retry_after) {
-        Some(wait) => format!("{} → {}{}{}", url, status, RETRY_AFTER_MARK, wait.as_secs()),
-        None => format!("{} → {}", url, status),
+        Some(wait) => format!("{} → {}{}{}", shown_url(url), status, RETRY_AFTER_MARK, wait.as_secs()),
+        None => format!("{} → {}", shown_url(url), status),
     }
 }
 
@@ -1825,6 +1864,22 @@ PK"),
         assert!(with_query.starts_with("https://host/a.jar?x=1&nocache="));
         assert!(is_stale_cdn_miss("https://host/a.jar → 404 Not Found"));
         assert!(!is_stale_cdn_miss("https://host/a.jar: обрыв загрузки"));
+    }
+
+    /// A signed address is a credential for minutes: no cache-busting parameter (it would break
+    /// the signature) and no query in the text the player and the report see.
+    #[test]
+    fn a_signed_address_is_neither_bypassed_nor_shown() {
+        let signed = "https://garage.millida.net/packs/a.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=k%2F20261111%2Fgarage%2Fs3%2Faws4_request&X-Amz-Expires=900&X-Amz-Signature=abc";
+        assert!(is_signed(signed));
+        assert!(!is_signed("https://host/a.jar?x=1"));
+        let text = status_text(signed, reqwest::StatusCode::FORBIDDEN, None);
+        assert_eq!(text, "https://garage.millida.net/packs/a.zip → 403 Forbidden");
+        assert_eq!(status_text("https://host/a.jar?x=1", reqwest::StatusCode::NOT_FOUND, None), "https://host/a.jar?x=1 → 404 Not Found");
+        assert_eq!(without_signature(&format!("{}: обрыв загрузки (reset)", signed)), "https://garage.millida.net/packs/a.zip: обрыв загрузки (reset)");
+        assert_eq!(without_signature(&format!("{} → 403 Forbidden", signed)), "https://garage.millida.net/packs/a.zip → 403 Forbidden");
+        assert_eq!(without_signature("https://host/a.jar?x=1: нет связи"), "https://host/a.jar?x=1: нет связи");
+        assert_eq!(without_signature("Что-то пошло не так?"), "Что-то пошло не так?");
     }
 
     /// A body cut mid-flight is what a filtered or unstable connection produces:

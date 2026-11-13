@@ -47,6 +47,10 @@ pub(crate) struct GraphFacts {
     pub deps: u32,
     /// The account's session, ms (None when there was none to get).
     pub auth_ms: Option<u64>,
+    /// Why our mod is not in the build this launch; empty when it is.
+    pub no_mod: &'static str,
+    /// What the launch got for our mod (`ModToken::code`); empty when the mod is not in the build.
+    pub mod_token: &'static str,
 }
 
 /// One launch's stopwatch. Cloning shares the same numbers.
@@ -122,6 +126,13 @@ impl LaunchPerf {
 
     pub(crate) fn graph(&self, facts: GraphFacts) {
         locked(&self.inner).graph = Some(facts);
+    }
+
+    /// The token is asked for after the graph is done.
+    pub(crate) fn mod_token(&self, code: &'static str) {
+        if let Some(g) = locked(&self.inner).graph.as_mut() {
+            g.mod_token = code;
+        }
     }
 
     pub(crate) fn graph_facts(&self) -> Option<GraphFacts> {
@@ -242,6 +253,12 @@ pub(crate) fn graph_event(g: &GraphFacts, ok: bool) -> Value {
     data.insert("deps".into(), json!(g.deps));
     if let Some(ms) = g.auth_ms {
         data.insert("auth".into(), json!(ms));
+    }
+    if !g.no_mod.is_empty() {
+        data.insert("noMod".into(), json!(g.no_mod));
+    }
+    if !g.mod_token.is_empty() {
+        data.insert("modToken".into(), json!(g.mod_token));
     }
     json!({ "data": Value::Object(data), "durationMs": g.plan_ms + g.prep_ms, "ok": ok })
 }
@@ -412,6 +429,20 @@ mod tests {
         std::thread::sleep(Duration::from_millis(20));
         let snap = perf.snapshot();
         assert!(snap["assets"].ms >= 15, "the stage that was running when the launch ended gets its time");
+    }
+
+    #[test]
+    fn the_graph_event_says_what_our_mod_got_in_codes_only() {
+        let placed = GraphFacts { mod_token: "failed", ..Default::default() };
+        let ev = graph_event(&placed, true);
+        assert_eq!(ev["data"]["modToken"], "failed");
+        assert!(ev["data"].get("noMod").is_none(), "a build with the mod has no reason to report");
+        let absent = GraphFacts { no_mod: "no_variant", auth_ms: Some(1), ..Default::default() };
+        let ev = graph_event(&absent, true);
+        assert_eq!(ev["data"]["noMod"], "no_variant");
+        assert!(ev["data"].get("modToken").is_none(), "no mod, no token to report");
+        let full = GraphFacts { no_mod: "x", mod_token: "x", auth_ms: Some(1), ..Default::default() };
+        assert!(graph_event(&full, true)["data"].as_object().unwrap().len() <= 12, "the collector keeps 12 keys");
     }
 
     #[test]

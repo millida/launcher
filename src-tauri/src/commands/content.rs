@@ -87,7 +87,7 @@ pub fn toggle_content(profile: String, kind: String, name: String, enable: bool)
 
 #[tauri::command(async)]
 pub fn delete_content(profile: String, kind: String, name: String) -> Result<(), String> {
-    engine::delete_content(&profile, &kind, &name)
+    engine::delete_content_user(&profile, &kind, &name)
 }
 
 #[tauri::command(async)]
@@ -100,7 +100,7 @@ pub fn toggle_mod(profile: String, name: String, enable: bool) -> Result<(), Str
 
 #[tauri::command(async)]
 pub fn delete_mod(profile: String, name: String) -> Result<(), String> {
-    engine::delete_mod(&profile, &name)
+    engine::delete_content_user(&profile, "mod", &name)
 }
 
 #[tauri::command]

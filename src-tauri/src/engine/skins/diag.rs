@@ -1,5 +1,5 @@
 // Diagnostics "why is the skin not visible": checks the modpack files and asks api.millida.net if the nickname has a skin and if the texture is served.
-// Only the player nickname and requests to our own skin server are sent. No tokens.
+// The player nickname goes to our own skin server without a token; only the count of owned items is asked with the account's session.
 use crate::engine::*;
 use serde_json::{json, Value};
 
@@ -38,6 +38,10 @@ pub(crate) enum BuildSkin {
     ModSilent,
     ModComplains,
     Ok,
+    /// Our own mod is in the build and answers for the skin. It writes no CustomSkinLoader journal.
+    OwnMod,
+    /// Our mod ran, but the last launch could not get it a token: it saw none of the purchases.
+    OwnModNoToken,
 }
 
 /// What one build is worth to the verdict: its state, and when it was last
@@ -56,7 +60,12 @@ pub(crate) struct BuildFacts {
 }
 
 /// Faults worth telling the player about, in the order they outrank each other.
-const BUILD_FAULTS: [(BuildSkin, &str, &str); 5] = [
+const BUILD_FAULTS: [(BuildSkin, &str, &str); 6] = [
+    (
+        BuildSkin::OwnModNoToken,
+        "mod_no_token",
+        "В прошлом запуске мод не получил вход Millida, поэтому купленных вещей в игре не было. Запусти сборку заново. Если повторится, скопируй отчёт и пришли его в поддержку.",
+    ),
     (
         BuildSkin::Conflict,
         "conflict",
@@ -102,6 +111,8 @@ impl BuildSkin {
             BuildSkin::ModSilent => "mod_silent",
             BuildSkin::ModComplains => "mod_complains",
             BuildSkin::Ok => "ok",
+            BuildSkin::OwnMod => "own_mod",
+            BuildSkin::OwnModNoToken => "own_mod_no_token",
         }
     }
 
@@ -115,6 +126,8 @@ impl BuildSkin {
             BuildSkin::ModSilent => "Мод скинов не запустился с этой версией игры: своего журнала он не создал",
             BuildSkin::ModComplains => "Мод скинов запускался, но жалуется в журнале",
             BuildSkin::Ok => "Мод скинов на месте и отработал",
+            BuildSkin::OwnMod => "Мод Millida на месте: скин, плащ и одежда приходят через него",
+            BuildSkin::OwnModNoToken => "Мод Millida на месте, но в прошлом запуске не получил вход: купленных вещей в игре не было",
         }
     }
 }
@@ -166,6 +179,18 @@ pub(crate) fn build_state(
         return BuildSkin::ModComplains;
     }
     BuildSkin::Ok
+}
+
+/// Verdict for a build that holds our own mod. The launcher replaced CustomSkinLoader with it, so
+/// asking for that mod's jar and journal called a healthy build broken.
+pub(crate) fn own_mod_state(launched: bool, last_token: Option<&str>) -> BuildSkin {
+    if !launched {
+        BuildSkin::NeverLaunched
+    } else if last_token == Some("failed") {
+        BuildSkin::OwnModNoToken
+    } else {
+        BuildSkin::OwnMod
+    }
 }
 
 /// Lines of a journal that report a failure, newest first. `keep` narrows them
@@ -271,24 +296,32 @@ fn build_report(profile: &Profile, root: &str) -> (Value, BuildFacts) {
     let state = skin_mod_state(&profile.name);
     let cfg_dir = dir.join("CustomSkinLoader");
     let log = read_text(&cfg_dir.join(CSL_LOG));
+    let own_mod = modded && millida_mod_installed(&profile.name);
+    let conflict = !state["conflict"].is_null();
+    let last_token = if own_mod { last_mod_token(&profile.name) } else { None };
     // Only the mod's own journal decides whether the mod complains: a stray
-    // error from the game log would blame it for someone else's failure.
-    let mod_problems = log.as_deref().map(log_problems).unwrap_or_default();
+    // error from the game log would blame it for someone else's failure. A
+    // journal CustomSkinLoader left before our mod replaced it is about nothing now.
+    let mod_problems = if own_mod { vec![] } else { log.as_deref().map(log_problems).unwrap_or_default() };
     let cfg: Value = std::fs::read(cfg_dir.join("CustomSkinLoader.json"))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(Value::Null);
     let cfg_root = config_root(&cfg);
     let played = played_at(&dir);
-    let verdict = build_state(
-        modded,
-        state["on"].as_bool().unwrap_or(false),
-        state["present"].as_bool().unwrap_or(false),
-        !state["conflict"].is_null(),
-        played.is_some(),
-        log.is_some(),
-        !mod_problems.is_empty(),
-    );
+    let verdict = if own_mod && !conflict {
+        own_mod_state(played.is_some(), last_token.as_deref())
+    } else {
+        build_state(
+            modded,
+            state["on"].as_bool().unwrap_or(false),
+            state["present"].as_bool().unwrap_or(false),
+            conflict,
+            played.is_some(),
+            log.is_some(),
+            !mod_problems.is_empty(),
+        )
+    };
     let off_reason = skin_mod_off_reason(&profile.name);
     // The launcher log holds the startup of the last launch, the game log the
     // rest of it: a skin that never arrived leaves its reason in one of the two.
@@ -319,6 +352,8 @@ fn build_report(profile: &Profile, root: &str) -> (Value, BuildFacts) {
             "offReason": off_reason,
             "playedAt": played,
             "agentSeen": agent,
+            "ownMod": own_mod,
+            "modToken": last_token,
             "root": cfg_root,
             "rootStale": cfg_root.as_deref().map(|r| r != root).unwrap_or(false),
             "problems": problems,
@@ -423,6 +458,13 @@ async fn session_report(nick: &str) -> Value {
         "textureOk": readable,
         "ok": agent && signed && skin_url.is_some() && domain_ok && readable,
     })
+}
+
+/// How many items the account owns, as the server sees it: tells "the purchase never reached the
+/// account" apart from "the game did not get it". Nothing is said when the question fails.
+async fn owned_count() -> Option<usize> {
+    let owned = millida_api_auth("/cosmetics/owned".into(), "GET".into(), None).await.ok()?;
+    owned["items"].as_array().map(Vec::len)
 }
 
 /// The first broken link of the account route, if any. Order follows the route
@@ -556,10 +598,10 @@ pub async fn skin_diagnose(nick: &str, online: bool) -> Value {
         return json!({ "verdict": "offline", "text": "Не выбран аккаунт — в гардеробе некому применять скин.", "builds": [] });
     }
     let root = format!("{}/yggdrasil/csl/", MILLIDA_API);
-    let (server, session) = if online {
-        tokio::join!(server_report(nick, &root), session_report(nick))
+    let (server, session, owned) = if online {
+        tokio::join!(server_report(nick, &root), session_report(nick), owned_count())
     } else {
-        (Value::Null, Value::Null)
+        (Value::Null, Value::Null, None)
     };
     let profiles = load_profiles();
     let reports: Vec<(Value, BuildFacts)> =
@@ -574,7 +616,7 @@ pub async fn skin_diagnose(nick: &str, online: bool) -> Value {
     let fix = culprit
         .and_then(|i| Some((auto_fix(facts.get(i)?.state)?, builds.get(i)?["build"].as_str()?)))
         .map(|(action, build)| json!({ "action": action, "build": build }));
-    json!({ "nick": nick, "verdict": verdict, "text": text, "fix": fix, "server": server, "session": session, "builds": builds })
+    json!({ "nick": nick, "verdict": verdict, "text": text, "fix": fix, "server": server, "session": session, "owned": owned, "builds": builds })
 }
 
 #[cfg(test)]
@@ -612,6 +654,24 @@ mod tests {
         assert_eq!(build_state(true, false, true, false, true, true, false), BuildSkin::Off);
         assert_eq!(build_state(true, true, true, false, true, true, true), BuildSkin::ModComplains);
         assert_eq!(build_state(true, true, true, false, true, true, false), BuildSkin::Ok);
+    }
+
+    /// Сборка с нашим модом держит не CustomSkinLoader: требовать его jar и журнал
+    /// значило называть исправную сборку сломанной и предлагать бесполезную починку.
+    #[test]
+    fn a_build_with_our_mod_is_not_reported_as_having_no_skin_mod() {
+        assert_eq!(own_mod_state(false, None), BuildSkin::NeverLaunched);
+        assert_eq!(own_mod_state(true, Some("issued")), BuildSkin::OwnMod);
+        assert_eq!(own_mod_state(true, None), BuildSkin::OwnMod, "launched before the launcher kept this record");
+        assert_eq!(own_mod_state(true, Some("no_session")), BuildSkin::OwnMod, "no login is not a lost token");
+        assert_eq!(own_mod_state(true, Some("failed")), BuildSkin::OwnModNoToken);
+        assert_eq!(auto_fix(BuildSkin::OwnMod), None);
+        assert_eq!(auto_fix(BuildSkin::OwnModNoToken), None, "a new launch is the cure, there is nothing to switch on");
+        let good = json!({ "ok": true, "skin": true, "cape": true });
+        let live = json!({ "agent": true, "profile": true, "signed": true, "skin": true, "domainOk": true, "textureOk": true, "ok": true });
+        let played = |s| facts(s, Some(100));
+        assert_eq!(overall(&good, &live, &[played(BuildSkin::OwnMod)], true).0, "ok");
+        assert_eq!(overall(&good, &live, &[played(BuildSkin::OwnModNoToken)], true).0, "mod_no_token");
     }
 
     #[test]

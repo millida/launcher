@@ -8,6 +8,8 @@ use std::time::Duration;
 
 // Mod version list on the Millida CDN.
 const MANIFEST_URL: &str = "https://cdn.millida.net/mod/variants.json";
+// Mod version list of the testing channel, read only when the player opted into test versions.
+const BETA_MANIFEST_URL: &str = "https://cdn.millida.net/mod/beta.json";
 // Kill switch: mod versions the launcher must not install (crashes).
 const BLOCKED_URL: &str = "https://api.millida.net/v2/launcher/mod/blocked";
 const MOD_BASE: &str = "https://cdn.millida.net/mod";
@@ -95,15 +97,57 @@ enum ManifestSource {
 /// How old the copy of the version list may be before a launch asks the CDN again (in the background).
 const MANIFEST_LAUNCH_TTL: Duration = Duration::from_secs(10 * 60);
 
+/// One release channel of the mod: its list on the CDN and its own copy on disk, so a beta
+/// list never stands in for the stable one after the player leaves the testing channel.
+struct Channel {
+    url: &'static str,
+    copy: &'static str,
+}
+
+const STABLE: Channel = Channel { url: MANIFEST_URL, copy: "millida-mod-variants.json" };
+// Same folder and signing key as the stable list: the testing setting picks a file, never a host.
+const BETA: Channel = Channel { url: BETA_MANIFEST_URL, copy: "millida-mod-variants-beta.json" };
+
 /// Read before every launch of a modded build. Without a copy on disk, a launch
 /// with no network lost the mod the build already had.
 async fn manifest(source: ManifestSource) -> Result<Value, String> {
-    let copy = data_dir().join("millida-mod-variants.json");
+    if !beta_channel() {
+        return channel_manifest(&STABLE, source).await;
+    }
+    let (stable, beta) = futures::future::join(channel_manifest(&STABLE, source), beta_manifest(source)).await;
+    pick_channel(stable, beta)
+}
+
+/// A launch never waits for a beta list it has not seen yet: the build starts on the stable
+/// one and the beta list lands for the next launch.
+async fn beta_manifest(source: ManifestSource) -> Option<Value> {
+    let copy = data_dir().join(BETA.copy);
+    if source == ManifestSource::Launch && !copy.exists() {
+        refresh_in_background(BETA.url, &copy);
+        return None;
+    }
+    channel_manifest(&BETA, source).await.ok()
+}
+
+/// The testing channel takes the beta list only while it is ahead of the stable one. Once a
+/// beta is promoted, or the beta list is missing or broken, testers are on stable like
+/// everyone else.
+fn pick_channel(stable: Result<Value, String>, beta: Option<Value>) -> Result<Value, String> {
+    let Some(beta) = beta else { return stable };
+    let ahead = match &stable {
+        Ok(s) => version_key(beta["version"].as_str().unwrap_or("")) > version_key(s["version"].as_str().unwrap_or("")),
+        Err(_) => true,
+    };
+    if ahead && beta["variants"].is_array() { Ok(beta) } else { stable }
+}
+
+async fn channel_manifest(channel: &Channel, source: ManifestSource) -> Result<Value, String> {
+    let copy = data_dir().join(channel.copy);
     let m = match source {
-        ManifestSource::Fresh => get_json_revalidated(MANIFEST_URL, &copy).await,
+        ManifestSource::Fresh => get_json_revalidated(channel.url, &copy).await,
         // A launch takes the copy it has and lets the newer list land for the next one: a new
         // mod release reaches a build one launch later, and nobody waits for the CDN.
-        ManifestSource::Launch => get_json_swr(MANIFEST_URL, &copy, MANIFEST_LAUNCH_TTL).await,
+        ManifestSource::Launch => get_json_swr(channel.url, &copy, MANIFEST_LAUNCH_TTL).await,
     }
     .map_err(|e| format!("Каталог версий мода недоступен: {}", e))?;
     let seen = data_dir().join("millida-mod-signed");
@@ -1004,10 +1048,57 @@ fn loader_version_of(entry: &Profile) -> String {
 /// сборку, увидев такой jar.
 fn jar_fits(path: &Path, entry: &Profile) -> bool {
     match read_declared(path) {
-        Some(d) => d.fits_game(&entry.version) && d.fits_loader(&loader_version_of(entry)),
+        Some(d) => d.fits_game(&entry.version) && d.fits_loader(&loader_version_of(entry)) && runs_on(jar_java(path), build_java(entry)),
         // Не прочитали — файл битый, в сборку его нельзя.
         None => false,
     }
+}
+
+/// A jar built for a newer Java than the build runs on takes the whole build
+/// down with UnsupportedClassVersionError, and the crash screen then offered the
+/// Java the game already had: a 1.16.5 Forge build on Java 8 asked for Java 8 in
+/// a loop (16.09.2026, again 11.11.2026). Such a jar does not go in. Unknown on
+/// either side is no reason to keep the mod out.
+fn runs_on(needs: Option<u64>, has: Option<u64>) -> bool {
+    match (needs, has) {
+        (Some(needs), Some(has)) => needs <= has,
+        _ => true,
+    }
+}
+
+/// Java the build will run on, as far as it is known before the launch picks a
+/// binary: the major the player pinned, else the one the game version needs. A
+/// Java path set by hand is not known here.
+fn build_java(entry: &Profile) -> Option<u64> {
+    let settings = profile_settings(&entry.name);
+    if let Some(major) = settings["javaMajor"].as_u64().filter(|m| *m > 0) {
+        return Some(major);
+    }
+    if settings["javaPath"].as_str().is_some_and(|p| !p.trim().is_empty()) {
+        return None;
+    }
+    Some(java_major_for(&entry.version))
+}
+
+/// Java a jar was compiled for, from the class file version of its first class
+/// (52 is Java 8, 65 is Java 21).
+fn jar_java(path: &Path) -> Option<u64> {
+    use std::io::Read;
+    let mut jar = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
+    for i in 0..jar.len() {
+        let mut entry = jar.by_index(i).ok()?;
+        let name = entry.name().to_string();
+        if !name.ends_with(".class") || name.starts_with("META-INF/") || name.ends_with("module-info.class") {
+            continue;
+        }
+        let mut head = [0u8; 8];
+        entry.read_exact(&mut head).ok()?;
+        if head[..4] != [0xCA, 0xFE, 0xBA, 0xBE] {
+            return None;
+        }
+        return u64::from(u16::from_be_bytes([head[6], head[7]])).checked_sub(44);
+    }
+    None
 }
 
 async fn ensure_fabric_api(app: &AppHandle, profile: &str, game_version: &str) -> bool {
@@ -1237,8 +1328,121 @@ pub async fn ensure_millida_mod(
     profile: &str,
     nick: &str,
     licensed: bool,
-) -> Result<Option<String>, String> {
+) -> Result<ModPlaced, String> {
     ensure_millida_mod_with(app, profile, nick, licensed, KillPrefetch::none()).await
+}
+
+/// What the launch's mod step did with our mod.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModPlaced {
+    Jar(String),
+    Absent(NoMod),
+}
+
+/// Why a build goes without our mod. The skin and cape still arrive by another route, the worn
+/// items do not: without a word that looks like the purchases were lost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoMod {
+    Off,
+    NoVariant,
+    KillSwitch,
+    Quarantine,
+    FabricApi,
+    Unfit,
+}
+
+impl NoMod {
+    pub fn code(self) -> &'static str {
+        match self {
+            NoMod::Off => "off",
+            NoMod::NoVariant => "no_variant",
+            NoMod::KillSwitch => "kill_switch",
+            NoMod::Quarantine => "quarantine",
+            NoMod::FabricApi => "fabric_api",
+            NoMod::Unfit => "unfit",
+        }
+    }
+
+    /// `None`: the player chose this and needs no reminder.
+    fn notice(self) -> Option<&'static str> {
+        match self {
+            NoMod::Off => None,
+            NoMod::NoVariant | NoMod::Unfit => {
+                Some("Под эту версию игры мода Millida пока нет: скин и плащ будут видны, а одежда и эмоции нет")
+            }
+            NoMod::KillSwitch => {
+                Some("В новой версии мода Millida нашли ошибку, и этот запуск идёт без него: скин и плащ будут видны, а одежда и эмоции нет")
+            }
+            NoMod::Quarantine => {
+                Some("Мод Millida выключен для этой сборки: с ним она падала. Вернуть его можно на странице сборки")
+            }
+            NoMod::FabricApi => {
+                Some("Косметике Millida нужен Fabric API под версию этой сборки, а его нет или он от другой версии игры. Сборка запустится без косметики")
+            }
+        }
+    }
+}
+
+/// Said once per build and reason: the reason rarely changes, and a warning on every launch
+/// would only teach the player to ignore it.
+fn notice_due(why: NoMod, told: Option<&str>) -> Option<&'static str> {
+    why.notice().filter(|_| told != Some(why.code()))
+}
+
+/// Apart from `millida-settings.json` on purpose: a change there drops the plan the lobby
+/// prepared (warm.rs), and this file changes as a result of launching.
+fn launch_state_file(profile: &str) -> PathBuf {
+    profile_dir(profile).join("millida").join("launch-state.json")
+}
+
+fn launch_state_value(profile: &str, key: &str) -> Option<String> {
+    let bytes = std::fs::read(launch_state_file(profile)).ok()?;
+    serde_json::from_slice::<Value>(&bytes).ok()?[key].as_str().map(str::to_string)
+}
+
+fn set_launch_state_value(profile: &str, key: &str, value: Option<&str>) {
+    if launch_state_value(profile, key).as_deref() == value {
+        return;
+    }
+    let file = launch_state_file(profile);
+    let mut state = std::fs::read(&file)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    match value {
+        Some(value) => state.insert(key.to_string(), Value::String(value.to_string())),
+        None => state.remove(key),
+    };
+    if let Some(parent) = file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = write_json_atomic(&file, &Value::Object(state));
+}
+
+/// The text to show for a build going without our mod, if it is still news to the player.
+pub(crate) fn take_no_mod_notice(profile: &str, why: NoMod) -> Option<&'static str> {
+    let text = notice_due(why, launch_state_value(profile, "noModTold").as_deref())?;
+    set_launch_state_value(profile, "noModTold", Some(why.code()));
+    Some(text)
+}
+
+/// The mod is back: if it goes away again, that is news again.
+pub(crate) fn forget_no_mod_notice(profile: &str) {
+    set_launch_state_value(profile, "noModTold", None);
+}
+
+pub(crate) fn note_mod_token(profile: &str, code: &str) {
+    set_launch_state_value(profile, "modToken", Some(code));
+}
+
+/// What the last launch with our mod got for it (`ModToken::code`).
+pub(crate) fn last_mod_token(profile: &str) -> Option<String> {
+    launch_state_value(profile, "modToken")
+}
+
+pub(crate) fn millida_mod_installed(profile: &str) -> bool {
+    !installed_jar(profile).is_empty()
 }
 
 /// The launch's version: the list of versions comes from the copy (refreshed in the background)
@@ -1249,24 +1453,24 @@ pub(crate) async fn ensure_millida_mod_with(
     nick: &str,
     licensed: bool,
     prefetch: KillPrefetch,
-) -> Result<Option<String>, String> {
+) -> Result<ModPlaced, String> {
     if !millida_mod_wanted(profile) {
         // Мод выключен насовсем: сборку не трогаем и не забираем у неё
         // CustomSkinLoader - без нашего мода скин иначе брать неоткуда.
         remove_mod_from(profile);
-        return Ok(None);
+        return Ok(ModPlaced::Absent(NoMod::Off));
     }
     let dir = profile_dir(profile);
     let mods = dir.join("mods");
     let state = match mod_state(profile.to_string(), ManifestSource::Launch).await {
         Ok(state) => state,
-        Err(e) => return keep_installed(profile, &dir, nick, licensed).map(Some).ok_or(e),
+        Err(e) => return keep_installed(profile, &dir, nick, licensed).map(ModPlaced::Jar).ok_or(e),
     };
     if state.available.is_empty() {
         // Под эту связку варианта нет, а jar от прежней версии сборки мог
         // остаться: загрузчик прочтёт его и упадёт.
         remove_mod_from(profile);
-        return Ok(None);
+        return Ok(ModPlaced::Absent(NoMod::NoVariant));
     }
     // Рубильник: сломанный выпуск не должен дойти до игры. Файл убираем, но
     // карантина нет - со следующей версией в каталоге мод поставится сам.
@@ -1275,7 +1479,7 @@ pub(crate) async fn ensure_millida_mod_with(
         write_settings(&dir, licensed)?;
         place_local_skin(&dir, nick);
         drop_launcher_csl(&mods);
-        return Ok(None);
+        return Ok(ModPlaced::Absent(NoMod::KillSwitch));
     }
     // Мод - часть сборки, а не дополнение к ней: на нём держатся скины, плащи и
     // косметика, за которую заплачено. Стёрли файл руками или снёс антивирус -
@@ -1290,17 +1494,13 @@ pub(crate) async fn ensure_millida_mod_with(
         write_settings(&dir, licensed)?;
         place_local_skin(&dir, nick);
         drop_launcher_csl(&mods);
-        return Ok(None);
+        return Ok(ModPlaced::Absent(NoMod::Quarantine));
     }
     // The Fabric jar declares a hard dependency on Fabric API: without it the
     // loader refuses the whole build before the game even opens.
     if needs_fabric_api(&state.loader) && !ensure_fabric_api(app, profile, &state.game_version).await {
         remove_mod_from(profile);
-        warn(
-            app,
-            "Косметике Millida нужен Fabric API под версию этой сборки, а его нет или он от другой версии игры. Сборка запустится без косметики",
-        );
-        return Ok(None);
+        return Ok(ModPlaced::Absent(NoMod::FabricApi));
     }
     // Имя совпало - ещё не значит, что файл тот. Перезалитый под тем же номером
     // jar отличается только содержимым, и сверка суммы - единственное, что это
@@ -1313,7 +1513,7 @@ pub(crate) async fn ensure_millida_mod_with(
             let _ = std::fs::remove_file(mods.join(&state.installed));
         }
         if let Err(e) = install_for_launch(app, profile).await {
-            return keep_installed(profile, &dir, nick, licensed).map(Some).ok_or(e);
+            return keep_installed(profile, &dir, nick, licensed).map(ModPlaced::Jar).ok_or(e);
         }
     }
     // Даже когда версия та самая: лишний jar рядом с ней роняет загрузчик, а
@@ -1322,7 +1522,7 @@ pub(crate) async fn ensure_millida_mod_with(
     if let Some(entry) = profile_of(profile) {
         if !jar_fits(&mods.join(&state.available), &entry) {
             remove_mod_from(profile);
-            return Ok(None);
+            return Ok(ModPlaced::Absent(NoMod::Unfit));
         }
     }
     let stuck = keep_only(profile, &state.available);
@@ -1335,13 +1535,52 @@ pub(crate) async fn ensure_millida_mod_with(
     write_settings(&dir, licensed)?;
     place_local_skin(&dir, nick);
     drop_launcher_csl(&mods);
-    Ok(Some(state.available))
+    Ok(ModPlaced::Jar(state.available))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// stable list, beta list -> which version the testing channel installs. Leaving the
+    /// channel is covered by `manifest` itself: with the setting off the beta list is not read.
+    #[test]
+    fn the_testing_channel_takes_beta_only_while_it_is_ahead() {
+        type Case<'a> = (Result<Value, String>, Option<Value>, &'a str, &'a str);
+        let list = |v: &str| json!({ "version": v, "variants": [] });
+        let cases: [Case; 7] = [
+            (Ok(list("0.2.47")), Some(list("0.2.48")), "0.2.48", "a newer beta is what testers are there for"),
+            (Ok(list("0.2.48")), Some(list("0.2.48")), "0.2.48", "promoted beta: the same release either way"),
+            (Ok(list("0.2.49")), Some(list("0.2.48")), "0.2.49", "a stable that overtook the beta list must not be held back"),
+            (Ok(list("0.2.9")), Some(list("0.2.10")), "0.2.10", "versions compare as numbers, not as text"),
+            (Ok(list("0.2.47")), None, "0.2.47", "no beta list yet (404, no copy): stable"),
+            (Err("offline".into()), Some(list("0.2.48")), "0.2.48", "stable list unreachable: the beta copy still installs"),
+            (Ok(list("0.2.47")), Some(json!({ "version": "0.3.0" })), "0.2.47", "a beta list without variants is broken, not newer"),
+        ];
+        for (stable, beta, want, why) in cases {
+            let got = pick_channel(stable, beta).ok().map(|m| m["version"].as_str().unwrap_or("").to_string());
+            assert_eq!(got.as_deref(), Some(want), "{why}");
+        }
+    }
+
+    /// Pins the testing channel to the stable list's folder and keeps their copies apart: a
+    /// shared copy would hand the beta jar to a player who has just left the channel.
+    #[test]
+    fn the_beta_list_sits_next_to_the_stable_one_with_its_own_copy() {
+        let folder = |u: &str| u.rsplit_once('/').map(|(h, _)| h.to_string());
+        assert_eq!(folder(BETA.url), folder(STABLE.url), "the beta list must come from the same CDN folder as the stable one");
+        assert_eq!(folder(BETA.url).as_deref(), Some(MOD_BASE), "the beta list must live in the mod folder whose jars it names");
+        assert_ne!(BETA.copy, STABLE.copy, "a shared copy on disk would mix the channels");
+    }
+
+    #[test]
+    fn a_build_without_our_mod_is_explained_once_per_reason() {
+        assert!(notice_due(NoMod::NoVariant, None).is_some(), "the first launch says why the items are not in the game");
+        assert!(notice_due(NoMod::NoVariant, Some("no_variant")).is_none(), "the same reason is not repeated on every launch");
+        assert!(notice_due(NoMod::KillSwitch, Some("no_variant")).is_some(), "a new reason is news");
+        assert!(notice_due(NoMod::Off, None).is_none(), "the player turned it off and knows");
+    }
 
     #[test]
     fn repair_brings_back_a_mod_the_player_deleted() {
@@ -1737,6 +1976,37 @@ mod tests {
         let broken = dir.join("millida-mod-broken.jar");
         std::fs::write(&broken, b"not a zip").unwrap();
         assert!(!jar_fits(&broken, &profile("1.21.1", "neoforge", None)), "битый jar в сборку не идёт");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A jar compiled for Java 21 must not go into a 1.16.5 build that runs on Java 8.
+    #[test]
+    fn our_jar_needs_a_java_the_build_has() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("millida-mod-java-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let jar = |name: &str, class_major: u8| -> PathBuf {
+            let path = dir.join(name);
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("META-INF/mods.toml", opts).unwrap();
+            zip.write_all(b"[[mods]]\nmodId = \"millida\"\n").unwrap();
+            zip.start_file("META-INF/versions/9/module-info.class", opts).unwrap();
+            zip.write_all(&[0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, 53]).unwrap();
+            zip.start_file("net/millida/Mod.class", opts).unwrap();
+            zip.write_all(&[0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, class_major, 0, 0]).unwrap();
+            zip.finish().unwrap();
+            path
+        };
+        let java21 = jar("millida-mod-forge-1.16.5-j21.jar", 65);
+        let java8 = jar("millida-mod-forge-1.16.5-j8.jar", 52);
+        assert_eq!(jar_java(&java21), Some(21));
+        assert_eq!(jar_java(&java8), Some(8));
+        assert!(!jar_fits(&java21, &profile("1.16.5", "forge", Some("36.2.39"))), "Java 8 не загрузит класс Java 21");
+        assert!(jar_fits(&java8, &profile("1.16.5", "forge", Some("36.2.39"))));
+        assert!(jar_fits(&java21, &profile("1.21.1", "neoforge", None)), "1.21.1 и так на Java 21");
+        assert!(runs_on(None, Some(8)) && runs_on(Some(17), None), "неизвестное с любой стороны мод не выключает");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

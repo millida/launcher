@@ -1,5 +1,5 @@
 // Modpack card from the catalog: icon, the "author hid the contents" flag, comparison with the catalog.
-// The icon is downloaded only from cdn.millida.trade and checked by size.
+// The icon is downloaded only from our trade CDN and checked by size.
 use crate::engine::*;
 use serde_json::Value;
 
@@ -10,8 +10,10 @@ pub const PACK_PROTECTED_KEY: &str = "catalogPackProtected";
 /// put there: a picture with another fingerprint is the player's own choice.
 pub const PACK_ICON_KEY: &str = "catalogPackIcon";
 
-// The only host we take the modpack icon from.
-const ICON_HOST: &str = "cdn.millida.trade";
+// The only places we take the modpack icon from: the trade bucket under its own
+// host and under /t/ on cdn.millida.net, where the API points it while the
+// own host is unreachable from Russia.
+const ICON_SOURCES: [(&str, &str); 2] = [("cdn.millida.trade", "/"), ("cdn.millida.net", "/t/")];
 const ICON_MAX_BYTES: usize = 2 * 1024 * 1024;
 const ICON_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
 
@@ -60,7 +62,11 @@ pub fn protected_builds() -> Vec<String> {
 
 fn icon_url_allowed(raw: &str) -> bool {
     let Ok(url) = url::Url::parse(raw.trim()) else { return false };
-    url.scheme() == "https" && url.host_str() == Some(ICON_HOST) && url.port().is_none() && url.username().is_empty()
+    if url.scheme() != "https" || url.port().is_some() || !url.username().is_empty() {
+        return false;
+    }
+    let Some(host) = url.host_str() else { return false };
+    ICON_SOURCES.iter().any(|(h, prefix)| host == *h && url.path().starts_with(prefix))
 }
 
 #[derive(Debug, PartialEq)]
@@ -199,8 +205,11 @@ mod tests {
 
     #[test]
     fn only_our_cdn_serves_pack_icons() {
-        let cases: [(&str, bool, &str); 6] = [
+        let cases: [(&str, bool, &str); 9] = [
             (ICON, true, "the catalogue stores pack icons here"),
+            ("https://cdn.millida.net/t/catalog/launcher-packs/oneblock-metalabs/2026-09-27/oneblock-icon.png", true, "the same bucket under the host reachable from Russia"),
+            ("https://cdn.millida.net/catalog/i.png", false, "outside /t/ cdn.millida.net is another bucket"),
+            ("https://cdn.millida.net.evil.example/t/i.png", false, "a look-alike of the new host is not ours either"),
             ("https://cdn.millida.trade.evil.example/i.png", false, "a look-alike host is not ours"),
             ("https://cdn.millida.trade:8443/i.png", false, "our CDN has no other port"),
             ("https://user@cdn.millida.trade/i.png", false, "credentials in the address are a disguise"),

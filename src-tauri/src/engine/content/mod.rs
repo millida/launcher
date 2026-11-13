@@ -15,6 +15,7 @@ mod catalog_file;
 mod pack_delta;
 mod pack_stream;
 mod pack_install;
+mod pack_link;
 mod pack_card;
 mod pack_contents;
 mod pack_edits;

@@ -129,6 +129,7 @@ jvm:
   -XX:SurvivorRatio=32
   -XX:+PerfDisableSharedMem
   -XX:MaxTenuringThreshold=1
+  -XX:ReservedCodeCacheSize=400M
   -Dfile.encoding=UTF-8
   -Dsun.stdout.encoding=UTF-8
   -Dsun.stderr.encoding=UTF-8

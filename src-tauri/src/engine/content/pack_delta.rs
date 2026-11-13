@@ -1,5 +1,6 @@
 // Delta update of a modpack: instead of the full archive, only the changed parts of the file are downloaded (HTTP Range). Hashes are checked.
 // Where it connects: the same archive address as in a normal install.
+use super::pack_link::PackLink;
 use crate::engine::*;
 use serde_json::Value;
 use std::collections::HashSet;
@@ -24,6 +25,10 @@ const MAX_REQUESTS: usize = 2000;
 const MERGE_GAP: u64 = 1 << 20;
 const GROUP_CAP: u64 = 64 << 20;
 const RANGE_TRIES: u32 = 3;
+/// New addresses one span may ask for after the storage refused the old one (pack_link).
+const RENEWALS: u32 = 2;
+/// A span the storage refused: the signed address ran out, not the data.
+const SPAN_REFUSED: &str = "storage refused the address";
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DeltaEntry {
@@ -402,7 +407,7 @@ pub(crate) fn content_range_ok(header: Option<&str>, from: u64, to_exclusive: u6
 }
 
 struct SpanTarget<'a> {
-    url: &'a str,
+    link: &'a PackLink,
     allow: fn(&str) -> bool,
     archive_size: u64,
     file: &'a Path,
@@ -412,11 +417,11 @@ fn span_bytes_on_disk(file: &Path) -> Result<u64, String> {
     std::fs::metadata(file).map(|m| m.len()).map_err(|e| io_fail("Обновление", file, &e))
 }
 
-async fn fetch_span_once(target: &SpanTarget<'_>, group: &Group, have: u64, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
+async fn fetch_span_once(target: &SpanTarget<'_>, url: &str, group: &Group, have: u64, job: &Job, on: &(dyn Fn(u64) + Send + Sync)) -> Result<(), String> {
     let cancel = Some(job.cancel_flag());
     let from = group.from + have;
     // Requests a part of the archive (Range header) from an address that already passed the check.
-    let req = client().get(target.url).header(reqwest::header::RANGE, format!("bytes={}-{}", from, group.to - 1));
+    let req = client().get(url).header(reqwest::header::RANGE, format!("bytes={}-{}", from, group.to - 1));
     let resp = or_pause(req.send(), cancel).await?.map_err(|e| net_err(&e))?;
     if !(target.allow)(resp.url().as_str()) {
         return Err("хранилище перенаправило на чужой адрес".into());
@@ -424,6 +429,9 @@ async fn fetch_span_once(target: &SpanTarget<'_>, group: &Group, have: u64, job:
     let status = resp.status();
     if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
         return Err(format!("storage is busy: {}", status));
+    }
+    if status == reqwest::StatusCode::FORBIDDEN && target.link.renewable() {
+        return Err(SPAN_REFUSED.into());
     }
     if status != reqwest::StatusCode::PARTIAL_CONTENT {
         return Err(format!("хранилище ответило {} вместо куска архива", status));
@@ -459,16 +467,27 @@ async fn fetch_span(target: &SpanTarget<'_>, group: &Group, job: &Job, on: &(dyn
     std::fs::File::create(target.file).map_err(|e| io_fail("Обновление", target.file, &e))?;
     let want = group.to - group.from;
     let mut tries = 0;
+    let mut renewals = 0;
     loop {
         let have = span_bytes_on_disk(target.file)?;
         if have == want {
             return Ok(());
         }
-        let why = match fetch_span_once(target, group, have, job, on).await {
+        // Taken per attempt: an update of hundreds of spans, or one resumed after a pause, outlives a signed address.
+        let url = target.link.current().await;
+        let why = match fetch_span_once(target, &url, group, have, job, on).await {
             Ok(()) => return Ok(()),
             Err(e) if e == CANCELLED || job.cancelled() => return Err(CANCELLED.into()),
             Err(e) if e == PAUSED => {
                 job.cancel_flag().gate().await?;
+                continue;
+            }
+            Err(e) if e == SPAN_REFUSED => {
+                renewals += 1;
+                if renewals > RENEWALS {
+                    return Err(e);
+                }
+                target.link.renew(&url).await?;
                 continue;
             }
             Err(e) if e.contains("вместо куска") || e.contains("не тот кусок") || e.contains("чужой адрес") => return Err(e),
@@ -488,7 +507,7 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Sen
 
 pub(crate) struct DeltaSource<'a> {
     pub(crate) file_id: &'a str,
-    pub(crate) url: &'a str,
+    pub(crate) link: &'a PackLink,
     pub(crate) archive_size: u64,
     pub(crate) installed: &'a Path,
     pub(crate) into: &'a Path,
@@ -539,7 +558,7 @@ pub(crate) async fn build_by_delta(app: &AppHandle, job: &Job, s: DeltaSource<'_
         }
     };
     job.emit(app, 12.0, "Скачиваем изменения…");
-    let target = SpanTarget { url: s.url, allow: super::catalog_pack::pack_url_allowed, archive_size: index.size, file: s.span_file };
+    let target = SpanTarget { link: s.link, allow: super::catalog_pack::pack_url_allowed, archive_size: index.size, file: s.span_file };
     for group in spans {
         fetch_span(&target, &group, job, &report).await?;
         let (idx, span, into) = (index.clone(), s.span_file.to_path_buf(), s.into.to_path_buf());
@@ -1042,8 +1061,8 @@ mod tests {
         let base = scratch("resume");
         let file = base.join("span");
         std::fs::write(&file, b"bytes of the previous group").unwrap();
-        let url = format!("http://{addr}/pack.zip");
-        let target = SpanTarget { url: &url, allow: any_host, archive_size: bytes.len() as u64, file: &file };
+        let link = PackLink::fixed(&format!("http://{addr}/pack.zip"));
+        let target = SpanTarget { link: &link, allow: any_host, archive_size: bytes.len() as u64, file: &file };
         let job = Job::start("test-pack-delta-resume".to_string(), "resume").unwrap();
         let counted = std::sync::atomic::AtomicU64::new(0);
         let on = |n: u64| {
@@ -1081,8 +1100,8 @@ mod tests {
             let (addr, asked) = range_server(bytes.clone(), script.to_vec()).await;
             let base = scratch(&format!("tries-{n}"));
             let file = base.join("span");
-            let url = format!("http://{addr}/pack.zip");
-            let target = SpanTarget { url: &url, allow: any_host, archive_size: bytes.len() as u64, file: &file };
+            let link = PackLink::fixed(&format!("http://{addr}/pack.zip"));
+            let target = SpanTarget { link: &link, allow: any_host, archive_size: bytes.len() as u64, file: &file };
             let job = Job::start(format!("test-pack-delta-tries-{n}"), "tries").unwrap();
             let result = fetch_span(&target, &group, &job, &|_: u64| {}).await;
             assert_eq!(result.is_ok(), *finishes, "{why}: {result:?}");

@@ -37,6 +37,8 @@ const prefWrites: Array<[string, string]> = []
 /// Содержимое файла настроек ядра, как его отдаёт uiPrefs.
 let diskPrefs: Record<string, string> = {}
 const remembered: Array<[string, unknown]> = []
+const forgets: unknown[] = []
+let forgetFails = false
 
 mock.module('../ipc/tauri', () => ({ hasTauri: () => true }))
 mock.module('../ipc/commands', () => ({
@@ -52,6 +54,10 @@ mock.module('../ipc/commands', () => ({
     return disk
   },
   millidaApi: (path: string, _m: string, body: Batch) => {
+    if (path === '/launcher/telemetry/forget') {
+      forgets.push(JSON.parse(JSON.stringify(body)))
+      return forgetFails ? Promise.reject(new Error('offline')) : Promise.resolve({})
+    }
     if (path !== '/launcher/telemetry') return Promise.resolve({})
     sent.push(JSON.parse(JSON.stringify(body)))
     if (!manual) return Promise.resolve({})
@@ -73,6 +79,8 @@ describe('очередь телеметрии', () => {
     release = []
     manual = false
     disk = null
+    forgets.length = 0
+    forgetFails = false
     for (const k of Object.keys(listeners)) delete listeners[k]
     ;(globalThis as { location: { hash: string } }).location.hash = ''
   })
@@ -216,6 +224,48 @@ describe('очередь телеметрии', () => {
     await T.rememberLiveBeat('idle', {})
     expect(remembered).toHaveLength(0)
     T.setTelemetryEnabled(true)
+  })
+
+  // Отказ от статистики просит сервер забыть уже отправленное: иначе «удалить свои данные» нельзя.
+  test('отказ от телеметрии просит сервер забыть эту установку', async () => {
+    const id = T.installId()
+    T.setTelemetryEnabled(false)
+    await tick()
+    await tick()
+    expect(forgets).toEqual([{ installId: id }])
+    expect(store.get('m-telemetry-forget')).toBeUndefined()
+    T.setTelemetryEnabled(true)
+  })
+
+  // Без сети в момент отказа просьба не теряется, а уходит при следующем запуске.
+  test('неудавшаяся просьба забыть повторяется при следующем запуске', async () => {
+    forgetFails = true
+    T.setTelemetryEnabled(false)
+    await tick()
+    await tick()
+    expect(store.get('m-telemetry-forget')).toBe('1')
+    forgetFails = false
+    forgets.length = 0
+    await T.initTelemetry(100)
+    await tick()
+    await tick()
+    expect(forgets.length).toBe(1)
+    expect(store.get('m-telemetry-forget')).toBeUndefined()
+    T.setTelemetryEnabled(true)
+  })
+
+  // Включил обратно до повтора — забывать уже нечего просить: данные снова собираются с согласия.
+  test('включённая обратно статистика снимает отложенную просьбу забыть', async () => {
+    forgetFails = true
+    T.setTelemetryEnabled(false)
+    await tick()
+    T.setTelemetryEnabled(true)
+    forgetFails = false
+    forgets.length = 0
+    await T.initTelemetry(100)
+    await tick()
+    expect(forgets.length).toBe(0)
+    expect(store.get('m-telemetry-forget')).toBeUndefined()
   })
 
   test('отказ от телеметрии чистит сохранённую очередь', () => {

@@ -1,6 +1,6 @@
 export const ABONENT_SLUG = 'abonent'
 
-const MEDIA = 'https://cdn.millida.trade/catalog/launcher-packs/abonent/page/'
+const MEDIA = 'https://cdn.millida.net/t/catalog/launcher-packs/abonent/page/'
 
 export const clip = (name: string) => ({ video: MEDIA + name + '.mp4', poster: MEDIA + name + '.jpg' })
 

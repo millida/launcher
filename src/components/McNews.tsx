@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { create } from 'zustand'
 import { hasTauri } from '../ipc/tauri'
 import { minecraftNews, openUrl, type McNews } from '../ipc/commands'
 import { backdropClose } from '../lib/dismiss'
 import { coreErrorText } from '../lib/coreErrors'
 import { useLocale, useT } from '../i18n'
+import { useMcNews } from './mcNewsStore'
 import '../styles/pixel/mcnews.css'
-
-export const useMcNews = create<{ open: boolean }>(() => ({ open: false }))
-export const openMcNews = () => useMcNews.setState({ open: true })
 
 type Load = { state: 'loading' } | { state: 'error'; text: string } | { state: 'ready'; items: McNews[] }
 

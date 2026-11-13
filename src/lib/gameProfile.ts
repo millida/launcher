@@ -230,6 +230,8 @@ export interface CosmeticItem {
   variants?: { name: string; color?: string; texture?: string; emissive?: string; preview?: string; code?: string; title?: string; rarity?: string; price?: number }[]
   /// Ранг вещи (у вещи-расцветки — ранг расцветки).
   rarity?: string
+  /// Метки подборок каталога: `TREND` — эмоции из трендов (чип гардероба и раздел магазина).
+  tags?: string[]
   /// v3.1: код исходной вещи у вещи-расцветки («ANGEL_WINGS» у «ANGEL_WINGS~red»).
   baseId?: string
   /// v3.1: цвет своей расцветки и базовой — превью перекрашивается из второго в первый.
@@ -359,12 +361,25 @@ function refreshCatalogLater() {
 }
 
 /**
+ * Только dev: демо (?preview) собирает каталог заново — dev-сервер подмешивает
+ * в него свои эмоции из docs/emotes, и копия с прошлого запуска прятала бы
+ * новые и правленые. Модуль демо сюда не тянем: он велик для этого файла.
+ */
+function previewCatalog(): boolean {
+  try {
+    return !('__TAURI_INTERNALS__' in window) && new URLSearchParams(location.search).has('preview')
+  } catch {
+    return false
+  }
+}
+
+/**
  * Каталог с прошлого запуска отдаётся сразу из IndexedDB: вещи надеваются без
  * 3-12 секунд ожидания 1,5 МБ. Свежая копия сети не просит, старая — догоняется
  * в фоне после показа экрана.
  */
 async function fetchCatalog(locale: string): Promise<{ at: number; value: Catalog }> {
-  const cached = await idbGet<Catalog>(catalogStoreKey(locale))
+  const cached = import.meta.env.DEV && previewCatalog() ? null : await idbGet<Catalog>(catalogStoreKey(locale))
   if (cached && Array.isArray(cached.value.items) && cached.value.items.length) {
     return { at: cached.at, value: expanded(cached.value) }
   }
@@ -464,7 +479,7 @@ export interface PlusStatus {
   /** Уровень оплаченной подписки (магазин v2). */
   tier?: 'PLUS' | 'DIAMOND' | null
   checkout?: 'gateway' | 'dollar-wallet'
-  checkoutOptions?: ('gateway' | 'dollar-wallet')[]
+  checkoutOptions?: ('gateway' | 'dollar-wallet' | 'stripe')[]
   quote?: Quote
 }
 
@@ -479,10 +494,10 @@ export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidU
 
 export type PlusTier = 'PLUS' | 'DIAMOND'
 
-export function subscribePlus(tier: PlusTier = 'PLUS'): Promise<{ subscriptionId: string; paymentUrl: string }> {
+export function subscribePlus(tier: PlusTier = 'PLUS', gateway?: 'stripe'): Promise<{ subscriptionId: string; paymentUrl: string }> {
   return api<{ subscriptionId: string; paymentUrl: string }>('/launcher/plus/subscribe', {
     method: 'POST',
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify(gateway ? { tier, gateway } : { tier }),
   })
 }
 

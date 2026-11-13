@@ -113,6 +113,14 @@ struct Task {
     size: u64,
 }
 
+/// An entry whose name Windows cannot hold (a device name, a colon, a trailing
+/// dot) is skipped, which is right for safety, but it used to vanish without a
+/// trace: a pack missing a mod the server demanded left support nothing to go on
+/// (11.11.2026). The launcher log names it now.
+fn skipped_entry(rel: &str) {
+    eprintln!("[unzip] пропущен файл с недопустимым именем: {}", rel);
+}
+
 /// Spreads the files of one archive over several threads, each with its own handle on the archive. `Ok(false)` means
 /// the layout asks for the one-by-one road (two entries that land on one name, where the last must win), and nothing
 /// has been written. Anything it did write goes into `written`, so a failure takes back exactly that.
@@ -137,7 +145,10 @@ fn extract_parallel(
         let file = zip.by_index_raw(i).map_err(|e| e.to_string())?;
         let Some(name) = file.enclosed_name() else { continue };
         let Some(rel) = place(&name) else { continue };
-        let Ok(out) = crate::engine::safe_join(dest, &rel) else { continue };
+        let Ok(out) = crate::engine::safe_join(dest, &rel) else {
+            skipped_entry(&rel);
+            continue;
+        };
         if file.is_dir() {
             folders.push(out);
             continue;
@@ -245,7 +256,10 @@ fn extract_entries(
         // (device names, colons, trailing dots) — safe_join covers those.
         let Some(name) = file.enclosed_name() else { continue };
         let Some(rel) = place(&name) else { continue };
-        let Ok(out) = crate::engine::safe_join(dest, &rel) else { continue };
+        let Ok(out) = crate::engine::safe_join(dest, &rel) else {
+            skipped_entry(&rel);
+            continue;
+        };
         if file.is_dir() {
             written.dir(&out).map_err(|e| super::io_fail("Распаковка", &out, &e))?;
             continue;
@@ -371,6 +385,7 @@ pub(crate) fn is_launcher_service_file(name: &str) -> bool {
     let low = name.to_ascii_lowercase();
     (low.starts_with("millida-") && low.ends_with(".json"))
         || low == "millida-args.txt"
+        || low == "millida-common-options.txt"
         || low.starts_with("servers.dat.millida")
 }
 
@@ -480,7 +495,7 @@ mod tests {
 
     #[test]
     fn service_files_are_recognised() {
-        for n in ["millida-settings.json", "millida-pack-launch.json", "MILLIDA-args.txt", "millida-args.txt", "servers.dat.millida", "servers.dat.millida.bak"] {
+        for n in ["millida-settings.json", "millida-pack-launch.json", "MILLIDA-args.txt", "millida-args.txt", "millida-common-options.txt", "servers.dat.millida", "servers.dat.millida.bak"] {
             assert!(is_launcher_service_file(n), "{n}");
         }
         for n in ["options.txt", "servers.dat", "millida.txt", "config.json"] {

@@ -606,6 +606,8 @@ export interface PackAutoUpdate {
   on: boolean
   modified: boolean
   chosen: boolean | null
+  removedMods: string[]
+  addedMods: string[]
 }
 
 export const packAutoUpdate = (profile: string) => invoke<PackAutoUpdate>('pack_auto_update', { profile })
@@ -1375,6 +1377,8 @@ export interface SkinDiagBuild {
   offReason: string | null
   playedAt: number | null
   agentSeen: boolean | null
+  ownMod: boolean
+  modToken: string | null
   root: string | null
   rootStale: boolean
   problems: string[]
@@ -1411,6 +1415,7 @@ export interface SkinDiag {
   fix: SkinDiagFix | null
   server: SkinDiagServer | null
   session: SkinDiagSession | null
+  owned: number | null
   builds: SkinDiagBuild[]
 }
 export const skinDiagnose = (nick: string, online: boolean) => invoke<SkinDiag>('skin_diagnose', { nick, online })
@@ -1532,6 +1537,9 @@ export interface Tuning {
 
 export const tuneProfile = (profile: string) => invoke<Tuning>('tune_profile', { profile })
 export const setAutoTune = (profile: string, on: boolean) => invoke<void>('set_auto_tune', { profile, on })
+/** Auto memory for every build at once; off, a build without its own memory gets half the machine. */
+export const autoTuneGlobal = () => invoke<boolean>('auto_tune_global')
+export const setAutoTuneGlobal = (on: boolean) => invoke<void>('set_auto_tune_global', { on })
 /** Memory of the build in MB, 0 for auto: the one value the launch takes. */
 export const setProfileRam = (profile: string, mb: number) => invoke<void>('set_profile_ram', { profile, mb })
 
