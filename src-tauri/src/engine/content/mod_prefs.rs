@@ -30,6 +30,10 @@ struct ContentPrefs {
     /// record, so no file is labelled either way.
     #[serde(default)]
     pack_origin: Option<BTreeSet<String>>,
+    /// Loader ids the player explicitly removed. Automatic launch repair must
+    /// not silently put these mods back into a custom instance.
+    #[serde(default)]
+    removed_mod_ids: BTreeSet<String>,
 }
 
 static PREFS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -56,6 +60,16 @@ fn edit_at<T>(pdir: &Path, f: impl FnOnce(&mut ContentPrefs) -> T) -> Result<T, 
 
 fn edit<T>(profile: &str, f: impl FnOnce(&mut ContentPrefs) -> T) -> Result<T, String> {
     edit_at(&profile_dir(profile), f)
+}
+
+pub(crate) fn removed_mod_ids(profile: &str) -> BTreeSet<String> {
+    load(profile).removed_mod_ids
+}
+
+pub(crate) fn remember_removed_mod_ids(profile: &str, ids: &[String]) -> Result<(), String> {
+    edit(profile, |p| {
+        p.removed_mod_ids.extend(ids.iter().filter(|id| !id.is_empty()).map(|id| id.to_ascii_lowercase()));
+    })
 }
 
 /// A catalogue project keeps its marks across updates, which rename the file;
@@ -283,6 +297,17 @@ pub(crate) fn annotate_content(profile: &str, kind: &str, list: &mut [ModFile]) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_mod_ids_survive_saved_preferences_and_old_files_still_load() {
+        let dir = std::env::temp_dir().join(format!("millida-removed-mods-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(PREFS_FILE), b"{\"locked\":[]}").unwrap();
+        edit_at(&dir, |p| { p.removed_mod_ids.insert("create".into()); }).unwrap();
+        assert!(load_at(&dir).removed_mod_ids.contains("create"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// (typed tags) -> what is stored.
     #[test]

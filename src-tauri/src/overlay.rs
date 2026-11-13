@@ -304,6 +304,10 @@ fn reveal(app: &AppHandle, win: &tauri::WebviewWindow, interactive: bool) -> Res
         let _ = app.emit_to(LABEL, "overlay-hover", hover);
     }
     crate::webview_health::set_low_memory(win, false);
+    #[cfg(windows)]
+    if !interactive {
+        show_without_focus(win);
+    }
     win.show().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
     set_passthrough(win, passthrough(interactive, hover));
@@ -314,6 +318,24 @@ fn reveal(app: &AppHandle, win: &tauri::WebviewWindow, interactive: bool) -> Res
         arm_hit_watch(app);
     }
     Ok(())
+}
+
+/// tao shows a window without activating it only on its first show (`focused(false)` is used up
+/// then); every later card came up with SW_SHOW and took the foreground from the game. GLFW hides
+/// the cursor of a game that lost focus with the cursor captured, and the keys, F11 too, went to
+/// the overlay: «the cursor is there but invisible», «F11 does not leave fullscreen» (11.11.2026).
+/// A passive card is put on screen without activation first. tao's own show then finds the window
+/// visible, where SW_SHOW changes nothing, and its state stays right for `hide`.
+#[cfg(windows)]
+fn show_without_focus(win: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+    if let Ok(hwnd) = win.hwnd() {
+        // unsafe: WinAPI on the overlay's own window handle.
+        unsafe {
+            ShowWindow(hwnd.0 as HWND, SW_SHOWNOACTIVATE);
+        }
+    }
 }
 
 pub fn hide(app: &AppHandle) {

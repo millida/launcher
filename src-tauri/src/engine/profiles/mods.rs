@@ -136,6 +136,30 @@ pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), Strin
     manifest_remove(profile, kind, &file);
     if kind == "mod" && is_injected_skin_mod(&file) {
         note_skin_mod_removed(profile);
+    } else if kind == "mod" && is_custom_skin_loader_jar(&file) {
+        note_csl_removed(profile);
+    }
+    Ok(())
+}
+
+/// Deletion from the UI carries the player's intent. Internal cleanup uses
+/// delete_content directly and must not suppress future dependency repair.
+pub fn delete_content_user(profile: &str, kind: &str, name: &str) -> Result<(), String> {
+    let file = safe_file_name(name)?;
+    let ids = if kind == "mod" {
+        scan_local_meta(profile, kind, false).into_iter()
+            .find(|m| m.file_name == file)
+            .map(|m| std::iter::once(m.mod_id).chain(m.provides).filter(|id| !id.is_empty()).collect::<Vec<_>>())
+            .unwrap_or_default()
+    } else { Vec::new() };
+    delete_content(profile, kind, &file)?;
+    if kind == "mod" {
+        remember_removed_mod_ids(profile, &ids)?;
+        // A catalogue update replaces the author's complete mods folder. A
+        // previous opt-in to automatic updates must not undo this deletion.
+        if pack_auto_update(profile).on {
+            set_pack_auto_update(profile, false)?;
+        }
     }
     Ok(())
 }

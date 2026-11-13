@@ -200,6 +200,9 @@ pub fn run() {
     // A copy started by a patch update waits for the old launcher to end, so the single-instance guard below does not
     // mistake it for a second start. The old exe it left beside itself stays until this copy's page has reported
     // ready (engine::mark_frontend_ready): a new exe that cannot even open leaves the old one to go back to.
+    // Before the builder: Tauri creates the window from its config before our setup runs, and a
+    // WebView2 that fails there panics with nobody listening (engine::install_panic_hook).
+    engine::install_panic_hook(env!("MILLIDA_VERSION").to_string());
     engine::wait_for_parent();
     cli::remember_startup_args();
     #[cfg(target_os = "linux")]
@@ -238,7 +241,6 @@ pub fn run() {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let _ = app.deep_link().register_all();
             }
-            engine::install_panic_hook(env!("MILLIDA_VERSION").to_string());
             allow_assets(app.handle());
             tray::init(app.handle());
             // macOS: the old LaunchAgent becomes a login item of the app itself, once and silently.
@@ -627,6 +629,8 @@ pub fn run() {
             commands::launch::seed_video_options,
             commands::launch::tune_profile,
             commands::launch::set_auto_tune,
+            commands::launch::auto_tune_global,
+            commands::launch::set_auto_tune_global,
             commands::launch::set_profile_ram,
             commands::profiles::screenshot_gallery,
             commands::profiles::delete_screenshot,

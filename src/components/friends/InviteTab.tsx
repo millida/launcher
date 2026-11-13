@@ -239,7 +239,8 @@ export function InviteTab({ on }: { on: boolean }) {
                 <span className="inv-step-n">{t.friends}</span>
                 {t.granted ? (
                   <Icon id="i-check" className="icon inv-step-ok" />
-                ) : t.reached && t.delayed ? (
+                ) : t.reached ? (
+                  // Reached and not yet given: a lit step without a mark read as «done, nothing came».
                   <Icon id="i-clock" className="icon inv-step-wait" />
                 ) : null}
               </span>
@@ -252,6 +253,20 @@ export function InviteTab({ on }: { on: boolean }) {
             </li>
           ))}
         </ol>
+        {data.tiers.some((step) => step.reached && !step.granted) ? (
+          <p className="faint-note inv-rule">
+            {t('Награда за ступень приходит сама, нажимать ничего не нужно: сундуки — в «Мои сундуки», PLUS — на аккаунт. Ступени с часами выдаются через 72 часа. Прошло больше трёх дней — напиши в поддержку.')}
+          </p>
+        ) : null}
+        {data.pending > 0 ? (
+          <p className="faint-note inv-rule">
+            {t('Ещё не засчитаны: {friends}. Друг засчитывается, когда наиграет {hours} ч за {n} дня.', {
+              friends: friendsText(data.pending),
+              hours,
+              n: data.rules.playDays,
+            })}
+          </p>
+        ) : null}
       </div>
 
       {data.friends.length ? (

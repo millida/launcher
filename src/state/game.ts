@@ -34,11 +34,15 @@ export const anyGameRunning = () => useGame.getState().list.length > 0
 export const isGameRunning = (profile: string) => useGame.getState().list.includes(profile)
 
 // The game outlives a launcher window reload, so button state comes from the core.
-export function syncRunningGame() {
-  if (!hasTauri()) return
-  void runningGames()
-    .then((list) => useGame.getState().setList(list || []))
-    .catch(() => {})
+export function syncRunningGame(): Promise<string[]> {
+  if (!hasTauri()) return Promise.resolve([])
+  return runningGames()
+    .then((list) => {
+      const running = list || []
+      useGame.getState().setList(running)
+      return running
+    })
+    .catch(() => [])
 }
 
 export function stopRunningGame(profile?: string | null) {

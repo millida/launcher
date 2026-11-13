@@ -432,9 +432,55 @@ interface CatalogItem {
   staffOnly?: boolean
 }
 
+// ── Свои эмоции до загрузки на сервер ───────────────────────────────────────
+//
+// Наборы из docs/emotes отдаёт dev-сервер (scripts/dev-cosmetic-models.mjs):
+// позиции каталога — здесь, модели — через /__dev/cosmetic-models. На сервере
+// они пока только у команды (staffOnly), а цену и редкость владелец задаёт
+// перед запуском: демо ставит заглушки, чтобы вещь было видно на витрине.
+
+type AuthoredItem = CatalogItem & { names?: Record<string, string>; rarity?: string | null; priceRubies?: number | null }
+
+let authoredAsk: Promise<AuthoredItem[]> | null = null
+function authoredEmotes(): Promise<AuthoredItem[]> {
+  if (!authoredAsk) {
+    authoredAsk = fetch('/__dev/emote-catalog')
+      .then((r) => (r.ok ? (r.json() as Promise<{ items?: AuthoredItem[] }>) : { items: [] }))
+      .then((r) => (Array.isArray(r.items) ? r.items : []))
+      .catch(() => [])
+  }
+  return authoredAsk
+}
+
+const DEMO_AUTHORED_PRICE = 999
+
+function asDemoItem(item: AuthoredItem, lang: string): CatalogItem {
+  const { names, ...rest } = item
+  return {
+    ...rest,
+    name: names?.[lang] ?? names?.['en'] ?? item.name,
+    staffOnly: false,
+    priceRubies: item.priceRubies ?? DEMO_AUTHORED_PRICE,
+    rarity: item.rarity ?? 'RARE',
+  } as CatalogItem
+}
+
+function withAuthored(items: CatalogItem[], authored: AuthoredItem[], lang: string): CatalogItem[] {
+  const known = new Set(items.map((x) => x.id))
+  return [...items, ...authored.filter((x) => !known.has(x.id)).map((x) => asDemoItem(x, lang))]
+}
+
+/** Живой каталог с подмешанными своими эмоциями; без живого — ошибка, и экран повторит запрос. */
+async function demoCatalog(pathname: string): Promise<{ items: CatalogItem[] }> {
+  const [r, authored] = await Promise.all([live<{ items: CatalogItem[] }>(pathname), authoredEmotes()])
+  if (!r || !Array.isArray(r.items)) throw new Error('catalog')
+  const lang = new URLSearchParams(pathname.split('?')[1] ?? '').get('lang') ?? 'ru'
+  return { ...r, items: withAuthored(r.items, authored, lang) }
+}
+
 async function catalogItems(): Promise<CatalogItem[]> {
-  const r = await live<{ items: CatalogItem[] }>('/cosmetics/catalog')
-  return (r && Array.isArray(r.items) ? r.items : []).filter((x) => x && !x.staffOnly)
+  const [r, authored] = await Promise.all([live<{ items: CatalogItem[] }>('/cosmetics/catalog'), authoredEmotes()])
+  return withAuthored(r && Array.isArray(r.items) ? r.items : [], authored, 'ru').filter((x) => x && !x.staffOnly)
 }
 
 /** Что «куплено»: первые вещи живого каталога, чтобы коллекция была не пустой. */
@@ -1227,6 +1273,7 @@ const ROUTES: [RegExp, Handler][] = [
     } catch {}
     return { ok: true, applied: items.length }
   }],
+  [/^\/cosmetics\/catalog$/, (p) => demoCatalog(p)],
   [/^\/cosmetics\/models\//, (p) => {
     const id = decodeURIComponent(bare(p).replace('/cosmetics/models/', ''))
     return DEMO_MODELS[id]

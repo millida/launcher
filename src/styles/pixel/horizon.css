@@ -13,4 +13,15 @@
 .hz-new {
   min-height: 52px; margin-top: 12px; padding: 8px 12px; background-color: var(--m-inset);
   --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: var(--px-well-ol); --px-ol-w: 1px; --px-ft: var(--px-well-t); --px-ft-w: 3px;
+  cursor: pointer;
+  transition: background-color var(--m-t-fast), color var(--m-t-fast);
 }
+.hz-new.off { cursor: not-allowed; }
+@media (hover: hover) and (pointer: fine) { .hz-new:hover:not(.off):not(.on) { background-color: var(--m-surface-2); } }
+.hz-new:focus-visible { outline: none; --px-ol: var(--m-accent); --px-ol-w: 2px; }
+.hz-new.on {
+  background-color: var(--m-accent-soft);
+  --px-ol: var(--m-accent); --px-ol-w: 3px; --px-ft: transparent; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 4px;
+}
+.hz-new.on .hz-title b { color: var(--m-accent); }

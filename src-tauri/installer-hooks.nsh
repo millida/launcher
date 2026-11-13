@@ -20,6 +20,9 @@ Var MillidaLen
 Var MillidaWipe
 Var MillidaFind
 Var MillidaEntry
+Var MillidaWv2
+Var MillidaWv2Find
+Var MillidaWv2Entry
 
 ; NSIS aborts the install with "Error opening file for writing" whenever the
 ; target is still held: the app running from the tray, an elevated instance the
@@ -77,8 +80,96 @@ Var MillidaEntry
   !insertmacro MillidaFreeFile "$INSTDIR\uninstall.exe"
 !macroend
 
+; WebView2 Runtime. Tauri's own section (webviewInstallMode) looked at one registry
+; value only and aborted the WHOLE install when it could not download or run
+; Microsoft's installer: players with a working runtime whose registration was
+; trimmed (Edge removal scripts, «lite» Windows builds, cleaners) got «Failed to
+; install WebView2» and no launcher at all. It is off (tauri.conf.json: skip) and
+; done here: any registration naming a real version counts, files on disk save a
+; failed repair from a false alarm, and a failure never stops the install. A
+; launcher that then cannot open its window says so itself (engine/core/crash.rs).
+!define MILLIDA_WV2_GUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+!define MILLIDA_WV2_CLIENT "Microsoft\EdgeUpdate\Clients\${MILLIDA_WV2_GUID}"
+!define MILLIDA_WV2_URL "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+!define MILLIDA_WV2_PAGE "https://developer.microsoft.com/microsoft-edge/webview2/"
+
+; A version in the registration; «0.0.0.0» is what Microsoft writes for «not installed».
+!macro MillidaWv2Version _root _key
+  ${If} $MillidaWv2 == ""
+  ${OrIf} $MillidaWv2 == "0.0.0.0"
+    ReadRegStr $MillidaWv2 ${_root} "${_key}" "pv"
+  ${EndIf}
+!macroend
+
+; $MillidaWv2Entry = "1" when msedgewebview2.exe is in a version folder under _dir.
+!macro MillidaWv2Files _dir
+  ${If} $MillidaWv2Entry != "1"
+    ClearErrors
+    FindFirst $MillidaWv2Find $MillidaWv2 "${_dir}\*"
+    ${DoUntil} ${Errors}
+      ${If} $MillidaWv2 != "."
+      ${AndIf} $MillidaWv2 != ".."
+      ${AndIf} ${FileExists} "${_dir}\$MillidaWv2\msedgewebview2.exe"
+        StrCpy $MillidaWv2Entry "1"
+        ${Break}
+      ${EndIf}
+      ClearErrors
+      FindNext $MillidaWv2Find $MillidaWv2
+    ${Loop}
+    FindClose $MillidaWv2Find
+  ${EndIf}
+!macroend
+
+!macro MillidaEnsureWebView2
+  ${If} $UpdateMode <> 1
+    StrCpy $MillidaWv2 ""
+    !insertmacro MillidaWv2Version HKLM "SOFTWARE\WOW6432Node\${MILLIDA_WV2_CLIENT}"
+    !insertmacro MillidaWv2Version HKLM "SOFTWARE\${MILLIDA_WV2_CLIENT}"
+    !insertmacro MillidaWv2Version HKCU "SOFTWARE\${MILLIDA_WV2_CLIENT}"
+    ${If} $MillidaWv2 == ""
+    ${OrIf} $MillidaWv2 == "0.0.0.0"
+      DetailPrint "WebView2 Runtime is not registered, installing it"
+      InitPluginsDir
+      Delete "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"
+      ; urlmon speaks HTTPS and follows the system proxy; NSISdl is the fallback.
+      System::Call 'urlmon::URLDownloadToFileW(p 0, w "${MILLIDA_WV2_URL}", w "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe", i 0, p 0) i .s'
+      Pop $MillidaExitCode
+      ${IfNot} ${FileExists} "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"
+        NSISdl::download "${MILLIDA_WV2_URL}" "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"
+        Pop $MillidaExitCode
+      ${EndIf}
+      StrCpy $MillidaExitCode "1"
+      ${If} ${FileExists} "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe"
+        ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $MillidaExitCode
+      ${EndIf}
+      ${If} $MillidaExitCode = 0
+        DetailPrint "WebView2 Runtime installed"
+      ${Else}
+        DetailPrint "WebView2 Runtime was not installed (code $MillidaExitCode), the launcher install goes on"
+        StrCpy $MillidaWv2Entry ""
+        !insertmacro MillidaWv2Files "$PROGRAMFILES32\Microsoft\EdgeWebView\Application"
+        !insertmacro MillidaWv2Files "$PROGRAMFILES64\Microsoft\EdgeWebView\Application"
+        !insertmacro MillidaWv2Files "$LOCALAPPDATA\Microsoft\EdgeWebView\Application"
+        ; The runtime is on disk: the repair failed, the launcher will most likely open anyway.
+        ${If} $MillidaWv2Entry != "1"
+        ${AndIfNot} ${Silent}
+        ${AndIf} $PassiveMode <> 1
+          ${If} $LANGUAGE = 1049
+            MessageBox MB_YESNO|MB_ICONEXCLAMATION "Не удалось установить компонент Microsoft WebView2 — без него окно лаунчера не откроется. Установка лаунчера продолжится.$\n$\nОткрыть страницу WebView2, чтобы поставить его вручную?" IDNO millida_wv2_done
+          ${Else}
+            MessageBox MB_YESNO|MB_ICONEXCLAMATION "Microsoft WebView2 could not be installed, and the launcher window will not open without it. The launcher install goes on.$\n$\nOpen the WebView2 page to install it by hand?" IDNO millida_wv2_done
+          ${EndIf}
+          ExecShell "open" "${MILLIDA_WV2_PAGE}"
+          millida_wv2_done:
+        ${EndIf}
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
   !insertmacro MillidaFreeInstallDir
+  !insertmacro MillidaEnsureWebView2
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL

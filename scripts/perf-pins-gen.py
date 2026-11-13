@@ -29,7 +29,9 @@ def rules(loader, mc):
         out.append(('renderer', ['sodium'], {'optifineClash': True}))
         out.append(('logic', ['lithium'], {}))
     elif loader == 'neoforge':
-        out.append(('renderer', ['sodium'], {'optifineClash': True}))
+        # Sodium for 26.3 crashes on NeoForge 26.3.0.65+, see BROKEN in fpsboost.rs.
+        if mc != '26.3':
+            out.append(('renderer', ['sodium'], {'optifineClash': True}))
         out.append(('logic', ['lithium'], {}))
     elif loader == 'forge' and v <= (1, 20, 1):
         out.append(('renderer', ['embeddium'], {'optifineClash': True}))

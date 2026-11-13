@@ -11,7 +11,7 @@ export function packAutoUpdateNote(s: PackAutoUpdate): string | null {
   return null
 }
 
-export function PackAutoUpdateRow({ profile }: { profile: string }) {
+export function PackAutoUpdateRow({ profile, revision }: { profile: string; revision?: number }) {
   const t = useT()
   const [state, setState] = useState<PackAutoUpdate | null>(null)
   const [busy, setBusy] = useState(false)
@@ -19,6 +19,9 @@ export function PackAutoUpdateRow({ profile }: { profile: string }) {
 
   useEffect(() => {
     setState(null)
+  }, [profile])
+
+  useEffect(() => {
     if (!hasTauri()) return
     const my = ++seq.current
     packAutoUpdate(profile)
@@ -26,7 +29,7 @@ export function PackAutoUpdateRow({ profile }: { profile: string }) {
         if (my === seq.current) setState(s)
       })
       .catch(() => {})
-  }, [profile])
+  }, [profile, revision])
 
   if (!state || !state.catalog) return null
 

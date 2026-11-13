@@ -387,37 +387,68 @@ async fn install_project_version_cancellable(
     let mut candidate = version.clone();
     let mut older: Option<Vec<Value>> = None;
     let mut demanded: Option<String> = None;
+    let mut clashing: Option<String> = None;
     for _ in 0..=LOADER_STEP_BACK {
         let placed = place_version(profile, kind, &candidate, cancel).await?;
-        let Some(range) = pin.as_ref().and_then(|p| file_loader_shortfall(&placed.dest, &placed.name, p)) else {
+        let shortfall = pin.as_ref().and_then(|p| file_loader_shortfall(&placed.dest, &placed.name, p));
+        let clashes = if kind == "mod" && shortfall.is_none() {
+            placed_version_clashes(profile, &placed.dest, &placed.name).await
+        } else {
+            vec![]
+        };
+        if shortfall.is_none() && clashes.is_empty() {
             record_version(profile, kind, project, &candidate, &placed.name).await;
             return Ok(placed.name);
-        };
+        }
         if placed.fresh {
             // Removes only the jar this call has just downloaded into the build: it would stop the loader on the next start.
             let _ = std::fs::remove_file(&placed.dest);
         }
-        demanded.get_or_insert(range);
         if older.is_none() {
-            older = Some(older_fitting(profile, project, &candidate).await);
+            older = Some(other_files(profile, project, &candidate, shortfall.is_some()).await);
+        }
+        match shortfall {
+            Some(range) => {
+                demanded.get_or_insert(range);
+            }
+            None => {
+                clashing.get_or_insert(clashes.into_iter().map(|c| c.text).collect::<Vec<_>>().join("; "));
+            }
         }
         match older.as_mut().filter(|o| !o.is_empty()).map(|o| o.remove(0)) {
             Some(v) => candidate = v,
             None => break,
         }
     }
-    match (pin, demanded) {
-        (Some(pin), Some(range)) => Err(loader_too_old_text(&fetch_project_meta(project).await.1, &pin, &range)),
+    match (pin, demanded, clashing) {
+        (Some(pin), Some(range), _) => Err(loader_too_old_text(&fetch_project_meta(project).await.1, &pin, &range)),
+        (_, _, Some(clashes)) => Err(version_clash_text(&fetch_project_meta(project).await.1, &clashes)),
         _ => Err("Файл не найден".into()),
     }
 }
 
-/// Files of the project older than `current` that fit the build, newest first.
-async fn older_fitting(profile: &str, project: &str, current: &Value) -> Vec<Value> {
+/// The files tried after `current` did not fit the build, newest first. A
+/// loader that is too old is only outgrown by older files; a version another
+/// mod of the build asks for may sit on either side of the picked file.
+async fn other_files(profile: &str, project: &str, current: &Value, older_only: bool) -> Vec<Value> {
     let ctx = ctx_of(profile, "mod");
-    let since = current["date_published"].as_str().unwrap_or("");
     let versions = project_versions(project).await.unwrap_or_default();
-    older_fitting_in(&versions, since, &ctx.game_version, &ctx.loaders, &ctx.bridge)
+    if older_only {
+        let since = current["date_published"].as_str().unwrap_or("");
+        return older_fitting_in(&versions, since, &ctx.game_version, &ctx.loaders, &ctx.bridge);
+    }
+    other_fitting_in(&versions, current["id"].as_str().unwrap_or(""), &ctx.game_version, &ctx.loaders, &ctx.bridge)
+}
+
+fn other_fitting_in(versions: &[Value], tried: &str, game_version: &str, loaders: &[String], bridge: &[String]) -> Vec<Value> {
+    versions
+        .iter()
+        .filter(|v| v["version_type"].as_str() != Some("alpha"))
+        .filter(|v| v["id"].as_str() != Some(tried))
+        .filter(|v| fits_build(v, game_version, loaders, bridge))
+        .take(LOADER_STEP_BACK)
+        .cloned()
+        .collect()
 }
 
 fn older_fitting_in(versions: &[Value], since: &str, game_version: &str, loaders: &[String], bridge: &[String]) -> Vec<Value> {
@@ -647,6 +678,8 @@ mod tests {
         assert_eq!(ids("2026-10-05"), vec!["486", "484", "483", "482"], "newest first, no alpha, no other loader, at most four downloads");
         assert_eq!(ids("2026-08-20"), vec!["481"], "only files older than the one that did not fit");
         assert!(ids("").is_empty(), "a version without a date has no «older» to step back to");
+        let around: Vec<String> = other_fitting_in(&versions, "484", "1.21.1", &["neoforge".to_string()], &[]).iter().map(|x| x["id"].as_str().unwrap_or("").to_string()).collect();
+        assert_eq!(around, vec!["487", "486", "483", "482"], "a file another mod of the build refuses gives way to its neighbours on both sides, newest first, itself and alphas left out");
     }
 
     /// Failed pick -> whether the audit may still offer «Поставить» as a retry.

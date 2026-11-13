@@ -10,6 +10,17 @@ use tauri::AppHandle;
 /// `0.155.2+26.1.2` is newer than `0.144.3+26.1` the way Fabric mod authors mean
 /// it, without pulling in a full semver crate for four comparison operators.
 fn cmp_version(a: &str, b: &str) -> Ordering {
+    let (core_a, pre_a) = pre_release_split(a);
+    let (core_b, pre_b) = pre_release_split(b);
+    cmp_numeric(core_a, core_b).then_with(|| match (pre_a, pre_b) {
+        (None, None) => Ordering::Equal,
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(x), Some(y)) => cmp_pre_release(x, y),
+    })
+}
+
+fn cmp_numeric(a: &str, b: &str) -> Ordering {
     let parts = |s: &str| -> Vec<i64> {
         s.split('+')
             .next()
@@ -27,6 +38,47 @@ fn cmp_version(a: &str, b: &str) -> Ordering {
         }
     }
     Ordering::Equal
+}
+
+const PRE_RELEASE_WORDS: [&str; 5] = ["alpha", "beta", "rc", "pre", "snapshot"];
+
+/// Whether the part of a version after its first `-` marks a pre-release.
+/// Loaders rank `0.9.3-beta.5` below `0.9.3`, and an addon pinned to
+/// `=0.9.3-beta.5` takes no other beta. A tail that names a flavour
+/// (`3.4.0-fabric`, `1.21-4.5`) is not one and keeps its numeric reading.
+pub(crate) fn is_pre_release(tail: &str) -> bool {
+    let low = tail.to_ascii_lowercase();
+    PRE_RELEASE_WORDS.iter().any(|w| low.starts_with(*w))
+}
+
+fn pre_release_split(version: &str) -> (&str, Option<&str>) {
+    let plain = version.split('+').next().unwrap_or(version);
+    match plain.split_once('-') {
+        Some((core, tail)) if is_pre_release(tail) => (core, Some(tail)),
+        _ => (plain, None),
+    }
+}
+
+/// Dot-separated identifiers the semver way: numbers by value and below words,
+/// words by spelling, and the shorter list first when one is a prefix.
+fn cmp_pre_release(a: &str, b: &str) -> Ordering {
+    let (mut xs, mut ys) = (a.split('.'), b.split('.'));
+    loop {
+        let step = match (xs.next(), ys.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) => match (x.parse::<u64>(), y.parse::<u64>()) {
+                (Ok(m), Ok(n)) => m.cmp(&n),
+                (Ok(_), Err(_)) => Ordering::Less,
+                (Err(_), Ok(_)) => Ordering::Greater,
+                (Err(_), Err(_)) => x.to_ascii_lowercase().cmp(&y.to_ascii_lowercase()),
+            },
+        };
+        if step != Ordering::Equal {
+            return step;
+        }
+    }
 }
 
 /// A minimal reading of Fabric's version predicate syntax: `>=`, `<=`, `>`, `<`,
@@ -992,16 +1044,132 @@ pub(crate) fn relations_on<'a>(m: &'a LocalMeta, runs: &[String]) -> Option<(&'a
     if loaders_mismatch(declared, runs) {
         return None;
     }
-    let pick = runs.iter().find_map(|build| {
+    Some(match manifest_on(m, runs) {
+        Some(r) => (&r.requires, &r.breaks),
+        None => (&m.requires, &m.breaks),
+    })
+}
+
+fn manifest_on<'a>(m: &'a LocalMeta, runs: &[String]) -> Option<&'a LoaderRelations> {
+    runs.iter().find_map(|build| {
         m.relations
             .iter()
             .find(|r| &r.loader == build)
             .or_else(|| m.relations.iter().find(|r| !loader_mismatch(&r.loader, build)))
-    });
-    Some(match pick {
-        Some(r) => (&r.requires, &r.breaks),
-        None => (&m.requires, &m.breaks),
     })
+}
+
+/// A version requirement one jar of a build puts on another that the pair
+/// does not meet: the loader stops on it before the game window opens.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct VersionClash {
+    /// File of the mod that states the requirement.
+    pub by: String,
+    pub text: String,
+}
+
+/// Whether a `depends` range is one `version_satisfies` reads exactly: plain
+/// comparisons of dotted versions. Wildcards, carets and tildes are left to
+/// the loader, so a requirement that cannot be read never refuses an install.
+fn exact_range(range: &str) -> bool {
+    let range = range.trim();
+    !range.is_empty()
+        && range.split_whitespace().all(|clause| {
+            let version = clause.trim_start_matches(['>', '<', '=']);
+            version.starts_with(|c: char| c.is_ascii_digit())
+                && version
+                    .split(['.', '-', '+'])
+                    .all(|p| !p.is_empty() && !p.eq_ignore_ascii_case("x") && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        })
+}
+
+fn version_demands<'a>(m: &'a LocalMeta, runs: &[String]) -> &'a [BreakRule] {
+    match (relations_on(m, runs), manifest_on(m, runs)) {
+        (Some(_), Some(r)) => &r.require_ranges,
+        _ => &[],
+    }
+}
+
+/// Only a jar that carries the id itself is judged: a library bundled inside
+/// another jar has a version of its own that the outer manifest does not show.
+fn unmet_demand(by: &LocalMeta, on: &LocalMeta, runs: &[String]) -> Option<VersionClash> {
+    let rule = version_demands(by, runs).iter().find(|r| r.id == on.mod_id)?;
+    let judged = exact_range(&rule.range) && on.version.starts_with(|c: char| c.is_ascii_digit());
+    (judged && !version_satisfies(&on.version, &rule.range)).then(|| VersionClash {
+        by: by.file_name.clone(),
+        text: format!("«{}» нужен «{}» версии {}, а не {}", by.title, on.title, rule.range, on.version),
+    })
+}
+
+/// What the incoming jar and the rest of the build ask of each other's
+/// versions and do not get. Modrinth lists files by game version and loader
+/// only: Reese's Sodium Options 2.2.5 installs next to Sodium 0.9.3-beta.5
+/// while its fabric.mod.json takes Sodium 0.9.2 alone. A file with the id of
+/// the incoming jar is the one being replaced and is left out.
+pub(crate) fn version_clashes(incoming: &LocalMeta, others: &[LocalMeta], runs: &[String]) -> Vec<VersionClash> {
+    others
+        .iter()
+        .filter(|o| o.mod_id != incoming.mod_id)
+        .flat_map(|o| [unmet_demand(incoming, o, runs), unmet_demand(o, incoming, runs)])
+        .flatten()
+        .collect()
+}
+
+async fn enabled_mods_except(profile: &str, file_name: &str) -> Vec<LocalMeta> {
+    let enabled = enabled_mod_files(profile);
+    scan_mods(profile).await.into_iter().filter(|m| m.file_name != file_name && enabled.contains(&m.file_name)).collect()
+}
+
+fn build_runs(ctx: &Ctx) -> Vec<String> {
+    std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect()
+}
+
+/// `version_clashes` for a jar that has just been put into the build.
+pub(crate) async fn placed_version_clashes(profile: &str, path: &std::path::Path, file_name: &str) -> Vec<VersionClash> {
+    let runs = build_runs(&ctx_of(profile, "mod"));
+    let incoming = read_file_meta(path, "mod", file_name);
+    version_clashes(&incoming, &enabled_mods_except(profile, file_name).await, &runs)
+}
+
+pub(crate) fn version_clash_text(title: &str, clashes: &str) -> String {
+    format!("«{}» не поставлен: {}. Поставь подходящие версии этих модов или убери один из них", title, clashes)
+}
+
+/// What the enabled mods of the build ask of the mod in `file_name`, added to
+/// `range`: a version picked for one requirement must not break another.
+pub(crate) async fn range_with_build_demands(profile: &str, file_name: &str, range: &str) -> String {
+    let runs = build_runs(&ctx_of(profile, "mod"));
+    let Some((target, others)) = split_incoming(scan_mods(profile).await, file_name) else {
+        return range.to_string();
+    };
+    let enabled = enabled_mod_files(profile);
+    let mut clauses: Vec<&str> = range.split_whitespace().filter(|c| *c != "*").collect();
+    for other in others.iter().filter(|o| enabled.contains(&o.file_name)) {
+        for rule in version_demands(other, &runs).iter().filter(|r| r.id == target.mod_id && exact_range(&r.range)) {
+            for clause in rule.range.split_whitespace() {
+                if !clauses.contains(&clause) {
+                    clauses.push(clause);
+                }
+            }
+        }
+    }
+    if clauses.is_empty() { "*".into() } else { clauses.join(" ") }
+}
+
+/// Files of the enabled mods whose requirement the mod in `file_name` does
+/// not meet in the version it is installed in.
+pub(crate) async fn unmet_dependents(profile: &str, file_name: &str) -> Vec<String> {
+    let runs = build_runs(&ctx_of(profile, "mod"));
+    let Some((target, others)) = split_incoming(scan_mods(profile).await, file_name) else {
+        return vec![];
+    };
+    let enabled = enabled_mod_files(profile);
+    others
+        .iter()
+        .filter(|o| enabled.contains(&o.file_name) && o.mod_id != target.mod_id)
+        .filter_map(|o| unmet_demand(o, &target, &runs))
+        .map(|c| c.by)
+        .collect()
 }
 
 /// The loader a build is pinned to. An unpinned build gets the newest stable
@@ -1260,6 +1428,13 @@ pub(crate) struct LaunchDeps {
     /// Mod ids it put nothing in for: no file for this build, or the mod is in the build in a form
     /// the jars do not show (another name, switched off).
     pub unresolved: Vec<String>,
+    /// A removed mod is still required by an enabled mod. The player must
+    /// choose which of those mods to keep; launch must not restore it silently.
+    pub removed_required: Vec<(String, String)>,
+}
+
+fn removed_requirements(missing: Vec<(String, String)>, removed: &std::collections::BTreeSet<String>) -> Vec<(String, String)> {
+    missing.into_iter().filter(|(id, _)| removed.contains(&id.to_ascii_lowercase())).collect()
 }
 
 /// The enabled mods of the build: their files without `.disabled`.
@@ -1364,6 +1539,13 @@ pub(crate) async fn settle_launch_deps(app: &AppHandle, profile: &str) -> Launch
     if known_complete(profile, &key) {
         return out;
     }
+    let removed = removed_mod_ids(profile);
+    if !removed.is_empty() {
+        if let Some((_, missing)) = launch_requirements(profile).await {
+            out.removed_required = removed_requirements(missing, &removed);
+            if !out.removed_required.is_empty() { return out; }
+        }
+    }
     let Some((ctx, missing)) = launch_requirements(profile).await else { return out };
     if missing.is_empty() {
         mark_complete(profile, key);
@@ -1454,7 +1636,19 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, retry_dep, BreakRule, DepNode, LocalMeta};
+    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, removed_requirements, retry_dep, BreakRule, DepNode, LocalMeta};
+
+    #[test]
+    fn a_player_removed_dependency_is_not_restored_at_launch() {
+        let removed = ["create".to_string()].into_iter().collect();
+        let addon = LocalMeta { mod_id: "createaddition".into(), title: "Create Crafts & Additions".into(), requires: vec!["create".into()], ..Default::default() };
+        let runs = ["forge".to_string()];
+        let missing = launch_missing(&[addon], &runs, "forge", None);
+        assert_eq!(removed_requirements(missing, &removed), vec![("create".into(), "Create Crafts & Additions".into())]);
+        let create = LocalMeta { mod_id: "create".into(), ..Default::default() };
+        let addon = LocalMeta { mod_id: "createaddition".into(), requires: vec!["create".into()], ..Default::default() };
+        assert!(removed_requirements(launch_missing(&[addon, create], &runs, "forge", None), &removed).is_empty());
+    }
 
     /// Required dependency of a Modrinth version -> whether the audit drops it as another loader's.
     #[test]
@@ -1564,6 +1758,78 @@ mod tests {
             let got = jar_blockers(incoming, &others, &runs, "fabric", Some("0.16.10"));
             assert_eq!(got.missing, missing, "{}: missing requirements. Why pinned: {why}", incoming.file_name);
             assert_eq!(got.clashes.len(), clashes, "{}: clashes {:?}. Why pinned: {why}", incoming.file_name, got.clashes);
+        }
+    }
+
+    fn pinned_jar(file: &str, id: &str, version: &str, needs: &[(&str, &str)]) -> LocalMeta {
+        let mut jar = declared_jar(file, id, version, &[], &[]);
+        jar.relations = vec![LoaderRelations {
+            loader: "fabric".into(),
+            require_ranges: needs.iter().map(|(id, range)| BreakRule { id: id.to_string(), range: range.to_string() }).collect(),
+            ..Default::default()
+        }];
+        jar
+    }
+
+    /// (incoming jar, the rest of the build) -> files whose version requirement
+    /// is not met. Ranges and versions are the ones published for Minecraft
+    /// 26.3 on 12.11.2026. A missed clash is a build Fabric refuses to start; a
+    /// false one refuses a mod that would have worked.
+    #[test]
+    fn a_jar_is_placed_only_next_to_the_versions_it_and_its_neighbours_ask_for() {
+        let sodium = |v: &str| pinned_jar(&format!("sodium-fabric-{v}.jar"), "sodium", v, &[]);
+        let reeses = |v: &str, needs: &str| pinned_jar(&format!("reeses-{v}.jar"), "reeses-sodium-options", v, &[("sodium", needs)]);
+        let bbe = |v: &str, needs: &str| pinned_jar(&format!("bbe-{v}.jar"), "betterblockentities", v, &[("sodium", needs)]);
+        let extra = pinned_jar("sodium-extra-0.9.4.jar", "sodium-extra", "0.9.4+mc26.3", &[("sodium", ">=0.9.2+mc26.3")]);
+        let mut fork = pinned_jar("fork.jar", "sodium-fork", "1.0.0", &[]);
+        fork.provides = vec!["sodium".into()];
+        let mut forge_addon = reeses("2.2.5+mc26.3", "=0.9.2+mc26.3");
+        forge_addon.loader = "forge".into();
+        let beta5 = "0.9.3-beta.5+mc26.3";
+        let runs = vec!["fabric".to_string()];
+        type Case<'a> = (LocalMeta, Vec<LocalMeta>, Vec<&'a str>, &'a str);
+        let cases: Vec<Case> = vec![
+            (reeses("2.2.5+mc26.3", "=0.9.2+mc26.3"), vec![sodium(beta5)], vec!["reeses-2.2.5+mc26.3.jar"], "the newest release of the addon takes Sodium 0.9.2 alone, and Modrinth still lists it for 26.3"),
+            (reeses("2.2.6-beta.4+mc26.3", "=0.9.3-beta.5+mc26.3"), vec![sodium(beta5)], vec![], "the beta of the addon built for this very Sodium beta"),
+            (reeses("2.2.6-beta.3+mc26.3", "=0.9.3-beta.4+mc26.3"), vec![sodium(beta5)], vec!["reeses-2.2.6-beta.3+mc26.3.jar"], "one beta is not another: the pin is exact"),
+            (sodium(beta5), vec![reeses("2.2.6-beta.1+mc26.3", "=0.9.3-beta.1+mc26.3")], vec!["reeses-2.2.6-beta.1+mc26.3.jar"], "an update of Sodium is judged by the addons already in the build"),
+            (sodium(beta5), vec![sodium("0.9.3-beta.1+mc26.3"), reeses("2.2.6-beta.4+mc26.3", "=0.9.3-beta.5+mc26.3")], vec![], "the old file of the same mod is the one being replaced"),
+            (bbe("1.4.1+mc26.3", ">=0.9.3-beta.3"), vec![sodium("0.9.2+mc26.3")], vec!["bbe-1.4.1+mc26.3.jar"], "the newest BBE release needs a Sodium beta, the build has the release before it"),
+            (bbe("1.4.0+mc26.3", ">=0.9.2-beta.2"), vec![sodium("0.9.2+mc26.3")], vec![], "a release is past its own betas"),
+            (bbe("1.4.1+mc26.3", ">=0.9.3-beta.3"), vec![sodium(beta5)], vec![], "a later beta clears a floor set at an earlier one"),
+            (sodium(beta5), vec![extra], vec![], "an open floor takes every later version"),
+            (reeses("1.0.0", "0.9.x"), vec![sodium(beta5)], vec![], "a wildcard is left to the loader: an unread range never refuses an install"),
+            (reeses("1.0.0", "^0.8.0"), vec![sodium(beta5)], vec![], "the same for a caret"),
+            (reeses("1.0.0", "*"), vec![sodium(beta5)], vec![], "any version"),
+            (reeses("2.2.5+mc26.3", "=0.9.2+mc26.3"), vec![fork], vec![], "a jar that only provides the id has a version of its own"),
+            (reeses("2.2.5+mc26.3", "=0.9.2+mc26.3"), vec![sodium("${version}")], vec![], "a version the build tool never filled in cannot be compared"),
+            (forge_addon, vec![sodium(beta5)], vec![], "a jar the build cannot load asks nothing of it"),
+        ];
+        for (incoming, others, want, why) in cases {
+            let got = version_clashes(&incoming, &others, &runs);
+            let by: Vec<&str> = got.iter().map(|c| c.by.as_str()).collect();
+            assert_eq!(by, want, "{} next to {:?}. Why pinned: {why}", incoming.file_name, others.iter().map(|o| o.file_name.as_str()).collect::<Vec<_>>());
+        }
+    }
+
+    /// (a, b) -> order. Loaders rank a pre-release below its release, and an
+    /// exact pin on one beta takes no other: both hang on this order.
+    #[test]
+    fn a_pre_release_sorts_below_its_release() {
+        let cases: [(&str, &str, Ordering, &str); 9] = [
+            ("0.9.3-beta.5", "0.9.3", Ordering::Less, "a beta comes before the release it leads to"),
+            ("0.9.2", "0.9.3-alpha.1", Ordering::Less, "the core number still decides first"),
+            ("0.9.3-beta.5", "0.9.3-beta.4", Ordering::Greater, "betas are ordered by their number"),
+            ("0.9.3-beta.10", "0.9.3-beta.9", Ordering::Greater, "by value, not by spelling"),
+            ("0.9.3-beta.1", "0.9.3-alpha.1", Ordering::Greater, "channels in their own order"),
+            ("0.9.3-rc.1", "0.9.3-beta.9", Ordering::Greater, "a release candidate is past every beta"),
+            ("0.9.3-beta.5+mc26.3", "0.9.3-beta.5", Ordering::Equal, "build metadata is not part of the order"),
+            ("3.4.0-fabric", "3.4.0", Ordering::Equal, "a loader flavour in the tail is not a pre-release"),
+            ("1.21-4.6", "1.21-4.5", Ordering::Greater, "a mod version after the game version keeps its numeric reading"),
+        ];
+        for (a, b, want, why) in cases {
+            assert_eq!(cmp_version(a, b), want, "{a} against {b}: {why}");
+            assert_eq!(cmp_version(b, a), want.reverse(), "{b} against {a}: the order must hold both ways. {why}");
         }
     }
 

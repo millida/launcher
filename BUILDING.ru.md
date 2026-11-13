@@ -26,7 +26,10 @@ winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quie
 
 После установки закрой и открой PowerShell заново — иначе он не увидит `bun` и `cargo`.
 
-WebView2 в Windows 11 уже есть. На Windows 10 — [скачать у Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
+В Windows 11 и большинстве поддерживаемых версий Windows 10 WebView2 уже есть.
+Если на машине для разработки его нет, [установи Runtime от Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
+Если Runtime нет, собранный из этого исходного кода установщик Windows скачивает bootstrapper
+Microsoft и ставит его (`src-tauri/installer-hooks.nsh`). Сбой на этом шаге установку лаунчера не останавливает.
 </details>
 
 <details>

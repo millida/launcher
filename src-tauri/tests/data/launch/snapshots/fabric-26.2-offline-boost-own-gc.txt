@@ -101,6 +101,7 @@ classpath (96):
 jvm:
   -Xmx4096M
   -XX:+IgnoreUnrecognizedVMOptions
+  -XX:ReservedCodeCacheSize=400M
   -Dfile.encoding=UTF-8
   -Dsun.stdout.encoding=UTF-8
   -Dsun.stderr.encoding=UTF-8
