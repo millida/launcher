@@ -11,10 +11,10 @@ How Millida Launcher files are signed and who is responsible for it.
   `gh attestation verify <file> -R millida/launcher`. The sums of all files are in `SHA256SUMS` of the release.
 - **Update signature.** Launcher updates are signed with a Millida key (minisign). The public part of the key is in
   [tauri.conf.json](src-tauri/tauri.conf.json). The launcher will not install an update without this signature.
-- **Windows signature (Authenticode).** Release files are moving to the free signing for open source projects:
-  free code signing provided by [SignPath.io](https://signpath.io), certificate by
-  [SignPath Foundation](https://signpath.org). Until this is connected, the release files are not signed. The installer on the
-  download button of the site is signed separately, with an EV certificate.
+- **Windows signature (Authenticode).** The launcher and its installer in every release are signed with a
+  [Certum](https://www.certum.eu) code signing certificate kept in the Certum cloud, with an RFC 3161 timestamp, so the
+  signature stays valid after the certificate expires. The installer on the download button of the site is signed
+  separately, with an EV certificate.
 - **macOS signature.** The build is signed without a developer certificate (ad-hoc). macOS will not open a downloaded disk image.
   Installing with the command from the [README](README.md) works, because the file arrives without the quarantine flag.
 
@@ -22,9 +22,10 @@ How Millida Launcher files are signed and who is responsible for it.
 
 - **Committers and reviewers** are members of the [millida](https://github.com/orgs/millida/people) organization.
   They write code and review other people's changes. Changes from outsiders are accepted only through a pull request.
-- **Approvers**: [l0l0l0l0l0l0l0l0l0l0l0l0](https://github.com/l0l0l0l0l0l0l0l0l0l0l0l0) approves every request to sign a release.
+- **Release managers**: only organization admins can push release tags. The signing credentials are available only to
+  builds of release tags, through a protected GitHub environment.
 
-All members sign in to GitHub and SignPath with two-factor authentication. The policy on the site: [millida.net/launcher/code-signing](https://millida.net/launcher/code-signing).
+All members sign in to GitHub with two-factor authentication. The policy on the site: [millida.net/launcher/code-signing](https://millida.net/launcher/code-signing).
 
 ## What is signed
 

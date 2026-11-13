@@ -4,9 +4,9 @@
 #
 # Every official installer is built here, on GitHub-hosted runners, from the
 # tagged commit. Updater signatures are added after the fact by the publisher,
-# who first checks these files against their build provenance. The only secret
-# is the SignPath token: Windows files are Authenticode-signed by SignPath
-# Foundation from artifacts this workflow uploads.
+# who first checks these files against their build provenance. The only secrets
+# are the Certum SimplySign credentials in the `signing` environment, which only
+# release tags can enter: Windows files are Authenticode-signed with ssign.
 name: Release
 
 on:
@@ -28,10 +28,10 @@ on:
         description: Version stamped into a trial build, nothing is published
         required: true
         default: "0.0.1"
-      signing_policy:
-        description: SignPath signing policy for the trial build, empty to skip signing
-        required: false
-        default: test-signing
+      sign:
+        description: Sign the Windows files of the trial build
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -103,6 +103,7 @@ jobs:
     # instead of holding back everyone else; the release job checks that every
     # required target uploaded its bundles.
     continue-on-error: ${{ matrix.optional == true }}
+    environment: ${{ matrix.platform == 'windows' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) && 'signing' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -152,10 +153,11 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ github.token }}
     env:
-      SIGNING_POLICY: ${{ inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY }}
       # Not SIGN: linuxdeploy-plugin-appimage treats any SIGN value as a request
       # to GPG-sign the AppImage and fails without a key.
-      WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && github.ref != 'refs/heads/main' && (inputs.signing_policy || vars.SIGNPATH_SIGNING_POLICY) != '' }}
+      WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) }}
+      SSIGN_VERSION: v0.1.11
+      SSIGN_SHA256: 54f49ed781fe9284d0f704faf1ca28175f21ea19881abc3fae62437146edc18f
       RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
       # The image already has all of it and this takes seconds; a package added
@@ -336,108 +338,63 @@ jobs:
           export CARGO_INCREMENTAL=1
           bun run tauri build ${{ matrix.runner_args }} --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
 
-      - name: Stage the app for signing
+      - name: Install ssign
         if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
           set -eu
-          mkdir -p unsigned/app
-          node .github/scripts/mark-bundle-type.mjs "$RELEASE_DIR" nsis > marked.txt
-          while read -r name; do cp "$RELEASE_DIR/$name" unsigned/app/; done < marked.txt
-          ls -l unsigned/app
+          curl -fsSL --retry 5 -o "$RUNNER_TEMP/ssign.tar.gz" \
+            "https://github.com/Le-Syl21/ssign/releases/download/$SSIGN_VERSION/ssign-linux-x86_64.tar.gz"
+          echo "$SSIGN_SHA256  $RUNNER_TEMP/ssign.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ssign"
+          tar -xzf "$RUNNER_TEMP/ssign.tar.gz" -C "$RUNNER_TEMP/ssign"
+          bin=$(find "$RUNNER_TEMP/ssign" -type f -name ssign | head -n 1)
+          [ -n "$bin" ] || { echo "::error::ssign binary not found in the release archive"; exit 1; }
+          install -m 0755 "$bin" /usr/local/bin/ssign
+          ssign --version
 
-      - name: Upload the unsigned app
-        if: env.WINDOWS_SIGNING == 'true'
-        id: unsigned-app
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: unsigned-app
-          retention-days: 1
-          if-no-files-found: error
-          path: unsigned/app
-
+      # ssign signs in place; the Authenticode digest excludes the signature, so
+      # an unchanged digest proves the signed file is the one that was built.
       - name: Sign the app
         if: env.WINDOWS_SIGNING == 'true'
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ env.SIGNING_POLICY }}
-          artifact-configuration-slug: app
-          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 7200
-          output-artifact-directory: signed/app
-
-      - name: Put the signed app in place
-        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
+        env:
+          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
+          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
         run: |
           set -eu
-          for f in unsigned/app/*.exe; do
-            name=$(basename "$f")
-            built=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
-            signed=$(node .github/scripts/pe-digest.mjs "signed/app/$name" | cut -d' ' -f1)
+          node .github/scripts/mark-bundle-type.mjs "$RELEASE_DIR" nsis > marked.txt
+          while read -r name; do
+            built=$(node .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
+            ssign "$RELEASE_DIR/$name"
+            signed=$(node .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
             if [ -z "$built" ] || [ "$built" != "$signed" ]; then
               echo "::error::signed $name is not the file that was built"
               exit 1
             fi
-            cp "signed/app/$name" "$RELEASE_DIR/$name"
-          done
+          done < marked.txt
 
       - name: Bundle
         if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: bun run tauri bundle --bundles nsis --target ${{ matrix.target }}
 
-      - name: Stage the installer for signing
-        if: env.WINDOWS_SIGNING == 'true'
-        shell: bash
-        run: |
-          set -eu
-          mkdir -p unsigned/installer
-          cp "$RELEASE_DIR"/bundle/nsis/*-setup.exe unsigned/installer/
-          ls -l unsigned/installer
-
-      - name: Upload the unsigned installer
-        if: env.WINDOWS_SIGNING == 'true'
-        id: unsigned-installer
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: unsigned-installer
-          retention-days: 1
-          if-no-files-found: error
-          path: unsigned/installer
-
       - name: Sign the installer
         if: env.WINDOWS_SIGNING == 'true'
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ env.SIGNING_POLICY }}
-          artifact-configuration-slug: installer
-          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 7200
-          output-artifact-directory: signed/installer
-
-      - name: Put the signed installer in place
-        if: env.WINDOWS_SIGNING == 'true'
         shell: bash
+        env:
+          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
+          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
         run: |
           set -eu
-          for f in unsigned/installer/*.exe; do
-            name=$(basename "$f")
+          for f in "$RELEASE_DIR"/bundle/nsis/*-setup.exe; do
             built=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
-            signed=$(node .github/scripts/pe-digest.mjs "signed/installer/$name" | cut -d' ' -f1)
+            ssign "$f"
+            signed=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
             if [ -z "$built" ] || [ "$built" != "$signed" ]; then
-              echo "::error::signed $name is not the file that was built"
+              echo "::error::signed $(basename "$f") is not the file that was built"
               exit 1
             fi
-            cp "signed/installer/$name" "$RELEASE_DIR/bundle/nsis/$name"
           done
 
       - name: Check signatures
@@ -446,15 +403,11 @@ jobs:
         run: |
           set -eu
           files=("$RELEASE_DIR"/bundle/nsis/*-setup.exe)
-          for f in unsigned/app/*.exe; do files+=("$RELEASE_DIR/$(basename "$f")"); done
+          while read -r name; do files+=("$RELEASE_DIR/$name"); done < marked.txt
           for f in "${files[@]}"; do
-            if ! osslsigncode extract-signature -in "$f" -out "$RUNNER_TEMP/signature.der" > /dev/null; then
-              echo "::error::$(basename "$f") carries no signature"
-              exit 1
-            fi
-            if [ "$SIGNING_POLICY" = "release-signing" ]; then
-              osslsigncode verify -in "$f" -CAfile /etc/ssl/certs/ca-certificates.crt
-            fi
+            osslsigncode verify -in "$f" \
+              -CAfile /etc/ssl/certs/ca-certificates.crt \
+              -TSA-CAfile /etc/ssl/certs/ca-certificates.crt
             echo "$(basename "$f"): signed"
           done
 
