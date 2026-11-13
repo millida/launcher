@@ -15,6 +15,43 @@ pub(crate) fn quiet(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
+/// The AppImage runtime points LD_LIBRARY_PATH, PATH, GTK and GStreamer paths
+/// into its own mount, which holds Ubuntu 22.04 libraries such as readline 8.1.
+/// A host program started with them (gamemoderun and other wrappers are bash
+/// scripts) loads those instead of its own and dies before running, e.g. Arch's
+/// bash with "undefined symbol: rl_trim_arg_from_keyseq".
+fn appimage_leftovers(appdir: &str, vars: impl IntoIterator<Item = (String, String)>) -> Vec<(String, Option<String>)> {
+    let root = appdir.trim_end_matches('/');
+    if root.is_empty() {
+        return Vec::new();
+    }
+    let mount_prefix = format!("{root}/");
+    let inside = |entry: &str| entry == root || entry.starts_with(&mount_prefix);
+    vars.into_iter()
+        .filter(|(_, value)| value.split(':').any(inside))
+        .map(|(name, value)| {
+            let host: Vec<&str> = value.split(':').filter(|entry| !entry.is_empty() && !inside(entry)).collect();
+            let restored = (!host.is_empty()).then(|| host.join(":"));
+            (name, restored)
+        })
+        .collect()
+}
+
+pub(crate) fn outside_appimage(cmd: &mut Command) -> &mut Command {
+    if !cfg!(target_os = "linux") {
+        return cmd;
+    }
+    let Ok(appdir) = std::env::var("APPDIR") else { return cmd };
+    let vars = std::env::vars_os().filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)));
+    for (name, restored) in appimage_leftovers(&appdir, vars) {
+        match restored {
+            Some(value) => cmd.env(name, value),
+            None => cmd.env_remove(name),
+        };
+    }
+    cmd
+}
+
 /// How a child that may be told to stop ended.
 #[derive(Debug)]
 pub(crate) enum Ran {
@@ -105,6 +142,42 @@ mod tests {
         .expect("the command starts");
         assert!(matches!(ran, Ran::Stopped), "a stopped child gives no output: {ran:?}");
         assert!(began.elapsed() < Duration::from_secs(10), "it took {:?}: the child was waited for", began.elapsed());
+    }
+
+    fn leftovers(appdir: &str, vars: &[(&str, &str)]) -> Vec<(String, Option<String>)> {
+        appimage_leftovers(appdir, vars.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+    }
+
+    #[test]
+    fn host_programs_get_the_environment_without_the_appimage_mount() {
+        let mount = "/tmp/.mount_MillidAbC";
+        let got = leftovers(
+            mount,
+            &[
+                ("LD_LIBRARY_PATH", "/tmp/.mount_MillidAbC/usr/lib/:/tmp/.mount_MillidAbC/lib64/:"),
+                ("PATH", "/tmp/.mount_MillidAbC/usr/bin/:/usr/local/bin:/usr/bin"),
+                ("XDG_DATA_DIRS", "/tmp/.mount_MillidAbC/usr/share:/usr/share:/usr/local/share"),
+                ("GST_PLUGIN_SCANNER_1_0", "/tmp/.mount_MillidAbC/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"),
+                ("APPDIR", mount),
+                ("APPIMAGE", "/home/p/Apps/Millida-Launcher.AppImage"),
+                ("HOME", "/home/p"),
+                ("MANPATH", "/tmp/.mount_MillidAbCdef/share"),
+            ],
+        );
+        let want: Vec<(String, Option<String>)> = vec![
+            ("LD_LIBRARY_PATH".into(), None),
+            ("PATH".into(), Some("/usr/local/bin:/usr/bin".into())),
+            ("XDG_DATA_DIRS".into(), Some("/usr/share:/usr/local/share".into())),
+            ("GST_PLUGIN_SCANNER_1_0".into(), None),
+            ("APPDIR".into(), None),
+        ];
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn nothing_changes_without_a_mount() {
+        assert!(leftovers("", &[("PATH", "/usr/bin")]).is_empty());
+        assert!(leftovers("/", &[("PATH", "/usr/bin")]).is_empty());
     }
 
     /// Without a stop it is the usual `output`: exit status and both streams.

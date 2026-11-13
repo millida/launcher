@@ -102,7 +102,6 @@ import { ChipRow, SectionBar } from '../components/character/Sections'
 import type { Section } from '../components/character/Sections'
 import { ItemGrid, ItemTile } from '../components/character/ItemTile'
 import { FittingBar } from '../components/character/FittingBar'
-import { ModHint } from '../components/character/ModHint'
 import { nametagSpot } from '../components/character/Nametag'
 import { Outfits } from '../components/character/Outfits'
 import { SetLooks } from '../components/character/SetLooks'
@@ -2790,6 +2789,10 @@ export function Skins({ on }: { on: boolean }) {
             trackFailure('skins', e, { step: 'license_skin' })
             showToast(t('На лицензию скин не уехал: {error}', { error: tx(e) }), 'error')
           }
+        } else {
+          const expired = t('вход по лицензии Microsoft устарел')
+          trackFailure('skins', new Error(expired), { step: 'license_session' })
+          showToast(t('На лицензию скин не уехал: {error}', { error: expired }), 'error')
         }
       }
       if (hasMillidaAccount()) {
@@ -3626,7 +3629,6 @@ export function Skins({ on }: { on: boolean }) {
             ) : !use3d ? (
               <span className="skin-loader" aria-label={t('Загружаем модель')}></span>
             ) : null}
-            <ModHint on={on} />
           </div>
 
           <FittingBar

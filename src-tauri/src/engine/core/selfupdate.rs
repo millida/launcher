@@ -772,7 +772,7 @@ fn relaunch_after_exit(target: &Path, opener: &str) -> Result<(), String> {
         opener
     );
     // A short sh script: waits until our process closes, then starts the new copy. The command line is built in the code above, nothing foreign gets in.
-    std::process::Command::new("/bin/sh")
+    super::proc::outside_appimage(&mut std::process::Command::new("/bin/sh"))
         .arg("-c")
         .arg(script)
         .arg("millida-relaunch")

@@ -1,5 +1,7 @@
-/* High contrast: text at full white on black surfaces, visible separations and a focus ring
-   on everything the keyboard reaches. Only the tokens change, so every screen follows. */
+/* High contrast: text at full white on black surfaces, a solid white edge on everything that can be
+   pressed and a yellow ring on the keyboard focus. Pixel buttons are cut with clip-path, which also
+   cuts an outside outline, so every edge here is drawn inside the shape: the stepped frame through
+   --px-ol and a plain outline with a negative offset for elements without the frame. */
 :root[data-contrast="high"] {
   --m-bg: #000000;
   --m-surface: #000000;
@@ -12,8 +14,31 @@
   --m-fg-muted: #ffffff;
   --m-fg-subtle: rgba(255, 255, 255, .9);
   --m-fg-faint: rgba(255, 255, 255, .78);
+  --m-accent-soft: rgba(var(--m-accent-rgb), .32);
+  --px-on-accent: #000000;
+  --px-btn-ol: #ffffff;
+  --px-well-ol: #ffffff;
+  --px-plate-t: rgba(255, 255, 255, .5);
 }
-:root[data-contrast="high"] :focus-visible {
+:root[data-contrast="high"] :is(button, a[href], [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], select):not(:disabled) {
+  --px-ol: #ffffff !important;
+  --px-ol-w: 2px !important;
+  outline: 2px solid #ffffff;
+  outline-offset: -2px;
+}
+:root:root[data-contrast="high"] :is(.btn.primary, .nav-item.active, .set-tab.on, [aria-checked="true"], [aria-selected="true"], [aria-pressed="true"]):not(:disabled) {
+  --px-ol: var(--m-warning) !important;
+  outline-color: var(--m-warning);
+}
+:root[data-contrast="high"] :is(button, a[href], [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], input, select, textarea):focus-visible {
+  --px-ol: var(--m-warning) !important;
+  --px-ol-w: 3px !important;
   outline: 3px solid var(--m-warning);
-  outline-offset: 2px;
+  outline-offset: -3px;
+}
+:root[data-contrast="high"] :is(button, [role="button"]):disabled {
+  opacity: .6;
+}
+:root[data-contrast="high"] a[href] {
+  text-decoration: underline;
 }

@@ -1591,6 +1591,7 @@ pub(crate) async fn start_game(app: AppHandle, spec: StartSpec, perf: &super::la
         // Starts Java from the launcher folder (or the one the player picked) with the ready command line,
         // through the wrapper the player confirmed for this build, if any.
         let mut cmd = super::launch_hooks::game_command(&hooks, &ansi_safe_path(exe));
+        crate::engine::core::outside_appimage(&mut cmd);
         super::launch_hooks::apply_env(&hooks, &mut cmd);
         // CREATE_NO_WINDOW on Windows, otherwise every launch pops a console window.
         quiet(&mut cmd);

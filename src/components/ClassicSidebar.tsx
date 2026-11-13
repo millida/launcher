@@ -23,6 +23,7 @@ import { t, tx, useT } from '../i18n'
 /** hub: раздел «Во что играем» — false «Мои сборки» (сборки и рекомендации), true «Каталог». */
 const NAV: { id: ScreenId; icon: string; label: string; pill?: string; hub?: boolean }[] = [
   { id: 'play', icon: 'i-play', get label() { return t('Играть') } },
+  { id: 'hosting', icon: 'i-server-cog', get label() { return t('Мой сервер') } },
   { id: 'playhub', icon: 'i-box2', get label() { return t('Мои сборки') }, hub: false },
   { id: 'playhub', icon: 'i-blocks', get label() { return t('Каталог') }, hub: true },
   { id: 'servers', icon: 'i-server', get label() { return t('Серверы') } },
@@ -30,7 +31,6 @@ const NAV: { id: ScreenId; icon: string; label: string; pill?: string; hub?: boo
   { id: 'rubies', icon: 'i-gem', get label() { return t('Магазин') } },
   { id: 'top', icon: 'i-trophy', get label() { return t('Топ') } },
   { id: 'friends', icon: 'i-users', get label() { return t('Друзья') } },
-  { id: 'hosting', icon: 'i-server-cog', get label() { return t('Мой сервер') } },
 ]
 
 const NAV_BOTTOM: { id: ScreenId; icon: string; label: string }[] = [{ id: 'settings', icon: 'i-settings', get label() { return t('Настройки') } }]
@@ -123,15 +123,16 @@ export function ClassicSidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
 
   return (
     <aside className={'sidebar' + (collapsed ? ' collapsed' : '')}>
-      {/* Свернуть — не строкой меню, а уголком, который проявляется при
-          наведении на панель (как в Notion и Linear). По умолчанию панель открыта. */}
       <button
-        className="cl-fold"
+        className="side-collapse"
+        data-tip={collapsed ? t('Развернуть меню') : t('Свернуть меню')}
         aria-label={collapsed ? t('Развернуть меню') : t('Свернуть меню')}
-        title={collapsed ? t('Развернуть меню') : t('Свернуть меню')}
         onClick={toggleCollapsed}
       >
-        <Icon id={collapsed ? 'i-chev-r' : 'i-chev-l'} />
+        <span className="side-collapse-ic">
+          <Icon id={collapsed ? 'i-chev-r' : 'i-chev-l'} />
+        </span>
+        <span className="nav-label">{t('Свернуть')}</span>
       </button>
 
       <nav className="nav-group">
