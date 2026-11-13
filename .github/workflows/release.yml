@@ -363,11 +363,11 @@ jobs:
           CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
         run: |
           set -eu
-          node .github/scripts/mark-bundle-type.mjs "$RELEASE_DIR" nsis > marked.txt
+          bun .github/scripts/mark-bundle-type.mjs "$RELEASE_DIR" nsis > marked.txt
           while read -r name; do
-            built=$(node .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
+            built=$(bun .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
             ssign "$RELEASE_DIR/$name"
-            signed=$(node .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
+            signed=$(bun .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
             if [ -z "$built" ] || [ "$built" != "$signed" ]; then
               echo "::error::signed $name is not the file that was built"
               exit 1
@@ -388,9 +388,9 @@ jobs:
         run: |
           set -eu
           for f in "$RELEASE_DIR"/bundle/nsis/*-setup.exe; do
-            built=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
+            built=$(bun .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
             ssign "$f"
-            signed=$(node .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
+            signed=$(bun .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
             if [ -z "$built" ] || [ "$built" != "$signed" ]; then
               echo "::error::signed $(basename "$f") is not the file that was built"
               exit 1
