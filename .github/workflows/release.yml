@@ -450,7 +450,10 @@ jobs:
   sign-windows-app:
     name: Sign Windows app
     needs: build
-    if: ${{ github.repository == 'millida/launcher' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) }}
+    # A status check of its own: the image job above is skipped whenever the
+    # build image is already published, and a skipped ancestor skips every job
+    # that does not ask for the result itself.
+    if: ${{ !cancelled() && needs.build.result != 'skipped' && github.repository == 'millida/launcher' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) }}
     runs-on: ubuntu-latest
     environment: signing
     permissions:
@@ -482,6 +485,7 @@ jobs:
   bundle-windows:
     name: Bundle Windows installer
     needs: sign-windows-app
+    if: ${{ !cancelled() && needs.sign-windows-app.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -532,6 +536,7 @@ jobs:
   sign-windows-installer:
     name: Sign Windows installer
     needs: bundle-windows
+    if: ${{ !cancelled() && needs.bundle-windows.result == 'success' }}
     runs-on: ubuntu-latest
     environment: signing
     permissions:
