@@ -6,7 +6,7 @@
       "name": "MillidaLauncherSetup.exe",
       "sha256": "046b8e68ac8a639b95bfd93c65199ec57b037901cdec20b6734fd0e8c2de6241",
       "signed": "authenticode",
-      "signer": "ИП Веселов Никита Николаевич (EV, GlobalSign)",
+      "signer": "Roman Babaskin (Certum)",
       "built": "вне GitHub, 03.09.2026; замена — подписанный файл из релиза setup-v*"
     },
     {
