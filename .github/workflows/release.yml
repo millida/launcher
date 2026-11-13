@@ -6,7 +6,8 @@
 # tagged commit. Updater signatures are added after the fact by the publisher,
 # who first checks these files against their build provenance. The only secrets
 # are the Certum SimplySign credentials in the `signing` environment, which only
-# release tags can enter: Windows files are Authenticode-signed with ssign.
+# release tags can enter. Windows files are Authenticode-signed in jobs of their
+# own that install no project dependencies, so no build code sees the secrets.
 name: Release
 
 on:
@@ -103,7 +104,6 @@ jobs:
     # instead of holding back everyone else; the release job checks that every
     # required target uploaded its bundles.
     continue-on-error: ${{ matrix.optional == true }}
-    environment: ${{ matrix.platform == 'windows' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) && 'signing' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -156,8 +156,6 @@ jobs:
       # Not SIGN: linuxdeploy-plugin-appimage treats any SIGN value as a request
       # to GPG-sign the AppImage and fails without a key.
       WINDOWS_SIGNING: ${{ matrix.platform == 'windows' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) }}
-      SSIGN_VERSION: v0.1.11
-      SSIGN_SHA256: 54f49ed781fe9284d0f704faf1ca28175f21ea19881abc3fae62437146edc18f
       RELEASE_DIR: src-tauri/target/${{ matrix.target }}/release
     steps:
       # The image already has all of it and this takes seconds; a package added
@@ -328,9 +326,10 @@ jobs:
           ls -l "$RELEASE_DIR"/bundle/*/
 
       # Signed Windows build: the app exe is signed before it goes into the
-      # installer, then the installer itself. Tauri stamps the bundle type into
-      # the exe while bundling, which would break a signature made earlier, so
-      # the stamp is applied here first and the bundler finds nothing to patch.
+      # installer, then the installer itself, each in a job of its own below.
+      # Tauri stamps the bundle type into the exe while bundling, which would
+      # break a signature made earlier, so the stamp is applied here first and
+      # the bundler finds nothing to patch.
       - name: Build
         if: env.WINDOWS_SIGNING == 'true'
         shell: bash
@@ -338,78 +337,24 @@ jobs:
           export CARGO_INCREMENTAL=1
           bun run tauri build ${{ matrix.runner_args }} --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
 
-      - name: Install ssign
+      - name: Stage the app for signing
         if: env.WINDOWS_SIGNING == 'true'
         shell: bash
         run: |
           set -eu
-          curl -fsSL --retry 5 -o "$RUNNER_TEMP/ssign.tar.gz" \
-            "https://github.com/Le-Syl21/ssign/releases/download/$SSIGN_VERSION/ssign-linux-x86_64.tar.gz"
-          echo "$SSIGN_SHA256  $RUNNER_TEMP/ssign.tar.gz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/ssign"
-          tar -xzf "$RUNNER_TEMP/ssign.tar.gz" -C "$RUNNER_TEMP/ssign"
-          bin=$(find "$RUNNER_TEMP/ssign" -type f -name ssign | head -n 1)
-          [ -n "$bin" ] || { echo "::error::ssign binary not found in the release archive"; exit 1; }
-          install -m 0755 "$bin" /usr/local/bin/ssign
-          ssign --version
-
-      # ssign signs in place; the Authenticode digest excludes the signature, so
-      # an unchanged digest proves the signed file is the one that was built.
-      - name: Sign the app
-        if: env.WINDOWS_SIGNING == 'true'
-        shell: bash
-        env:
-          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
-          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
-        run: |
-          set -eu
+          mkdir -p unsigned/app
           bun .github/scripts/mark-bundle-type.mjs "$RELEASE_DIR" nsis > marked.txt
-          while read -r name; do
-            built=$(bun .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
-            ssign "$RELEASE_DIR/$name"
-            signed=$(bun .github/scripts/pe-digest.mjs "$RELEASE_DIR/$name" | cut -d' ' -f1)
-            if [ -z "$built" ] || [ "$built" != "$signed" ]; then
-              echo "::error::signed $name is not the file that was built"
-              exit 1
-            fi
-          done < marked.txt
+          while read -r name; do cp "$RELEASE_DIR/$name" unsigned/app/; done < marked.txt
+          ls -l unsigned/app
 
-      - name: Bundle
+      - name: Upload the unsigned app
         if: env.WINDOWS_SIGNING == 'true'
-        shell: bash
-        run: bun run tauri bundle --bundles nsis --target ${{ matrix.target }}
-
-      - name: Sign the installer
-        if: env.WINDOWS_SIGNING == 'true'
-        shell: bash
-        env:
-          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
-          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
-        run: |
-          set -eu
-          for f in "$RELEASE_DIR"/bundle/nsis/*-setup.exe; do
-            built=$(bun .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
-            ssign "$f"
-            signed=$(bun .github/scripts/pe-digest.mjs "$f" | cut -d' ' -f1)
-            if [ -z "$built" ] || [ "$built" != "$signed" ]; then
-              echo "::error::signed $(basename "$f") is not the file that was built"
-              exit 1
-            fi
-          done
-
-      - name: Check signatures
-        if: env.WINDOWS_SIGNING == 'true'
-        shell: bash
-        run: |
-          set -eu
-          files=("$RELEASE_DIR"/bundle/nsis/*-setup.exe)
-          while read -r name; do files+=("$RELEASE_DIR/$name"); done < marked.txt
-          for f in "${files[@]}"; do
-            osslsigncode verify -in "$f" \
-              -CAfile /etc/ssl/certs/ca-certificates.crt \
-              -TSA-CAfile /etc/ssl/certs/ca-certificates.crt
-            echo "$(basename "$f"): signed"
-          done
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-app-unsigned
+          retention-days: 1
+          if-no-files-found: error
+          path: unsigned/app
 
       # curve25519.c has no runtime dispatch, so BMI2 or AVX2 in its object file
       # means the build drifted past baseline x86-64.
@@ -429,7 +374,7 @@ jobs:
           fi
 
       - name: Collect bundles
-        if: github.ref != 'refs/heads/main'
+        if: github.ref != 'refs/heads/main' && env.WINDOWS_SIGNING != 'true'
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
@@ -440,7 +385,7 @@ jobs:
         run: bash .github/scripts/collect-bundles.sh
 
       - uses: actions/upload-artifact@v4
-        if: github.ref != 'refs/heads/main'
+        if: github.ref != 'refs/heads/main' && env.WINDOWS_SIGNING != 'true'
         with:
           name: bundle-${{ matrix.target }}
           retention-days: 3
@@ -453,6 +398,134 @@ jobs:
         with:
           path: src-tauri/target/${{ matrix.target }}/release/incremental
           key: release-v1-incremental-${{ matrix.target }}-${{ github.run_id }}
+
+  # The signing jobs check out only the CI scripts and run nothing from the
+  # project's dependencies: the OTP seed can sign anything as us, so it must not
+  # share a machine with code from npm or crates.io.
+  sign-windows-app:
+    name: Sign Windows app
+    needs: build
+    if: ${{ github.repository == 'millida/launcher' && ((startsWith(github.ref, 'refs/tags/v') && vars.WINDOWS_SIGNING == 'true') || (github.event_name == 'workflow_dispatch' && inputs.sign)) }}
+    runs-on: ubuntu-latest
+    environment: signing
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-app-unsigned
+          path: app
+
+      - name: Sign
+        env:
+          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
+          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
+        run: bash .github/scripts/sign-windows.sh app/*.exe
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-app-signed
+          retention-days: 1
+          if-no-files-found: error
+          path: app
+
+  bundle-windows:
+    name: Bundle Windows installer
+    needs: sign-windows-app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/millida/launcher-xwin-build:24.04
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.0"
+
+      - run: bun install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Set version from the tag
+        if: github.ref != 'refs/heads/main'
+        shell: bash
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: bash .github/scripts/set-version.sh "${VERSION_INPUT:-${GITHUB_REF_NAME#v}}"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-app-signed
+          path: src-tauri/target/x86_64-pc-windows-msvc/release
+
+      - name: Bundle
+        shell: bash
+        run: bun run tauri bundle --bundles nsis --target "$TARGET"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-installer-unsigned
+          retention-days: 1
+          if-no-files-found: error
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+
+  sign-windows-installer:
+    name: Sign Windows installer
+    needs: bundle-windows
+    runs-on: ubuntu-latest
+    environment: signing
+    permissions:
+      contents: read
+    env:
+      TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer-unsigned
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+
+      - name: Sign
+        env:
+          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
+          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
+        run: bash .github/scripts/sign-windows.sh src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+
+      - name: Collect bundles
+        if: github.ref != 'refs/heads/main'
+        env:
+          UPDATER_KEY: windows-x86_64
+          UPDATER_DIR: nsis
+          UPDATER_PATTERN: "*-setup.exe"
+          UPDATER_EXTRA: ""
+        run: bash .github/scripts/collect-bundles.sh
+
+      - uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/main'
+        with:
+          name: bundle-x86_64-pc-windows-msvc
+          retention-days: 3
+          if-no-files-found: error
+          path: upload/x86_64-pc-windows-msvc
 
   # Every main build saves a new incremental state per target under its run id;
   # only the newest is kept, or they would push the dependency caches out of the
@@ -630,7 +703,7 @@ jobs:
 
   release:
     name: GitHub release
-    needs: [build, macos]
+    needs: [build, macos, sign-windows-installer]
     # Not a plain success check: an optional matrix leg may fail. Required
     # targets are enforced by release-assets.mjs, and a leg uploads its bundles
     # only as its last step, so a missing bundle means a failed build.
