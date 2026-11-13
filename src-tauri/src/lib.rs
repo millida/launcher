@@ -671,6 +671,8 @@ mod tests {
         "core:window:allow-close",
         "core:window:allow-destroy",
         "core:window:allow-start-dragging",
+        // Interface size in Settings: zooming the webview reflows the layout, CSS zoom on the root did not.
+        "core:webview:allow-set-webview-zoom",
         "updater:allow-check",
         "updater:allow-download",
         "updater:allow-install",
