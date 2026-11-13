@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://millida.net/launcher/antivirus"><img src=".github/readme/trust-virus-ru.png" width="49%" alt="Без вирусов: каждый установщик проверен VirusTotal"></a>
   <img src=".github/readme/trust-account-ru.png" width="49%" alt="Аккаунт в безопасности: пароль вводится только на сайте Microsoft">
-  <img src=".github/readme/trust-signed-ru.png" width="49%" alt="Установщик с сайта подписан EV-сертификатом GlobalSign">
+  <img src=".github/readme/trust-signed-ru.png" width="49%" alt="Установщик с сайта подписан сертификатом Certum">
   <a href="ARCHITECTURE.md"><img src=".github/readme/trust-open-ru.png" width="49%" alt="Код открыт: любую строку можно проверить здесь"></a>
 </p>
 
@@ -42,7 +42,7 @@
 <details>
 <summary><b>Windows</b> — установщик <code>.exe</code></summary>
 
-1. Скачай и запусти [установщик с подписью](https://github.com/millida/launcher/releases/download/setup-signed-1/MillidaLauncherSetup.exe) — лаунчер откроется сам.
+1. Скачай и запусти [установщик с подписью](https://github.com/millida/launcher/releases/download/setup-signed-2/MillidaLauncherSetup.exe) — лаунчер откроется сам.
 2. Если появилось синее окно «Windows защитила ваш компьютер»: **«Подробнее»** → **«Выполнить в любом случае»**.
 
 Обновления лаунчер ставит сам.
