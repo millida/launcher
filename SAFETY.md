@@ -93,7 +93,7 @@ Statistics (version, hardware, crashes, clicks; tied to your account if you are 
 
   | System | File behind the button | Where it was built | Who signed it |
   | --- | --- | --- | --- |
-  | Windows | `MillidaLauncherSetup.exe`, 1.9 MB, in the [setup-signed-1](https://github.com/millida/launcher/releases/tag/setup-signed-1) release. It does not contain the launcher: it downloads the installer of the current version, the same bytes as in the release here | outside GitHub, 2026-09-03 | GlobalSign EV certificate, sole proprietor Veselov Nikita Nikolaevich |
+  | Windows | `MillidaLauncherSetup.exe`, 1.9 MB, in the [setup-signed-1](https://github.com/millida/launcher/releases/tag/setup-signed-1) release. It does not contain the launcher: it downloads the installer of the current version, the same bytes as in the release here | outside GitHub, 2026-09-03 | Certum code signing certificate, Roman Babaskin |
   | macOS | `Millida-Launcher-aarch64.dmg`, `Millida-Launcher-x64.dmg`. After that the launcher updates from builds in Releases | outside GitHub, 2026-09-10 | Developer ID: Mark Sheremeta (G6P84BXZCC), notarized by Apple |
   | Linux | `.deb`, `.rpm`, AppImage | here; these are the release files | not signed; checked against `SHA256SUMS` and the attestation |
 
