@@ -4,7 +4,7 @@
  * лагает» на больших сборках: предлагаем поднять до автоподбора одной
  * кнопкой. Мало свободной памяти у самого ПК — подсказка закрыть программы.
  */
-import { applyGfxPreset, gfxPresetState, ramCheck, seedVideoOptions, type RamCheck } from '../ipc/commands'
+import { applyGfxPreset, autoTuneGlobal, gfxPresetState, ramCheck, seedVideoOptions, type RamCheck } from '../ipc/commands'
 import { uiChoice } from '../state/confirm'
 import { showToast } from '../state/ui'
 import { t, tx } from '../i18n'
@@ -165,6 +165,8 @@ export async function prelaunchCare(profile: string): Promise<void> {
     return
   }
   if (advice.kind !== 'raise' || skipped(profile)) return
+  // Автоподбор выключен для всего лаунчера: игрок сам решает, сколько памяти дать, и не просит подсказок.
+  if (!(await autoTuneGlobal().catch(() => true))) return
   const answer = await uiChoice(t('Сборке нужно {need} ГБ памяти, а выделено {have} ГБ. С таким объёмом она будет тормозить и может вылететь.', { need: advice.toGb, have: advice.haveGb }), {
     title: t('Мало памяти'),
     confirmLabel: t('Дать {n} ГБ', { n: advice.toGb }),

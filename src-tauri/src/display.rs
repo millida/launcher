@@ -75,6 +75,11 @@ mod win {
         unsafe {
             SetWindowSubclass(hwnd.0 as HWND, Some(proc), SUBCLASS_ID, 0);
         }
+        // The subclass is attached after the window was built: a scale or display change
+        // during the build (a window rebuilt from the tray right after a fullscreen game
+        // restored the desktop) was never seen, and the page stayed painted at the old
+        // size inside a black window (11.11.2026). One recovery after the build covers it.
+        schedule();
     }
 
     unsafe extern "system" fn proc(
@@ -191,9 +196,14 @@ mod win {
             return;
         }
         let Some(window) = app.get_webview_window("main") else { return };
+        // A number, not the pointer: the closure below must be Send.
+        let Ok(top) = window.hwnd() else { return };
+        let top = top.0 as isize;
         fit_to_monitor(&window);
         // Окно в трее остаётся невидимым для WebView2 и после смены экрана.
         let shown = window.is_visible().unwrap_or(true);
+        // What the webview is told here is what the message handler would tell it.
+        APPLIED.store(if shown { 2 } else { 1 }, Ordering::SeqCst);
         let _ = window.with_webview(move |webview| unsafe {
             let controller = webview.controller();
             let mut parent = windows::Win32::Foundation::HWND::default();
@@ -201,14 +211,16 @@ mod win {
                 return;
             }
             let parent = parent.0 as HWND;
+            let top = top as HWND;
+            // The size comes from the main window. wry's host window is the one that can be
+            // left at the old size, and copying its rectangle kept the page at that size.
             let mut client: RECT = std::mem::zeroed();
-            if GetClientRect(parent, &mut client) != 0 {
-                let _ = controller.SetBounds(windows::Win32::Foundation::RECT {
-                    left: client.left,
-                    top: client.top,
-                    right: client.right,
-                    bottom: client.bottom,
-                });
+            if GetClientRect(top, &mut client) != 0 {
+                let (width, height) = (client.right - client.left, client.bottom - client.top);
+                if parent != top {
+                    SetWindowPos(parent, std::ptr::null_mut(), 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                let _ = controller.SetBounds(windows::Win32::Foundation::RECT { left: 0, top: 0, right: width, bottom: height });
             }
             // Without this the webview keeps hit-testing against the position
             // the window had before the display was reset.

@@ -4,7 +4,7 @@ import { getAccount, useAccounts } from '../../state/accounts'
 import { setScreen } from '../../state/ui'
 import { MAX_WAIT_MS, lobby3dAllowed, mark3dLoaded, preloadQuietMs } from '../../lib/lazy3d'
 import { whenIdle } from '../../lib/idle'
-import { readLobbyStill, stageGeom, stillPlacement, type LobbyStill, type StillPlace } from '../../lib/lobbyStill'
+import { STILL_LOOK_EVENT, readLobbyStill, stageGeom, stillPlacement, type LobbyStill, type StillPlace } from '../../lib/lobbyStill'
 import { hostEl, keep, notify, subscribe } from './lobbyKeep'
 import { noted } from '../../lib/noted'
 import { loadMine3d } from '../../lib/mine3d'
@@ -107,6 +107,17 @@ export function LobbyFigure() {
       if (url) URL.revokeObjectURL(url)
     }
   }, [nick, activeId, allowed, round])
+
+  // Образ сменился, пока на месте фигуры снимок: на снимке старый скин. Без WebGL его не сменило бы
+  // ничто, и игрок видел только что заменённый скин на фигуре (11.11.2026). Хранимый снимок
+  // удаляет сам lib/lobbyStill.
+  useEffect(() => {
+    const drop = () => {
+      if (!liveRef.current) setStill(null)
+    }
+    window.addEventListener(STILL_LOOK_EVENT, drop)
+    return () => window.removeEventListener(STILL_LOOK_EVENT, drop)
+  }, [])
 
   // Снимок подгоняется под нынешнюю сцену и следует за размером окна: ноги и рост фигуры те же,
   // что встанут в 3D, даже если окно растянули, пока грузится сцена.

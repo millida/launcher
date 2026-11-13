@@ -3,7 +3,7 @@ import { apiErrorText } from '../lib/apiError'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
 import { showToast } from '../state/ui'
-import { loadProfileSettings, setAutoTune, tuneProfile, type Tuning } from '../ipc/commands'
+import { autoTuneGlobal, loadProfileSettings, setAutoTune, tuneProfile, type Tuning } from '../ipc/commands'
 import { useT } from '../i18n'
 
 interface Props {
@@ -20,6 +20,8 @@ export function TunePanel({ profile, manualGb }: Props) {
   const t = useT()
   const [tuning, setTuning] = useState<Tuning | null>(null)
   const [on, setOn] = useState(true)
+  // Off in the launcher settings: wins over the build's own switch.
+  const [globalOn, setGlobalOn] = useState(true)
   const [showFlags, setShowFlags] = useState(false)
 
   const load = useCallback(() => {
@@ -27,6 +29,9 @@ export function TunePanel({ profile, manualGb }: Props) {
     void tuneProfile(profile).then(setTuning).catch(() => {})
     void loadProfileSettings(profile)
       .then((s) => setOn((s as { autoTune?: boolean }).autoTune !== false))
+      .catch(() => {})
+    void autoTuneGlobal()
+      .then(setGlobalOn)
       .catch(() => {})
   }, [profile])
 
@@ -41,16 +46,21 @@ export function TunePanel({ profile, manualGb }: Props) {
         <small>
           {overridden
             ? t('Вручную {manual} ГБ · авто дал бы {auto} ГБ', { manual: manualGb, auto: Math.round(tuning.ramMb / 1024) })
-            : on
-              ? t('{n} ГБ памяти', { n: Math.round(tuning.ramMb / 1024) })
-              : t('Выключен — половина ОЗУ')}
+            : !globalOn
+              ? t('Выключен в настройках лаунчера — половина ОЗУ')
+              : on
+                ? t('{n} ГБ памяти', { n: Math.round(tuning.ramMb / 1024) })
+                : t('Выключен — половина ОЗУ')}
         </small>
       </span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '320px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span
-            className={'tgl' + (on ? ' on' : '')}
+            className={'tgl' + (on && globalOn ? ' on' : '')}
+            aria-disabled={!globalOn}
+            style={globalOn ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
             onClick={() => {
+              if (!globalOn) return
               const next = !on
               setOn(next)
               setAutoTune(profile, next)

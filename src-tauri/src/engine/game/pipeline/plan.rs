@@ -295,6 +295,15 @@ pub(crate) struct ArgsInput<'a> {
     pub platform: &'a Platform,
 }
 
+/// LWJGL 2 hands the OpenAL path to `LoadLibraryA` as `String.getBytes()`, that is in
+/// `file.encoding`, while Windows reads it in the ANSI code page. UTF-8 bytes of a non-ASCII
+/// path name no file there, OpenAL is not found and the game starts without sound.
+pub(crate) fn utf8_file_encoding_mutes_openal(platform: &Platform, classpath: &[PathBuf], natives_dir: &Path) -> bool {
+    platform.os == "windows"
+        && !natives_dir.to_string_lossy().is_ascii()
+        && classpath.iter().any(|jar| jar.file_name().is_some_and(|name| name.to_string_lossy().starts_with("lwjgl-2.")))
+}
+
 /// The whole command line after `java`, in the order the JVM reads it. The JVM keeps the last of
 /// two equal flags, so everything the launcher adds on its own stands left of the player's own
 /// arguments, and the version's own arguments are passed as the description lists them.
@@ -342,8 +351,10 @@ pub(crate) fn jvm_args(i: &ArgsInput<'_>) -> Vec<String> {
     // player's own arguments on purpose: this is a default, and a player who
     // pins another encoding must still win. Without it the game writes the
     // console code page and every non-ASCII line arrived as mojibake.
+    let ansi_file_encoding = utf8_file_encoding_mutes_openal(i.platform, i.classpath, i.natives_dir);
     for (n, a) in ["-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8"]
         .into_iter()
+        .filter(|f| !(ansi_file_encoding && f.starts_with("-Dfile.encoding=")))
         .filter(|f| {
             let key = f.split('=').next().unwrap_or_default();
             !own.unwrap_or("").split_whitespace().any(|a| a.starts_with(key))
@@ -355,7 +366,7 @@ pub(crate) fn jvm_args(i: &ArgsInput<'_>) -> Vec<String> {
     // Same order and for the same reason: auto-tuning goes to the left of the
     // player's own arguments and stays quiet once the boost mode has already
     // placed its GC profile.
-    for (n, a) in tuned_flags_for(i.auto_tune, own.unwrap_or(""), i.boost_on).into_iter().enumerate() {
+    for (n, a) in tuned_flags_for(i.auto_tune, own.unwrap_or(""), i.boost_on, i.ram_mb).into_iter().enumerate() {
         args.insert(1 + n, a);
     }
     // Zero means "let the game decide": passing --width/--height 0 makes
@@ -603,6 +614,65 @@ mod tests {
             game_env(Some("t"), Some("p"), false),
             vec![("MILLIDA_TOKEN", "t".to_string()), ("MILLIDA_PARTY", "p".to_string()), ("MILLIDA_TELEMETRY", "0".to_string())]
         );
+    }
+
+    /// (system, LWJGL jar, natives folder) -> is the UTF-8 `file.encoding` default left out.
+    /// Without OpenAL an old game starts silent and says nothing to the player.
+    #[test]
+    fn an_old_game_under_a_non_ascii_windows_path_keeps_its_sound() {
+        const WIN: Platform = Platform { os: "windows", arch: "x86_64", bits: "64" };
+        const LINUX: Platform = Platform { os: "linux", arch: "x86_64", bits: "64" };
+        const MAC: Platform = Platform { os: "osx", arch: "x86_64", bits: "64" };
+        let cyrillic = "C:/Users/Вася/AppData/Roaming/net.millida.launcher/minecraft/versions/1.12.2/natives";
+        let ascii = "C:/Users/Ivan/AppData/Roaming/net.millida.launcher/minecraft/versions/1.12.2/natives";
+        let cases: [(Platform, &str, &str, bool, &str); 7] = [
+            (WIN, "lwjgl-2.9.4-nightly-20150209.jar", cyrillic, true, "1.12.2: UTF-8 bytes of the OpenAL path are not a file name for LoadLibraryA"),
+            (WIN, "lwjgl-2.9.1.jar", cyrillic, true, "1.7.10 loads OpenAL the same way"),
+            (WIN, "lwjgl-2.9.4-nightly-20150209.jar", ascii, false, "an ASCII path is the same bytes in both encodings, the log stays UTF-8"),
+            (WIN, "lwjgl-3.3.1.jar", cyrillic, false, "LWJGL 3 does not pass the path through file.encoding"),
+            (WIN, "lwjgl-glfw-3.3.1.jar", cyrillic, false, "a LWJGL 3 module is not LWJGL 2"),
+            (LINUX, "lwjgl-2.9.4-nightly-20150209.jar", "/home/Вася/.local/share/millida/versions/1.12.2/natives", false, "dlopen wants the UTF-8 bytes the default gives"),
+            (MAC, "lwjgl-2.9.2-nightly-20140822.jar", "/Users/Вася/Library/millida/versions/1.12.2/natives", false, "macOS file names are UTF-8 too"),
+        ];
+        let v = json!({ "id": "1.12.2", "minecraftArguments": "--username ${auth_player_name}" });
+        let args_of = |platform: &Platform, classpath: &[PathBuf], natives: &Path, settings: &Value| {
+            jvm_args(&ArgsInput {
+                v: &v,
+                main_class: "net.minecraft.client.main.Main",
+                classpath,
+                nick: "Steve",
+                game_dir: Path::new("/G/profiles/p"),
+                assets_root: Path::new("/G/assets"),
+                natives_dir: natives,
+                libraries_dir: Path::new("/G/libraries"),
+                auth: &Auth::default(),
+                agent: None,
+                prefetched: None,
+                ram_mb: 2048,
+                settings,
+                boost_on: false,
+                auto_tune: false,
+                world: None,
+                server: None,
+                java_major: Some(8),
+                platform,
+            })
+        };
+        let utf8 = "-Dfile.encoding=UTF-8".to_string();
+        for (platform, jar, natives, left_out, why) in cases {
+            let classpath = vec![PathBuf::from("/G/libraries").join(jar), PathBuf::from("/G/versions/1.12.2/1.12.2.jar")];
+            let natives = Path::new(natives);
+            assert_eq!(utf8_file_encoding_mutes_openal(&platform, &classpath, natives), left_out, "{jar} on {}: {why}", platform.os);
+            let args = args_of(&platform, &classpath, natives, &json!({}));
+            assert_eq!(!args.contains(&utf8), left_out, "{jar} on {}: {why}; got {args:?}", platform.os);
+            assert!(
+                args.contains(&"-Dsun.stdout.encoding=UTF-8".to_string()),
+                "only file.encoding reaches the OpenAL path, the console default stays: {args:?}"
+            );
+        }
+        let classpath = vec![PathBuf::from("/G/libraries/lwjgl-2.9.1.jar")];
+        let own = args_of(&WIN, &classpath, Path::new(cyrillic), &json!({ "jvmArgs": "-Dfile.encoding=UTF-8" }));
+        assert!(own.contains(&utf8), "an encoding the player pinned is the player's call: {own:?}");
     }
 
     fn checks() -> super::super::super::launch_pre::Plan {

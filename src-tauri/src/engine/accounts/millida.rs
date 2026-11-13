@@ -430,11 +430,55 @@ fn keep_pair(access: &str, refresh: &str) {
 /// уходит: его прочитал бы любой мод сборки (аудит 24.09.2026). Ручка не
 /// ответила — мод работает без входа (каталог и косметика на игроках видны и так).
 // A separate narrow token for the Millida mod in the game (cosmetics only, 12 hours). The full account token is not passed to the game.
-pub async fn mod_session_token() -> Option<String> {
-    millida_token()?;
-    let call = millida_api_auth("/launcher/mod-session".into(), "POST".into(), None);
-    let v = tokio::time::timeout(std::time::Duration::from_secs(6), call).await.ok()?.ok()?;
-    v.get("token")?.as_str().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string)
+pub async fn mod_session_token(budget: std::time::Duration) -> ModToken {
+    if millida_token().is_none() {
+        return ModToken::NoSession;
+    }
+    // Its own task: the budget must not cut a token refresh after the server rotated the pair.
+    let call = tauri::async_runtime::spawn(millida_api_auth("/launcher/mod-session".into(), "POST".into(), None));
+    match tokio::time::timeout(budget, call).await {
+        Ok(Ok(answer)) => mod_token_of(answer),
+        _ => ModToken::Failed,
+    }
+}
+
+/// What the launch got for our mod. Without a token the mod never reads what the player owns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModToken {
+    Issued(String),
+    /// Nobody is signed in to Millida: nothing was lost.
+    NoSession,
+    Failed,
+}
+
+impl ModToken {
+    pub fn code(&self) -> &'static str {
+        match self {
+            ModToken::Issued(_) => "issued",
+            ModToken::NoSession => "no_session",
+            ModToken::Failed => "failed",
+        }
+    }
+
+    pub fn into_token(self) -> Option<String> {
+        match self {
+            ModToken::Issued(token) => Some(token),
+            _ => None,
+        }
+    }
+}
+
+fn mod_token_of(answer: Result<Value, String>) -> ModToken {
+    match answer {
+        Ok(v) => v
+            .get("token")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map_or(ModToken::Failed, |t| ModToken::Issued(t.to_string())),
+        Err(e) if e == UNAUTHORIZED => ModToken::NoSession,
+        Err(_) => ModToken::Failed,
+    }
 }
 
 static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -997,9 +1041,23 @@ mod tests {
 
     use super::{
         api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
-        upload_route_allowed, verdict_for, without_refresh_token, RefreshVerdict, Refreshed, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API,
+        upload_route_allowed, verdict_for, without_refresh_token, mod_token_of, ModToken, RefreshVerdict, Refreshed, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API, UNAUTHORIZED,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn the_mod_token_answer_tells_a_lost_token_from_no_session() {
+        let cases = [
+            (Ok(serde_json::json!({ "token": " t " })), ModToken::Issued("t".into()), "the token is trimmed"),
+            (Ok(serde_json::json!({ "token": "" })), ModToken::Failed, "an empty token is a failure the launch retries"),
+            (Ok(serde_json::json!({})), ModToken::Failed, "an answer without a token is a failure"),
+            (Err("http 502".to_string()), ModToken::Failed, "a server error loses the player's items for this launch"),
+            (Err(UNAUTHORIZED.to_string()), ModToken::NoSession, "a dead session cannot be helped by a retry"),
+        ];
+        for (answer, expected, why) in cases {
+            assert_eq!(mod_token_of(answer), expected, "{}", why);
+        }
+    }
 
     #[test]
     fn only_reads_are_asked_twice() {

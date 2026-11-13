@@ -21,21 +21,26 @@ export function seasonOf(d: Date): Season | null {
 }
 
 /// Pixel particle look per season: colours come from the theme where possible.
+/// `sparks` are firework colours; a season without them has no fireworks.
 export interface ParticleStyle {
   colors: string[]
   size: [number, number]
   fall: [number, number]
   drift: number
   count: number
+  sparks: string[]
 }
+
+const SNOW: Omit<ParticleStyle, 'sparks'> = { colors: ['#ffffff', '#dfefff'], size: [2, 4], fall: [18, 46], drift: 14, count: 70 }
 
 export function particleStyle(s: Season): ParticleStyle {
   switch (s) {
     case 'winter':
-      return { colors: ['#ffffff', '#dfefff'], size: [2, 4], fall: [18, 46], drift: 14, count: 70 }
+      return { ...SNOW, sparks: [] }
     case 'halloween':
-      return { colors: ['#ff8a1f', '#e86a0c', '#3a2a1a'], size: [3, 6], fall: [10, 26], drift: 22, count: 26 }
+      return { colors: ['#ff8a1f', '#e86a0c', '#3a2a1a'], size: [3, 6], fall: [10, 26], drift: 22, count: 26, sparks: [] }
     case 'newyear':
-      return { colors: ['#ffd84a', '#ff5ca8', '#5cd6ff', '#7dff6a'], size: [2, 3], fall: [0, 0], drift: 0, count: 0 }
+      // Fireworks go off inside the winter snow, they do not stop it.
+      return { ...SNOW, sparks: ['#ffd84a', '#ff5ca8', '#5cd6ff', '#7dff6a'] }
   }
 }

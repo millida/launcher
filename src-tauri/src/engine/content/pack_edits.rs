@@ -19,6 +19,10 @@ pub struct PackAutoUpdate {
     pub on: bool,
     pub modified: bool,
     pub chosen: Option<bool>,
+    /// Files shipped by the current version which are no longer in the build.
+    pub removed_mods: Vec<String>,
+    /// Player-added files in mods/ that the next catalogue version will drop.
+    pub added_mods: Vec<String>,
 }
 
 fn mod_file(name: &str) -> bool {
@@ -37,12 +41,12 @@ pub(crate) fn launcher_placed(name: &str) -> bool {
 /// file, so switching a shipped mod off reads as it being gone.
 fn enabled_mods(pdir: &Path) -> Vec<(String, std::fs::Metadata)> {
     let mut out = vec![];
-    collect_mods(&pdir.join(content_dir("mod")), "", 0, &mut out);
+    collect_mods(&pdir.join(content_dir("mod")), "", 0, false, &mut out);
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
 }
 
-fn collect_mods(dir: &Path, prefix: &str, depth: u32, out: &mut Vec<(String, std::fs::Metadata)>) {
+fn collect_mods(dir: &Path, prefix: &str, depth: u32, include_disabled: bool, out: &mut Vec<(String, std::fs::Metadata)>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for entry in rd.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -50,10 +54,11 @@ fn collect_mods(dir: &Path, prefix: &str, depth: u32, out: &mut Vec<(String, std
             continue;
         }
         let Ok(meta) = std::fs::symlink_metadata(entry.path()) else { continue };
-        let rel = format!("{}{}", prefix, name);
+        let file = if include_disabled { name.strip_suffix(".disabled").unwrap_or(&name) } else { &name };
+        let rel = format!("{}{}", prefix, file);
         if meta.is_dir() && depth == 0 {
-            collect_mods(&entry.path(), &format!("{}/", rel), depth + 1, out);
-        } else if meta.is_file() && mod_file(&name) && !launcher_placed(&name) {
+            collect_mods(&entry.path(), &format!("{}/", rel), depth + 1, include_disabled, out);
+        } else if meta.is_file() && mod_file(file) && !launcher_placed(file) {
             out.push((rel, meta));
         }
     }
@@ -73,6 +78,23 @@ pub(crate) fn record_shipped_mods(pdir: &Path) -> Result<(), String> {
 fn read_shipped_mods(pdir: &Path) -> Option<BTreeSet<String>> {
     let raw = std::fs::read(pdir.join(SHIPPED_MODS_FILE)).ok()?;
     serde_json::from_slice::<Vec<String>>(&raw).ok().map(|v| v.into_iter().collect())
+}
+
+/// A disabled jar is still present; it will be switched back on by an update,
+/// but it is not a deleted file requiring another download.
+fn removed_shipped_mods(pdir: &Path) -> Option<Vec<String>> {
+    Some(read_shipped_mods(pdir)?.into_iter().filter(|name| {
+        let path = pdir.join(content_dir("mod")).join(name);
+        let disabled = pdir.join(content_dir("mod")).join(format!("{}.disabled", name));
+        !path.is_file() && !disabled.is_file()
+    }).collect())
+}
+
+fn added_mods(pdir: &Path) -> Option<Vec<String>> {
+    let shipped = read_shipped_mods(pdir)?;
+    let mut all = vec![];
+    collect_mods(&pdir.join(content_dir("mod")), "", 0, true, &mut all);
+    Some(names(&all).difference(&shipped).cloned().collect())
 }
 
 fn arrived_at(meta: &std::fs::Metadata) -> Option<SystemTime> {
@@ -108,12 +130,25 @@ fn catalog_build(settings: &serde_json::Value) -> bool {
 pub fn pack_auto_update(profile: &str) -> PackAutoUpdate {
     let settings = profile_settings(profile);
     if !catalog_build(&settings) {
-        return PackAutoUpdate { catalog: false, on: false, modified: false, chosen: None };
+        return PackAutoUpdate { catalog: false, on: false, modified: false, chosen: None, removed_mods: vec![], added_mods: vec![] };
     }
     let chosen = settings[PACK_AUTO_UPDATE_KEY].as_bool();
     // A pinned file is the player's choice too: a pack update replaces the whole mods folder.
     let modified = mods_modified(&profile_dir(profile)) || has_locked_content(profile);
-    PackAutoUpdate { catalog: true, on: auto_update_on(chosen, modified), modified, chosen }
+    let removed_mods = removed_shipped_mods(&profile_dir(profile)).unwrap_or_else(|| {
+        // Older installs have no shipped-file snapshot. The explicit removal
+        // record still lets us warn before replacing their mods folder.
+        let removed = removed_mod_ids(profile);
+        if removed.is_empty() { return vec![]; }
+        let mods_dir = profile_dir(profile).join(content_dir("mod"));
+        let present: BTreeSet<String> = local_meta_map(profile, "mod").into_values()
+            .filter(|m| mods_dir.join(&m.file_name).is_file() || mods_dir.join(format!("{}.disabled", m.file_name)).is_file())
+            .flat_map(|m| std::iter::once(m.mod_id).chain(m.provides))
+            .map(|id| id.to_ascii_lowercase()).collect();
+        removed.difference(&present).cloned().collect()
+    });
+    let added_mods = added_mods(&profile_dir(profile)).unwrap_or_default();
+    PackAutoUpdate { catalog: true, on: auto_update_on(chosen, modified), modified, chosen, removed_mods, added_mods }
 }
 
 pub fn set_pack_auto_update(profile: &str, on: bool) -> Result<PackAutoUpdate, String> {
@@ -185,6 +220,23 @@ mod tests {
             assert_eq!(mods_modified(&dir), want, "{}: {}", name, why);
             let _ = std::fs::remove_dir_all(&dir);
         }
+    }
+
+    #[test]
+    fn a_manual_update_warns_only_for_shipped_mods_that_are_gone() {
+        let dir = shipped_pack("removed-prompt");
+        assert_eq!(removed_shipped_mods(&dir), Some(vec![]));
+        std::fs::rename(dir.join("mods/unimixins.jar"), dir.join("mods/unimixins.jar.disabled")).unwrap();
+        put(&dir, "mods/own.jar");
+        assert_eq!(removed_shipped_mods(&dir), Some(vec![]), "disabled and player-added files are not deleted shipped mods");
+        assert_eq!(added_mods(&dir), Some(vec!["own.jar".into()]));
+        std::fs::rename(dir.join("mods/own.jar"), dir.join("mods/own.jar.disabled")).unwrap();
+        assert_eq!(added_mods(&dir), Some(vec!["own.jar".into()]), "a disabled player-added mod is also lost on update");
+        std::fs::remove_file(dir.join("mods/angelica.jar")).unwrap();
+        assert_eq!(removed_shipped_mods(&dir), Some(vec!["angelica.jar".into()]));
+        put(&dir, "mods/angelica.jar");
+        assert_eq!(removed_shipped_mods(&dir), Some(vec![]), "re-adding the file clears the warning");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -129,6 +129,8 @@ struct ModsOut {
     own_mod: bool,
     /// Which file of our mod went in: if it brings the build down, that file is quarantined.
     own_mod_jar: String,
+    /// Why our mod is not in the build, for the launch's statistics.
+    no_mod: &'static str,
 }
 
 struct ModsAsk {
@@ -196,18 +198,34 @@ async fn mods_step(
         OwnMod::Place if modded => {
             let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
             match ensure_millida_mod_with(&app, &profile, &w.nick, licensed, kill).await {
-                Ok(Some(jar)) => {
+                Ok(ModPlaced::Jar(jar)) => {
                     out.own_mod = true;
                     // Какой именно файл поехал в сборку: если он её и уронит, под
                     // карантин пойдёт он, а не «мод вообще».
                     out.own_mod_jar = jar;
+                    forget_no_mod_notice(&profile);
                 }
-                Ok(None) => {}
-                Err(e) => warn(&app, &format!("Мод Millida не поставлен: {}", e)),
+                Ok(ModPlaced::Absent(why)) => {
+                    out.no_mod = why.code();
+                    // Without a Millida login there are no purchases to miss.
+                    if millida_token().is_some() {
+                        if let Some(text) = take_no_mod_notice(&profile, why) {
+                            warn(&app, text);
+                        }
+                    }
+                }
+                Err(e) => {
+                    out.no_mod = "error";
+                    warn(&app, &format!("Мод Millida не поставлен: {}", e));
+                }
             }
         }
-        OwnMod::Remove => remove_millida_mod(&profile),
-        OwnMod::Place | OwnMod::Leave => {}
+        OwnMod::Remove => {
+            remove_millida_mod(&profile);
+            out.no_mod = NoMod::Off.code();
+        }
+        OwnMod::Place => out.no_mod = "vanilla",
+        OwnMod::Leave => out.no_mod = "pack",
     }
     if touch_mods && modded && !out.own_mod {
         let licensed = !auth.token.is_empty() && auth.yggdrasil.is_empty();
@@ -227,6 +245,12 @@ async fn mods_step(
     } else if touch_mods && !out.own_mod {
         if let Some(why) = in_game_skin_blocker(&loader, !auth.token.is_empty(), want_skin) {
             warn(&app, why);
+        }
+    }
+    if touch_mods && modded {
+        let gone = take_back_broken_boost_mods(&profile);
+        if !gone.is_empty() {
+            warn(&app, &format!("Буст FPS убрал из сборки мод, с которым игра не запускается: {}", gone.join("; ")));
         }
     }
     if loader == "forge" {
@@ -253,6 +277,12 @@ async fn deps_step(app: AppHandle, profile: String, mods: Node<Arc<ModsOut>>) ->
     mods.get().await?;
     work_begins();
     match tokio::time::timeout(DEPS_BUDGET, settle_launch_deps(&app, &profile)).await {
+        Ok(found) if !found.removed_required.is_empty() => {
+            let details = found.removed_required.iter()
+                .map(|(id, by)| format!("«{}» нужен моду «{}»", id, by))
+                .collect::<Vec<_>>().join("; ");
+            Err(format!("Нельзя запустить сборку после удаления мода: {}. Отключи зависящий мод или установи удалённый снова.", details))
+        }
         Ok(found) if !found.installed.is_empty() => {
             warn(&app, &format!("Доставили моды, без которых сборка не запустится: {}", found.installed.join(", ")));
             Ok(found.installed.len() as u32)
@@ -604,6 +634,8 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
         warm,
         deps,
         auth_ms: done.iter().find(|d| d.name == "auth").map(|d| d.ended_ms.saturating_sub(d.began_ms)),
+        no_mod: mods.no_mod,
+        mod_token: "",
     });
     drop(g);
 
@@ -661,7 +693,17 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
     });
     // Токен для мода — узкий, из /launcher/mod-session; нет его — мод без входа.
     // Millida mod token: short, separate from the Microsoft account token, taken from the Millida API (/launcher/mod-session).
-    let mod_token = if mods.own_mod { pre.mod_token().await } else { None };
+    let mod_token = if mods.own_mod {
+        let got = pre.mod_token().await;
+        perf.mod_token(got.code());
+        note_mod_token(&profile, got.code());
+        if got == ModToken::Failed {
+            warn(&app, "Не удалось подтвердить вход Millida для мода: купленные вещи в этом запуске не видны. Перезапусти игру");
+        }
+        got.into_token()
+    } else {
+        None
+    };
     check_cancel()?;
     let party = mod_token.as_ref().and_then(|_| crate::engine::party_voice::bound_party());
     let env = game_env(mod_token.as_deref(), party.as_deref(), game_telemetry_enabled());

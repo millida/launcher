@@ -251,6 +251,18 @@ pub async fn tune_profile(profile: String) -> Result<engine::Tuning, String> {
 #[tauri::command]
 pub fn set_auto_tune(profile: String, on: bool) { engine::set_auto_tune(&profile, on); }
 
+/// Auto-tuning for every build at once; off, each build gets half the machine
+/// unless its memory is pinned.
+#[tauri::command(async)]
+pub fn auto_tune_global() -> bool {
+    engine::auto_tune_global_on()
+}
+
+#[tauri::command(async)]
+pub fn set_auto_tune_global(on: bool) -> Result<(), String> {
+    engine::set_auto_tune_global(on)
+}
+
 /// Memory of a build in megabytes, 0 for auto: the value the launch takes.
 #[tauri::command]
 pub fn set_profile_ram(profile: String, mb: u32) -> Result<(), String> {

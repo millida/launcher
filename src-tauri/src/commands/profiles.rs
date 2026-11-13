@@ -60,6 +60,8 @@ pub fn set_profile_gpu(profile: String, pref: String) -> String {
     let pref = engine::GpuPref::parse(&pref);
     let mut patch = serde_json::Map::new();
     patch.insert("gpu".into(), serde_json::json!(pref.as_str()));
+    // The player chose: the launcher no longer takes the card back by itself.
+    patch.insert(engine::GPU_FALLBACK_KEY.into(), serde_json::Value::Null);
     engine::merge_settings(&profile, patch);
     pref.as_str().to_string()
 }
@@ -597,8 +599,8 @@ pub async fn import_dropped_pack(app: tauri::AppHandle, id: u64) -> Result<engin
 }
 
 #[tauri::command]
-pub async fn share_profile(profile: String, summary: Option<String>) -> Result<engine::SharedPack, String> {
-    engine::share_profile(profile, summary).await
+pub async fn share_profile(app: tauri::AppHandle, profile: String, summary: Option<String>) -> Result<engine::SharedPack, String> {
+    engine::share_profile(app, profile, summary).await
 }
 
 

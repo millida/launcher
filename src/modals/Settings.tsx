@@ -38,7 +38,7 @@ import { CloudSync } from '../components/CloudSync'
 import { SharedStore } from '../components/SharedStore'
 import { BackupsFolderRow } from '../components/BackupsFolderRow'
 import { AmbienceRows } from '../components/lobby/AmbienceRows'
-import { openMcNews } from '../components/McNews'
+import { openMcNews } from '../components/mcNewsStore'
 import { A11yRows } from '../components/A11yRows'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
@@ -74,7 +74,7 @@ import { balanceText, openTopup, useMoney } from '../lib/useMoney'
 // (или до входа в аккаунт), навсегда застревала на «Нужен аккаунт Millida».
 import { useHasMillida } from '../state/auth'
 import { setSkinSource, skinSource } from '../lib/gameProfile'
-import { millidaModEnabled, setMillidaModEnabled } from '../ipc/commands'
+import { autoTuneGlobal, millidaModEnabled, setAutoTuneGlobal, setMillidaModEnabled } from '../ipc/commands'
 import { startTour } from '../state/tour'
 import { buildDiagnostics } from '../lib/diag'
 import { copyText } from '../lib/clipboard'
@@ -95,6 +95,7 @@ import type { SkinSource } from '../lib/gameProfile'
 import { showLogin } from '../lib/session'
 import { PremiumSwatches, ThemeRow } from '../components/premium/ThemeRow'
 import { leavePremiumLook, markThemeChoice } from '../lib/premiumTheme'
+import { useFestive } from '../lib/festiveStore'
 import { accentFromHex, computeAccent, paintAccent, saveAccent, withColorFade } from '../lib/accent'
 import type { Accent } from '../lib/accent'
 import { canPickBackdrop, pickBackdrop } from '../lib/pickBackdrop'
@@ -245,6 +246,7 @@ export function Settings({ on }: { on: boolean }) {
     cardMs: CARD_TTL_MS,
   })
   const [modOn, setModOn] = useState(true)
+  const [autoRam, setAutoRam] = useState(true)
   const showSnapshots = useMcVersionList((s) => s.show)
   const [cacheMb, setCacheMb] = useState<number | null>(null)
   const [clearing, setClearing] = useState(false)
@@ -304,6 +306,7 @@ export function Settings({ on }: { on: boolean }) {
         .catch(() => setCacheMb(0))
     void overlayState().then(setOverlay).catch(() => {})
     void millidaModEnabled().then(setModOn).catch(() => {})
+    void autoTuneGlobal().then(setAutoRam).catch(() => {})
     void listJavaRuntimes().then(setJavas).catch(() => {})
     void defaultJava().then(setJavaDef).catch(() => {})
     void javaMajors()
@@ -472,6 +475,7 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
         <Group title={t('Тема лаунчера')}>
           <ThemeRow />
+          <FestiveRow />
         </Group>
       </Block>
 
@@ -836,6 +840,26 @@ export function Settings({ on }: { on: boolean }) {
             {t('Настроить')}
           </button>
         </Row>
+        <Row
+          title={t('Авто-подбор памяти')}
+          hint={autoRam ? t('Лаунчер сам выбирает память сборкам без своего значения') : t('Выключен во всех сборках — половина ОЗУ, если память не задана')}
+          keys="memory ram озу оперативная память автоподбор авто подбор auto tune"
+        >
+          <Toggle
+            id="setAutoRam"
+            label={t('Авто-подбор памяти')}
+            on={autoRam}
+            onChange={() => {
+              const next = !autoRam
+              setAutoRam(next)
+              setAutoTuneGlobal(next).catch((err) => {
+                console.error('[settings] auto ram', err)
+                setAutoRam(!next)
+                showToast(t('Не получилось — попробуй ещё раз'), 'error')
+              })
+            }}
+          />
+        </Row>
         <Row title={t('Лаунчер при запуске игры')} keys="окно свернуть трей оставить">
           <Segs<LaunchWindowMode>
             value={winMode}
@@ -1183,10 +1207,7 @@ export function Settings({ on }: { on: boolean }) {
               onClick={() => {
                 setUpdBusy(true)
                 void checkForUpdate(true)
-                  .then((u) => {
-                    setUpd(u)
-                    if (!u) showToast(t('Стоит последняя версия'))
-                  })
+                  .then((u) => setUpd(u))
                   .finally(() => setUpdBusy(false))
               }}
             >
@@ -1211,7 +1232,7 @@ export function Settings({ on }: { on: boolean }) {
             {t('Открыть')}
           </button>
         </Row>
-        <Row title={t('Тестовые версии')} hint={beta ? t('Раньше всех, бывают поломки') : undefined} keys="бета тестирование обновления раньше">
+        <Row title={t('Тестовые версии')} hint={t('Лаунчер и мод Millida раньше всех, бывают поломки')} keys="бета тестирование обновления раньше мод">
           <Toggle
             label={t('Тестовые версии')}
             on={beta}
@@ -1379,4 +1400,17 @@ function MusicNow() {
   const on = useMusic((s) => radioOn(s))
   const toggle = useMusic((s) => s.toggleRadio)
   return <Toggle label={t('Музыка сейчас')} on={on} onChange={() => toggle()} />
+}
+
+/** Новогодняя тема (lib/festive): строка есть, только пока тема доступна — сейчас в тестовой сборке 99.x. */
+function FestiveRow() {
+  const t = useT()
+  const available = useFestive((s) => s.scene !== null)
+  const on = useFestive((s) => s.on)
+  if (!available) return null
+  return (
+    <Row title={t('Новогодняя тема')} keys="новый год новогодняя снег гирлянда праздник зима тема">
+      <Toggle label={t('Новогодняя тема')} on={on} onChange={() => useFestive.getState().setOn(!on)} />
+    </Row>
+  )
 }
