@@ -325,7 +325,8 @@ jobs:
             echo "::error::linuxdeploy-plugin-appimage is not in the Tauri cache, the AppImage cannot be repacked"
             exit 1
           fi
-          for image in "$RELEASE_DIR"/bundle/appimage/*.AppImage; do
+          for built in "$RELEASE_DIR"/bundle/appimage/*.AppImage; do
+            image=$(realpath "$built")
             unpacked="$RUNNER_TEMP/appimage-unpacked"
             rm -rf "$unpacked"
             mkdir -p "$unpacked"
