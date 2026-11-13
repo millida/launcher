@@ -5,14 +5,11 @@
 # The small installer from millida.net (installer/) is built here, on
 # GitHub-hosted runners, from the tagged commit, like the launcher itself.
 #
-# Windows wants that exe signed by Millida's certificate. Two ways:
-# - the certificate is reachable from CI (cloud signing): secrets
-#   WINDOWS_SIGN_SETUP / WINDOWS_SIGN_COMMAND, signed right here;
-# - the certificate is a hardware token: its holder signs the unsigned exe from
-#   this release and runs this workflow by hand with a link to the result. The
-#   run accepts the file only if its Authenticode digest equals the digest of
-#   the build made here: a signature adds a signature and nothing else.
-# Either way the release ends up with the very file millida.net serves.
+# The Windows exe is signed in this run with the Certum SimplySign cloud
+# certificate from the `signing` environment, which only installer and release
+# tags can enter. A file signed elsewhere can still be attached by hand: the run
+# accepts it only if its Authenticode digest equals the digest of the build made
+# here, because a signature adds a signature and nothing else.
 name: Setup
 
 on:
@@ -81,48 +78,43 @@ jobs:
           path: out/*
           if-no-files-found: error
 
-  # Signing secrets live only in this job, and it runs no third-party actions:
-  # nothing outside GitHub's own code ever runs next to the certificate.
+  # The signing job checks out only the CI scripts and installs nothing else:
+  # the OTP seed can sign anything as us, so no third-party build code runs here.
   sign:
-    name: Sign on GitHub (cloud certificate)
-    if: github.event_name == 'push'
+    name: Sign (Certum cloud certificate)
+    if: github.event_name == 'push' && github.repository == 'millida/launcher'
     needs: windows
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    environment: signing
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@v4
         with:
           name: setup-windows
           path: out
 
-      - name: Install signing tool
-        shell: pwsh
-        env:
-          SETUP: ${{ secrets.WINDOWS_SIGN_SETUP }}
-        run: if ($env:SETUP) { Invoke-Expression $env:SETUP } else { echo "No signing in CI - the certificate owner will sign it" }
-
       - name: Sign
-        shell: pwsh
         env:
-          SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
+          CERTUM_EMAIL: ${{ secrets.CERTUM_EMAIL }}
+          CERTUM_OTP: ${{ secrets.CERTUM_OTP }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          if (-not $env:SIGN_COMMAND) { exit 0 }
-          if (-not $env:SIGN_COMMAND.Contains('%1')) { throw 'WINDOWS_SIGN_COMMAND has no %1 placeholder' }
-          Copy-Item out/MillidaLauncherSetup.exe out/MillidaLauncherSetup-signed.exe
-          Invoke-Expression $env:SIGN_COMMAND.Replace('%1', (Resolve-Path out/MillidaLauncherSetup-signed.exe).Path)
-          $sig = Get-AuthenticodeSignature out/MillidaLauncherSetup-signed.exe
-          if ($sig.Status -ne 'Valid') { throw "The signature did not apply: $($sig.Status)" }
-          $a = node .github/scripts/pe-digest.mjs out/MillidaLauncherSetup.exe
-          $b = node .github/scripts/pe-digest.mjs out/MillidaLauncherSetup-signed.exe
-          if ($a.Split(' ')[0] -ne $b.Split(' ')[0]) { throw 'The signature changed the file contents' }
+          set -eu
+          mkdir signed
+          cp out/MillidaLauncherSetup.exe signed/MillidaLauncherSetup-signed.exe
+          bash .github/scripts/sign-windows.sh signed/MillidaLauncherSetup-signed.exe
+          a=$(node .github/scripts/pe-digest.mjs out/MillidaLauncherSetup.exe | cut -d' ' -f1)
+          b=$(node .github/scripts/pe-digest.mjs signed/MillidaLauncherSetup-signed.exe | cut -d' ' -f1)
+          [ -n "$a" ] && [ "$a" = "$b" ] || { echo "::error::the signed exe is not the build from this run"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
           name: setup-windows-signed
-          path: out/MillidaLauncherSetup-signed.exe
-          if-no-files-found: ignore
+          path: signed/MillidaLauncherSetup-signed.exe
+          if-no-files-found: error
 
   linux:
     name: Linux stub
