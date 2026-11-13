@@ -281,7 +281,9 @@ jobs:
 
       # The three packages are packed side by side. The bundler stamps the package
       # type into the binary in place and restores it after each package, so rpm and
-      # deb are packed from their own copies in separate target dirs.
+      # deb are packed from their own copies in separate target dirs. Both copies
+      # are finished before any bundler starts: a copy still being read while the
+      # AppImage bundler rewrote the binary came out as zeros behind a valid header.
       - name: Build and bundle (Linux)
         if: matrix.platform == 'linux'
         shell: bash
@@ -299,11 +301,14 @@ jobs:
           set -eu
           export CARGO_INCREMENTAL=1
           bun run tauri build --no-bundle --target "$TARGET" --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+          binary_bytes=$(stat -c %s "$RELEASE_DIR/millida-launcher")
+          for kind in rpm deb; do
+            mkdir -p "$RUNNER_TEMP/$kind-target/$TARGET/release"
+            cp "$RELEASE_DIR/millida-launcher" "$RUNNER_TEMP/$kind-target/$TARGET/release/"
+            cmp "$RELEASE_DIR/millida-launcher" "$RUNNER_TEMP/$kind-target/$TARGET/release/millida-launcher"
+          done
           bundle_aside() {
-            local dir="$RUNNER_TEMP/$1-target"
-            mkdir -p "$dir/$TARGET/release"
-            cp "$RELEASE_DIR/millida-launcher" "$dir/$TARGET/release/"
-            CARGO_TARGET_DIR="$dir" bun run tauri bundle --bundles "$1" --target "$TARGET" > "$RUNNER_TEMP/$1.log" 2>&1
+            CARGO_TARGET_DIR="$RUNNER_TEMP/$1-target" bun run tauri bundle --bundles "$1" --target "$TARGET" > "$RUNNER_TEMP/$1.log" 2>&1
           }
           pids=()
           for kind in rpm deb; do
@@ -311,6 +316,36 @@ jobs:
             pids+=("$kind:$!")
           done
           bun run tauri bundle --bundles appimage --target "$TARGET"
+          # linuxdeploy copies libwayland from the build image into the AppImage. A
+          # current Mesa cannot load its EGL library against that older copy, WebKit
+          # then aborts with "Could not create default EGL display" and the window
+          # stays black. Without the copies the host's own libwayland is used.
+          repack_tool=$(find "${XDG_CACHE_HOME:-$HOME/.cache}/tauri" -name 'linuxdeploy-plugin-appimage.AppImage' | head -n1)
+          if [ -z "$repack_tool" ]; then
+            echo "::error::linuxdeploy-plugin-appimage is not in the Tauri cache, the AppImage cannot be repacked"
+            exit 1
+          fi
+          for image in "$RELEASE_DIR"/bundle/appimage/*.AppImage; do
+            unpacked="$RUNNER_TEMP/appimage-unpacked"
+            rm -rf "$unpacked"
+            mkdir -p "$unpacked"
+            (cd "$unpacked" && env -u APPIMAGE_EXTRACT_AND_RUN "$image" --appimage-extract > /dev/null)
+            find "$unpacked/squashfs-root/usr/lib" -maxdepth 1 -name 'libwayland-*.so*' -delete
+            rm "$image"
+            ARCH="${TARGET%%-*}" LDAI_OUTPUT="$image" OUTPUT="$image" "$repack_tool" --appdir "$unpacked/squashfs-root"
+            rm -rf "$unpacked"
+            mkdir -p "$unpacked"
+            (cd "$unpacked" && env -u APPIMAGE_EXTRACT_AND_RUN "$image" --appimage-extract > /dev/null)
+            if [ ! -x "$unpacked/squashfs-root/usr/bin/millida-launcher" ]; then
+              echo "::error::$image lost the launcher binary while being repacked"
+              exit 1
+            fi
+            if find "$unpacked/squashfs-root" -name 'libwayland-*.so*' | grep -q .; then
+              echo "::error::$image still carries its own libwayland"
+              exit 1
+            fi
+            rm -rf "$unpacked"
+          done
           for entry in "${pids[@]}"; do
             kind="${entry%%:*}"
             status=0
@@ -322,6 +357,15 @@ jobs:
             fi
             mkdir -p "$RELEASE_DIR/bundle/$kind"
             cp "$RUNNER_TEMP/$kind-target/$TARGET/release/bundle/$kind/"*."$kind" "$RELEASE_DIR/bundle/$kind/"
+            # A real package keeps over half of the binary after compression; one
+            # packed from a zeroed binary is a few hundred kilobytes.
+            for package in "$RELEASE_DIR/bundle/$kind/"*."$kind"; do
+              package_bytes=$(stat -c %s "$package")
+              if [ "$package_bytes" -lt $((binary_bytes / 5)) ]; then
+                echo "::error::$package is $package_bytes bytes for a binary of $binary_bytes: the packed binary is damaged"
+                exit 1
+              fi
+            done
           done
           ls -l "$RELEASE_DIR"/bundle/*/
 
