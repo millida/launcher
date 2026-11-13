@@ -4,8 +4,7 @@
 use url::{Host, Url};
 
 /// Same key as the updater plugin in tauri.conf.json: the stub must not become a
-/// second, weaker way to run code that the launcher itself would refuse. The key
-/// of the legacy channel leaked on 05.09.2026, so only the v2 pair counts.
+/// second, weaker way to run code that the launcher itself would refuse.
 // Public part of the signing key in base64 (minisign), the same as in tauri.conf.json. The private part is not here.
 pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5MzUwRDVGRUE4NUI5NzcKUldSM3VZWHFYdzAxS1VyamhaeUdwQkRTNzZwN3U2WXRjaDFpWDZ6b3FvLzN0bkFvY3JwWEFQeCsK";
 
@@ -28,8 +27,8 @@ const ALLOWED: &[(&str, &str)] = &[
 /// install.json is the first-install manifest and can be pinned to an older
 /// build by hand; latest.json is the auto-update one and only serves as a
 /// fallback, so a missing install.json never blocks new installs. Both live
-/// under v2/: the manifests at the root are signed with the leaked key and a
-/// fresh install must never trust them.
+/// under v2/: the manifests at the root serve only very old launchers, carry a
+/// different key, and a fresh install never reads them.
 /// v2/gh/latest.json is the same release with files on GitHub and the CDN as
 /// a mirror; it goes first so a fresh install comes straight from the public
 /// release.
@@ -143,17 +142,16 @@ mod tests {
         );
     }
 
-    /// The root manifests are still served for launchers 1.0.89 and older and are
-    /// signed with the key that leaked on 05.09.2026. A stub reading them would
-    /// install anything that leak can sign.
+    /// The root manifests are still served for launchers 1.0.89 and older and
+    /// carry a different key: the stub reads only the channel of its own key.
     #[test]
-    fn manifests_come_from_the_rotated_channel() {
-        // A release asset on GitHub is written by the release pipeline of the
-        // rotated key; the leaked key only ever signed manifests on the storage.
+    fn manifests_come_from_the_v2_channel() {
+        // A release asset on GitHub is written by the release pipeline with the
+        // current key.
         for url in MANIFEST_URLS.iter().filter(|u| **u != GITHUB_MANIFEST_URL) {
             assert!(
                 url.contains("/v2/"),
-                "источник {} лежит вне канала v2 — он подписан утёкшим ключом",
+                "источник {} лежит вне канала v2 — он подписан другим ключом",
                 url
             );
         }
