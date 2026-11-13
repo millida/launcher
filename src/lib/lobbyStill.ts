@@ -123,3 +123,20 @@ export function saveLobbyStill(canvas: HTMLCanvasElement, look: string, stage: S
     }
   })
 }
+
+/**
+ * Same name as `LOOK_EVENT` in lib/gameProfile, written out here: importing that module would pull
+ * the wardrobe API into the lobby's first chunk only for a string (the test pins the two together).
+ */
+export const STILL_LOOK_EVENT = 'm-look-changed'
+
+/**
+ * The look changed (skin, cape or items): the still shows the old one. A working 3D scene dresses
+ * the new look and takes a fresh still anyway; without WebGL nothing ever replaced the old picture,
+ * and the player saw the skin they had just changed stay on the lobby figure (11.11.2026).
+ */
+export function dropLobbyStill(): Promise<void> {
+  return idbDel(KEY + ownerOf()).catch(() => {})
+}
+
+if (typeof window !== 'undefined') window.addEventListener(STILL_LOOK_EVENT, () => void dropLobbyStill())

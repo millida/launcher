@@ -102,6 +102,7 @@ import { ChipRow, SectionBar } from '../components/character/Sections'
 import type { Section } from '../components/character/Sections'
 import { ItemGrid, ItemTile } from '../components/character/ItemTile'
 import { FittingBar } from '../components/character/FittingBar'
+import { ModHint } from '../components/character/ModHint'
 import { nametagSpot } from '../components/character/Nametag'
 import { Outfits } from '../components/character/Outfits'
 import { SetLooks } from '../components/character/SetLooks'
@@ -322,7 +323,13 @@ interface ChipDef {
   key: string
   name: string
   slots: string[]
+  /** Подборка внутри мест: только вещи с этой меткой каталога (`tags`). */
+  tag?: string
 }
+
+/** Вещь лежит в чипе: её место из чипа, а у подборки — ещё и метка. */
+const chipHas = (chip: ChipDef, item: { slot: string; tags?: string[] }) =>
+  chip.slots.includes(item.slot) && (!chip.tag || !!item.tags?.includes(chip.tag))
 
 interface SectionDef {
   key: string
@@ -373,6 +380,8 @@ const COSMETIC_SECTIONS = (): SectionDef[] => [
     icon: 'i-smile',
     chips: [
       { key: 'EMOTE', name: t('Эмоции'), slots: ['EMOTE'] },
+      // Танцы и жесты из трендов: каталог помечает их `tags: ['TREND']`.
+      { key: 'TREND', name: t('В тренде'), slots: ['EMOTE'], tag: 'TREND' },
       { key: 'EFFECT', name: t('Ауры'), slots: ['EFFECT', 'AURA', 'ICON'] },
     ],
   },
@@ -381,16 +390,17 @@ const COSMETIC_SECTIONS = (): SectionDef[] => [
 const KNOWN_SLOTS = new Set(['CAPE', ...COSMETIC_SECTIONS().flatMap((s) => s.chips.flatMap((c) => c.slots))])
 
 /** Разделы с учётом того, что реально есть в каталоге: новое место каталога уходит в «Тело · Другое». */
-function cosmeticSections(slots: string[]): SectionDef[] {
+function cosmeticSections(items: { slot: string; tags?: string[] }[]): SectionDef[] {
   // Каталог ещё грузится — показываем все разделы сразу, иначе первые секунды
   // видны только «Образы, Скины, Плащи» и полоса прыгает (владелец 24.09.2026).
-  if (!slots.length) return COSMETIC_SECTIONS()
-  const unknown = Array.from(new Set(slots.filter((s) => !KNOWN_SLOTS.has(s))))
+  // Подборки по меткам ждут каталога: пустой чип «В тренде» ни к чему.
+  if (!items.length) return COSMETIC_SECTIONS().map((sec) => ({ ...sec, chips: sec.chips.filter((c) => !c.tag) }))
+  const unknown = Array.from(new Set(items.map((i) => i.slot).filter((s) => !KNOWN_SLOTS.has(s))))
   return COSMETIC_SECTIONS().map((sec) => ({
     ...sec,
     chips: sec.chips
       .concat(sec.key === 'body' && unknown.length ? [{ key: 'OTHER', name: t('Другое'), slots: unknown }] : [])
-      .filter((c) => c.slots.some((slot) => slots.includes(slot))),
+      .filter((c) => items.some((item) => chipHas(c, item))),
   })).filter((sec) => sec.chips.length > 0)
 }
 
@@ -1055,7 +1065,7 @@ export function Skins({ on }: { on: boolean }) {
     const tried = fitting.filter((c) => mine.some((m) => m.slot === c.slot))
     setWorn(next)
     setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot)))
-    applyCosmetics(next)
+    applyWorn(next)
       .then(() => showToast(t('Надето — видят игроки с Millida'), 'ok'))
       .catch((e) => {
         setWorn((now) => (now === next ? before : now))
@@ -1072,6 +1082,19 @@ export function Skins({ on }: { on: boolean }) {
   /** Вещь закрыта: платная и права на неё пока нет. */
   const cosmeticLocked = (item: CosmeticItem) =>
     item.access !== 'FREE' && !cosmeticOwned.includes(item.id)
+
+  /**
+   * Надеть набор и сказать, если служба приняла не всё. Экран оставлял вещь на фигуре и писал
+   * «Надето», а на аккаунте её не было — в игре её и не видно (11.11.2026, «капюшон не
+   * отображается»).
+   */
+  const applyWorn = (items: WornCosmetic[]) =>
+    applyCosmetics(items).then((r) => {
+      // После «Надето» вызывающего кода: предупреждение должно остаться последним словом.
+      if (r.ok && r.applied < items.length)
+        window.setTimeout(() => showToast(t('Надето не всё: служба приняла {applied} из {total} вещей. Остальных нет на аккаунте — в игре их не будет', { applied: r.applied, total: items.length }), 'error'), 0)
+      return r
+    })
 
   const shownIn = (slot: string) => shownPerSlot[slot] ?? COSMETICS_FIRST_PAGE
 
@@ -1203,7 +1226,7 @@ export function Skins({ on }: { on: boolean }) {
       .concat(bought.map((c) => ({ id: c.id, slot: c.slot, variant: variantOf(c)?.name })))
     let wore = true
     try {
-      await applyCosmetics(next)
+      await applyWorn(next)
       setWorn(next)
       setFitting((now) => now.filter((c) => !got.includes(c.id)))
     } catch (e) {
@@ -1253,7 +1276,7 @@ export function Skins({ on }: { on: boolean }) {
     )
     setCosmeticBusy('fitting')
     try {
-      await applyCosmetics(next)
+      await applyWorn(next)
       setWorn(next)
       setFitting((now) => now.filter((c) => !ready.some((r) => r.id === c.id)))
       showToast(t('Надето — видят игроки с Millida'), 'ok')
@@ -1306,7 +1329,7 @@ export function Skins({ on }: { on: boolean }) {
     }
     setCosmeticBusy(item.id)
     try {
-      await applyCosmetics(next)
+      await applyWorn(next)
       setWorn(next)
       // Своё надетое вытесняет примерку на том же месте.
       if (!already) setFitting((now) => now.filter((c) => c.slot !== item.slot))
@@ -1333,7 +1356,7 @@ export function Skins({ on }: { on: boolean }) {
     const next = worn.filter((w) => !slots.includes(w.slot))
     setCosmeticBusy('off')
     try {
-      await applyCosmetics(next)
+      await applyWorn(next)
       setWorn(next)
       showToast(t('Снято'))
     } catch (e) {
@@ -1891,19 +1914,26 @@ export function Skins({ on }: { on: boolean }) {
     return true
   }
 
+  /**
+   * Снять плащ — везде, откуда игра его берёт. Раньше снимался только плащ Millida: у лицензии
+   * активный плащ Mojang оставался на аккаунте, игра брала его из сессии, а этот экран при
+   * следующем заходе надевал его обратно; копия плаща для сборок тоже оставалась (11.11.2026).
+   */
   const takeOffCape = () => {
     chooseCape('none')
-    if (!hasMillidaAccount()) {
-      showToast(t('Плащ снят'))
-      return
-    }
-    void uploadTexture('cape', null)
-      .then(() => refreshWardrobe())
-      .then(() => showToast(t('Плащ снят')))
-      .catch((e) => {
-        trackFailure('skins', e, { step: 'cape_remove' })
-        showToast(apiErrorText(e, t('Плащ не снялся — попробуй ещё раз')), 'error')
-      })
+    const acc = getAccount()
+    const license = acc && acc.kind === 'microsoft' ? switchLicensedCape(acc.id, '') : Promise.resolve(false)
+    if (hasTauri()) void setLocalSkin(null, '', variant === 'slim').catch(() => {})
+    const millida = hasMillidaAccount() ? uploadTexture('cape', null).then(() => refreshWardrobe()) : Promise.resolve()
+    void Promise.allSettled([millida, license]).then(([m, l]) => {
+      if (m.status === 'rejected') {
+        trackFailure('skins', m.reason, { step: 'cape_remove' })
+        showToast(apiErrorText(m.reason, t('Плащ не снялся — попробуй ещё раз')), 'error')
+      } else if (l.status === 'rejected') {
+        trackFailure('skins', l.reason, { step: 'cape_remove_license' })
+        showToast(t('Плащ лицензии не переключился: {error}', { error: tx(l.reason) }), 'error')
+      } else showToast(t('Плащ снят'))
+    })
   }
 
   const fitViewer = () => {
@@ -2582,7 +2612,7 @@ export function Skins({ on }: { on: boolean }) {
   // чипу. Поиск — по всему каталогу сразу, как в Roblox: ищут вещь, а не место.
   const cosmeticQueryNorm = cosmeticQuery.trim().toLowerCase()
 
-  const sections = useMemo(() => cosmeticSections(cosmetics.map((c) => c.slot)), [cosmetics, t])
+  const sections = useMemo(() => cosmeticSections(cosmetics), [cosmetics, t])
 
   const sectionDef = sections.find((s) => s.key === section)
   const chipKey = chipBy[section] ?? (sectionDef ? sectionDef.chips[0].key : section === 'skin' ? 'mine' : 'all')
@@ -2598,7 +2628,7 @@ export function Skins({ on }: { on: boolean }) {
     let list: CosmeticItem[]
     if (cosmeticQueryNorm) list = cosmetics.filter((c) => c.name.toLowerCase().includes(cosmeticQueryNorm))
     else if (section === 'cape') list = chipKey === 'all' ? cosmetics.filter((c) => c.slot === 'CAPE') : []
-    else if (chipDef) list = cosmetics.filter((c) => chipDef.slots.includes(c.slot))
+    else if (chipDef) list = cosmetics.filter((c) => chipHas(chipDef, c))
     else list = []
     // Отмеченное звёздочкой идёт первым: из сотни вещей подписки человек носит
     // десяток, и искать их каждый раз заново - работа, а не удовольствие.
@@ -2919,7 +2949,7 @@ export function Skins({ on }: { on: boolean }) {
       .concat(mine.map((c) => ({ id: c.id, slot: c.slot, variant: variantOf(c)?.name })))
     setSetBusy(set.id)
     try {
-      await applyCosmetics(next)
+      await applyWorn(next)
       setWorn(next)
       setFitting((now) => now.filter((c) => !mine.some((m) => m.slot === c.slot) && !missing.some((m) => m.slot === c.slot)).concat(missing))
       setSetOffer(missing.length && way.price > 0 ? { setId: set.id, colorway: way.name, title: set.title, price: way.price } : null)
@@ -2970,7 +3000,7 @@ export function Skins({ on }: { on: boolean }) {
         .filter((w) => !all.some((c) => c.slot === w.slot))
         .concat(all.map((c) => ({ id: c.id, slot: c.slot, variant: variantOf(c)?.name })))
       try {
-        await applyCosmetics(next)
+        await applyWorn(next)
         setWorn(next)
         setFitting([])
       } catch (e) {
@@ -3051,7 +3081,7 @@ export function Skins({ on }: { on: boolean }) {
       const same =
         wear.length === worn.length && wear.every((w) => worn.some((x) => x.id === w.id && x.variant === w.variant))
       if (!same) {
-        await applyCosmetics(wear)
+        await applyWorn(wear)
         setWorn(wear)
         setFitting([])
       }
@@ -3167,7 +3197,7 @@ export function Skins({ on }: { on: boolean }) {
           ? sectionDef.chips.map((c) => ({
               key: c.key,
               name: c.name,
-              count: cosmetics.filter((x) => c.slots.includes(x.slot)).length,
+              count: cosmetics.filter((x) => chipHas(c, x)).length,
             }))
           : []
 
@@ -3596,6 +3626,7 @@ export function Skins({ on }: { on: boolean }) {
             ) : !use3d ? (
               <span className="skin-loader" aria-label={t('Загружаем модель')}></span>
             ) : null}
+            <ModHint on={on} />
           </div>
 
           <FittingBar

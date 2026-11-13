@@ -4,7 +4,7 @@ import { anarchyOnlineShown } from './AnarchyTile'
 import { PRISON_SLUG } from './featured'
 import { useT } from '../../i18n'
 
-export const PRISON_BANNER = 'https://cdn.millida.trade/catalog/launcher-packs/prisonrpg/2026-10-05/prisonrpg-banner.webp'
+export const PRISON_BANNER = 'https://cdn.millida.net/t/catalog/launcher-packs/prisonrpg/2026-10-05/prisonrpg-banner.webp'
 export const PRISON_CO = 'MetaLabs × Millida'
 
 export interface PrisonFace {

@@ -68,6 +68,21 @@ export function updateSessionServer(server: string | null, serverName: string | 
   heartbeat('playing')
 }
 
+/**
+ * The page was built again while a game runs (the tray, an overlay card, a second start, a link):
+ * the session lived in the page that is gone. Without it every beat said «lobby», the server
+ * stopped counting the time that opens chests and the time cape, and the beat the core repeats
+ * without a window was overwritten with a lobby one (11.11.2026). Whether a game runs is the
+ * core's word; the server it is on comes back from the core's log (updateSessionServer). No
+ * «mc-started»: the game did not start now, and nothing that waits for a start should run.
+ */
+export function adoptRunningGame(running: readonly string[]) {
+  if (session || launching || !running.length) return
+  session = { profile: running[0], server: null, serverName: null }
+  sessionAt = Date.now()
+  heartbeat()
+}
+
 /** Процесс успевает появиться в списке ядра не мгновенно — до этого верим сессии. */
 const SESSION_GRACE_MS = 3 * 60 * 1000
 

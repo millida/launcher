@@ -267,10 +267,11 @@ pub fn pack_link(code: &str) -> String {
 /// Publishes the build and returns the code to pass on. Re-publishing the same
 /// build keeps the code: the link a player already sent to friends must not go
 /// stale because they added a mod.
-pub async fn share_profile(profile: String, summary: Option<String>) -> Result<SharedPack, String> {
+pub async fn share_profile(app: AppHandle, profile: String, summary: Option<String>) -> Result<SharedPack, String> {
     refuse_protected(&profile)?;
+    refuse_paid(&profile).await?;
     let (mut manifest, skipped) = build_manifest(&profile, true)?;
-    let (jars, skipped) = upload_own_jars(&profile_dir(&profile), skipped).await;
+    let (jars, skipped) = upload_own_jars(&app, &profile, skipped).await;
     manifest.jars = jars;
     if manifest.files.is_empty() && manifest.jars.is_empty() {
         return Err("В сборке нет файлов из Modrinth или CurseForge — передавать нечего".into());
@@ -295,6 +296,38 @@ pub async fn share_profile(profile: String, summary: Option<String>) -> Result<S
         skipped,
         size_bytes,
     })
+}
+
+pub const PAID_REFUSAL: &str =
+    "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida";
+const PAID_CARD_WAIT: std::time::Duration = std::time::Duration::from_secs(6);
+
+fn card_is_paid(view: &Value) -> bool {
+    view["accessRequired"].as_bool() == Some(true)
+}
+
+/// Every mod of a paid pack comes from its archive, not from a public
+/// catalogue, so sharing would upload the paid files themselves as the
+/// player's own jars. The card is asked each time because the profile does not
+/// remember the price. A card that does not answer refuses nothing: the files
+/// are on the player's disk either way, and an outage must not block ordinary
+/// builds.
+async fn refuse_paid(profile: &str) -> Result<(), String> {
+    let Some(slug) = launch_gate_slug(&profile_settings(profile)) else { return Ok(()) };
+    let card = millida_api(format!("/catalog/packs/{}", slug), "GET".into(), None, millida_token());
+    match tokio::time::timeout(PAID_CARD_WAIT, card).await {
+        Ok(Ok(view)) if card_is_paid(&view) => Err(PAID_REFUSAL.into()),
+        _ => Ok(()),
+    }
+}
+
+fn is_own_jar(rel: &str) -> bool {
+    rel.starts_with("mods/") && rel.to_ascii_lowercase().ends_with(".jar")
+}
+
+fn emit_upload_progress(app: &AppHandle, profile: &str, done: usize, total: usize) {
+    use tauri::Emitter;
+    let _ = app.emit("share-progress", serde_json::json!({ "profile": profile, "done": done, "total": total }));
 }
 
 /// Digests of a jar read whole: it is uploaded from the same bytes, so what the
@@ -360,16 +393,20 @@ async fn upload_own_jar(jar: OwnJar) -> Result<PackJar, String> {
 
 /// Hand-added jars from `skipped` travel as the author's own files; one that
 /// cannot is named in what stays behind, with the reason.
-async fn upload_own_jars(pdir: &Path, skipped: Vec<String>) -> (Vec<PackJar>, Vec<String>) {
+async fn upload_own_jars(app: &AppHandle, profile: &str, skipped: Vec<String>) -> (Vec<PackJar>, Vec<String>) {
+    let pdir = profile_dir(profile);
+    let total = skipped.iter().filter(|rel| is_own_jar(rel)).count().min(MAX_JARS);
+    let mut tried = 0;
     let mut jars = vec![];
     let mut left = vec![];
     for rel in skipped {
-        let own = rel.starts_with("mods/") && rel.to_ascii_lowercase().ends_with(".jar");
-        if !own || jars.len() >= MAX_JARS {
+        if !is_own_jar(&rel) || jars.len() >= MAX_JARS {
             left.push(rel);
             continue;
         }
-        let (dir, r) = (pdir.to_path_buf(), rel.clone());
+        emit_upload_progress(app, profile, tried, total);
+        tried += 1;
+        let (dir, r) = (pdir.clone(), rel.clone());
         let read = match tokio::task::spawn_blocking(move || read_own_jar(&dir, &r)).await {
             Ok(x) => x,
             Err(e) => Err(e.to_string()),
@@ -1450,6 +1487,34 @@ pub async fn shared_pack_sync(app: AppHandle, profile: String, apply: bool, appr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_card_that_asks_for_access_stops_sharing() {
+        let cases: &[(Value, bool, &str)] = &[
+            (serde_json::json!({ "slug": "arcania-2", "accessRequired": true }), true, "a subscription pack: its jars are what buyers paid for"),
+            (serde_json::json!({ "slug": "aeronautics", "accessRequired": false }), false, "a free catalogue pack is shared like any build"),
+            (serde_json::json!({ "slug": "aeronautics" }), false, "an older API without the field refuses nothing"),
+            (serde_json::json!({ "accessRequired": "true" }), false, "only a real boolean from the card counts"),
+            (Value::Null, false, "an unreadable card refuses nothing"),
+        ];
+        for (view, paid, why) in cases {
+            assert_eq!(card_is_paid(view), *paid, "{why}: a wrong verdict either uploads paid jars to shared storage or blocks sharing of a free build");
+        }
+    }
+
+    #[test]
+    fn only_jars_from_the_mods_folder_travel_as_the_authors_own() {
+        let cases: &[(&str, bool, &str)] = &[
+            ("mods/own-mod.jar", true, "a hand-added mod"),
+            ("mods/Own-Mod.JAR", true, "the extension is matched without case"),
+            ("mods/readme.txt", false, "not a jar"),
+            ("resourcepacks/pack.jar", false, "only mods are uploaded"),
+            ("config/mods/x.jar", false, "the folder must be the build's own mods"),
+        ];
+        for (rel, own, why) in cases {
+            assert_eq!(is_own_jar(rel), *own, "{rel}: {why}; the progress total is counted with the same rule as the upload");
+        }
+    }
 
     fn sub_with(files: &[(&str, &str)], overrides: &[(&str, &str)]) -> Subscription {
         let f = |kind: &str, (p, h): &(&str, &str)| SubFile { kind: kind.into(), path: p.to_string(), sha1: h.to_string() };

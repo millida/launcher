@@ -158,6 +158,35 @@ fn file_for_mod(profile: &str, name: &str) -> Option<String> {
         .cloned()
 }
 
+/// The class a too-old Java refused and the Java it was compiled for, in both
+/// wordings: «… has been compiled by a more recent version … (class file version
+/// 65.0)» from Java 9 on, «… : Unsupported major.minor version 65.0» from Java 8.
+fn newer_class(log: &str) -> Option<(String, u64)> {
+    const MARK: &str = "UnsupportedClassVersionError: ";
+    let at = log.find(MARK)?;
+    let line = log[at + MARK.len()..].lines().next()?;
+    let class = line.split_whitespace().next()?.trim_end_matches(':').replace('.', "/");
+    let version = ["class file version ", "major.minor version "].iter().find_map(|w| line.find(w).map(|i| &line[i + w.len()..]))?;
+    let digits: String = version.chars().take_while(char::is_ascii_digit).collect();
+    let needs = digits.parse::<u64>().ok()?.checked_sub(44)?;
+    (!class.is_empty()).then_some((class, needs))
+}
+
+/// The enabled jar in mods/ that carries `class` (slashes, no `.class`).
+fn jar_with_class(profile: &str, class: &str) -> Option<String> {
+    let mods = profile_dir(profile).join(content_dir("mod"));
+    let entry = format!("{}.class", class);
+    std::fs::read_dir(mods).ok()?.flatten().find_map(|e| {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.to_ascii_lowercase().ends_with(".jar") {
+            return None;
+        }
+        let mut jar = zip::ZipArchive::new(std::fs::File::open(e.path()).ok()?).ok()?;
+        let found = jar.by_name(&entry).is_ok();
+        found.then_some(name)
+    })
+}
+
 fn profile_version(profile: &str) -> String {
     load_profiles().into_iter().find(|p| p.name == profile).map(|p| p.version).unwrap_or_default()
 }
@@ -563,15 +592,29 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
 
     if low.contains("java") && (low.contains("верси") || low.contains("нужна")) {
         let major = java_major_for(&profile_version(profile));
-        actions.insert(
-            0,
-            CrashAction::new(
-                "install-java",
-                format!("Поставить Java {}", major),
-                major.to_string(),
-                "Версия игры требует именно её",
+        match newer_class(log_text) {
+            // A jar built for a newer Java than the game version runs on. The game's
+            // Java is already there, and offering it again kept a 1.16.5 Forge build on
+            // Java 8 in a loop (11.11.2026): the jar is what has to go.
+            Some((class, needs)) if needs > major => {
+                if let Some(file) = jar_with_class(profile, &class) {
+                    let why = format!("Мод собран под Java {}, а эта версия игры работает на Java {}", needs, major);
+                    actions.insert(0, CrashAction::new("disable-mod", format!("Отключить «{}»", file), file.clone(), &why));
+                    if !culprits.contains(&file) {
+                        culprits.push(file);
+                    }
+                }
+            }
+            _ => actions.insert(
+                0,
+                CrashAction::new(
+                    "install-java",
+                    format!("Поставить Java {}", major),
+                    major.to_string(),
+                    "Версия игры требует именно её",
+                ),
             ),
-        );
+        }
     }
 
     if let Some((_, url)) = driver_link(reason) {
@@ -682,8 +725,8 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             let (file, range) = arg.split_once('|').ok_or("Некорректный мод")?;
             let file = safe_file_name(file)?;
             let (_, range) = dep_arg(&format!("x|{}", range))?;
-            let installed = set_content_version_in_range(&profile, "mod", &file, &range).await?;
-            Ok(format!("Вместо {} стоит {}", file, installed))
+            let swaps = set_content_version_in_range(&profile, "mod", &file, &range).await?;
+            Ok(swaps.iter().map(|(old, new)| format!("Вместо {} стоит {}", old, new)).collect::<Vec<_>>().join("; "))
         }
         "disable-mod" => {
             let file = safe_file_name(&arg)?;
@@ -813,6 +856,16 @@ mod tests {
         for (mb, gb, why) in [(8088, 8, "the offer after 6040 MB read «7 ГБ»"), (6011, 6, "8 GB machine at its reserve"), (8192, 8, "whole gigabytes stay as they are"), (2560, 3, "a half rounds up")] {
             assert_eq!(gb_label(mb), gb, "{why}");
         }
+    }
+
+    /// Log -> the class a too-old Java refused and the Java it needs.
+    #[test]
+    fn a_class_built_for_newer_java_is_named_with_its_java() {
+        let modern = "java.lang.UnsupportedClassVersionError: net/millida/mod/Millida has been compiled by a more recent version of the Java Runtime (class file version 65.0), this version of the Java Runtime only recognizes class file versions up to 52.0";
+        assert_eq!(newer_class(modern), Some(("net/millida/mod/Millida".to_string(), 21)));
+        let java8 = "Caused by: java.lang.UnsupportedClassVersionError: com.example.Foo : Unsupported major.minor version 61.0\n\tat java.lang.ClassLoader.defineClass1(Native Method)";
+        assert_eq!(newer_class(java8), Some(("com/example/Foo".to_string(), 17)));
+        assert_eq!(newer_class("[main/ERROR] [mixin/]: Mixin config millida.mixins.json does not specify \"minVersion\" property"), None);
     }
 
     /// game version -> java major. A wrong answer here is offered to the player

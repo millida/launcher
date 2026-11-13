@@ -171,6 +171,17 @@ mod tests {
             let has = pins_for(doc, loader, game).unwrap_or_default().iter().any(|m| m.slug == slug);
             assert_eq!(has, want, "{loader} {game} {slug}: Dynamic FPS only before 1.21.2, ModernFix and its mVUS fork by version");
         }
+        for p in &doc.profiles {
+            for m in &p.mods {
+                assert!(
+                    super::super::fpsboost::known_broken(&p.loader, &p.game, "", &m.slug).is_none(),
+                    "{} {}: {} crashes on the current loader and must not be pinned",
+                    p.loader,
+                    p.game,
+                    m.slug
+                );
+            }
+        }
         assert!(pins_for(doc, "quilt", "1.21.11").is_some(), "Quilt takes the Fabric table");
         // RenderScale: only Potato and Low, only stable releases, never in the boost set.
         let scale = |loader: &str, game: &str, level: &str| level_pins(doc, loader, game, level).iter().any(|m| m.slug == "renderscale");

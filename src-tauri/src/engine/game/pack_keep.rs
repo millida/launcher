@@ -20,6 +20,50 @@ const SHIPPED_HASHES_FILE: &str = "millida-pack-hashes.json";
 /// or progress, and hashing them on every update would cost seconds.
 const TRACKED_FILE_MAX_BYTES: u64 = 32 << 20;
 
+/// The text of the settings files a version shipped. Merging the player's
+/// settings key by key needs the author's previous copy as the base, and the
+/// hashes alone cannot give it. A launcher service file (`millida-*.json`): it
+/// never leaves with the player's files and a pack archive cannot bring one.
+const SHIPPED_SETTINGS_FILE: &str = "millida-pack-settings.json";
+const SETTINGS_TEXT_MAX_BYTES: u64 = 256 << 10;
+
+/// The game's own settings and the video settings of the renderer mods: the
+/// player sets them in the game, the author ships them with the pack, and an
+/// update used to give the whole file to whoever changed it last. Every release
+/// of a pack whose author touched options.txt reset the player's graphics.
+const SETTINGS_FILES: [&str; 8] = [
+    "options.txt",
+    "optionsof.txt",
+    "optionsshaders.txt",
+    "config/iris.properties",
+    "config/oculus.properties",
+    "config/sodium-options.json",
+    "config/embeddium-options.json",
+    "config/rubidium-options.json",
+];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SettingsFormat {
+    /// `key:value` lines, the game and OptiFine.
+    Colon,
+    /// `key=value` lines, shader settings.
+    Equals,
+    Json,
+}
+
+fn settings_format(rel: &str) -> Option<SettingsFormat> {
+    if !SETTINGS_FILES.contains(&rel) {
+        return None;
+    }
+    Some(if rel.ends_with(".json") {
+        SettingsFormat::Json
+    } else if rel.ends_with(".properties") || rel == "optionsshaders.txt" {
+        SettingsFormat::Equals
+    } else {
+        SettingsFormat::Colon
+    })
+}
+
 type Hashes = BTreeMap<String, String>;
 
 const ALWAYS_KEEP: [&str; 9] = [
@@ -82,7 +126,34 @@ pub fn record_shipped(pdir: &Path) -> Result<(), String> {
     let body = serde_json::to_vec(&shipped).map_err(|e| e.to_string())?;
     std::fs::write(pdir.join(SHIPPED_FILE), body).map_err(|e| format!("Не удалось записать состав сборки: {}", e))?;
     let hashes = serde_json::to_vec(&hash_tracked(pdir, &names_in(pdir))?).map_err(|e| e.to_string())?;
-    std::fs::write(pdir.join(SHIPPED_HASHES_FILE), hashes).map_err(|e| format!("Не удалось записать состав сборки: {}", e))
+    std::fs::write(pdir.join(SHIPPED_HASHES_FILE), hashes).map_err(|e| format!("Не удалось записать состав сборки: {}", e))?;
+    record_settings(pdir)
+}
+
+/// The settings files as the version ships them, before the game or the player touches them.
+fn record_settings(pdir: &Path) -> Result<(), String> {
+    let mut copies: BTreeMap<String, String> = BTreeMap::new();
+    for rel in SETTINGS_FILES {
+        let path = pdir.join(rel);
+        let small = std::fs::metadata(&path).is_ok_and(|m| m.is_file() && m.len() <= SETTINGS_TEXT_MAX_BYTES);
+        if let (true, Ok(text)) = (small, std::fs::read_to_string(&path)) {
+            copies.insert(rel.to_string(), text);
+        }
+    }
+    let file = pdir.join(SHIPPED_SETTINGS_FILE);
+    if copies.is_empty() {
+        let _ = std::fs::remove_file(&file);
+        return Ok(());
+    }
+    let body = serde_json::to_vec(&copies).map_err(|e| e.to_string())?;
+    std::fs::write(file, body).map_err(|e| format!("Не удалось записать состав сборки: {}", e))
+}
+
+fn read_settings(pdir: &Path) -> BTreeMap<String, String> {
+    std::fs::read(pdir.join(SHIPPED_SETTINGS_FILE))
+        .ok()
+        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .unwrap_or_default()
 }
 
 /// Entries whose files are judged one by one on an update: settings and
@@ -162,6 +233,7 @@ fn edit_verdict(theirs: &str, was: Option<&str>, now: Option<&str>, recorded: bo
 /// skill progress mods keep in `config/`.
 fn carry_edited(from: &Path, to: &Path, keep: &Path, old: Option<&Hashes>) -> Result<usize, String> {
     let (Some(shipped), Some(now)) = (read_shipped(from), read_hashes(to)) else { return Ok(0) };
+    let shipped_settings = read_settings(from);
     let entries: Vec<String> = names_in(from)
         .into_iter()
         .filter(|name| shipped.contains(name))
@@ -176,15 +248,157 @@ fn carry_edited(from: &Path, to: &Path, keep: &Path, old: Option<&Hashes>) -> Re
             Some(_) => sha256_file(&from.join(&rel))?,
             None => String::new(),
         };
-        let res = match edit_verdict(&theirs, was, next, old.is_some()) {
-            Edit::Leave => continue,
-            Edit::Carry => copy_path(&from.join(&rel), &to.join(&rel)),
-            Edit::Shelve => copy_path(&from.join(&rel), &free_target(keep.join(&rel))),
+        let verdict = match edit_verdict(&theirs, was, next, old.is_some()) {
+            Edit::Carry if was.is_none() && next.is_none() && default_changed(&rel, &theirs, old, &now) => Edit::Shelve,
+            other => other,
+        };
+        let res = match (verdict, settings_format(&rel)) {
+            (Edit::Leave, _) => continue,
+            (Edit::Carry, _) => copy_path(&from.join(&rel), &to.join(&rel)),
+            (Edit::Shelve, Some(format)) => merge_settings_file(from, to, keep, &rel, format, shipped_settings.get(&rel).map(String::as_str)),
+            (Edit::Shelve, None) => copy_path(&from.join(&rel), &free_target(keep.join(&rel))),
         };
         res.map_err(|e| format!("не удалось перенести «{}»: {}", rel, e))?;
         carried += 1;
     }
     Ok(carried)
+}
+
+/// A config the game wrote from the pack's `defaultconfigs` copy (Forge copies one
+/// there when the config is missing) was shipped by no version and moved on as the
+/// player's. When the next version changed that default, the old copy kept the old
+/// values for good: a main menu that said 1.2.7 after the update to 1.2.9
+/// (11.11.2026, Dominion over the Gods). It now yields to the new default, and the
+/// game writes the config again from it. Only a copy still equal to the old default
+/// yields: one the player edited is theirs, and shelving it lost their settings on
+/// every update that touched the default (13.11.2026).
+fn default_changed(rel: &str, theirs: &str, old: Option<&Hashes>, now: &Hashes) -> bool {
+    let (Some(name), Some(old)) = (rel.strip_prefix("config/"), old) else { return false };
+    let key = format!("defaultconfigs/{}", name);
+    let untouched = old.get(&key).is_some_and(|was| was == theirs);
+    untouched && now.get(&key).is_some_and(|next| old.get(&key) != Some(next))
+}
+
+/// Both the author and the player changed a settings file. The author's whole copy
+/// used to win: an update reset the player's graphics. They are merged key by key
+/// instead, and the player's whole copy still waits in the keep folder. A file the
+/// next version no longer ships stays the player's.
+fn merge_settings_file(from: &Path, to: &Path, keep: &Path, rel: &str, format: SettingsFormat, base: Option<&str>) -> std::io::Result<()> {
+    let (mine_path, next_path) = (from.join(rel), to.join(rel));
+    let (Ok(mine), Ok(next)) = (std::fs::read_to_string(&mine_path), std::fs::read_to_string(&next_path)) else {
+        return if next_path.exists() { copy_path(&mine_path, &free_target(keep.join(rel))) } else { copy_path(&mine_path, &next_path) };
+    };
+    let merged = match format {
+        SettingsFormat::Colon => Some(merge_lines(base, &next, &mine, ':')),
+        SettingsFormat::Equals => Some(merge_lines(base, &next, &mine, '=')),
+        SettingsFormat::Json => merge_json_text(base, &next, &mine),
+    };
+    copy_path(&mine_path, &free_target(keep.join(rel)))?;
+    match merged {
+        Some(text) => std::fs::write(&next_path, text),
+        // The player's copy is not readable JSON: the author's stays.
+        None => Ok(()),
+    }
+}
+
+/// Lists of packs the author can add to: a pack a version starts shipping (a
+/// translation, say) has to be switched on for players who changed their list.
+const PACK_LIST_KEYS: [&str; 2] = ["resourcePacks", "incompatibleResourcePacks"];
+
+/// Key by key, with the author's previous copy as the base: a key the author
+/// changed between versions takes the author's value, every other key keeps the
+/// player's, a key the author added arrives, a key the author dropped goes.
+/// Without a base (a pack installed before the copies were kept) the player's
+/// values win, and the author only adds keys and packs.
+fn merge_lines(base: Option<&str>, next: &str, mine: &str, sep: char) -> String {
+    fn pair(line: &str, sep: char) -> Option<(&str, &str)> {
+        if line.trim_start().starts_with('#') {
+            return None;
+        }
+        line.split_once(sep)
+    }
+    let base: Option<BTreeMap<&str, &str>> = base.map(|b| b.lines().filter_map(|l| pair(l, sep)).collect());
+    let mine_rows: Vec<(&str, &str)> = mine.lines().filter_map(|l| pair(l, sep)).collect();
+    let mine_map: BTreeMap<&str, &str> = mine_rows.iter().copied().collect();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut out = String::with_capacity(next.len().max(mine.len()));
+    for line in next.lines() {
+        let Some((key, theirs)) = pair(line, sep) else {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        };
+        seen.insert(key);
+        let value = match (mine_map.get(key), &base) {
+            (None, _) => theirs.to_string(),
+            (Some(own), Some(base)) if base.get(key) == Some(&theirs) => own.to_string(),
+            (Some(_), Some(_)) => theirs.to_string(),
+            (Some(own), None) if PACK_LIST_KEYS.contains(&key) => with_new_packs(own, theirs),
+            (Some(own), None) => own.to_string(),
+        };
+        out.push_str(key);
+        out.push(sep);
+        out.push_str(&value);
+        out.push('\n');
+    }
+    for (key, own) in mine_rows {
+        let dropped = base.as_ref().is_some_and(|b| b.contains_key(key));
+        if !dropped && seen.insert(key) {
+            out.push_str(key);
+            out.push(sep);
+            out.push_str(own);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// The player's pack list with the packs the author's list has on top of it.
+fn with_new_packs(own: &str, theirs: &str) -> String {
+    let (Ok(mut list), Ok(next)) = (serde_json::from_str::<Vec<String>>(own), serde_json::from_str::<Vec<String>>(theirs)) else {
+        return own.to_string();
+    };
+    for pack in next {
+        if !list.contains(&pack) {
+            list.push(pack);
+        }
+    }
+    serde_json::to_string(&list).unwrap_or_else(|_| own.to_string())
+}
+
+fn merge_json_text(base: Option<&str>, next: &str, mine: &str) -> Option<String> {
+    let next: serde_json::Value = serde_json::from_str(next).ok()?;
+    let mine: serde_json::Value = serde_json::from_str(mine).ok()?;
+    let base: Option<serde_json::Value> = base.and_then(|b| serde_json::from_str(b).ok());
+    serde_json::to_string_pretty(&merge_json(base.as_ref(), &next, &mine)).ok()
+}
+
+/// The same rule as `merge_lines`, for nested JSON objects.
+fn merge_json(base: Option<&serde_json::Value>, next: &serde_json::Value, mine: &serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    let (Value::Object(theirs), Value::Object(own)) = (next, mine) else {
+        return if base.is_none_or(|b| b == next) { mine.clone() } else { next.clone() };
+    };
+    let mut out = theirs.clone();
+    for (key, their_value) in theirs {
+        let Some(own_value) = own.get(key) else { continue };
+        let was = base.and_then(|b| b.get(key));
+        let value = if their_value.is_object() && own_value.is_object() {
+            merge_json(was, their_value, own_value)
+        } else if base.is_none() || was == Some(their_value) {
+            own_value.clone()
+        } else {
+            their_value.clone()
+        };
+        out.insert(key.clone(), value);
+    }
+    for (key, own_value) in own {
+        let dropped = base.is_some_and(|b| b.get(key).is_some());
+        if !theirs.contains_key(key) && !dropped {
+            out.insert(key.clone(), own_value.clone());
+        }
+    }
+    Value::Object(out)
 }
 
 pub(crate) fn shipped_recorded_at(pdir: &Path) -> Option<std::time::SystemTime> {
@@ -614,7 +828,7 @@ mod tests {
             ("config/skills/abilities.json", "pack"),
             ("config/balance.toml", "v1"),
             ("config/tweak.toml", "v1"),
-            ("options.txt", "author v1"),
+            ("options.txt", "renderDistance:8\nlang:en_us\nresourcePacks:[\"vanilla\"]\n"),
             ("servers.dat", "pack"),
         ]);
         record_shipped(&old).unwrap();
@@ -623,7 +837,7 @@ mod tests {
             ("config/skills/abilities.json", "player skills"),
             ("config/quest_tracked.txt", "made by the game"),
             ("config/tweak.toml", "player"),
-            ("options.txt", "player keys"),
+            ("options.txt", "renderDistance:16\nlang:en_us\nresourcePacks:[\"vanilla\"]\nfov:0.5\n"),
             ("servers.dat", "player servers"),
         ]);
         put(&new, &[
@@ -631,7 +845,7 @@ mod tests {
             ("config/skills/abilities.json", "pack"),
             ("config/balance.toml", "v2"),
             ("config/tweak.toml", "v2"),
-            ("options.txt", "author v2"),
+            ("options.txt", "renderDistance:8\nlang:ru_ru\nresourcePacks:[\"vanilla\",\"file/Ru.zip\"]\n"),
             ("servers.dat", "pack"),
         ]);
         record_shipped(&new).unwrap();
@@ -644,13 +858,18 @@ mod tests {
             ("config/quest_tracked.txt", "made by the game", "файл, записанный игрой, переезжает"),
             ("config/balance.toml", "v2", "правка автора доезжает до игрока"),
             ("config/tweak.toml", "v2", "поменяли оба — побеждает автор"),
-            ("options.txt", "author v2", "автор обновил options.txt — он обновился у всех"),
+            (
+                "options.txt",
+                "renderDistance:16\nlang:ru_ru\nresourcePacks:[\"vanilla\",\"file/Ru.zip\"]\nfov:0.5\n",
+                "поменяли оба: ключи автора доезжают, графика игрока остаётся",
+            ),
             ("servers.dat", "player servers", "автор не трогал servers.dat — у игрока остаётся свой"),
         ];
         for (rel, want, why) in cases {
             assert_eq!(std::fs::read_to_string(new.join(rel)).ok().as_deref(), Some(*want), "«{rel}»: {why}");
         }
-        for (rel, want) in [("config/tweak.toml", "player"), ("options.txt", "player keys")] {
+        let mine = "renderDistance:16\nlang:en_us\nresourcePacks:[\"vanilla\"]\nfov:0.5\n";
+        for (rel, want) in [("config/tweak.toml", "player"), ("options.txt", mine)] {
             assert_eq!(std::fs::read_to_string(keep.join(rel)).ok().as_deref(), Some(want), "уступившая копия игрока «{rel}» откладывается");
         }
         let _ = std::fs::remove_dir_all(&base);
@@ -757,5 +976,85 @@ mod tests {
         for bad in ["..", "../x", "/etc", "a/b", "", "A"] {
             assert!(keep_root(bad).is_err(), "{bad}");
         }
+    }
+
+    /// Both changed options.txt: the keys the author changed between versions
+    /// arrive, the rest stay as the player set them.
+    #[test]
+    fn settings_are_merged_key_by_key() {
+        let base = "renderDistance:8\ngraphicsMode:1\nlang:en_us\nkey_key.jump:key.keyboard.space\n";
+        let next = "renderDistance:8\ngraphicsMode:1\nlang:ru_ru\nnarrator:0\n";
+        let mine = "renderDistance:16\ngraphicsMode:2\nlang:en_us\nkey_key.jump:key.keyboard.space\nfov:0.8\n";
+        let merged = merge_lines(Some(base), next, mine, ':');
+        assert_eq!(merged, "renderDistance:16\ngraphicsMode:2\nlang:ru_ru\nnarrator:0\nfov:0.8\n");
+        // Without the author's previous copy the player's values win, and the
+        // author still adds keys and the packs a version starts shipping.
+        let next = "renderDistance:8\nresourcePacks:[\"vanilla\",\"file/Ru.zip\"]\nnarrator:0\n";
+        let mine = "renderDistance:16\nresourcePacks:[\"vanilla\",\"file/Faithful.zip\"]\n";
+        assert_eq!(
+            merge_lines(None, next, mine, ':'),
+            "renderDistance:16\nresourcePacks:[\"vanilla\",\"file/Faithful.zip\",\"file/Ru.zip\"]\nnarrator:0\n"
+        );
+        // Shader settings: «=» and comments that are not keys.
+        let merged = merge_lines(Some("#Iris\nshaderPack=BSL\nenableShaders=true\n"), "#Iris\nshaderPack=Complementary\nenableShaders=true\n", "#Iris\nshaderPack=BSL\nenableShaders=false\n", '=');
+        assert_eq!(merged, "#Iris\nshaderPack=Complementary\nenableShaders=false\n");
+    }
+
+    #[test]
+    fn video_settings_json_is_merged_by_the_same_rule() {
+        let base = r#"{"quality":{"weather":"DEFAULT","leaves":"FAST"},"advanced":{"cpu_frames":3}}"#;
+        let next = r#"{"quality":{"weather":"FAST","leaves":"FAST"},"advanced":{"cpu_frames":3},"notifications":{}}"#;
+        let mine = r#"{"quality":{"weather":"DEFAULT","leaves":"FANCY"},"advanced":{"cpu_frames":5}}"#;
+        let merged: serde_json::Value = serde_json::from_str(&merge_json_text(Some(base), next, mine).unwrap()).unwrap();
+        assert_eq!(merged["quality"]["weather"], "FAST", "the author changed it");
+        assert_eq!(merged["quality"]["leaves"], "FANCY", "the player changed it, the author did not");
+        assert_eq!(merged["advanced"]["cpu_frames"], 5);
+        assert!(merged["notifications"].is_object(), "a section the author added arrives");
+        assert!(merge_json_text(Some(base), next, "{not json").is_none(), "an unreadable copy leaves the author's file");
+    }
+
+    /// A config the game copied from `defaultconfigs` follows a changed default.
+    #[test]
+    fn a_config_written_from_a_changed_default_yields_to_it() {
+        let base = std::env::temp_dir().join(format!("millida-pack-defaults-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (old, new, keep) = (base.join("old"), base.join("new"), base.join("keep"));
+        fn put(root: &Path, files: &[(&str, &str)]) {
+            for (rel, body) in files {
+                let p = root.join(rel);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, body).unwrap();
+            }
+        }
+        put(&old, &[("config/pack.toml", "x"), ("defaultconfigs/bcc-common.toml", "version = \"1.2.7\""), ("defaultconfigs/same.toml", "a"), ("defaultconfigs/edited.toml", "zoom = 1")]);
+        record_shipped(&old).unwrap();
+        put(&old, &[("config/bcc-common.toml", "version = \"1.2.7\""), ("config/same.toml", "player"), ("config/edited.toml", "zoom = 3")]);
+        put(&new, &[("config/pack.toml", "x"), ("defaultconfigs/bcc-common.toml", "version = \"1.2.9\""), ("defaultconfigs/same.toml", "a"), ("defaultconfigs/edited.toml", "zoom = 2")]);
+        record_shipped(&new).unwrap();
+
+        carry_into(&old, &new, &keep).expect("перенос не должен падать");
+
+        assert!(!new.join("config/bcc-common.toml").exists(), "игра заново возьмёт конфиг из новой версии defaultconfigs");
+        assert!(keep.join("config/bcc-common.toml").exists(), "старая копия ждёт в отложенных");
+        assert_eq!(std::fs::read_to_string(new.join("config/same.toml")).unwrap(), "player", "умолчание не менялось — копия игрока переезжает");
+        assert_eq!(std::fs::read_to_string(new.join("config/edited.toml")).unwrap(), "zoom = 3", "игрок правил конфиг — он не пропадает, даже если умолчание сменилось");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_settings_file_the_next_version_drops_stays_the_players() {
+        let base = std::env::temp_dir().join(format!("millida-pack-settings-drop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (old, new, keep) = (base.join("old"), base.join("new"), base.join("keep"));
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(old.join("options.txt"), "renderDistance:8\n").unwrap();
+        record_shipped(&old).unwrap();
+        std::fs::write(old.join("options.txt"), "renderDistance:16\n").unwrap();
+        std::fs::write(new.join("readme.txt"), "v2").unwrap();
+        record_shipped(&new).unwrap();
+        carry_into(&old, &new, &keep).expect("перенос не должен падать");
+        assert_eq!(std::fs::read_to_string(new.join("options.txt")).unwrap(), "renderDistance:16\n");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

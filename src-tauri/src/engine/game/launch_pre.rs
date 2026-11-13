@@ -11,6 +11,10 @@ use std::future::Future;
 
 /// How long the launch waits for the card of a catalogue build before it uses the stored answer.
 const PACK_MOD_GRACE: std::time::Duration = std::time::Duration::from_millis(400);
+/// How long the first request for our mod's token may take.
+const MOD_TOKEN_BUDGET: std::time::Duration = std::time::Duration::from_secs(6);
+/// The one repeat after a failure: only a launch that already lost the token waits for it.
+const MOD_TOKEN_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(4);
 
 /// A task that belongs to the launch. If the launch ends before its answer is read (an error,
 /// a cancel), the task is stopped with it.
@@ -128,7 +132,7 @@ pub(crate) struct Preflight {
     gate: Option<Job<Result<(), String>>>,
     token: Option<Job<Result<Vec<String>, String>>>,
     pack_mod: Option<Job<(bool, bool)>>,
-    mod_token: Option<Job<Option<String>>>,
+    mod_token: Option<Job<ModToken>>,
     skin: Option<Job<Ygg>>,
     kill: Option<KillPrefetch>,
     /// What was started, for the plan of the launch.
@@ -166,7 +170,7 @@ impl Preflight {
                 let profile = profile.to_string();
                 Job::spawn(async move { pack_millida_mod(&profile, &slug).await })
             }),
-            mod_token: plan.mod_token.then(|| Job::spawn(async { mod_session_token().await })),
+            mod_token: plan.mod_token.then(|| Job::spawn(mod_session_token(MOD_TOKEN_BUDGET))),
             skin: plan.skin_server.map(|url| Job::spawn(prepare_skin_server(url))),
             kill: plan.kill_switch.then(KillPrefetch::start),
         }
@@ -207,14 +211,15 @@ impl Preflight {
         pack_mod_answer(self.pack_mod.take(), profile, slug).await
     }
 
-    pub(crate) async fn mod_token(&mut self) -> Option<String> {
-        match self.mod_token.take() {
-            Some(job) => match job.answer().await {
-                Some(done) => done,
-                None => mod_session_token().await,
-            },
-            None => mod_session_token().await,
-        }
+    pub(crate) async fn mod_token(&mut self) -> ModToken {
+        let first = match self.mod_token.take() {
+            Some(job) => job.answer().await.unwrap_or(ModToken::Failed),
+            None => mod_session_token(MOD_TOKEN_BUDGET).await,
+        };
+        once_more_if_failed(first, || {
+            super::launch_perf::detour("net", mod_session_token(MOD_TOKEN_RETRY_BUDGET))
+        })
+        .await
     }
 
     pub(crate) fn take_kill_prefetch(&mut self) -> KillPrefetch {
@@ -234,6 +239,18 @@ pub(crate) async fn gate_verdict(job: Job<Result<(), String>>) -> Result<(), Str
 }
 
 /// `Preflight::pack_mod` for a job taken out of it (a node of the launch graph).
+/// The mod reads its token once, at the start of the game: a lost one costs the whole session.
+async fn once_more_if_failed<F, Fut>(first: ModToken, again: F) -> ModToken
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = ModToken>,
+{
+    match first {
+        ModToken::Failed => again().await,
+        done => done,
+    }
+}
+
 pub(crate) async fn pack_mod_answer(job: Option<Job<(bool, bool)>>, profile: &str, slug: &str) -> (bool, bool) {
     let Some(mut job) = job else { return pack_millida_mod(profile, slug).await };
     if !job.finished() {
@@ -264,6 +281,26 @@ mod tests {
 
     fn sample() -> Plan {
         Plan::default()
+    }
+
+    #[tokio::test]
+    async fn only_a_failed_mod_token_is_asked_for_again() {
+        let issued = ModToken::Issued("t".into());
+        let cases = [
+            (issued.clone(), issued.clone(), false, "a token in hand costs the launch nothing"),
+            (ModToken::NoSession, ModToken::NoSession, false, "with nobody signed in there is nothing to wait for"),
+            (ModToken::Failed, issued, true, "the repeat brings the player's items back"),
+        ];
+        for (first, expected, retried, why) in cases {
+            let asked = AtomicBool::new(false);
+            let got = once_more_if_failed(first, || async {
+                asked.store(true, Ordering::SeqCst);
+                ModToken::Issued("t".into())
+            })
+            .await;
+            assert_eq!(got, expected, "{}", why);
+            assert_eq!(asked.load(Ordering::SeqCst), retried, "{}", why);
+        }
     }
 
     /// (settings, pack as (slug, needs key), skin server, loader, mod wanted) -> plan, why pinned
