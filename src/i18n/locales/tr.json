@@ -4746,7 +4746,7 @@
   "Перетащи установщик": "Yükleyiciyi sürükle",
   "Сравни с нашим отчётом": "Raporumuzla karşılaştır",
   "Установщик Windows подписан": "Windows yükleyicisi imzalı",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "İmza, zaman damgalı bir Certum Code Signing sertifikasıdır. Roman Babaskin adına verilmiştir ve 13.11.2027'ye kadar geçerlidir. İmza, dosyayı kimin yayınladığını gösterir ve dosya değiştirilirse bozulur. İmzayı sürüm derlemesi otomatik olarak atar.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "İmza, zaman damgalı bir GlobalSign EV CodeSigning sertifikasıdır. Şahıs şirketi sahibi Veselov Nikita Nikolaevich adına verilmiştir ve 09.09.2027'ye kadar geçerlidir. İmza, dosyayı kimin yayınladığını gösterir ve dosya değiştirilirse bozulur. Sertifika sahibi imzayı elle atar.",
   "Установщики проходят VirusTotal": "Yükleyiciler VirusTotal'dan geçer",
   "VirusTotal — сайт, который прогоняет файл через десятки антивирусных движков. Установщики Windows, macOS и Linux проверяются заново по понедельникам и вручную. Свежие числа — выше, они берутся из последнего отчёта.": "VirusTotal, bir dosyayı onlarca antivirüs motorundan geçiren bir sitedir. Windows, macOS ve Linux yükleyicileri her pazartesi ve elle yeniden kontrol edilir. Güncel sayılar yukarıda, en son rapordan alınır.",
   "Раньше было иначе, и мы это не прячем": "Eskiden farklıydı ve bunu saklamıyoruz",
@@ -6567,9 +6567,5 @@
   "Убрали {0}: {1}": "{0} kaldırıldı: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, ancak dosya kaldırılamadı: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium bu NeoForge sürümüyle (26.3.0.65 ve sonrası) çalışmıyor: oyun açılırken çöküyor. Aşağıdaki düğmeyle Sodium'u kapat; o olmadan mod paketi açılır.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS artışı, oyunun açılmasını engelleyen bir modu mod paketinden kaldırdı: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "“{0}” için “{1}” sürüm {2} gerekli, {3} değil",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "“{0}” kurulmadı: {1}. Bu modların uyumlu sürümlerini kur ya da birini kaldır",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "Ücretli mod paketi paylaşılamaz — arkadaşın erişimi Millida kataloğundaki mod paketi sayfasından kendisi alır",
-  "Отправляем моды: {done} из {total}": "Modlar gönderiliyor: {done} / {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS artışı, oyunun açılmasını engelleyen bir modu mod paketinden kaldırdı: {0}"
 }

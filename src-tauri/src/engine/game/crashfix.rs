@@ -725,8 +725,8 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             let (file, range) = arg.split_once('|').ok_or("Некорректный мод")?;
             let file = safe_file_name(file)?;
             let (_, range) = dep_arg(&format!("x|{}", range))?;
-            let swaps = set_content_version_in_range(&profile, "mod", &file, &range).await?;
-            Ok(swaps.iter().map(|(old, new)| format!("Вместо {} стоит {}", old, new)).collect::<Vec<_>>().join("; "))
+            let installed = set_content_version_in_range(&profile, "mod", &file, &range).await?;
+            Ok(format!("Вместо {} стоит {}", file, installed))
         }
         "disable-mod" => {
             let file = safe_file_name(&arg)?;

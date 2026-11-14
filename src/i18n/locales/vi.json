@@ -1353,7 +1353,7 @@
   "Перетащи установщик": "Kéo trình cài đặt vào",
   "Сравни с нашим отчётом": "So với báo cáo của chúng tôi",
   "Установщик Windows подписан": "Trình cài đặt Windows đã được ký",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "Chữ ký là chứng chỉ Certum Code Signing, có dấu thời gian. Chứng chỉ cấp cho Roman Babaskin và có hiệu lực đến 13.11.2027. Chữ ký cho biết ai phát hành tệp và sẽ hỏng nếu tệp bị thay đổi. Bản dựng phát hành tự động ký.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "Chữ ký là chứng chỉ GlobalSign EV CodeSigning, có dấu thời gian. Chứng chỉ cấp cho hộ kinh doanh Veselov Nikita Nikolaevich và có hiệu lực đến 09.09.2027. Chữ ký cho biết ai phát hành tệp và sẽ hỏng nếu tệp bị thay đổi. Người giữ chứng chỉ ký thủ công.",
   "Установщики проходят VirusTotal": "Các trình cài đặt được kiểm tra qua VirusTotal",
   "VirusTotal — сайт, который прогоняет файл через десятки антивирусных движков. Установщики Windows, macOS и Linux проверяются заново по понедельникам и вручную. Свежие числа — выше, они берутся из последнего отчёта.": "VirusTotal là trang web chạy tệp qua hàng chục công cụ diệt virus. Trình cài đặt Windows, macOS và Linux được kiểm tra lại vào mỗi thứ Hai và thủ công. Số liệu mới nhất ở phía trên, lấy từ báo cáo gần nhất.",
   "Раньше было иначе, и мы это не прячем": "Trước đây khác, và chúng tôi không giấu điều đó",
@@ -6570,9 +6570,5 @@
   "Убрали {0}: {1}": "Đã gỡ {0}: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, nhưng không gỡ được tệp: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium không hoạt động với phiên bản NeoForge này (26.3.0.65 trở lên): game bị crash ngay khi khởi động. Hãy tắt Sodium bằng nút bên dưới — không có nó, gói mod sẽ khởi động được.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Tăng FPS đã gỡ khỏi gói mod một mod khiến game không khởi động được: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "“{0}” cần “{1}” phiên bản {2}, không phải {3}",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "Chưa cài “{0}”: {1}. Hãy cài các phiên bản phù hợp của những mod này hoặc gỡ một trong số chúng",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "Không thể chia sẻ modpack trả phí — bạn của bạn tự nhận quyền truy cập trên trang modpack trong danh mục Millida",
-  "Отправляем моды: {done} из {total}": "Đang tải mod lên: {done} / {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Tăng FPS đã gỡ khỏi gói mod một mod khiến game không khởi động được: {0}"
 }
