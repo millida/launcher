@@ -18,7 +18,7 @@ const NESTED_DEPTH: u32 = 3;
 /// Bumped whenever the parser starts extracting a new field: cache entries are
 /// keyed by (size, mtime), so without it an old cache would keep answering with
 /// fields the previous version never filled in.
-const META_REV: u32 = 11;
+const META_REV: u32 = 10;
 
 /// A `breaks` entry as the mod author wrote it: which mod, and under what
 /// version range. `"breaks": {"fabric-api": "<0.144.3+26.1"}` means "needs a
@@ -44,10 +44,6 @@ pub struct LoaderRelations {
     /// (`>=0.16.0`). Empty when it asks for none.
     #[serde(default)]
     pub loader_range: String,
-    /// The version each required mod must have, as the author wrote it. A
-    /// requirement written as a list of alternatives is kept as `*`.
-    #[serde(default)]
-    pub require_ranges: Vec<BreakRule>,
 }
 
 /// Metadata read from the content file itself (fabric.mod.json, mods.toml,
@@ -476,8 +472,7 @@ fn loader_relations(jar: &mut Jar) -> Vec<LoaderRelations> {
         let Some(v) = entry_text(jar, file).and_then(|t| lenient_json(&t)) else { continue };
         let (requires, breaks) = fabric_rules(&v, quilt);
         let loader_range = if quilt { String::new() } else { fabric_loader_range(&v) };
-        let require_ranges = if quilt { vec![] } else { break_list(&v["depends"]) };
-        out.push(LoaderRelations { loader: (if quilt { "quilt" } else { "fabric" }).into(), requires, breaks, loader_range, require_ranges });
+        out.push(LoaderRelations { loader: (if quilt { "quilt" } else { "fabric" }).into(), requires, breaks, loader_range });
     }
     for file in ["META-INF/neoforge.mods.toml", "META-INF/mods.toml"] {
         let Some(text) = entry_text(jar, file) else { continue };
@@ -488,7 +483,7 @@ fn loader_relations(jar: &mut Jar) -> Vec<LoaderRelations> {
         }
         let (_, requires, breaks) = forge_relations(&text);
         let loader_range = forge_loader_range(&text, loader);
-        out.push(LoaderRelations { loader: loader.into(), requires, breaks, loader_range, require_ranges: vec![] });
+        out.push(LoaderRelations { loader: loader.into(), requires, breaks, loader_range });
     }
     out
 }

@@ -4014,7 +4014,7 @@
   "Подписчики": "Sledujúci",
   "подписчиков": "sledujúci",
   "Подпись": "Popis",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "Podpis je certifikát Certum Code Signing s časovou pečiatkou. Je vydaný na meno Roman Babaskin a platí do 13.11.2027. Podpis ukazuje, kto súbor vydal, a pri zmene súboru sa poruší. Pridáva ho automaticky zostavenie vydania.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "Podpis je certifikát GlobalSign EV CodeSigning s časovou pečiatkou. Je vydaný samostatnému podnikateľovi Veselov Nikita Nikolajevič a platí do 09.09.2027. Podpis ukazuje, kto súbor vydal, a pri zmene súboru sa poruší. Držiteľ certifikátu ho aplikuje ručne.",
   "Подпись должна быть одной строкой": "Popis musí byť na jednom riadku",
   "Подпись и *антивирусы*": "Podpis a *antivírusy*",
   "Подпись и альбом": "Popis a album",
@@ -6567,9 +6567,5 @@
   "Убрали {0}: {1}": "Odstránené {0}: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, ale súbor sa nepodarilo odstrániť: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium nefunguje s touto verziou NeoForge (26.3.0.65 a novšie): hra pri štarte spadne. Vypni Sodium tlačidlom nižšie — bez neho sa modpack spustí.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Zrýchlenie FPS odstránilo z modpacku mod, s ktorým sa hra nespustí: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "„{0}“ vyžaduje „{1}“ vo verzii {2}, nie {3}",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "„{0}“ sa nenainštaloval: {1}. Nainštaluj vyhovujúce verzie týchto módov alebo jeden z nich odstráň",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "Platený modpack sa nedá zdieľať — kamarát získa prístup sám na stránke modpacku v katalógu Millida",
-  "Отправляем моды: {done} из {total}": "Odosielame módy: {done} z {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Zrýchlenie FPS odstránilo z modpacku mod, s ktorým sa hra nespustí: {0}"
 }

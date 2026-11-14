@@ -4746,7 +4746,7 @@
   "Перетащи установщик": "Installer hineinziehen",
   "Сравни с нашим отчётом": "Mit unserem Bericht vergleichen",
   "Установщик Windows подписан": "Der Windows-Installer ist signiert",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "Die Signatur ist ein Certum Code Signing-Zertifikat mit Zeitstempel. Es wurde auf Roman Babaskin ausgestellt und ist bis 13.11.2027 gültig. Die Signatur zeigt, wer die Datei veröffentlicht hat, und wird ungültig, wenn die Datei verändert wird. Sie wird beim Release-Build automatisch gesetzt.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "Die Signatur ist ein GlobalSign EV CodeSigning-Zertifikat mit Zeitstempel. Es wurde auf den Einzelunternehmer Veselov Nikita Nikolaevich ausgestellt und ist bis 09.09.2027 gültig. Die Signatur zeigt, wer die Datei veröffentlicht hat, und wird ungültig, wenn die Datei verändert wird. Der Zertifikatsinhaber setzt sie manuell.",
   "Установщики проходят VirusTotal": "Die Installer werden von VirusTotal geprüft",
   "VirusTotal — сайт, который прогоняет файл через десятки антивирусных движков. Установщики Windows, macOS и Linux проверяются заново по понедельникам и вручную. Свежие числа — выше, они берутся из последнего отчёта.": "VirusTotal ist eine Website, die eine Datei durch Dutzende Antiviren-Engines laufen lässt. Die Installer für Windows, macOS und Linux werden jeden Montag und manuell erneut geprüft. Die aktuellen Zahlen stehen oben, sie stammen aus dem letzten Bericht.",
   "Раньше было иначе, и мы это не прячем": "Früher war es anders, und das verbergen wir nicht",
@@ -6567,9 +6567,5 @@
   "Убрали {0}: {1}": "{0} entfernt: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, aber die Datei ließ sich nicht entfernen: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium funktioniert nicht mit dieser NeoForge-Version (26.3.0.65 und neuer): Das Spiel stürzt beim Start ab. Deaktivieren Sie Sodium mit der Schaltfläche unten — ohne Sodium startet das Modpack.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Der FPS-Boost hat einen Mod aus dem Modpack entfernt, mit dem das Spiel nicht startet: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "„{0}“ braucht „{1}“ in Version {2}, nicht {3}",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "„{0}“ wurde nicht installiert: {1}. Installieren Sie passende Versionen dieser Mods oder entfernen Sie einen davon",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "Ein kostenpflichtiges Modpack kann nicht geteilt werden – dein Freund erhält den Zugang selbst auf der Modpack-Seite im Millida-Katalog",
-  "Отправляем моды: {done} из {total}": "Mods werden hochgeladen: {done} von {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Der FPS-Boost hat einen Mod aus dem Modpack entfernt, mit dem das Spiel nicht startet: {0}"
 }

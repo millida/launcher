@@ -1349,7 +1349,7 @@
   "Перетащи установщик": "Drag the installer in",
   "Сравни с нашим отчётом": "Compare it with our report",
   "Установщик Windows подписан": "The Windows installer is signed",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "The signature is a Certum Code Signing certificate with a timestamp. It is issued to Roman Babaskin and is valid until 13.11.2027. The signature shows who released the file and breaks if the file is changed. The release build applies it automatically.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "The signature is a GlobalSign EV CodeSigning certificate with a timestamp. It is issued to sole proprietor Veselov Nikita Nikolaevich and is valid until 09.09.2027. The signature shows who released the file and breaks if the file is changed. The certificate holder applies it manually.",
   "Установщики проходят VirusTotal": "The installers go through VirusTotal",
   "VirusTotal — сайт, который прогоняет файл через десятки антивирусных движков. Установщики Windows, macOS и Linux проверяются заново по понедельникам и вручную. Свежие числа — выше, они берутся из последнего отчёта.": "VirusTotal is a website that runs a file through dozens of antivirus engines. The Windows, macOS and Linux installers are rechecked every Monday and manually. The latest numbers are above, they come from the most recent report.",
   "Раньше было иначе, и мы это не прячем": "It used to be different, and we do not hide it",
@@ -6567,9 +6567,5 @@
   "Убрали {0}: {1}": "Removed {0}: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, but the file couldn't be removed: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium doesn't work with this NeoForge version (26.3.0.65 and newer): the game crashes on startup. Turn off Sodium with the button below — the modpack will start without it.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS boost removed a mod that stops the game from starting: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "“{0}” needs “{1}” version {2}, not {3}",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "“{0}” was not installed: {1}. Install matching versions of these mods or remove one of them",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "A paid modpack cannot be shared — your friend gets access on the modpack's page in the Millida catalog",
-  "Отправляем моды: {done} из {total}": "Uploading mods: {done} of {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS boost removed a mod that stops the game from starting: {0}"
 }

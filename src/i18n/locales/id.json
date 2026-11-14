@@ -1264,7 +1264,7 @@
   "Перетащи установщик": "Seret installer ke sana",
   "Сравни с нашим отчётом": "Bandingkan dengan laporan kami",
   "Установщик Windows подписан": "Installer Windows ditandatangani",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "Tanda tangannya — sertifikat Certum Code Signing dengan stempel waktu. Sertifikat diterbitkan atas nama Roman Babaskin dan berlaku hingga 13.11.2027. Tanda tangan menunjukkan siapa yang merilis file dan rusak jika file diubah. Tanda tangan dipasang otomatis saat build rilis.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "Tanda tangannya — sertifikat GlobalSign EV CodeSigning dengan stempel waktu. Sertifikat diterbitkan atas nama pengusaha perorangan Veselov Nikita Nikolaevich dan berlaku hingga 09.09.2027. Tanda tangan menunjukkan siapa yang merilis file dan rusak jika file diubah. Tanda tangan dibuat secara manual oleh pemegang sertifikat.",
   "Установщики проходят VirusTotal": "Installer diperiksa VirusTotal",
   "VirusTotal — сайт, который прогоняет файл через десятки антивирусных движков. Установщики Windows, macOS и Linux проверяются заново по понедельникам и вручную. Свежие числа — выше, они берутся из последнего отчёта.": "VirusTotal adalah situs yang memeriksa file dengan puluhan mesin antivirus. Installer Windows, macOS, dan Linux diperiksa ulang setiap Senin dan secara manual. Angka terbaru ada di atas, diambil dari laporan terakhir.",
   "Раньше было иначе, и мы это не прячем": "Dulu berbeda, dan kami tidak menyembunyikannya",
@@ -6571,9 +6571,5 @@
   "Убрали {0}: {1}": "{0} dihapus: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, tetapi file tidak bisa dihapus: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium tidak berfungsi dengan versi NeoForge ini (26.3.0.65 dan yang lebih baru): game crash saat dimulai. Matikan Sodium dengan tombol di bawah — tanpanya modpack akan berjalan.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Boost FPS menghapus dari modpack sebuah mod yang membuat game tidak bisa dimulai: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "“{0}” membutuhkan “{1}” versi {2}, bukan {3}",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "“{0}” tidak dipasang: {1}. Pasang versi mod-mod ini yang cocok atau hapus salah satunya",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "Modpack berbayar tidak bisa dibagikan — temanmu mendapatkan akses sendiri di halaman modpack di katalog Millida",
-  "Отправляем моды: {done} из {total}": "Mengunggah mod: {done} dari {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "Boost FPS menghapus dari modpack sebuah mod yang membuat game tidak bisa dimulai: {0}"
 }

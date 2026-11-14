@@ -1349,7 +1349,7 @@
   "Перетащи установщик": "Prevuci instaler",
   "Сравни с нашим отчётом": "Uporedi sa našim izveštajem",
   "Установщик Windows подписан": "Windows instaler je potpisan",
-  "Подпись — сертификат Certum Code Signing, с меткой времени. Он выдан на Roman Babaskin и действует до 13.11.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её ставит сборка релиза автоматически.": "Potpis — Certum Code Signing sertifikat, sa vremenskom oznakom. Izdat je na ime Roman Babaskin i važi do 13.11.2027. Potpis pokazuje ko je izdao fajl i puca ako se fajl izmeni. Postavlja ga automatski build izdanja.",
+  "Подпись — сертификат GlobalSign EV CodeSigning, с меткой времени. Он выдан на ИП Веселов Никита Николаевич и действует до 09.09.2027. Подпись показывает, кто выпустил файл, и ломается, если файл изменить. Её делает держатель сертификата вручную.": "Potpis — GlobalSign EV CodeSigning sertifikat, sa vremenskom oznakom. Izdat je na preduzetnika Veselov Nikita Nikolajevič i važi do 09.09.2027. Potpis pokazuje ko je izdao fajl i puca ako se fajl izmeni. Pravi ga vlasnik sertifikata ručno.",
   "Установщики проходят VirusTotal": "Instaleri prolaze VirusTotal",
   "VirusTotal — сайт, который прогоняет файл через десятки антивирусных движков. Установщики Windows, macOS и Linux проверяются заново по понедельникам и вручную. Свежие числа — выше, они берутся из последнего отчёта.": "VirusTotal je sajt koji proverava fajl kroz desetine antivirusnih mašina. Instaleri za Windows, macOS i Linux se ponovo proveravaju ponedeljkom i ručno. Sveži brojevi su iznad, uzimaju se iz poslednjeg izveštaja.",
   "Раньше было иначе, и мы это не прячем": "Ranije je bilo drugačije, i to ne krijemo",
@@ -6567,9 +6567,5 @@
   "Убрали {0}: {1}": "Uklonjeno {0}: {1}",
   "{0}: {1}, но убрать файл не вышло: {2}": "{0}: {1}, ali fajl nije mogao da se ukloni: {2}",
   "Sodium не работает с этой версией NeoForge (26.3.0.65 и новее): игра падает на старте. Отключи Sodium кнопкой ниже — без него сборка запустится.": "Sodium ne radi sa ovom verzijom NeoForge-a (26.3.0.65 i novije): igra pada pri pokretanju. Isključi Sodium dugmetom ispod — bez njega će se modpak pokrenuti.",
-  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS boost je iz modpaka uklonio mod sa kojim igra ne može da se pokrene: {0}",
-  "«{0}» нужен «{1}» версии {2}, а не {3}": "„{0}“ zahteva „{1}“ verzije {2}, a ne {3}",
-  "«{0}» не поставлен: {1}. Поставь подходящие версии этих модов или убери один из них": "„{0}“ nije instaliran: {1}. Instaliraj odgovarajuće verzije ovih modova ili ukloni jedan od njih",
-  "Платной сборкой поделиться нельзя — друг получает доступ сам на странице сборки в каталоге Millida": "Plaćeni modpak ne može da se deli — prijatelj sam dobija pristup na stranici modpaka u Millida katalogu",
-  "Отправляем моды: {done} из {total}": "Šaljemo modove: {done} od {total}"
+  "Буст FPS убрал из сборки мод, с которым игра не запускается: {0}": "FPS boost je iz modpaka uklonio mod sa kojim igra ne može da se pokrene: {0}"
 }
