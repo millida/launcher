@@ -26,12 +26,20 @@ function write(key: string, value: string) {
   } catch {}
 }
 
-/// The whole interface scales, not only the text: most sizes in the launcher are in px,
-/// so a bigger font alone would overflow every button.
+let zoomLoaded = false
+
+function applyScale(scale: TextScale) {
+  if (scale === 100 && !zoomLoaded) return
+  zoomLoaded = true
+  void import('./uiZoom')
+    .then((m) => m.applyUiZoom(scale, () => useA11y.getState().scale))
+    .catch((e) => console.warn('[a11y] interface size', e))
+}
+
 function apply(scale: TextScale, contrast: boolean) {
   if (typeof document === 'undefined') return
+  applyScale(scale)
   const root = document.documentElement
-  root.style.setProperty('zoom', scale === 100 ? '' : String(scale / 100))
   if (contrast) root.setAttribute('data-contrast', 'high')
   else root.removeAttribute('data-contrast')
 }
@@ -63,5 +71,5 @@ export function initA11y() {
   apply(scale, contrast)
 }
 
-// Applied at import, before the first paint, so a scaled interface never flashes at 100%.
+// Applied at import, before the first paint: contrast is set at once, a bigger size as soon as its chunk loads.
 initA11y()

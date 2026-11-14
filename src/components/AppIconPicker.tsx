@@ -6,6 +6,7 @@ import { pickFriendsTab } from './friends/friendsView'
 import { usePlus } from '../state/plus'
 import { hasMillidaAccount } from '../lib/api'
 import { loadInvites } from '../lib/referrals'
+import { loadEconomyProgress } from '../lib/rubies'
 import { APP_ICONS, chosenIcon, iconUnlocked, pickAppIcon } from '../lib/appIcon'
 import type { AppIconId } from '../lib/appIcon'
 import '../styles/pixel/invite.css'
@@ -19,6 +20,7 @@ export function AppIconPicker() {
   const plus = usePlus((s) => s.active)
   const diamond = usePlus((s) => s.diamond)
   const [perks, setPerks] = useState<string[]>([])
+  const [progress, setProgress] = useState({ hours: 0, points: 0 })
   const [picked, setPicked] = useState<AppIconId>(() => chosenIcon())
 
   useEffect(() => {
@@ -27,14 +29,20 @@ export function AppIconPicker() {
     loadInvites()
       .then((o) => setPerks((o.perks || []).map((p) => p.id)))
       .catch(() => {})
+    // Without progress the achievement icons stay locked, which is the honest state when the server is unreachable.
+    loadEconomyProgress()
+      .then((p) => setProgress({ hours: p.hours ?? 0, points: p.points ?? 0 }))
+      .catch(() => {})
   }, [])
 
-  const access = { plus, diamond, perks }
+  const access = { plus, diamond, perks, ...progress }
   // Закрытая иконка ведёт туда, где её открывают (как закрытая тема):
-  // PLUS/Diamond — к покупке подписки, лестница друзей — во вкладку «Пригласить».
+  // PLUS/Diamond — к покупке подписки, лестница друзей — во вкладку «Пригласить»,
+  // достижения — в задания магазина, где видны часы и очки.
   const pick = (id: AppIconId, rule: string) => {
     if (!iconUnlocked(id, access)) {
       if (rule === 'plus' || rule === 'diamond') usePremiumTheme.getState().requestPlus(rule === 'diamond' ? 'DIAMOND' : 'PLUS')
+      else if (rule === 'hours' || rule === 'points') setScreen('rubies')
       else {
         setScreen('friends')
         pickFriendsTab('invite')

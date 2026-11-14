@@ -102,7 +102,7 @@ export const TRUST_ROWS: TrustRow[] = [
   { id: 'mojang', text: 'Игра скачивается с серверов Mojang', logo: 'mojang' },
   { id: 'files', text: 'Файлы игры оригинальные, мы их не меняем', detail: 'Каждый файл сверяется с отпечатком Mojang' },
   { id: 'vt', text: 'Проверено VirusTotal: угроз нет', logo: 'virustotal' },
-  { id: 'sign', text: 'Установщик подписан EV-сертификатом', detail: 'GlobalSign, Windows' },
+  { id: 'sign', text: 'Установщик подписан сертификатом', detail: 'Certum, Windows' },
   { id: 'code', text: 'Код открыт на GitHub', logo: 'github', detail: 'GPL-3.0' },
 ];
 
@@ -261,7 +261,7 @@ export const SEC_SECTIONS: SecSection[] = [
     title: 'Подпись и *антивирусы*',
     sub: 'чем подтверждается установщик',
     intro: [
-      'Установщик подписан EV-сертификатом.',
+      'Установщик подписан сертификатом Certum.',
       'Его проверяет VirusTotal.',
       'Проверь сам: загрузи файл туда же.',
     ],

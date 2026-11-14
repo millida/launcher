@@ -224,6 +224,7 @@ fn hook_command(line: &str, game_dir: &Path, profile: &str) -> Option<Command> {
     let parts = split_command(line);
     let (program, args) = parts.split_first()?;
     let mut cmd = Command::new(program);
+    crate::engine::core::outside_appimage(&mut cmd);
     cmd.args(args).current_dir(game_dir).env("MILLIDA_PROFILE", profile).env("MILLIDA_GAME_DIR", game_dir);
     quiet(&mut cmd);
     Some(cmd)
