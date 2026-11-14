@@ -31,8 +31,18 @@ export async function syncAppIcon(): Promise<void> {
   const chosen = chosenIcon()
   if (chosen === 'default' || !hasTauri()) return
   if (!hasMillidaAccount()) return
-  const [invites] = await Promise.all([loadInvites().catch(() => null), usePlus.getState().load()])
+  const [invites, progress] = await Promise.all([
+    loadInvites().catch(() => null),
+    import('./rubies').then((m) => m.loadEconomyProgress()).catch(() => null),
+    usePlus.getState().load(),
+  ])
   const plus = usePlus.getState()
-  const access: IconAccess = { plus: plus.active, diamond: plus.diamond, perks: (invites?.perks ?? []).map((p) => p.id) }
+  const access: IconAccess = {
+    plus: plus.active,
+    diamond: plus.diamond,
+    perks: (invites?.perks ?? []).map((p) => p.id),
+    hours: progress?.hours ?? 0,
+    points: progress?.points ?? 0,
+  }
   await applyAppIcon(effectiveIcon(chosen, access))
 }

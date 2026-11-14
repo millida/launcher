@@ -62,7 +62,7 @@ body{
   font-family:var(--m-font);font-size:14px;line-height:1.5;font-weight:500;
   background:var(--m-bg);color:var(--m-fg);
   font-synthesis-weight:none;-webkit-font-smoothing:antialiased;
-  min-height:100vh;transition:background-color 150ms ease,color 150ms ease;
+  min-height:calc(100vh / var(--ui-zoom,1));transition:background-color 150ms ease,color 150ms ease;
 }
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* A hand over everything clickable, not only <button>. Plain selectors without :where/:has: the WebKit of
@@ -105,7 +105,9 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 
 /* ============ Launcher window ============ */
 .window{
-  width:100vw;height:100vh;
+  /* --ui-zoom is set only where the interface size falls back to CSS zoom (browser preview): CSS zoom
+     multiplies viewport units, the window box divides them back so it never outgrows the viewport. */
+  width:calc(100vw / var(--ui-zoom,1));height:calc(100vh / var(--ui-zoom,1));
   background:var(--m-bg);
   display:flex;flex-direction:column;position:relative;
   /* The closed chat panel parks itself past the right edge (translateX), which
@@ -138,13 +140,6 @@ input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0
 .tb-btn:hover{background:var(--m-surface-2);color:var(--m-fg)}
 .tb-btn.close:hover{background:var(--m-danger-soft);color:var(--m-danger)}
 .tb-btns{display:flex;align-items:center;gap:2px}
-.tb-status{display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;clip-path:var(--px-5,none);background:var(--m-warning-soft);color:var(--m-warning);font-size:12px;font-weight:600;transition:transform var(--m-t-fast),filter var(--m-t-fast)}
-.tb-status.down{background:var(--m-danger-soft);color:var(--m-danger)}
-.tb-status.maintenance{background:var(--m-info-soft);color:var(--m-info)}
-.tb-status:active{transform:scale(.97)}
-@media (hover:hover) and (pointer:fine){.tb-status:hover{filter:brightness(1.08)}}
-.tb-status-dot{width:6px;height:6px;background:currentColor;flex-shrink:0}
-@media (max-width:760px){.tb-status-text{display:none}}
 /* macOS puts native traffic lights on the left; reserve room so the drag region
    does not start under them. */
 .titlebar.mac{padding:0 16px 0 78px}

@@ -53,6 +53,7 @@ import {
   removeWardrobeItem,
   setSkinSource,
   skinSource,
+  skinTarget,
   uploadTexture,
 } from '../lib/gameProfile'
 import type {
@@ -102,7 +103,6 @@ import { ChipRow, SectionBar } from '../components/character/Sections'
 import type { Section } from '../components/character/Sections'
 import { ItemGrid, ItemTile } from '../components/character/ItemTile'
 import { FittingBar } from '../components/character/FittingBar'
-import { ModHint } from '../components/character/ModHint'
 import { nametagSpot } from '../components/character/Nametag'
 import { Outfits } from '../components/character/Outfits'
 import { SetLooks } from '../components/character/SetLooks'
@@ -2768,18 +2768,21 @@ export function Skins({ on }: { on: boolean }) {
           throw new Error(t('скин не сохранился на этом компьютере: {error}', { error: tx(e) }))
         })
       const acc = getAccount()
+      const licenseAccount = !!acc && acc.kind === 'microsoft' && hasTauri()
+      const goesTo = licenseAccount && hasMillidaAccount() ? skinTarget() : 'both'
       let licensed = false
       let capeLocalOnly = ''
-      try {
-        licensed = await applyLicensedCape()
-      } catch (e) {
-        trackFailure('skins', e, { step: 'license_cape' })
-        showToast(t('Плащ лицензии не переключился: {error}', { error: tx(e) }), 'error')
-      }
+      if (goesTo !== 'millida')
+        try {
+          licensed = await applyLicensedCape()
+        } catch (e) {
+          trackFailure('skins', e, { step: 'license_cape' })
+          showToast(t('Плащ лицензии не переключился: {error}', { error: tx(e) }), 'error')
+        }
       // Скин на лицензию уходит независимо от аккаунта Millida: раньше он был
       // привязан к загрузке в каталог, и без входа в Millida на аккаунте
       // менялся только плащ — скин оставался прежним.
-      if (acc && acc.kind === 'microsoft' && hasTauri()) {
+      if (acc && licenseAccount && goesTo !== 'millida') {
         const ms = await ensureMsAuth(acc)
         if (ms) {
           try {
@@ -2790,9 +2793,13 @@ export function Skins({ on }: { on: boolean }) {
             trackFailure('skins', e, { step: 'license_skin' })
             showToast(t('На лицензию скин не уехал: {error}', { error: tx(e) }), 'error')
           }
+        } else {
+          const expired = t('вход по лицензии Microsoft устарел')
+          trackFailure('skins', new Error(expired), { step: 'license_session' })
+          showToast(t('На лицензию скин не уехал: {error}', { error: expired }), 'error')
         }
       }
-      if (hasMillidaAccount()) {
+      if (hasMillidaAccount() && goesTo !== 'license') {
         if (skinSource() !== 'millida') setSkinSource('millida')
         if (stale()) return
         const applied = await uploadTexture('skin', skin, slimArms, skinTitle()).catch((e) => {
@@ -3626,7 +3633,6 @@ export function Skins({ on }: { on: boolean }) {
             ) : !use3d ? (
               <span className="skin-loader" aria-label={t('Загружаем модель')}></span>
             ) : null}
-            <ModHint on={on} />
           </div>
 
           <FittingBar

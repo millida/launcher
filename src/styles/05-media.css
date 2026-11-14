@@ -1894,21 +1894,6 @@ html.overlay-root,html.overlay-root body,html.overlay-root #root{background:tran
   white-space: nowrap;
   box-shadow: var(--m-shadow-lg);
 }
-/* Сверху сцены: снизу та же плашка говорит «Надеваем…». Текст длинный и не должен мешать вращать фигуру. */
-.stage-note.ch-mod-hint {
-  top: 14px;
-  bottom: auto;
-  width: max-content;
-  max-width: calc(100% - 32px);
-  white-space: normal;
-  text-align: center;
-  font-weight: 500;
-  pointer-events: none;
-}
-:root:not([data-theme-pack]) .stage-note.ch-mod-hint {
-  border-radius: 0;
-  clip-path: var(--px-5);
-}
 .stage-spin,
 .cape-load {
   width: 14px;
