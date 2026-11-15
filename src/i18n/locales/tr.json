@@ -6095,6 +6095,7 @@
   "Неизвестный формат выгрузки": "Bilinmeyen dışa aktarma biçimi",
   "{0}: {1} — {2} (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)": "{0}: {1} — {2} (dosya meşgul veya kilitli — oyunu kapat ve başlatıcı klasörünü antivirüsünün dışlamalarına ekle)",
   "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения": "bir antivirüs veya proxy bağlantıya müdahale ediyor: orada HTTPS/SSL taramasını kapat ya da başlatıcıyı dışlamalara ekle",
+  "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер": "bilgisayardaki tarih ve saat yanlış: sistem ayarlarından otomatik ayarlamayı aç ve başlatıcıyı yeniden başlat",
   "адрес сервера не определился: проверь DNS, VPN и антивирус": "sunucu adresi çözümlenemedi: DNS, VPN ve antivirüsü kontrol et",
   "сервер не ответил вовремя: проверь интернет и VPN": "sunucu zamanında yanıt vermedi: internetini ve VPN'i kontrol et",
   "соединение не установилось: проверь брандмауэр, VPN и антивирус": "bağlantı kurulamadı: güvenlik duvarını, VPN'i ve antivirüsü kontrol et",
@@ -6591,5 +6592,7 @@
   "Не удалось загрузить фон: {error}": "Arka plan yüklenemedi: {error}",
   "Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого лаунчера, или поставь готовую сборку.": "Bir sürüm ve yükleyici seç — Minecraft, Java ve yükleyiciyi senin için kuruyoruz. Ya da başka bir başlatıcıdan mod paketi içe aktar veya hazır bir tane kur.",
   "Импорт из лаунчера": "Başlatıcıdan içe aktar",
-  "Готовая сборка": "Hazır mod paketi"
+  "Готовая сборка": "Hazır mod paketi",
+  "Куда ставить скин": "Skin nereye uygulansın",
+  "Везде": "Her yerde"
 }

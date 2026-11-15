@@ -21,6 +21,7 @@ let manifest = { version: '2.0.302', critical: false }
 let stageFails = false
 let pluginFindsVersion: string | null = '2.0.302'
 let pluginHangs = false
+let games: string[] = []
 const pluginCheckOptions: Array<{ timeout?: number } | undefined> = []
 const toasts: Array<[string, string | undefined]> = []
 
@@ -28,6 +29,7 @@ mock.module('../ipc/tauri', () => ({ hasTauri: () => true, tauri: () => null }))
 mock.module('../ipc/commands', () => ({
   appVersion: async () => '2.0.300',
   isFlatpak: async () => false,
+  runningGames: async () => games,
   showAfterUpdate: async () => void calls.showAfter++,
   updateFallbackCheck: async () => ({ version: manifest.version, notes: '', url: '', file: 'f', signature: 's', source: '', critical: manifest.critical }),
   updateFallbackRun: async (path: string, restart?: boolean) => {
@@ -91,6 +93,7 @@ describe('обновление лаунчера лежит на диске у я
     manifest = { version: '2.0.302', critical: false }
     pluginFindsVersion = '2.0.302'
     pluginHangs = false
+    games = []
     pluginCheckOptions.length = 0
     toasts.length = 0
     calls.stage = 0
@@ -117,13 +120,23 @@ describe('обновление лаунчера лежит на диске у я
     expect(U.updateReady()).toBe(false)
   })
 
-  test('каждое открытие окна не качает ~55 МиБ заново: скачанная версия та же', async () => {
+  test('скачанное в прошлый раз ставится при запуске, ничего не качая заново', async () => {
     staged = { version: '2.0.302', path: '/updates/x.exe', started: false }
-    await U.bootUpdate()
-    await settle()
+    expect(await U.bootUpdate(), 'запуск уходит в установку').toBe(true)
     expect(calls.pluginCheck).toBe(1)
     expect(calls.stage, 'ядро не просят скачать то, что уже лежит на диске').toBe(0)
     expect(calls.pluginDownload, 'плагин не качает в память окна').toBe(0)
+    expect(calls.run, 'игрок ждёт, что запуск обновит лаунчер, а не только выход из трея').toEqual([['/updates/x.exe', undefined]])
+    expect(calls.exit).toBe(1)
+  })
+
+  test('идёт игра — скачанное ждёт выхода: окно открыли заново, а ядро держит игру', async () => {
+    staged = { version: '2.0.302', path: '/updates/x.exe', started: false }
+    games = ['arcania']
+    expect(await U.bootUpdate()).toBe(false)
+    await settle()
+    expect(calls.run, 'установка убила бы запущенную игру').toEqual([])
+    expect(calls.stage).toBe(0)
     expect(useUpdate.getState().staged).toBe(true)
   })
 
@@ -133,6 +146,7 @@ describe('обновление лаунчера лежит на диске у я
     await settle()
     expect(calls.stage).toBe(1)
     expect(calls.pluginDownload).toBe(0)
+    expect(calls.run, 'старое скачанное не ставится, когда вышла версия новее').toEqual([])
     expect(U.updateReady()).toBe(true)
   })
 
