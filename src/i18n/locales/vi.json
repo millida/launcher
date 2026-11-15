@@ -6095,6 +6095,7 @@
   "Неизвестный формат выгрузки": "Định dạng xuất không xác định",
   "{0}: {1} — {2} (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)": "{0}: {1} — {2} (tệp đang bị chiếm dụng hoặc bị khóa — hãy đóng game và thêm thư mục launcher vào danh sách loại trừ của phần mềm diệt virus)",
   "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения": "phần mềm diệt virus hoặc proxy đang can thiệp vào kết nối: hãy tắt quét HTTPS/SSL của nó hoặc thêm launcher vào danh sách loại trừ",
+  "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер": "ngày giờ trên máy tính bị sai: hãy bật tự động đặt ngày giờ trong cài đặt hệ thống rồi khởi động lại launcher",
   "адрес сервера не определился: проверь DNS, VPN и антивирус": "không phân giải được địa chỉ máy chủ: hãy kiểm tra DNS, VPN và phần mềm diệt virus",
   "сервер не ответил вовремя: проверь интернет и VPN": "máy chủ không phản hồi kịp: hãy kiểm tra internet và VPN",
   "соединение не установилось: проверь брандмауэр, VPN и антивирус": "không thiết lập được kết nối: hãy kiểm tra tường lửa, VPN và phần mềm diệt virus",
@@ -6594,5 +6595,7 @@
   "Не удалось загрузить фон: {error}": "Không tải được hình nền: {error}",
   "Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого лаунчера, или поставь готовую сборку.": "Chọn phiên bản và trình tải — chúng tôi cài Minecraft, Java và trình tải cho bạn. Hoặc nhập modpack từ launcher khác, hoặc cài một modpack có sẵn.",
   "Импорт из лаунчера": "Nhập từ launcher",
-  "Готовая сборка": "Modpack có sẵn"
+  "Готовая сборка": "Modpack có sẵn",
+  "Куда ставить скин": "Áp dụng skin ở đâu",
+  "Везде": "Mọi nơi"
 }
