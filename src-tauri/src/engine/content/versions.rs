@@ -119,11 +119,16 @@ pub(crate) fn number_in_range(number: &str, range: &str, game_version: &str) -> 
     if range.is_empty() || range == "*" {
         return true;
     }
-    number
-        .split(['-', '+', ' ', '_'])
-        .map(|t| t.trim_start_matches(['v', 'V']))
-        .filter(|t| t.starts_with(|c: char| c.is_ascii_digit()) && *t != game_version)
-        .any(|t| version_satisfies(t, range))
+    let tokens: Vec<&str> = number.split(['-', '+', ' ', '_']).map(|t| t.trim_start_matches(['v', 'V'])).collect();
+    tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.starts_with(|c: char| c.is_ascii_digit()) && **t != game_version)
+        .any(|(i, t)| {
+            // «mc26.3-0.9.3-beta.5-fabric»: an addon pinned to that beta asks for `=0.9.3-beta.5`, which «0.9.3» alone never equals.
+            let with_pre_release = tokens.get(i + 1).filter(|next| is_pre_release(next)).map(|next| format!("{}-{}", t, next));
+            version_satisfies(t, range) || with_pre_release.is_some_and(|v| version_satisfies(&v, range))
+        })
 }
 
 /// Removes the staged download on every way out except a successful rename.
@@ -283,22 +288,57 @@ pub async fn set_content_version(profile: String, kind: String, file_name: Strin
 
 /// Puts the newest file of this mod that fits the build and `range` — the
 /// version a loader asked for. `*` means «any file for this build», which is
-/// how a mod built for another game version is brought to this one.
-pub(crate) async fn set_content_version_in_range(profile: &str, kind: &str, file_name: &str, range: &str) -> Result<String, String> {
+/// how a mod built for another game version is brought to this one. The range
+/// is narrowed by what the other mods of the build ask of this one; when no
+/// file suits them all, the mods asking for another version move instead.
+/// Returns every swap made as (old file, new file).
+pub(crate) async fn set_content_version_in_range(profile: &str, kind: &str, file_name: &str, range: &str) -> Result<Vec<(String, String)>, String> {
     assert_not_running(profile, "повтори починку")?;
     let entry = sourced_entry(profile, kind, file_name)?;
     let ctx = ctx_of(profile, kind);
     pinned_refusal(profile, &ctx, &entry)?;
     let title = if entry.title.is_empty() { entry.file_name.clone() } else { entry.title.clone() };
+    let range = if kind == "mod" { range_with_build_demands(profile, &entry.file_name, range).await } else { range.to_string() };
     let list = candidates(&ctx, &entry.project_id, &entry.version_id).await?;
-    let pick = list
-        .iter()
-        .find(|c| number_in_range(&c.choice.number, range, &ctx.game_version))
-        .ok_or_else(|| format!("У «{}» нет версии под эту сборку, которая подошла бы ({}) — отключи мод", title, range))?;
+    let Some(pick) = list.iter().find(|c| number_in_range(&c.choice.number, &range, &ctx.game_version)) else {
+        let no_version = format!("У «{}» нет версии под эту сборку, которая подошла бы ({}) — отключи мод", title, range);
+        return if kind == "mod" { refit_dependents(profile, &ctx, &entry.file_name, no_version).await } else { Err(no_version) };
+    };
     if pick.choice.current {
         return Err(format!("«{}» уже стоит в подходящей версии — новее под эту сборку нет, отключи мод", title));
     }
-    install_candidate(profile, kind, &entry, pick).await
+    let installed = install_candidate(profile, kind, &entry, pick).await?;
+    Ok(vec![(entry.file_name, installed)])
+}
+
+/// Moves the mods whose requirement `file_name` does not meet to their newest
+/// file that takes the version installed. `no_version` is the answer when
+/// nothing in the build asks for another version, or the asking mod has no
+/// catalogue source to pick a file from.
+async fn refit_dependents(profile: &str, ctx: &Ctx, file_name: &str, no_version: String) -> Result<Vec<(String, String)>, String> {
+    let manifest = load_content_manifest(profile);
+    let mut swaps: Vec<(String, String)> = vec![];
+    for file in unmet_dependents(profile, file_name).await {
+        let Some(dependent) = manifest
+            .iter()
+            .find(|e| e.kind == "mod" && e.file_name == file && !e.project_id.is_empty() && cf_id(&e.project_id).is_none() && !is_catalog_project(&e.project_id))
+        else {
+            return Err(no_version);
+        };
+        if is_content_locked(profile, &dependent.kind, &dependent.project_id, &dependent.file_name) {
+            return Err(format!("{}: {}", dependent.title, "Версия этого файла закреплена — сними замок, чтобы обновить"));
+        }
+        let versions = project_versions(&dependent.project_id).await?;
+        let Some(newest) = versions
+            .iter()
+            .find(|v| v["version_type"].as_str() != Some("alpha") && fits_build(v, &ctx.game_version, &ctx.loaders, &ctx.bridge))
+        else {
+            return Err(no_version);
+        };
+        let installed = apply_update(profile, "mod", &file, newest).await?;
+        swaps.push((file, installed));
+    }
+    if swaps.is_empty() { Err(no_version) } else { Ok(swaps) }
 }
 
 /// The newest file of a Modrinth project that fits the build and `range`, for
@@ -320,7 +360,11 @@ mod tests {
     /// a file the loader refuses again, or refuses one that fits.
     #[test]
     fn the_mod_version_is_read_out_of_the_catalogue_number() {
-        let cases: [(&str, &str, bool, &str); 9] = [
+        let cases: [(&str, &str, bool, &str); 13] = [
+            ("mc26.3-0.9.3-beta.5-fabric", "=0.9.3-beta.5+mc26.3", true, "Reese's Sodium Options 2.2.6-beta.4 is pinned to exactly this Sodium beta"),
+            ("mc26.3-0.9.3-beta.4-fabric", "=0.9.3-beta.5+mc26.3", false, "the beta before it is another version"),
+            ("mc26.3-0.9.3-beta.5-fabric", ">=0.9.3-beta.3", true, "Better Block Entities 1.4.1 takes any beta from the third on"),
+            ("mc26.3-0.9.2-fabric", ">=0.9.3-beta.3", false, "the release before those betas is below the floor"),
             ("mc1.20.1-0.5.8-fabric", ">=0.5.8", true, "Sodium на Modrinth: версия игры спереди"),
             ("mc1.20.1-0.5.3-fabric", ">=0.5.8", false, "та же запись, но версия ниже требования"),
             ("0.5.11+mc1.20.1", ">=0.5.8 <0.6", true, "версия с метаданными сборки"),

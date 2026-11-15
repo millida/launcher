@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://millida.net/launcher/antivirus"><img src=".github/readme/trust-virus-en.png" width="49%" alt="No viruses: every installer is checked by VirusTotal"></a>
   <img src=".github/readme/trust-account-en.png" width="49%" alt="Your account is safe: you enter your password only on the Microsoft site">
-  <img src=".github/readme/trust-signed-en.png" width="49%" alt="The installer from the site is signed with a GlobalSign EV certificate">
+  <img src=".github/readme/trust-signed-en.png" width="49%" alt="The installer from the site is signed with a Certum certificate">
   <a href="ARCHITECTURE.md"><img src=".github/readme/trust-open-en.png" width="49%" alt="Open source: you can check any line right here"></a>
 </p>
 
@@ -38,7 +38,7 @@
 <details>
 <summary><b>Windows</b>: <code>.exe</code> installer</summary>
 
-1. Download and run the [signed installer](https://github.com/millida/launcher/releases/download/setup-signed-1/MillidaLauncherSetup.exe). The launcher opens by itself.
+1. Download and run the [signed installer](https://github.com/millida/launcher/releases/download/setup-signed-2/MillidaLauncherSetup.exe). The launcher opens by itself.
 2. If you see a blue window "Windows protected your PC": click **"More info"**, then **"Run anyway"**.
 
 The launcher updates itself.

@@ -38,6 +38,18 @@ export function listenInstallProgress(handler: (p: InstallProgress) => void): Pr
   return T.event.listen<InstallProgress>('install-progress', (e) => handler(e.payload)).catch(() => null)
 }
 
+export interface ShareProgress {
+  profile: string
+  done: number
+  total: number
+}
+
+export function listenShareProgress(handler: (p: ShareProgress) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<ShareProgress>('share-progress', (e) => handler(e.payload)).catch(() => null)
+}
+
 export interface DroppedPack {
   id: number
   name: string

@@ -261,9 +261,6 @@
   width: 96px;
   height: 96px;
   margin-bottom: 4px;
-  overflow: hidden;
-  --px-n: 10px;
-  clip-path: var(--px-10);
 }
 .ico-pic img {
   display: block;
@@ -273,21 +270,6 @@
 }
 .ico-tile:hover .ico-pic img {
   transform: scale(1.06);
-}
-/* Легенда — блик бежит по иконке (только по самой иконке, не по полям вокруг скругления). */
-.ico-pic[data-id='legend']::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: 22%;
-  background: linear-gradient(105deg, transparent 38%, rgba(255, 240, 190, 0.5) 50%, transparent 62%) no-repeat;
-  background-size: 300% 100%;
-  background-position: 150% 0;
-  animation: ico-sheen 2.6s steps(16, end) infinite;
-  pointer-events: none;
-}
-@keyframes ico-sheen {
-  60%, 100% { background-position: -50% 0; }
 }
 .ico-lock {
   position: absolute;
