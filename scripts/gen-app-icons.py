@@ -1,164 +1,79 @@
 #!/usr/bin/env python3
-"""Собирает альтернативные иконки приложения Millida из 3D-рендеров.
+"""Alternative app icons of the launcher: the bundle icon (src-tauri/icons/icon.png) recoloured.
 
-Рисунки (06.10.2026) — знак Millida, выдавленный в 3D и снятый в разных
-материалах: scripts/voxel-art/icons.ts. Кадры 1024×1024 «в край» лежат в
-scripts/voxel-art/icons/<id>.jpg. Перерисовать их:
+Every icon is flat, exactly the shape of the standard one: a tile colour and a glyph colour,
+no scene, no shadow. The picker in Settings shows the same picture the core puts on the
+window, the taskbar, the Dock and the shortcuts, so the player picks what they will see.
 
-    npx vite   # из корня репозитория
-    PAGE=icons node scripts/voxel-art/save.mjs /tmp/icons
-    python3 scripts/gen-app-icons.py --masters /tmp/icons   # PNG → JPG-мастера и сборка
+Run from the repository root:
 
-Запуск без аргументов собирает иконки из лежащих мастеров:
-src-tauri/icons/alt/<id>/{32x32,128x128,256x256,512x512}.png, icon.ico,
-icon.icns (iconutil на macOS) и public/app-icons/<id>.png для витрины.
+    python scripts/gen-app-icons.py
 
-Два уровня детализации: от 256 px — сцена с материалом (<id>.jpg), до 128 px —
-упрощённый кадр <id>-small.jpg: плитка во весь кадр, глиф в тёмной кайме, без
-россыпей — знак читается с 16 px и не сливается с обоями.
-
-Силуэт — суперэллипс (скругление macOS). Два варианта полей:
-- macOS: тело 824 из 1024 с тенью (сетка Apple) — PNG и .icns, их же ставит Dock;
-- Windows и витрина: тело 944 из 1024, тень короче — .ico и public/app-icons.
-
-Лестница (06.10.2026): Искра — 5 друзей, Пламя — 10, Аметист — 25,
-Легенда — 50; Золото — PLUS, Алмаз — Diamond.
+Writes src-tauri/icons/alt/<id>/{32x32,128x128,256x256,512x512,runtime-256}.png, icon.ico,
+icon.icns and public/app-icons/<id>.png (default.png is the bundle icon itself).
 """
 import os
-import shutil
-import subprocess
 import sys
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, IcnsImagePlugin  # noqa: F401  (registers the ICNS writer)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MASTERS = os.path.join(ROOT, "scripts", "voxel-art", "icons")
-ALT = ["spark", "flame", "amethyst", "legend", "gold", "diamond"]
-ALL = ["default"] + ALT  # default — только картинка витрины, штатная иконка сборки не меняется
-M = 1024
+BUNDLE_ICON = os.path.join(ROOT, "src-tauri", "icons", "icon.png")
+SOURCE_TILE = (90, 206, 102)
+
+PALETTE = {
+    "spark": ("#0b3a17", "#a8ff3a"),
+    "flame": ("#d8321a", "#ffd84a"),
+    "amethyst": ("#7d3ff0", "#ffffff"),
+    "legend": ("#13227a", "#ffc547"),
+    "gold": ("#f0a828", "#ffffff"),
+    "diamond": ("#38c4f5", "#ffffff"),
+    "emerald": ("#14b06e", "#ffffff"),
+    "quartz": ("#ec6aa2", "#ffffff"),
+    "obsidian": ("#1d1230", "#b98cff"),
+}
 
 
-def squircle(size, n=5.0, ss=4):
-    """Маска суперэллипса |x|^n + |y|^n = 1 со сглаживанием."""
-    big = size * ss
-    im = Image.new("L", (big, big), 0)
-    px = im.load()
-    r = big / 2
-    for y in range(big):
-        v = abs((y + 0.5 - r) / r) ** n
-        if v >= 1:
-            continue
-        w = (1 - v) ** (1 / n) * r
-        x0, x1 = int(round(r - w)), int(round(r + w))
-        for x in range(x0, x1):
-            px[x, y] = 255
-    return im.resize((size, size), Image.LANCZOS)
+def rgb(hex_colour):
+    h = hex_colour.lstrip("#")
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
 
 
-def compose(master, body, shadow_y, shadow_blur, shadow_a):
-    art = master.convert("RGB").resize((body, body), Image.LANCZOS)
-    mask = squircle(body)
-    # Тонкая светлая кромка — край читается на тёмном доке и панели задач.
-    inner = mask.filter(ImageFilter.MinFilter(5))
-    ring = ImageChops.subtract(mask, inner).point(lambda v: int(v * 0.16))
-    art = Image.composite(Image.new("RGB", (body, body), (255, 255, 255)), art, ring)
-    out = Image.new("RGBA", (M, M), (0, 0, 0, 0))
-    off = (M - body) // 2
-    sh = Image.new("L", (M, M), 0)
-    sh.paste(mask, (off, off + shadow_y))
-    sh = sh.filter(ImageFilter.GaussianBlur(shadow_blur)).point(lambda v: int(v * shadow_a))
-    out.paste(Image.new("RGBA", (M, M), (0, 0, 0, 255)), (0, 0), sh)
-    tile = art.convert("RGBA")
-    tile.putalpha(mask)
-    out.alpha_composite(tile, (off, off))
+def recolour(src, tile, glyph):
+    """Antialiased edges keep their blend: the share of white in a source pixel is the share of glyph."""
+    out = Image.new("RGBA", src.size)
+    sp, op = src.load(), out.load()
+    span = 255 - SOURCE_TILE[0]
+    for y in range(src.height):
+        for x in range(src.width):
+            r, _, _, a = sp[x, y]
+            f = min(1.0, max(0.0, (r - SOURCE_TILE[0]) / span))
+            op[x, y] = tuple(round(tile[i] * (1 - f) + glyph[i] * f) for i in range(3)) + (a,)
     return out
 
 
-# До 128 px включительно — чёткий кадр: Dock (64 pt на Retina = 128 px), панель
-# задач, ярлыки. Крупнее — сцена (Finder, Launchpad, витрина).
-SMALL_MAX = 128
+def sized(im, s):
+    return im.resize((s, s), Image.LANCZOS)
 
 
-class Icon:
-    """Крупный и мелкий кадр одного варианта полей; размер сам выбирает кадр."""
-
-    def __init__(self, big, small):
-        self.big, self.small = big, small
-
-    def at(self, s, bold=False):
-        return (self.small if bold or s <= SMALL_MAX else self.big).resize((s, s), Image.LANCZOS)
-
-
-def sized(icon, s):
-    return icon.at(s)
-
-
-def export(name, mac, win):
-    pub = os.path.join(ROOT, "public", "app-icons")
-    os.makedirs(pub, exist_ok=True)
-    sized(win, 256).save(os.path.join(pub, f"{name}.png"), optimize=True)
-    if name not in ALT:
-        return
+def export(name, icon):
     out = os.path.join(ROOT, "src-tauri", "icons", "alt", name)
-    shutil.rmtree(out, ignore_errors=True)
-    os.makedirs(out)
+    os.makedirs(out, exist_ok=True)
     for s in (32, 128, 256, 512):
-        sized(mac, s).save(os.path.join(out, f"{s}x{s}.png"), optimize=True)
-    # Картинка, которую ядро ставит в Dock/окно/панель задач в рантайме: чёткий кадр.
-    mac.at(256, bold=True).save(os.path.join(out, "runtime-256.png"), optimize=True)
-    sizes = [16, 24, 32, 48, 64, 128, 256]
-    frames = [sized(win, x) for x in sizes]
-    frames[-1].save(os.path.join(out, "icon.ico"), sizes=[(x, x) for x in sizes], append_images=frames[:-1])
-    iconset = os.path.join(out, "icon.iconset")
-    os.makedirs(iconset)
-    for base in (16, 32, 128, 256, 512):
-        sized(mac, base).save(os.path.join(iconset, f"icon_{base}x{base}.png"))
-        sized(mac, base * 2).save(os.path.join(iconset, f"icon_{base}x{base}@2x.png"))
-    if shutil.which("iconutil"):
-        subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(out, "icon.icns")], check=True)
-    shutil.rmtree(iconset)
-
-
-def variants(name):
-    big = Image.open(os.path.join(MASTERS, f"{name}.jpg"))
-    small = Image.open(os.path.join(MASTERS, f"{name}-small.jpg"))
-    mac = Icon(compose(big, 824, 12, 22, 0.5), compose(small, 824, 12, 22, 0.5))
-    win = Icon(compose(big, 944, 8, 12, 0.42), compose(small, 944, 8, 12, 0.42))
-    return mac, win
-
-
-def sheet(path):
-    """Лист проверки: каждая иконка 256 (macOS-поля) и 64/32 (Windows-поля) на тёмном и светлом."""
-    W = 300
-    sh = Image.new("RGBA", (len(ALL) * W, 420), (28, 30, 34, 255))
-    ImageDraw.Draw(sh).rectangle((0, 340, len(ALL) * W, 420), fill=(236, 236, 240, 255))
-    for i, n in enumerate(ALL):
-        mac, win = variants(n)
-        sh.alpha_composite(sized(mac, 256), (i * W + 22, 10))
-        sh.alpha_composite(sized(win, 64), (i * W + 60, 272))
-        sh.alpha_composite(sized(win, 32), (i * W + 150, 288))
-        sh.alpha_composite(sized(win, 64), (i * W + 60, 348))
-        sh.alpha_composite(sized(win, 32), (i * W + 150, 364))
-    sh.save(path)
-
-
-def import_masters(src):
-    os.makedirs(MASTERS, exist_ok=True)
-    for n in ALL:
-        for suf in ("", "-small"):
-            Image.open(os.path.join(src, f"{n}{suf}.png")).convert("RGB").save(os.path.join(MASTERS, f"{n}{suf}.jpg"), quality=93, subsampling=0)
+        sized(icon, s).save(os.path.join(out, f"{s}x{s}.png"), optimize=True)
+    sized(icon, 256).save(os.path.join(out, "runtime-256.png"), optimize=True)
+    ico_sizes = [16, 24, 32, 48, 64, 128, 256]
+    sized(icon, 256).save(os.path.join(out, "icon.ico"), sizes=[(s, s) for s in ico_sizes])
+    sized(icon, 1024).save(os.path.join(out, "icon.icns"))
+    sized(icon, 256).save(os.path.join(ROOT, "public", "app-icons", f"{name}.png"), optimize=True)
 
 
 def main():
-    args = sys.argv[1:]
-    if len(args) >= 2 and args[0] == "--masters":
-        import_masters(args[1])
-        args = args[2:]
-    if len(args) >= 2 and args[0] == "--sheet":
-        sheet(args[1])
-        return 0
-    for n in ALL:
-        export(n, *variants(n))
-        print("ok", n)
+    src = Image.open(BUNDLE_ICON).convert("RGBA")
+    os.makedirs(os.path.join(ROOT, "public", "app-icons"), exist_ok=True)
+    sized(src, 256).save(os.path.join(ROOT, "public", "app-icons", "default.png"), optimize=True)
+    for name, (tile, glyph) in PALETTE.items():
+        export(name, recolour(src, rgb(tile), rgb(glyph)))
+        print("ok", name)
     return 0
 
 

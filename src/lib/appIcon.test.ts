@@ -45,6 +45,25 @@ describe('app icon locks', () => {
     expect(iconUnlocked('diamond', { ...none, perks: ['icon-diamond'] })).toBe(true)
   })
 
+  test('achievement icons: Emerald 100 hours, Quartz 500 achievement points, Obsidian 500 hours', () => {
+    const cases: Array<[Parameters<typeof iconUnlocked>[0], { hours?: number; points?: number }, boolean, string]> = [
+      ['emerald', {}, false, 'no progress loaded keeps it locked'],
+      ['emerald', { hours: 99 }, false, 'one hour short is still locked'],
+      ['emerald', { hours: 100 }, true, 'the threshold itself opens it'],
+      ['obsidian', { hours: 499 }, false, 'Obsidian is the long grind, 100 hours is not enough'],
+      ['obsidian', { hours: 500 }, true, 'Obsidian opens at 500 hours'],
+      ['quartz', { hours: 5000 }, false, 'hours never stand in for achievement points'],
+      ['quartz', { points: 499 }, false, 'points short of the goal keep it locked'],
+      ['quartz', { points: 500 }, true, 'Quartz opens at 500 points'],
+      ['emerald', { points: 5000 }, false, 'points never stand in for hours'],
+    ]
+    for (const [id, progress, want, why] of cases) expect(iconUnlocked(id, { ...none, plus: true, diamond: true, ...progress }), why).toBe(want)
+  })
+
+  test('every icon has its picture in public/app-icons', () => {
+    for (const i of APP_ICONS) expect(i.src, i.id).toBe('/app-icons/' + i.id + '.png')
+  })
+
   test('a lapsed subscription falls back to the default icon without losing the choice', () => {
     expect(effectiveIcon('gold', none)).toBe('default')
     expect(effectiveIcon('gold', { ...none, plus: true })).toBe('gold')

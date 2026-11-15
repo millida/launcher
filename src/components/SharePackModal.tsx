@@ -6,6 +6,7 @@ import { copyText } from '../lib/clipboard'
 import { backdropClose } from '../lib/dismiss'
 import { showToast } from '../state/ui'
 import { setPackVisibility, shareProfile, unshareProfile, type PackVisibility, type SharedPack } from '../ipc/commands'
+import { listenShareProgress, type ShareProgress } from '../ipc/events'
 import '../styles/pixel/build-extras.css'
 import { apiErrorText } from '../lib/apiError'
 import { useT } from '../i18n'
@@ -56,6 +57,22 @@ export function SharePackModal({ profile, onClose }: Props) {
   const [shared, setShared] = useState(() => wasShared(profile))
   const [vis, setVis] = useState<PackVisibility>(() => readVis(profile))
   const [visBusy, setVisBusy] = useState(false)
+  const [upload, setUpload] = useState<ShareProgress | null>(null)
+
+  useEffect(() => {
+    if (!busy) return
+    let alive = true
+    const stop = listenShareProgress((p) => {
+      if (alive && p.profile === profile) setUpload(p)
+    })
+    return () => {
+      alive = false
+      setUpload(null)
+      void stop.then((off) => off?.())
+    }
+  }, [busy, profile])
+
+  const busyLabel = upload && upload.total > 0 ? t('Отправляем моды: {done} из {total}', { done: upload.done, total: upload.total }) : t('Готовим…')
 
   const pickVis = (code: string, next: PackVisibility) => {
     if (next === vis || visBusy) return
@@ -206,12 +223,12 @@ export function SharePackModal({ profile, onClose }: Props) {
             </button>
           ) : (
             <button className="btn md primary" style={{ flex: 1 }} disabled={busy} onClick={publish}>
-              {busy ? t('Готовим…') : shared ? t('Обновить у друзей') : t('Получить код')}
+              {busy ? busyLabel : shared ? t('Обновить у друзей') : t('Получить код')}
             </button>
           )}
           {pack ? (
             <button className="btn md secondary" data-track="share_update_friends" disabled={busy} onClick={publish}>
-              <Icon id="i-restart" /> {busy ? t('Готовим…') : t('Обновить у друзей')}
+              <Icon id="i-restart" /> {busy ? busyLabel : t('Обновить у друзей')}
             </button>
           ) : null}
           <button className="btn md secondary" onClick={onClose}>

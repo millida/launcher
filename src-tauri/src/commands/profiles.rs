@@ -599,8 +599,8 @@ pub async fn import_dropped_pack(app: tauri::AppHandle, id: u64) -> Result<engin
 }
 
 #[tauri::command]
-pub async fn share_profile(profile: String, summary: Option<String>) -> Result<engine::SharedPack, String> {
-    engine::share_profile(profile, summary).await
+pub async fn share_profile(app: tauri::AppHandle, profile: String, summary: Option<String>) -> Result<engine::SharedPack, String> {
+    engine::share_profile(app, profile, summary).await
 }
 
 

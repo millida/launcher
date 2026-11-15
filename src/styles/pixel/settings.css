@@ -114,7 +114,7 @@
 /* ---------- Фоны ---------- */
 .s2-wp {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   padding: 14px 0 12px;
   border-bottom: 1px solid var(--m-border);
@@ -167,7 +167,10 @@
 }
 .s2-wp-ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--m-fg-subtle); }
 .s2-wp-ph svg { width: 22px; height: 22px; }
-.s2-wp-tile.add > span:not(.s2-wp-ph) { background: none; color: var(--m-fg-subtle); text-align: center; }
+/* Icon and caption are centred as one group; the 3px top padding offsets the empty descender room under the caption. */
+.s2-wp-tile.add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding-top: 3px; }
+.s2-wp-tile.add > .s2-wp-ph { position: static; display: block; line-height: 0; }
+.s2-wp-tile.add > span:not(.s2-wp-ph) { position: static; padding: 0; background: none; color: var(--m-fg-subtle); text-align: center; }
 .s2-wp-tile.add:hover { background-color: var(--m-accent-soft); }
 .s2-wp-tile.add:hover .s2-wp-ph { color: var(--m-accent); }
 .s2-wp-del {
@@ -329,15 +332,17 @@
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   --px-n: 5px;
   --px-ol: var(--m-accent); --px-ol-w: 3px;
 }
-.s2-wp-tile.add::before {
+/* Every tile, picture or not, carries the same ring, so the row reads as one even strip. */
+.s2-wp-tile:not(.on)::before {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
   background: var(--m-border-strong);
   clip-path: var(--px-ring-5);

@@ -14,6 +14,7 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-start-dragging",
+    "core:webview:allow-set-webview-zoom",
     "updater:allow-check",
     "updater:allow-download",
     "updater:allow-install",

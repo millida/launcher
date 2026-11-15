@@ -26,6 +26,9 @@ const DIAMOND: &[u8] = include_bytes!("../icons/alt/diamond/runtime-256.png");
 const FLAME: &[u8] = include_bytes!("../icons/alt/flame/runtime-256.png");
 const AMETHYST: &[u8] = include_bytes!("../icons/alt/amethyst/runtime-256.png");
 const LEGEND: &[u8] = include_bytes!("../icons/alt/legend/runtime-256.png");
+const EMERALD: &[u8] = include_bytes!("../icons/alt/emerald/runtime-256.png");
+const QUARTZ: &[u8] = include_bytes!("../icons/alt/quartz/runtime-256.png");
+const OBSIDIAN: &[u8] = include_bytes!("../icons/alt/obsidian/runtime-256.png");
 
 /// PNG выбранной иконки; `None` — штатная иконка приложения.
 fn png_of(id: &str) -> Result<Option<&'static [u8]>, String> {
@@ -37,6 +40,9 @@ fn png_of(id: &str) -> Result<Option<&'static [u8]>, String> {
         "flame" => Ok(Some(FLAME)),
         "amethyst" => Ok(Some(AMETHYST)),
         "legend" => Ok(Some(LEGEND)),
+        "emerald" => Ok(Some(EMERALD)),
+        "quartz" => Ok(Some(QUARTZ)),
+        "obsidian" => Ok(Some(OBSIDIAN)),
         other => Err(format!("unknown app icon: {other}")),
     }
 }
@@ -126,6 +132,9 @@ mod shortcuts {
         ("legend", include_bytes!("../icons/alt/legend/icon.ico")),
         ("gold", include_bytes!("../icons/alt/gold/icon.ico")),
         ("diamond", include_bytes!("../icons/alt/diamond/icon.ico")),
+        ("emerald", include_bytes!("../icons/alt/emerald/icon.ico")),
+        ("quartz", include_bytes!("../icons/alt/quartz/icon.ico")),
+        ("obsidian", include_bytes!("../icons/alt/obsidian/icon.ico")),
     ];
 
     fn known(id: &windows::core::GUID) -> Option<PathBuf> {
@@ -290,7 +299,7 @@ mod tests {
 
     #[test]
     fn every_icon_decodes_as_a_square_png() {
-        for id in ["spark", "flame", "amethyst", "legend", "gold", "diamond"] {
+        for id in ["spark", "flame", "amethyst", "legend", "gold", "diamond", "emerald", "quartz", "obsidian"] {
             let img = decode(png_of(id).unwrap().unwrap()).unwrap();
             assert_eq!(img.width(), img.height(), "{id}");
             assert!(img.width() >= 128, "{id}");
