@@ -87,6 +87,7 @@ permissions = [
   "allow-download-mc-music",
   "allow-ui-sounds",
   "allow-download-ui-sounds",
+  "allow-breaking-stages",
   "allow-list-mods",
   "allow-toggle-mod",
   "allow-delete-mod",

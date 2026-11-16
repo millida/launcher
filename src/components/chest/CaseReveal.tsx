@@ -58,34 +58,6 @@ const rewardRank = (r: CaseReward) => (r.item ? rarityRank(r.item.rarity) : 0)
 /** Звук награды (caseSound.ts): валюта звенит, вещь — по редкости. */
 const sting = (r: CaseReward) => playCase({ t: 'reveal', kind: r.kind, rarity: r.item?.rarity })
 
-/**
- * Трещины света на сундуке: от щели крышки в стороны, ломаными по пиксельной
- * сетке. Удар i открывает трещины группы i (последняя группа — самая длинная).
- */
-const CRACKS: string[][] = [
-  ['50,50 44,44 46,38 40,32', '50,50 58,46 62,48'],
-  ['50,50 36,52 30,48 22,52', '50,50 60,56 66,54 74,60', '50,50 52,40 58,34'],
-  ['50,50 40,62 42,70 34,78', '50,50 64,40 72,42 80,34', '50,50 26,40 18,42 10,36', '50,50 56,66 62,74 60,84'],
-]
-
-/** Ещё трещины для ×10: длинные, до краёв сундука. */
-const CRACKS_MORE: string[][] = [
-  ['50,50 30,30 34,22 26,12', '50,50 70,30 66,20 76,10', '50,50 22,62 14,60 6,70', '50,50 78,64 88,62 96,72', '50,50 46,74 50,84 44,96'],
-]
-
-function Cracks({ hits, need, more }: { hits: number; need: number; more?: boolean }) {
-  const groups = more ? [...CRACKS, ...CRACKS_MORE] : CRACKS
-  // Групп три (у ×10 — четыре); при другом числе ударов растягиваем на них.
-  const open = need > 0 ? Math.ceil((hits / need) * groups.length) : 0
-  return (
-    <svg className="rv2-cracks" viewBox="0 0 100 100" aria-hidden="true" shapeRendering="crispEdges">
-      {groups.flatMap((g, gi) =>
-        g.map((pts, i) => <polyline key={gi + '-' + i} points={pts} className={gi < open ? 'on' : ''} />),
-      )}
-    </svg>
-  )
-}
-
 /** Награда на сцене: вещь — карточка и слово редкости, валюта — большая сумма. */
 function BigReward({ r }: { r: CaseReward }) {
   if (r.item && r.kind === 'fragments') {
@@ -370,7 +342,7 @@ export function CaseReveal({
       { duration: 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
     )
     // Тряска всей сцены, на последнем ударе — сильнее.
-    const a = last ? 12 : 4 + hits * 2
+    const a = last ? 6 : 2 + hits
     root$.current?.animate?.(
       [{ transform: 'none' }, { transform: `translate(${a}px, ${-a / 2}px)` }, { transform: `translate(${-a}px, ${a / 2}px)` }, { transform: 'none' }],
       { duration: 180, delay: 60, easing: 'steps(4, end)' },
@@ -489,11 +461,20 @@ export function CaseReveal({
           <span className="rv2-halo" aria-hidden="true" />
           <span className={'rv2-chest' + (phase === 'burst' ? ' pop' : '')}>
             <span ref={chest$} className="rv2-hitbox">
-              <Chest3D tier={tier} tint={tint} mode={phase === 'hit' ? (hits ? 'shake' : 'ready') : 'open'} framing="hero" look="model" flatSize={300} noFlat holdShelf />
+              <Chest3D
+                tier={tier}
+                tint={tint}
+                mode={phase === 'hit' ? (hits ? 'shake' : 'ready') : 'open'}
+                damage={phase === 'hit' ? glow : 1}
+                framing="hero"
+                look="model"
+                flatSize={300}
+                noFlat
+                holdShelf
+              />
             </span>
-            {/* Свет из щелей и трещины — сильнее с каждым ударом. */}
+            {/* Свет из щелей — сильнее с каждым ударом. */}
             <i className="rv2-leak" aria-hidden="true" />
-            {phase === 'hit' ? <Cracks hits={hits} need={need} more={deal} /> : null}
           </span>
           {ups && phase === 'hit' ? <i key={'u' + ups} className="rv2-flash rv2-up-flash" aria-hidden="true" /> : null}
           {kick && phase === 'hit' ? <Burst key={'b' + kick} n={12 + hits * 6 + step * 10} spread={160 + hits * 40 + step * 30} seed={kick} /> : null}

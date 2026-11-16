@@ -6095,6 +6095,7 @@
   "Неизвестный формат выгрузки": "Nieznany format eksportu",
   "{0}: {1} — {2} (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)": "{0}: {1} — {2} (plik jest zajęty lub zablokowany — zamknij grę i dodaj folder launchera do wyjątków antywirusa)",
   "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения": "antywirus lub proxy przechwytuje połączenie: wyłącz w nim skanowanie HTTPS/SSL albo dodaj launcher do wyjątków",
+  "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер": "data i godzina na komputerze są nieprawidłowe: włącz ich automatyczne ustawianie w ustawieniach systemu i uruchom launcher ponownie",
   "адрес сервера не определился: проверь DNS, VPN и антивирус": "nie udało się ustalić adresu serwera: sprawdź DNS, VPN i antywirus",
   "сервер не ответил вовремя: проверь интернет и VPN": "serwer nie odpowiedział na czas: sprawdź internet i VPN",
   "соединение не установилось: проверь брандмауэр, VPN и антивирус": "nie udało się nawiązać połączenia: sprawdź zaporę, VPN i antywirus",
@@ -6591,5 +6592,7 @@
   "Не удалось загрузить фон: {error}": "Nie udało się wczytać tła: {error}",
   "Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого лаунчера, или поставь готовую сборку.": "Wybierz wersję i loader — Minecrafta, Javę i loader zainstalujemy za ciebie. Albo zaimportuj paczkę z innego launchera, albo zainstaluj gotową.",
   "Импорт из лаунчера": "Import z launchera",
-  "Готовая сборка": "Gotowa paczka"
+  "Готовая сборка": "Gotowa paczka",
+  "Куда ставить скин": "Gdzie ustawić skina",
+  "Везде": "Wszędzie"
 }
