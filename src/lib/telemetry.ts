@@ -7,7 +7,7 @@ import { LAUNCHER_API, apiHeaders } from './api'
 import { detectGpu } from './gpu'
 import { errorCode, scrubText } from './telemetryPrivacy'
 import { classifyError, type ErrorKind } from './errorKind'
-import { writePref } from './prefs'
+import { readPref, writePref } from './prefs'
 import { noted } from './noted'
 
 export type TelemetryEventType =
@@ -286,7 +286,8 @@ const APPEARANCE = { themePack: '', themeMode: 'dark' } as const
 /// blocked by CORS.
 async function send(events: QueuedEvent[]): Promise<boolean> {
   const dev = await initDevice()
-  const payload = { device: { ...dev, ...APPEARANCE }, events }
+  const layout = readPref('m-layout', 'lobby') === 'classic' ? 'classic' : 'lobby'
+  const payload = { device: { ...dev, ...APPEARANCE, layout }, events }
   if (hasTauri()) {
     try {
       await millidaApi('/launcher/telemetry', 'POST', payload)

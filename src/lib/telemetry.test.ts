@@ -127,6 +127,18 @@ describe('очередь телеметрии', () => {
     expect(ev.find((e) => e.type === 'perf' && e.data?.what === 'window_reopen')).toBeDefined()
   })
 
+  test.each([
+    ['classic', 'classic'],
+    ['lobby', 'lobby'],
+    [null, 'lobby'],
+    ['neon', 'lobby'],
+  ])('раскладка окна %p уходит в устройстве как %p', async (stored, expected) => {
+    if (stored !== null) store.set('m-layout', stored)
+    T.track('ui_click', {})
+    await T.flushTelemetry()
+    expect((sent[0] as unknown as { device: { layout: string } }).device.layout).toBe(expected)
+  })
+
   test('каждое событие со временем и версией, которая его записала', async () => {
     const before = Date.now()
     T.track('ui_click', {})

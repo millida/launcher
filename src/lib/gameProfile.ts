@@ -36,6 +36,17 @@ export function setSkinSource(v: SkinSource) {
   localStorage.setItem('m-skin-source', v)
 }
 
+export type SkinTarget = 'both' | 'license' | 'millida'
+
+export function skinTarget(): SkinTarget {
+  const stored = localStorage.getItem('m-skin-target')
+  return stored === 'license' || stored === 'millida' ? stored : 'both'
+}
+
+export function setSkinTarget(v: SkinTarget) {
+  localStorage.setItem('m-skin-target', v)
+}
+
 export function millidaSkinsActive(): boolean {
   return skinSource() === 'millida' && hasMillidaAccount()
 }
