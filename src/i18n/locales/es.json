@@ -6095,6 +6095,7 @@
   "Неизвестный формат выгрузки": "Formato de exportación desconocido",
   "{0}: {1} — {2} (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)": "{0}: {1} — {2} (el archivo está en uso o bloqueado — cierra el juego y añade la carpeta del launcher a las exclusiones de tu antivirus)",
   "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения": "un antivirus o proxy está interceptando la conexión: desactiva en él el análisis HTTPS/SSL o añade el launcher a sus exclusiones",
+  "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер": "la fecha y la hora del ordenador son incorrectas: activa su ajuste automático en la configuración del sistema y reinicia el launcher",
   "адрес сервера не определился: проверь DNS, VPN и антивирус": "no se pudo resolver la dirección del servidor: revisa el DNS, la VPN y el antivirus",
   "сервер не ответил вовремя: проверь интернет и VPN": "el servidor no respondió a tiempo: revisa tu internet y la VPN",
   "соединение не установилось: проверь брандмауэр, VPN и антивирус": "no se pudo establecer la conexión: revisa el firewall, la VPN y el antivirus",
@@ -6591,5 +6592,7 @@
   "Не удалось загрузить фон: {error}": "No se pudo cargar el fondo: {error}",
   "Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого лаунчера, или поставь готовую сборку.": "Elige una versión y un cargador — instalamos Minecraft, Java y el cargador por ti. O importa un modpack de otro launcher, o instala uno ya hecho.",
   "Импорт из лаунчера": "Importar desde un launcher",
-  "Готовая сборка": "Modpack ya hecho"
+  "Готовая сборка": "Modpack ya hecho",
+  "Куда ставить скин": "Dónde aplicar la skin",
+  "Везде": "En todas partes"
 }
