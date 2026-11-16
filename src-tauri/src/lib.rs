@@ -191,6 +191,44 @@ fn avoid_webkit_compositing_on_appimage_wayland() {
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
+const SYSTEM_FONTCONFIG: &str = "/etc/fonts/fonts.conf";
+
+/// The AppImage's bundled WebKit aborts its web process in Skia's
+/// `colrv1_configure_skpaint` on COLRv1 colour fonts, such as Fedora's default
+/// Noto-COLRv1.ttf, and leaves a blank window. The launcher alone gets the host
+/// font configuration minus those files; emoji fall back to a monochrome font.
+#[cfg(any(target_os = "linux", test))]
+fn colrv1_free_fontconfig(system_config: &str) -> String {
+    format!(
+        "<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"urn:fontconfig:fonts.dtd\">\n<fontconfig>\n  <include>{system_config}</include>\n  <selectfont>\n    <rejectfont>\n      <glob>*COLRv1*</glob>\n    </rejectfont>\n  </selectfont>\n</fontconfig>\n"
+    )
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn needs_colrv1_fonts_rejected(appimage: bool, user_fontconfig: bool, system_config_exists: bool) -> bool {
+    appimage && !user_fontconfig && system_config_exists
+}
+
+#[cfg(target_os = "linux")]
+fn avoid_colrv1_fonts_on_appimage() {
+    const VAR: &str = "FONTCONFIG_FILE";
+    let user_fontconfig = std::env::var_os(VAR).is_some() || std::env::var_os("FONTCONFIG_PATH").is_some();
+    let system_config_exists = std::path::Path::new(SYSTEM_FONTCONFIG).is_file();
+    if !needs_colrv1_fonts_rejected(std::env::var_os("APPIMAGE").is_some(), user_fontconfig, system_config_exists) {
+        return;
+    }
+    let path = engine::data_dir().join("fontconfig").join("fonts.conf");
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&path, colrv1_free_fontconfig(SYSTEM_FONTCONFIG)));
+    match written {
+        Ok(()) => std::env::set_var(VAR, &path),
+        Err(e) => eprintln!("colour emoji fonts stay enabled, {} could not be written: {e}", path.display()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if engine::uninstall_report_requested() {
@@ -210,6 +248,7 @@ pub fn run() {
         avoid_nvidia_explicit_sync();
         avoid_webkit_dmabuf_renderer();
         avoid_webkit_compositing_on_appimage_wayland();
+        avoid_colrv1_fonts_on_appimage();
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -379,6 +418,7 @@ pub fn run() {
             commands::system::download_mc_music,
             commands::system::ui_sounds,
             commands::system::download_ui_sounds,
+            commands::system::breaking_stages,
             commands::content::list_mods,
             commands::content::toggle_mod,
             commands::content::delete_mod,
@@ -981,6 +1021,37 @@ mod tests {
         for &(appimage, nvidia, expected, why) in cases {
             assert_eq!(crate::needs_dmabuf_off(appimage, nvidia), expected, "appimage={appimage} nvidia={nvidia}: {why}");
         }
+    }
+
+    #[test]
+    fn colrv1_fonts_are_rejected_only_in_the_appimage_and_never_over_the_users_config() {
+        let cases: &[(bool, bool, bool, bool, &str)] = &[
+            (true, false, true, true, "AppImage on Fedora: the bundled WebKit aborts on Noto-COLRv1.ttf"),
+            (false, false, true, false, "deb/rpm use the host WebKit, which renders COLRv1"),
+            (true, true, true, false, "a FONTCONFIG_FILE or FONTCONFIG_PATH set by the user wins"),
+            (true, false, false, false, "without the host fonts.conf the replacement would leave the launcher with no fonts"),
+        ];
+        for &(appimage, user_fontconfig, system_config, expected, why) in cases {
+            assert_eq!(
+                crate::needs_colrv1_fonts_rejected(appimage, user_fontconfig, system_config),
+                expected,
+                "appimage={appimage} user_fontconfig={user_fontconfig} system_config={system_config}: {why}",
+            );
+        }
+    }
+
+    #[test]
+    fn colrv1_free_fontconfig_keeps_the_host_fonts_and_drops_only_colrv1_files() {
+        let conf = crate::colrv1_free_fontconfig(crate::SYSTEM_FONTCONFIG);
+        assert!(
+            conf.contains("<include>/etc/fonts/fonts.conf</include>"),
+            "FONTCONFIG_FILE replaces the whole configuration; without the host include the launcher loses every font:\n{conf}",
+        );
+        assert!(
+            conf.contains("<rejectfont>\n      <glob>*COLRv1*</glob>\n    </rejectfont>"),
+            "the COLRv1 files must be rejected, or the web process aborts on the first emoji:\n{conf}",
+        );
+        assert_eq!(conf.matches("<glob>").count(), 1, "only COLRv1 files may be rejected:\n{conf}");
     }
 
     /// directory -> verdict. The vault lives directly under data_dir() and

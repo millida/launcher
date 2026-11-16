@@ -127,6 +127,30 @@ describe('очередь телеметрии', () => {
     expect(ev.find((e) => e.type === 'perf' && e.data?.what === 'window_reopen')).toBeDefined()
   })
 
+  test.each([
+    ['classic', 'classic'],
+    ['lobby', 'lobby'],
+    [null, 'lobby'],
+    ['neon', 'lobby'],
+  ])('раскладка окна %p уходит в устройстве как %p', async (stored, expected) => {
+    if (stored !== null) store.set('m-layout', stored)
+    T.track('ui_click', {})
+    await T.flushTelemetry()
+    expect((sent[0] as unknown as { device: { layout: string } }).device.layout).toBe(expected)
+  })
+
+  test.each([
+    ['[{"id":"m","nick":"Notch","kind":"microsoft"},{"id":"o","nick":"Alex","kind":"offline"}]', true],
+    ['[{"id":"o","nick":"Alex","kind":"offline"}]', false],
+    [null, false],
+    ['not json', false],
+  ])('аккаунты %p: лицензия в устройстве %p', async (accounts, expected) => {
+    if (accounts !== null) store.set('m-accounts', accounts)
+    T.track('ui_click', {})
+    await T.flushTelemetry()
+    expect((sent[0] as unknown as { device: { license: boolean } }).device.license).toBe(expected)
+  })
+
   test('каждое событие со временем и версией, которая его записала', async () => {
     const before = Date.now()
     T.track('ui_click', {})
