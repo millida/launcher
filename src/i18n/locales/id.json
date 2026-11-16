@@ -6099,6 +6099,7 @@
   "Неизвестный формат выгрузки": "Format ekspor tidak dikenal",
   "{0}: {1} — {2} (файл занят или заблокирован — закрой игру и добавь папку лаунчера в исключения антивируса)": "{0}: {1} — {2} (file sedang dipakai atau terkunci — tutup game dan tambahkan folder launcher ke pengecualian antivirus)",
   "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения": "antivirus atau proxy mencegat koneksi: matikan pemindaian HTTPS/SSL-nya atau tambahkan launcher ke pengecualiannya",
+  "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер": "tanggal dan waktu di komputer salah: nyalakan pengaturan otomatisnya di pengaturan sistem lalu mulai ulang launcher",
   "адрес сервера не определился: проверь DNS, VPN и антивирус": "alamat server tidak bisa ditemukan: periksa DNS, VPN, dan antivirus",
   "сервер не ответил вовремя: проверь интернет и VPN": "server tidak menjawab tepat waktu: periksa internet dan VPN",
   "соединение не установилось: проверь брандмауэр, VPN и антивирус": "koneksi tidak bisa dibuat: periksa firewall, VPN, dan antivirus",
@@ -6595,5 +6596,7 @@
   "Не удалось загрузить фон: {error}": "Gagal memuat latar: {error}",
   "Выбери версию и загрузчик — Minecraft, Java и загрузчик поставим сами. Или импортируй сборку из другого лаунчера, или поставь готовую сборку.": "Pilih versi dan loader — kami pasang Minecraft, Java, dan loader untukmu. Atau impor modpack dari launcher lain, atau pasang yang sudah jadi.",
   "Импорт из лаунчера": "Impor dari launcher",
-  "Готовая сборка": "Modpack siap pakai"
+  "Готовая сборка": "Modpack siap pakai",
+  "Куда ставить скин": "Pasang skin di mana",
+  "Везде": "Di mana saja"
 }
