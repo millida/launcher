@@ -1114,6 +1114,9 @@ export const uiSounds = () => invoke<UiSoundFile[]>('ui_sounds')
 
 export const downloadUiSounds = () => invoke<UiSoundFile[]>('download_ui_sounds')
 
+/** The game's ten block-breaking frames as PNG data URLs; empty when no installed version has them. */
+export const breakingStages = () => invoke<string[]>('breaking_stages')
+
 export const quickPlay = (
   profile: string,
   nick: string,

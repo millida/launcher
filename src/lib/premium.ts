@@ -90,6 +90,8 @@ export interface PremiumPackDetail extends PremiumPack {
   includes?: string[]
   /// Уровни подписки, в которых сборка есть.
   plans?: PremiumPlan[]
+  /// «Стандарт» этой сборки: сервер шлёт его отдельно от plans, чтобы старые лаунчеры не назвали его «Все сборки».
+  standardPlan?: PremiumPlan | null
   patches?: PremiumPatch[]
   updatedAt?: string | null
   /// Подписка на эту сборку отдельно.
@@ -161,8 +163,22 @@ export async function loadShowcase(): Promise<PremiumShowcase> {
   return { subscription: (shown && shown.subscription) || null, plans: (shown && shown.plans) || [], packs }
 }
 
+export const PACK_PLAN_ID = 'pack'
+export const STANDARD_PLAN_ID = 'pack:standard'
+
+export const isBundlePlan = (plan: PremiumPlan) => plan.id !== PACK_PLAN_ID && plan.id !== STANDARD_PLAN_ID
+
+/// Три тарифа партнёрской сборки, как на сайте: Старт (эта сборка), Стандарт и Премиум (все сборки).
+export function withStandardPlan(detail: PremiumPackDetail): PremiumPackDetail {
+  const standard = detail.standardPlan
+  const plans = detail.plans || []
+  if (!standard || plans.some((p) => p.id === STANDARD_PLAN_ID)) return detail
+  const at = plans.findIndex((p) => p.id === PACK_PLAN_ID)
+  return { ...detail, plans: [...plans.slice(0, at + 1), standard, ...plans.slice(at + 1)] }
+}
+
 export function loadPremiumPack(id: string): Promise<PremiumPackDetail> {
-  return api<PremiumPackDetail>('/launcher/premium/' + encodeURIComponent(id))
+  return api<PremiumPackDetail>('/launcher/premium/' + encodeURIComponent(id)).then(withStandardPlan)
 }
 
 /// Оформление: сервер возвращает адрес оплаты, лаунчер открывает его снаружи.
