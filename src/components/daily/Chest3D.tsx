@@ -23,6 +23,7 @@ export function Chest3D({
   onOpened,
   noFlat,
   holdShelf,
+  damage = 0,
 }: {
   tier: ChestTier
   mode: ChestMode
@@ -37,6 +38,8 @@ export function Chest3D({
   noFlat?: boolean
   /** A reveal scene: while it is up, the 3D chests of the shelf under it become a drawing (chestShelf). */
   holdShelf?: boolean
+  /** 0..1: cracks on the model (hits in the reveal). */
+  damage?: number
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -46,6 +49,8 @@ export function Chest3D({
   openedRef.current = onOpened
   const modeRef = useRef(mode)
   modeRef.current = mode
+  const damageRef = useRef(damage)
+  damageRef.current = damage
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading')
 
   useEffect(() => {
@@ -80,6 +85,7 @@ export function Chest3D({
           return
         }
         sceneRef.current = scene
+        scene.setDamage(damageRef.current)
         // Потерю общего контекста сундуков ловит chestGl (onLost выше):
         // дальше рисунок, второй раз за сеанс — лёгкая графика (lib/gpuLite).
         const el = wrap.current
@@ -107,6 +113,9 @@ export function Chest3D({
   useEffect(() => {
     sceneRef.current?.setTier(tier)
   }, [tier])
+  useEffect(() => {
+    sceneRef.current?.setDamage(damage)
+  }, [damage])
 
   // Без WebGL карточки не ждут крышку: «открытие» наступает сразу.
   useEffect(() => {

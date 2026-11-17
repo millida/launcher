@@ -2,7 +2,7 @@
 // Account tokens stay in the core. The UI gets only the result (millidaApi adds the token on the core side).
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
-import { t, tx } from '../i18n'
+import { getLocale, t, tx } from '../i18n'
 
 export interface Profile {
   name: string
@@ -674,7 +674,7 @@ export interface MillidaPack {
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */
-export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs')
+export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs', { lang: getLocale() })
 
 /** Активация ключа доступа к платной сборке. */
 export const packBuyUrl = (slug: string) => invoke<string>('pack_buy_url', { slug })
@@ -858,6 +858,10 @@ export const catalogPackContents = (slug: string) => invoke<PackContents>('catal
 /** The .mrpack a hosting server's owner uploaded: the core downloads it from the API and keeps it only if sha512 and size match. */
 export const installServerPackFile = (serverId: string, sha512: string, size: number, name: string) =>
   invoke<Profile>('install_server_pack_file', { serverId, sha512, size, name })
+
+/** One of a hosting server's own mods the player approved: downloaded from the API into the build's mods/, kept only if sha512 and size match. */
+export const installServerModFile = (profile: string, serverId: string, sha512: string, size: number, fileName: string, ticket: string) =>
+  invoke<string>('install_server_mod_file', { profile, serverId, sha512, size, fileName, ticket })
 
 /** What a build shares with the other builds that share the same thing. */
 export interface CommonShare {
@@ -1113,6 +1117,9 @@ export interface UiSoundFile {
 export const uiSounds = () => invoke<UiSoundFile[]>('ui_sounds')
 
 export const downloadUiSounds = () => invoke<UiSoundFile[]>('download_ui_sounds')
+
+/** The game's ten block-breaking frames as PNG data URLs; empty when no installed version has them. */
+export const breakingStages = () => invoke<string[]>('breaking_stages')
 
 export const quickPlay = (
   profile: string,
