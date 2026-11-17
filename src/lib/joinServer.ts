@@ -202,7 +202,9 @@ export async function quickJoin(ip: string, name: string, licensed?: boolean, ve
     ...(rated ? { addr: ip.slice(0, 64), name: name.slice(0, 64), slug: rated.slug.slice(0, 80) } : { rated: false }),
     ...launchAttribution('other'),
   })
-  const own = await serverPackBuild(ip, name)
+  const pack = await serverPackBuild(ip, name)
+  if (pack === SKIP_JOIN) return
+  const own = pack ?? (await (await import('./serverMods')).serverModsBuild(ip, name))
   if (own === SKIP_JOIN) return
   let wanted = versions && versions.length ? serverVersions(versions) : versionsForAddr(ip)
   if (!wanted.length && !own) wanted = await versionsFromPing(ip)

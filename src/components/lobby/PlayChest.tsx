@@ -1,7 +1,6 @@
-import { useEffect } from 'react'
 import { openShopAt } from '../../lib/openShopAt'
 import { Icon } from '../Icon'
-import { usePlayChests, playLeftText } from '../../state/playChests'
+import { usePlayChests, usePlayChestsLive, playLeftText } from '../../state/playChests'
 import { useShopGift } from '../shop/giftState'
 import { setScreen } from '../../state/ui'
 import { hasMillidaAccount } from '../../lib/api'
@@ -28,9 +27,7 @@ function PlayChestLine({ on }: { on: boolean }) {
   const t = useT()
   const view = usePlayChests((s) => s.view)
   const at = usePlayChests((s) => s.at)
-  useEffect(() => {
-    if (on) void usePlayChests.getState().load()
-  }, [on])
+  usePlayChestsLive(on)
   if (!view) return null
   // Просто открыть магазин сверху — дальше человек листает сам (владелец 06.10.2026).
   const toShop = () => {

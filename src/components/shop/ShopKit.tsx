@@ -11,6 +11,7 @@ import {
   loadPackQuests,
   claimTelegramReward,
   loadTelegramReward,
+  unlinkTelegram,
   type TelegramReward,
   claimDiscordReward,
   loadDiscordReward,
@@ -429,6 +430,22 @@ export function useShop(on: boolean) {
     }
   }
 
+  const relinkTelegram = async (): Promise<boolean> => {
+    setBusy('telegram')
+    try {
+      await unlinkTelegram()
+      setTelegram((was) => (was ? { ...was, linked: false, linkedAs: null } : was))
+      void loadTelegramReward().then(setTelegram).catch(noted('shop-tasks'))
+      return true
+    } catch (e) {
+      trackFailure('shop', e, { step: 'tg_relink' })
+      showToast(apiErrorText(e, t('Не получилось отвязать Telegram, попробуй ещё раз')), 'error')
+      return false
+    } finally {
+      setBusy('')
+    }
+  }
+
   const doPackQuest = async (quest: PackQuest) => {
     setBusy('quest:' + quest.code)
     try {
@@ -605,7 +622,7 @@ export function useShop(on: boolean) {
   return {
     on, signedIn, day, setDay, rules, busy, plus, tier, balance, error, bump, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, setOpening, caseResult,
     weekly, quests, telegram, discord, workshop, habit, order, dayCase, daySet, plusTile, todayActs, setActs, scrollTo, toPacks,
-    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, claimTask, doPlus, doManage, doPack, doCraft,
+    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, claimTask, relinkTelegram, doPlus, doManage, doPack, doCraft,
   }
 }
 
@@ -637,7 +654,7 @@ function ShardLabel({ n }: { n: number }) {
 export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
   const t = useT()
   const { on, day, plus, busy, tier, balance, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, weekly, quests, telegram, discord, plusTile, todayActs, setActs } = s
-  const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, claimTask, doPlus, doManage, doPack } = s
+  const { reloadShop, reloadSets, doOpenCase, doWeekly, doPackQuest, claimTask, relinkTelegram, doPlus, doManage, doPack } = s
   if (!day)
     return (
       <div className="sh-flow" aria-hidden="true">
@@ -699,7 +716,7 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
         </Guard>
 
         <Guard what="Задания Telegram и Discord" silent>
-          <SocialTasks telegram={telegram} discord={discord} busy={busy} onClaim={claimTask} />
+          <SocialTasks telegram={telegram} discord={discord} busy={busy} onClaim={claimTask} onRelink={relinkTelegram} />
         </Guard>
 
         <Guard what="Наборы" silent>

@@ -18,7 +18,7 @@ from PIL import Image, IcnsImagePlugin  # noqa: F401  (registers the ICNS writer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUNDLE_ICON = os.path.join(ROOT, "src-tauri", "icons", "icon.png")
-SOURCE_TILE = (90, 206, 102)
+SOURCE_TILE = (94, 198, 77)
 
 PALETTE = {
     "spark": ("#0b3a17", "#a8ff3a"),
