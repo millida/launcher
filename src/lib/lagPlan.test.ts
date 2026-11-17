@@ -19,7 +19,7 @@ describe('lagPlan: главная кнопка лечит самую вероя�
     ['Sodium уже стоит — второй не предлагаем', false, { boostOffered: true, hasRenderer: true }, 'heavy', 'lite'],
     ['шейдеры включены', false, { shadersOn: true }, 'shaders', 'shaders'],
     ['дальность 24', false, { renderDistance: 24 }, 'distance', 'distance'],
-    ['всё уже на минимуме — кнопки нет, только Милли', false, { graphicsLow: true }, 'heavy', ''],
+    ['всё уже на минимуме — кнопки нет, только Aera AI', false, { graphicsLow: true }, 'heavy', ''],
   ]
   for (const [why, memory, f, cause, first] of cases) {
     test(why, () => {

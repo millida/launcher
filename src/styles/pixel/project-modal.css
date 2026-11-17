@@ -168,7 +168,7 @@
 }
 #pjModal .pjx-dot { width: 3px; height: 3px; background: currentColor; opacity: 0.7; }
 
-/* «В сборке Милли» — плашка как всплывающее описание предмета: тёмно-фиолетовая
+/* «В сборке Aera AI» — плашка как всплывающее описание предмета: тёмно-фиолетовая
    с фиолетовой гранью (подсказка мода в карточке сборки — та же гамма). */
 #pjModal .pjx-milli-tag {
   display: inline-flex;
@@ -540,7 +540,7 @@
 #pjModal .pjx-link.discord .px-icon:first-child { color: #8b9bff; }
 #pjModal .pjx-link.source .px-icon:first-child { color: var(--m-accent); }
 
-/* Сборка Милли: подсказка предмета — фиолетовая грань, «почему» зелёным. */
+/* Сборка Aera AI: подсказка предмета — фиолетовая грань, «почему» зелёным. */
 #pjModal .pjx-plate.pjx-milli {
   background-color: rgba(16, 0, 16, 0.78);
   --px-ol: rgba(110, 40, 255, 0.7);

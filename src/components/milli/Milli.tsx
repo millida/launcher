@@ -12,7 +12,6 @@ import {
   MILLI_DUST,
   MILLI_EYES,
   MILLI_CROWN_DY,
-  MILLI_FRAME,
   MILLI_FRAME_BOX,
   MILLI_GAZE_FRESH,
   MILLI_GLINT,
@@ -23,7 +22,6 @@ import {
   MILLI_HEARTS,
   MILLI_IRIS,
   MILLI_LEGS,
-  MILLI_NOSE,
   MILLI_NOTE,
   MILLI_NOTES,
   MILLI_PUFF,
@@ -31,15 +29,14 @@ import {
   MILLI_PUPIL_SMALL,
   MILLI_RIM,
   MILLI_SHADOW,
-  MILLI_SHADOW_SHIFT,
   MILLI_SHOULDER_Y,
   MILLI_SLEEP_AFTER,
   MILLI_SPARK,
   MILLI_SPARKS,
   MILLI_SPROUT,
-  MILLI_STEPS,
   MILLI_TILE,
   MILLI_TOTEM,
+  MILLI_VIEW,
   MILLI_Z,
   MILLI_ZZZ,
   milliBlinkPlan,
@@ -114,7 +111,7 @@ import {
 export type { MilliCue, MilliMode }
 
 /**
- * Милли — персонаж из логотипа Millida: ручки в белых варежках, ножки в кедах.
+ * Aera AI's animated assistant character: a branded tile avatar with pixel-art limbs.
  *
  * Анимация (04.10.2026) — покадровая, как спрайт в Minecraft: CSS-ключи со
  * steps() на transform/opacity (styles/pixel/milli-mascot.css), позы и лица —
@@ -125,7 +122,8 @@ export type { MilliCue, MilliMode }
  * подписка на указатель и один таймер на все маскоты; невидимые стоят на паузе,
  * при reduced-motion — статичные позы.
  *
- * Поле — квадрат `MILLI_FRAME_BOX` (544); `size` — сторона квадрата.
+ * The existing Milli component API is retained for connected feature call sites.
+ * The field is the square `MILLI_FRAME_BOX` (544); `size` is its side length.
  */
 
 export interface MilliProps {
@@ -136,7 +134,7 @@ export interface MilliProps {
   track?: boolean
   /** Тык мышкой — игривая реакция (три по кругу). Клик не перехватывается. */
   poke?: boolean
-  /** Корона — часть персонажа (PLUS — золотая, Diamond — алмазная): прыгает и наклоняется вместе с Милли. */
+  /** Корона — часть персонажа (PLUS — золотая, Diamond — алмазная): прыгает и наклоняется вместе с Aera AI. */
   crown?: 'gold' | 'diamond' | null
   /** Тень под ногами (на сцене со своей тенью — не нужна). */
   shadow?: boolean
@@ -499,14 +497,7 @@ function sprite(sl: Slots, crown: 'gold' | 'diamond' | null = null) {
           <path d={MILLI_RIM} fillRule="evenodd" className="mm-rim" />
           <g className="mm-face">
             <g transform={`translate(0 ${MILLI_GLYPH_LIFT})`}>
-              <g transform={`translate(${MILLI_SHADOW_SHIFT} ${MILLI_SHADOW_SHIFT})`} className="mm-gsh">
-                <path d={MILLI_FRAME} />
-                <path d={MILLI_STEPS} />
-                <Box b={MILLI_NOSE} />
-              </g>
-              <path d={MILLI_FRAME} className="mm-glyph" />
-              <path d={MILLI_STEPS} className="mm-glyph" />
-              <Box b={MILLI_NOSE} className="mm-glyph" />
+              <image href="/aera-mark.svg" x="0" y="0" width={MILLI_VIEW} height={MILLI_VIEW} aria-hidden="true" focusable="false" />
               <g className="mm-cheeks">
                 {MILLI_CHEEKS.map((b, i) => (
                   <Box key={i} b={b} className="mm-cheek" />
@@ -1028,7 +1019,7 @@ function register(inst: Inst): () => void {
 }
 
 /**
- * Разовая реакция всем видимым Милли от 32 px: `milliCue('hop')` — на отправку,
+ * Разовая реакция всем видимым Aera AI от 32 px: `milliCue('hop')` — на отправку,
  * `milliCue('spin')` — сборка готова. `within` — только маскоты внутри элемента.
  */
 export function milliCue(kind: MilliCue, within?: Element | null): void {

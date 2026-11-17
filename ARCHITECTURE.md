@@ -1,8 +1,8 @@
-# How Millida Launcher is built
+# How Aera Launcher is built
 
 Russian version: [ARCHITECTURE.ru.md](ARCHITECTURE.ru.md)
 
-This document is for people who are going to change the code. It describes the actual
+This rebranded fork is based on the GPL-licensed Millida Launcher codebase. This document is for people who are going to change the code. It describes the actual
 state of the repository: the layers, the borders between them, the security rules, the way
 the game starts, and the steps to add a new IPC command.
 

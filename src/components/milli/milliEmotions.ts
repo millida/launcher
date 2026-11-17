@@ -1,5 +1,5 @@
 /*
- * Эмоции и взаимодействия Милли (04.10.2026, владелец: «нарисуй прям много
+ * Эмоции и взаимодействия Aera AI (04.10.2026, владелец: «нарисуй прям много
  * анимированных эмоций и взаимодействий»).
  *
  * Здесь — чистые данные и логика: какие есть эмоции, сколько они длятся,
@@ -113,7 +113,7 @@ export const MILLI_EMOTE: Readonly<Record<MilliEmoteState, MilliEmoteDef>> = {
   tap: d(1600, 1600, false),
 }
 
-/* ── Шина: milliEmote из .ts доходит до всех Милли на странице ── */
+/* ── Шина: milliEmote из .ts доходит до всех Aera AI на странице ── */
 
 export interface MilliEmoteOpts {
   /** Сколько играть, мс (по умолчанию — `MILLI_EMOTE[name].ms`). */
@@ -136,7 +136,7 @@ export function milliEmoteSubscribe(play: Listener, stop: Releaser): () => void 
 }
 
 /**
- * Сыграть эмоцию всем видимым Милли от 32 px. Возвращает stop(): отпустить
+ * Сыграть эмоцию всем видимым Aera AI от 32 px. Возвращает stop(): отпустить
  * удержание (или прервать раньше). Неизвестное имя / null — ничего.
  */
 export function milliEmote(name: MilliEmoteState | string | null | undefined, opts: MilliEmoteOpts = {}): () => void {
@@ -258,7 +258,7 @@ export function milliToneOf(text: string): MilliTone {
   return 'neutral'
 }
 
-/** Сообщение игрока ушло: Милли откликается тоном (null — нейтрально). */
+/** Сообщение игрока ушло: Aera AI откликается тоном (null — нейтрально). */
 export function milliHear(text: string, within?: Element | null): void {
   const e = emotionFor({ tone: milliToneOf(text) })
   if (e) milliEmote(e, { within })

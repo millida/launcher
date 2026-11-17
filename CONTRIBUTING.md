@@ -2,9 +2,11 @@
 
 Russian version: [CONTRIBUTING.ru.md](CONTRIBUTING.ru.md)
 
-Millida Launcher is a desktop Minecraft launcher built with Tauri 2 (Rust) and React 19.
+Aera Launcher is a desktop Minecraft launcher built with Tauri 2 (Rust) and React 19, rebranded from GPL-licensed Millida Launcher source.
 The core (`src-tauri`) installs and starts the game and works with files and
-secrets. The frontend (`src`) is the view on top of the core's IPC commands.
+secrets. The frontend (`src`) is the view on top of the core's IPC commands. Account,
+catalog, hosting, and update services remain connected to their existing upstream infrastructure;
+this repository does not claim to operate or own those services.
 
 Thank you for wanting to help. Below is everything you need to set up the project,
 make your change look like the rest of the code, and write a pull request that

@@ -18,7 +18,7 @@ import {
 const css = readFileSync(new URL('../../styles/pixel/milli-emotions.css', import.meta.url), 'utf8')
 const base = readFileSync(new URL('../../styles/pixel/milli-mascot.css', import.meta.url), 'utf8')
 
-describe('Милли — эмоции', () => {
+describe('Aera AI — эмоции', () => {
   it('эмоций не меньше 16, у каждой есть кадры в CSS', () => {
     expect(MILLI_EMOTIONS.length).toBeGreaterThanOrEqual(16)
     for (const e of [...MILLI_EMOTIONS, ...MILLI_ACTS]) expect(css.includes('.mm-s-' + e) || base.includes('.mm-s-' + e), e).toBe(true)

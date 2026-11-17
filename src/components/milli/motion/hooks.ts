@@ -4,7 +4,7 @@ import { reducedMotion } from './reduced'
 import { formatNumber } from '../../../i18n'
 
 /*
- * Мелкие хуки микро-анимаций Милли (MOTION.md §2). Без зависимостей,
+ * Мелкие хуки микро-анимаций Aera AI (MOTION.md §2). Без зависимостей,
  * без setState на кадр: тикер пишет текст прямо в DOM, индикатор — CSS-переменные.
  */
 

@@ -98,9 +98,9 @@ test('milliError: коды из тела, статусы, текст ядра', 
   expect(milliError(new Error('http 403')).kind).toBe('blocked')
   expect(milliError(new TypeError('Failed to fetch')).kind).toBe('offline')
   // В приложении ядро отдаёт только message сервера.
-  expect(milliError('Лимит Милли на сегодня исчерпан').kind).toBe('limit')
-  expect(milliError('Милли ещё думает над прошлым запросом').kind).toBe('busy')
-  expect(milliError('something odd').text).toBe('Милли не ответила')
+  expect(milliError('Лимит Aera AI на сегодня исчерпан').kind).toBe('limit')
+  expect(milliError('Aera AI ещё думает над прошлым запросом').kind).toBe('busy')
+  expect(milliError('something odd').text).toBe('Aera AI не ответила')
 })
 
 test('refineMilliError: статус после сбоя точнее текста', () => {

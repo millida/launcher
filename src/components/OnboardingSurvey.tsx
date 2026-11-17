@@ -29,7 +29,7 @@ export function OnboardingSurvey() {
   const questions: Array<{ key: keyof Answers; title: string; options: Array<[string, string]> }> = [
     {
       key: 'heard',
-      title: t('Откуда узнал о Millida?'),
+      title: t('Откуда узнал о Aera?'),
       options: [
         ['youtube', 'YouTube'],
         ['tiktok', 'TikTok'],

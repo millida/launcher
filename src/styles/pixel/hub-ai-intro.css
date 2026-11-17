@@ -1,4 +1,4 @@
-/* «Собрать с ИИ»: Милли живёт в тёмном окошке внутри кнопки и выглядывает из него (владелец 04.10.2026) */
+/* «Собрать с ИИ»: Aera AI живёт в тёмном окошке внутри кнопки и выглядывает из него (владелец 04.10.2026) */
 .hub-find .btn.hub-find-ai { padding-left: 92px; }
 /* окошко: утопленная ячейка, как слот инвентаря; всё, что ниже его края, спрятано */
 .hub-ai-peek {
@@ -16,7 +16,7 @@
 .hub-ai-peek.is-up .hub-ai-who { transform: translateY(24px); animation: hub-ai-up 600ms 150ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .hub-find-ai:hover .hub-ai-who { transform: translateY(24px); }
 @keyframes hub-ai-up { 0% { transform: translateY(70px); } 100% { transform: translateY(24px); } }
-/* пузырь в портале над кнопкой, хвост смотрит на голову Милли */
+/* пузырь в портале над кнопкой, хвост смотрит на голову Aera AI */
 .hub-ai-say {
   position: fixed; z-index: 9000; transform: translateY(calc(-100% - 10px)); white-space: nowrap; pointer-events: none;
   padding: 9px 13px 10px; font: 800 14px/1 var(--m-font); color: var(--m-fg); background: var(--m-raised);

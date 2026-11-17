@@ -452,13 +452,13 @@ export function NewBuildModal() {
             disabled={busy}
             onClick={() => {
               close()
-              // Милли живёт в каталоге: ведём в «Ресурсы» и открываем её там.
+              // Aera AI живёт в каталоге: ведём в «Ресурсы» и открываем её там.
               openHubBuild()
               openMilli({ preset: aiPresetFor(loader, ver), src: 'new_build' })
             }}
           >
             <PxIcon name="sparkle" size={18} />
-            {t('Собрать с Милли')}
+            {t('Собрать с Aera AI')}
           </button>
           <button className="btn md secondary" id="nbCancel" data-sound="close" onClick={close}>
             {t('Отмена')}

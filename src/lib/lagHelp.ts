@@ -167,7 +167,7 @@ export async function applyLagFix(r: LagReport, fix: LagFix): Promise<boolean> {
   return true
 }
 
-/** «Спросить Милли»: карточка с теми же исправлениями и осмотром сборки — в чате, с контекстом сборки. */
+/** «Спросить Aera AI»: карточка с теми же исправлениями и осмотром сборки — в чате, с контекстом сборки. */
 export async function askMilliAboutLag(r: LagReport): Promise<void> {
   const [doctor, milli] = await Promise.all([import('./milliDoctor'), import('../state/milli'), import('./milliSteps')])
   doctor.startMilliDoctor()

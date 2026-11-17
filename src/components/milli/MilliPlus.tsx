@@ -7,7 +7,7 @@ import { useT } from '../../i18n'
  * кнопок PLUS в магазине и на «Персонаже»: `useDaily.startPlus` —
  * POST /launcher/plus/subscribe, ссылка оплаты в браузере, опрос до настоящей
  * оплаты; повторный клик в 15 минут открывает ту же ссылку, новая подписка не
- * создаётся. После оплаты `usePlus.active` меняется — панель Милли
+ * создаётся. После оплаты `usePlus.active` меняется — панель Aera AI
  * перечитывает статус (MilliDock).
  */
 export function MilliPlusButton({ label, track, src }: { label?: string; track: string; src: string }) {

@@ -239,7 +239,7 @@ fn worker(generation: u64, rx: Receiver<Job>) {
                 let slug = lock(&LAST_SLUG).clone();
                 let presence = Presence {
                     details: "In launcher".into(),
-                    state: "Millida Launcher".into(),
+                    state: "Aera Launcher".into(),
                     profile_slug: slug,
                     ..Presence::default()
                 };
@@ -352,7 +352,7 @@ fn apply(client: &mut Option<DiscordIpcClient>, since: &mut Option<i64>, p: &Pre
     }
 
     let big = if p.large_image.starts_with("https://") { p.large_image.as_str() } else { "logo" };
-    let big_text = if p.large_text.is_empty() { "Millida Launcher" } else { p.large_text.as_str() };
+    let big_text = if p.large_text.is_empty() { "Aera Launcher" } else { p.large_text.as_str() };
     let join_ok = p.playing && p.join_url.starts_with(JOIN_PREFIX) && p.join_url.len() <= 512;
     let profile = profile_url(&p.profile_slug);
     // Presence is read by people of every language, so it stays English whatever the launcher's UI language.

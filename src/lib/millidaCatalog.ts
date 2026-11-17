@@ -70,7 +70,7 @@ export interface CatalogCard {
   loaders: string[]
   categories: string[]
   filesCount: number
-  /// Сборку собрала Милли (ИИ-сборщик); нет поля — старый бэкенд, считаем false.
+  /// Сборку собрала Aera AI (ИИ-сборщик); нет поля — старый бэкенд, считаем false.
   aiGenerated?: boolean
   /// Код сборки лаунчера (8 знаков) — ставится тем же путём, что «Сборка по коду».
   packCode?: string | null
@@ -138,7 +138,7 @@ export interface CatalogItem {
   /// Статья-хранилище: по её slug адресуется скачивание файла.
   articleSlug: string | null
   files: CatalogFile[]
-  /// Сборку собрала Милли (ИИ-сборщик); нет поля — старый бэкенд, считаем false.
+  /// Сборку собрала Aera AI (ИИ-сборщик); нет поля — старый бэкенд, считаем false.
   aiGenerated?: boolean
   /// Код сборки лаунчера (8 знаков) — ставится тем же путём, что «Сборка по коду».
   packCode?: string | null

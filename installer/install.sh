@@ -16,7 +16,7 @@ Linux)
 	case "$arch" in
 	x86_64 | amd64) name="millida-launcher-setup-linux-x86_64" ;;
 	aarch64 | arm64) name="millida-launcher-setup-linux-aarch64" ;;
-	*) fail "Millida Launcher is built for x86_64 and ARM64, but this machine is $arch. Contact us: millida.net/support" ;;
+		*) fail "Aera Launcher is built for x86_64 and ARM64, but this machine is $arch. Contact the connected support service: millida.net/support" ;;
 	esac
 	;;
 Darwin)
@@ -26,8 +26,8 @@ Darwin)
 	*) fail "Unknown Mac processor: $arch. Contact us: millida.net/support" ;;
 	esac
 	;;
-*)
-	fail "This system is not supported: $os. The Windows installer is at millida.net/launcher"
+	*)
+		fail "This system is not supported: $os. The Windows installer is at millida.net/launcher"
 	;;
 esac
 
@@ -50,7 +50,7 @@ fi
 work=$(mktemp -d 2>/dev/null || mktemp -d -t millida-setup)
 trap 'rm -rf "$work"' EXIT INT TERM HUP
 
-echo "Downloading the Millida Launcher installer..."
+echo "Downloading the Aera Launcher installer..."
 fetch "$base/$name" "$work/setup" || fail "The installer failed to download. Check your internet connection."
 fetch "$base/$name.sha256" "$work/setup.sha256" || fail "The installer checksum failed to download."
 

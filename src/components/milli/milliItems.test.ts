@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { ENCHANT_GLYPHS, MC_ITEMS } from './milliItems'
 
-describe('предметы Милли', () => {
+describe('предметы Aera AI', () => {
   it('каждый рисунок 16×16 и не выходит за поле', () => {
     for (const [name, art] of Object.entries(MC_ITEMS)) {
       expect([name, art.size]).toEqual([name, 16])

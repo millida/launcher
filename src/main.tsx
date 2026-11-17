@@ -33,6 +33,7 @@ import { initAccent } from './lib/accent'
 import { initPremiumTheme } from './lib/premiumTheme'
 import './styles/pixel/premium-theme.css'
 import './styles/classic.css'
+import './styles/aera-brand.css'
 // Последним: лёгкий режим и «меньше движения» бьют остальные правила (lib/liteMode.ts).
 import './styles/13-lite.css'
 import { openExt } from './lib/api'

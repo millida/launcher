@@ -61,7 +61,7 @@ export function LagCard() {
             </button>
           ) : null}
           <button className={'btn lg ' + (main ? 'secondary' : 'primary')} data-track="lag_milli" disabled={acting !== ''} onClick={() => run('milli', () => askMilliAboutLag(report))}>
-            <Icon id="i-sparkle" /> {t('Спросить Милли')}
+            <Icon id="i-sparkle" /> {t('Спросить Aera AI')}
           </button>
           <div className="crash-acts-min">
             <button className="btn md ghost" onClick={muteLagHelp}>

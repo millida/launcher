@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { PX_ART, PX_CHIP_ORDER, PX_GLYPHS, PX_NAMES, pxSprite } from './pxSprites'
 import { PX_EMPTY, PX_GRID, pxGlintRuns, pxRuns } from './pxTypes'
 
-describe('пиксельные предметы Милли', () => {
+describe('пиксельные предметы Aera AI', () => {
   it('каждый рисунок 16×16 и только из символов своей палитры', () => {
     for (const name of PX_NAMES) {
       const art = PX_ART[name]

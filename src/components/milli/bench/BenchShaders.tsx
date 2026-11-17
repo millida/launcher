@@ -36,7 +36,7 @@ export function BenchSlot({ item, px, size = 40 }: { item: Partial<MilliItem>; p
   )
 }
 
-/** Пустая вкладка: одна строка и кнопка, которая просит Милли в чате. */
+/** Пустая вкладка: одна строка и кнопка, которая просит Aera AI в чате. */
 export function BenchEmpty({ px, text, ask, label }: { px: string; text: string; ask: string; label?: string }) {
   const t = useT()
   return (

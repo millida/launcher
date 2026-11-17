@@ -402,7 +402,7 @@
 .mr-tag svg { width: 14px; height: 14px; }
 .mr-tag.is-accent { color: var(--m-accent); }
 .mr-tag.has-tone { color: var(--mk-tone); }
-/* «Милли» — маскот вместо плашки значка (сборку собрала Милли, 30.09.2026). */
+/* «Aera AI» — маскот вместо плашки значка (сборку собрала Aera AI, 30.09.2026). */
 .mr-tag.is-bare { gap: 5px; }
 .mr-tag.is-bare .milli, .mr-tag.is-bare .milli svg { width: 18px; height: 18px; }
 /* Платная сборка: золотая плашка «Премиум» у названия и цена над кнопкой.

@@ -38,7 +38,7 @@ const LOADER_RU = (id: string): string => (loaderLabel(id) === id ? RU_LOADER(id
 
 const andList = (xs: string[]): string => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' и ' + xs[xs.length - 1])
 
-/// Короткое русское описание, если оно уже пришло лаунчеру со сборкой Милли.
+/// Короткое русское описание, если оно уже пришло лаунчеру со сборкой Aera AI.
 function milliDescription(slug: string): string {
   try {
     const msgs = useMilli.getState().messages

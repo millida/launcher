@@ -36,7 +36,7 @@ fn main() {
         let build = install::fetch_build(&client)?;
 
         let payload = workspace.file(install::PAYLOAD_NAME);
-        report.status(format!("Скачиваем Millida Launcher {} и проверяем подпись…", build.version));
+        report.status(format!("Скачиваем Aera Launcher {} и проверяем подпись…", build.version));
         install::download_verified(&client, &build, &payload, |done, total| report.progress(done, total))?;
 
         report.status("Устанавливаем…");
@@ -46,7 +46,7 @@ fn main() {
     match outcome {
         Some(Ok(())) => {}
         Some(Err(reason)) => {
-            ui::fail(&format!("Не удалось установить Millida Launcher.\n\n{}\n\n{}", reason, HELP));
+            ui::fail(&format!("Не удалось установить Aera Launcher.\n\n{}\n\n{}", reason, HELP));
             std::process::exit(1);
         }
         // The window was closed before the work finished. Quietly, but not a success.
@@ -61,7 +61,7 @@ fn main() {
 fn main() {
     let lock = install::single_instance();
     if matches!(lock, install::Instance::AlreadyRunning) {
-        eprintln!("Установка Millida Launcher уже идёт в другом окне.");
+        eprintln!("Установка Aera Launcher уже идёт в другом окне.");
         std::process::exit(1);
     }
     install::sweep_stale();
@@ -74,7 +74,7 @@ fn main() {
         let build = install::fetch_build(&client)?;
 
         let payload = workspace.file(install::PAYLOAD_NAME);
-        report.status(format!("Скачиваем Millida Launcher {} и проверяем подпись…", build.version));
+        report.status(format!("Скачиваем Aera Launcher {} и проверяем подпись…", build.version));
         install::download_verified(&client, &build, &payload, |done, total| report.progress(done, total))?;
 
         report.status("Устанавливаем…");
@@ -84,13 +84,13 @@ fn main() {
         // The launcher is already installed by now, so a desktop that refuses to
         // start it is a note, not a failed install.
         if let Err(reason) = place::launch(&app) {
-            report.status(format!("Запустить не удалось ({}) — откройте Millida Launcher вручную.", reason));
+            report.status(format!("Запустить не удалось ({}) — откройте Aera Launcher вручную.", reason));
         }
         Ok(())
     });
 
     if let Some(Err(reason)) = outcome {
-        ui::fail(&format!("Не удалось установить Millida Launcher.\n\n{}\n\n{}", reason, HELP));
+        ui::fail(&format!("Не удалось установить Aera Launcher.\n\n{}\n\n{}", reason, HELP));
         std::process::exit(1);
     }
 }

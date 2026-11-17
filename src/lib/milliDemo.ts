@@ -1,7 +1,7 @@
 import type { MilliItem, MilliMessage, MilliOp, MilliPack, MilliProgressEvent, MilliSession, MilliStatus } from './milli'
 
 /*
- * Демо Милли для ?preview=user (только dev, в релиз не попадает: модуль
+ * Демо Aera AI для ?preview=user (только dev, в релиз не попадает: модуль
  * грузится динамически из ветки import.meta.env.DEV). Проекты Modrinth
  * настоящие — id, slug, иконки из ответа /v2/projects 24.09.2026.
  */
@@ -172,7 +172,7 @@ const stackOf = (p: MilliPack) => {
   return st
 }
 
-/** Обычный шаг (клик, ход Милли): текущее состояние — в стек отмены. */
+/** Обычный шаг (клик, ход Aera AI): текущее состояние — в стек отмены. */
 function stepRev(cur: MilliPack, next: MilliPack): MilliPack {
   stackOf(cur).push(cur.buildId)
   return nextRev(cur, next)
@@ -214,7 +214,7 @@ async function revertPack(cur: MilliPack, to?: string): Promise<MilliPack> {
   return nextRev(cur, { ...target, changes: bench.diffPacks(cur, target, to ? 'Вернула версию' : 'Отмена', 'user') })
 }
 
-/** Ответ Милли на правку словами: «полегче» — шейдеры на ступень ниже, иначе убрать пару тяжёлых. */
+/** Ответ Aera AI на правку словами: «полегче» — шейдеры на ступень ниже, иначе убрать пару тяжёлых. */
 async function milliEdit(cur: MilliPack, text: string): Promise<MilliPack> {
   const bench = await import('../state/milliBench')
   bench.rememberPack(cur)

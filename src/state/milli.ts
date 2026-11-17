@@ -27,7 +27,7 @@ import { hasMillidaAccount } from '../lib/api'
 import { track } from '../lib/telemetry'
 
 /*
- * Чат с Милли: одно состояние на весь лаунчер — кнопка в каталоге и панель
+ * Чат с Aera AI: одно состояние на весь лаунчер — кнопка в каталоге и панель
  * чата читают его. Запросы без входа в аккаунт
  * Millida не уходят: панель показывает «Войди в аккаунт».
  */
@@ -105,7 +105,7 @@ export function setMilliEnhanced(v: boolean) {
   set({ enhanced: v })
 }
 
-/** Ответ пришёл: Милли говорит ~2 с, со сборкой — потом радуется. */
+/** Ответ пришёл: Aera AI говорит ~2 с, со сборкой — потом радуется. */
 function react(withPack: boolean) {
   clearTimeout(moodTimer)
   set({ mood: 'talk' })
@@ -132,10 +132,10 @@ export async function refreshMilliPlans(force = false): Promise<void> {
   }
 }
 
-// Подписка аккаунта загрузилась или сменилась (купил PLUS / Diamond) — статус Милли заново:
+// Подписка аккаунта загрузилась или сменилась (купил PLUS / Diamond) — статус Aera AI заново:
 // иначе в шапке висело «×10 с PLUS» у того, у кого PLUS уже есть.
 // Подписка — из state/daily лениво: статический импорт тянул аккаунты (localStorage) при
-// загрузке модуля, и тесты Милли падали без браузера.
+// загрузке модуля, и тесты Aera AI падали без браузера.
 let plusSeen: unknown = undefined
 if (typeof localStorage !== 'undefined')
   void import('./daily')
@@ -240,7 +240,7 @@ export function loadMilliGreeting(): Promise<MilliGreeting | null> {
   return milliGreeting().catch(() => null)
 }
 
-/** Кнопка приветствия: «Улучшить «…»» сначала открывает тот разговор, потом пишет Милли. */
+/** Кнопка приветствия: «Улучшить «…»» сначала открывает тот разговор, потом пишет Aera AI. */
 export async function pickMilliGreeting(chip: MilliGreetingChip) {
   const text = chip.text || chip.label
   if (chip.sessionId) {
@@ -296,7 +296,7 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
   }
   clearTimeout(moodTimer)
   set((s) => ({ messages: [...s.messages, local], pending: true, error: null, failedText: '', failedAction: null, mood: 'think' }))
-  // Милли откликается на тон игрока (спасибо → сердечки, «вылетает» → сочувствие), потом думает.
+  // Aera AI откликается на тон игрока (спасибо → сердечки, «вылетает» → сочувствие), потом думает.
   milliHear(text)
   // Только длина — сам текст не уходит.
   track('catalog_search', { section: 'milli', len: text.length, first: first ? 1 : 0 })
@@ -305,11 +305,11 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
   pendingLocal = { id: local.id, text }
   startProgress(sid, turn)
   try {
-    // Клики верстака сначала доезжают до сервера: Милли правит то, что видит игрок.
+    // Клики верстака сначала доезжают до сервера: Aera AI правит то, что видит игрок.
     await benchSettled()
     if (turn !== turnSeq || get().sessionId !== sid) return
     const buildId = sid ? benchBuildId() : null
-    // Размер — только для новой сборки: правку существующей Милли делает по её составу.
+    // Размер — только для новой сборки: правку существующей Aera AI делает по её составу.
     const size = opts.size ?? (buildId ? null : savedSize())
     // Запомненный размер — лишь привычка: «на оптимизацию» или «для слабого ПК» в тексте сервер ставит выше.
     const sizeSaved = opts.size == null && size != null
@@ -345,7 +345,7 @@ export async function sendMilli(raw: string, opts: SendMilliOpts = {}) {
       preset: null,
     }))
     react(!!r.reply.pack)
-    // Сборка готова или поправлена — Милли радуется по-своему (танец / гордость), после «говорит».
+    // Сборка готова или поправлена — Aera AI радуется по-своему (танец / гордость), после «говорит».
     if (r.reply.pack && !r.reply.pack.stub) {
       const emo = emotionFor({ intent: buildId ? 'edit' : 'build', outcome: 'ok' })
       window.setTimeout(() => milliEmote(emo), 2200)

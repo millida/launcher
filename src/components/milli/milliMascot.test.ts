@@ -25,11 +25,9 @@ import {
   MILLI_VIEW,
   milliExtent,
   MILLI_EYES,
-  MILLI_GLYPH_CELLS,
   MILLI_MOUTH_OPEN,
   MILLI_MOUTH_SHUT,
   MILLI_IRIS,
-  MILLI_NOSE,
   MILLI_PUPIL,
   MILLI_TONGUE,
   milliCell,
@@ -39,32 +37,21 @@ import {
 const inside = (a: MilliBox, b: MilliBox) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h
 const overlaps = (a: MilliBox, b: MilliBox) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
-const whiteCells: MilliBox[] = MILLI_GLYPH_CELLS.flatMap((row, r) =>
-  row.flatMap((v, c) => (v ? [milliCell(c, r)] : [])),
-)
-
-describe('маскот Милли — логотип с лицом', () => {
-  it('центральный квадрат знака — клетка (2,2) сетки', () => {
-    const c = milliCell(2, 2)
-    expect(Math.abs(c.x - MILLI_NOSE.x)).toBeLessThan(0.5)
-    expect(Math.abs(c.y - MILLI_NOSE.y)).toBeLessThan(0.5)
-  })
-
-  it('рот и щёки не заходят на белые клетки; глаза — большие наклейки поверх скобки (владелец 30.09.2026, 21:22)', () => {
-    const face = [...MILLI_CHEEKS, MILLI_MOUTH_SHUT, MILLI_MOUTH_OPEN, MILLI_TONGUE]
-    for (const e of MILLI_EYES) expect(overlaps(e, MILLI_NOSE)).toBe(false)
-    for (const part of face) {
-      for (const cell of whiteCells) expect(overlaps(part, cell), JSON.stringify(part)).toBe(false)
+describe('маскот Aera AI — персонаж с фирменной меткой', () => {
+  it('глаза, рот и щёки помещаются на плитке персонажа', () => {
+    const tile = { x: 0, y: 0, w: MILLI_VIEW, h: MILLI_VIEW }
+    for (const part of [...MILLI_EYES, ...MILLI_CHEEKS, MILLI_MOUTH_SHUT, MILLI_MOUTH_OPEN, MILLI_TONGUE]) {
+      expect(inside(part, tile), JSON.stringify(part)).toBe(true)
     }
   })
 
-  it('глаза симметричны относительно носа, рот под носом', () => {
-    const nose = MILLI_NOSE.x + MILLI_NOSE.w / 2
+  it('глаза симметричны относительно центра, рот расположен ниже них', () => {
+    const nose = MILLI_VIEW / 2
     const [l, r] = MILLI_EYES as [MilliBox, MilliBox]
     expect(Math.abs(nose - (l.x + l.w / 2) - (r.x + r.w / 2 - nose))).toBeLessThan(0.5)
     expect(l.y).toBe(r.y)
     expect(Math.abs(MILLI_MOUTH_OPEN.x + MILLI_MOUTH_OPEN.w / 2 - nose)).toBeLessThan(0.5)
-    expect(MILLI_MOUTH_OPEN.y).toBeGreaterThan(MILLI_NOSE.y + MILLI_NOSE.h)
+    expect(MILLI_MOUTH_OPEN.y).toBeGreaterThan(Math.max(...MILLI_EYES.map((eye) => eye.y + eye.h)))
   })
 
   it('язык внутри открытого рта', () => {
@@ -72,7 +59,7 @@ describe('маскот Милли — логотип с лицом', () => {
   })
 })
 
-describe('Милли — персонаж: ручки и ножки', () => {
+describe('Aera AI — персонаж: ручки и ножки', () => {
   it('всё нарисованное влезает в поле персонажа', () => {
     const e = milliExtent()
     const f = { x: MILLI_FRAME_BOX.x, y: MILLI_FRAME_BOX.y, w: MILLI_FRAME_BOX.size, h: MILLI_FRAME_BOX.size }
@@ -99,12 +86,12 @@ describe('Милли — персонаж: ручки и ножки', () => {
   })
 })
 
-describe('Милли — кадры лица', () => {
-  it('все рты лежат в пустой клетке под носом и не задевают белые клетки', () => {
+describe('Aera AI — кадры лица', () => {
+  it('рты лежат в нижней области и не перекрывают глаза', () => {
     for (const k of Object.keys(MILLI_MOUTHS) as MilliMouth[]) {
       const b = milliMouthBox(k)
       expect(inside(b, milliCell(2, 3)), k).toBe(true)
-      for (const cell of whiteCells) expect(overlaps(b, cell), k).toBe(false)
+      for (const eye of MILLI_EYES) expect(overlaps(b, eye), k).toBe(false)
     }
   })
 
@@ -129,7 +116,7 @@ describe('Милли — кадры лица', () => {
   })
 })
 
-describe('Милли — пиксельные картинки', () => {
+describe('Aera AI — пиксельные картинки', () => {
   it('соседние клетки строки сливаются, цвета — отдельные path', () => {
     const p = milliPixels(['XX.Y', '.XXX'], 10, 5, 0)
     expect(p.X).toBe('M5 0h20v10h-20zM15 10h30v10h-30z')
@@ -141,7 +128,7 @@ describe('Милли — пиксельные картинки', () => {
   })
 })
 
-describe('Милли — поведение', () => {
+describe('Aera AI — поведение', () => {
   it('тыки идут по кругу из трёх реакций', () => {
     expect([0, 1, 2, 3, 4, -1].map(milliPoke)).toEqual(['poke1', 'poke2', 'poke3', 'poke1', 'poke2', 'poke3'])
   })
@@ -192,7 +179,7 @@ describe('Милли — поведение', () => {
   })
 })
 
-describe('Милли — CSS-кадры', () => {
+describe('Aera AI — CSS-кадры', () => {
   const css = readFileSync(new URL('../../styles/pixel/milli-mascot.css', import.meta.url), 'utf8')
 
   it('длина каждой реакции в JS совпадает с длиной её ключей в CSS', () => {

@@ -32,7 +32,7 @@ function Welcome({ nick }: { nick: string }) {
   return (
     <>
       <div className="onb-hero">
-        <img src="/millida-logo.svg" alt="" />
+        <img src="/aera-mark.svg" alt="" />
         <div>
           <h3>{nick ? t('Привет, {nick}!', { nick }) : t('Привет!')}</h3>
         </div>

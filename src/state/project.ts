@@ -49,7 +49,7 @@ export interface ProjectLink {
 }
 
 /**
- * Откуда открыли окно. Сейчас — карточка сборки Милли: окно показывает, что мод
+ * Откуда открыли окно. Сейчас — карточка сборки Aera AI: окно показывает, что мод
  * в сборке, и даёт убрать его/вернуть, не возвращаясь в чат. Поле необязательное:
  * каждый openProject/openCfProject/openMillidaProject без него сбрасывает его в null.
  */
@@ -59,20 +59,20 @@ export interface ProjectCtx {
   inPack: boolean
   /** Нужен для запуска — убрать нельзя. */
   locked?: boolean
-  /** Название сборки Милли — для подписи «В сборке «…»». */
+  /** Название сборки Aera AI — для подписи «В сборке «…»». */
   packTitle?: string
-  /** Зачем Милли взяла этот мод (MilliItem.why). */
+  /** Зачем Aera AI взяла этот мод (MilliItem.why). */
   why?: string
   /** Названия модов сборки, которым нужен этот мод (он их зависимость). */
   neededBy?: string[]
-  /** Убрать/вернуть мод в сборке Милли. Нет — кнопки нет (сборка уже ставится). */
+  /** Убрать/вернуть мод в сборке Aera AI. Нет — кнопки нет (сборка уже ставится). */
   onToggle?: () => void
   /**
    * Мод из верстака: «Убрать/Вернуть» идёт через стор сборки (`benchOp`), а
    * «в сборке ли» окно читает из головы ревизии — карточка может уже размонтироваться.
    */
   bench?: { projectId: string; tab: 'mods' | 'resourcepacks' | 'shaders' }
-  /** Вернуться к сборке (открыть Милли обратно). */
+  /** Вернуться к сборке (открыть Aera AI обратно). */
   onBack?: () => void
 }
 
@@ -126,7 +126,7 @@ interface ProjectState {
 }
 
 /// Поля, которые каждое открытие окна обязано сбросить: иначе у нового мода
-/// оставались автор, лицензия и контекст Милли от предыдущего.
+/// оставались автор, лицензия и контекст Aera AI от предыдущего.
 const FRESH = (): Partial<ProjectState> => ({
   projectId: '',
   failed: false,
@@ -227,7 +227,7 @@ function mrLinks(p: {
 }
 
 /// Автор: в карточке проекта Modrinth его нет (только id команды), а ручку
-/// members наш прокси не пускает — берём из поиска по id проекта, как подсказка Милли.
+/// members наш прокси не пускает — берём из поиска по id проекта, как подсказка Aera AI.
 async function mrAuthor(projectId: string): Promise<{ author: string; authorUrl: string } | null> {
   const facets = encodeURIComponent(JSON.stringify([['project_id:' + projectId]]))
   const r = await fetch(MODRINTH_API + '/v2/search?limit=1&facets=' + facets).then((x) => x.json())
@@ -493,14 +493,14 @@ export async function openMillidaProject(slug: string, section: string, kind?: s
   useProject.getState().set({ loading: false, failed: true, title: fallbackTitle || t('Не удалось загрузить'), sub: '' })
 }
 
-// ─── Мод из сборки Милли ─────────────────────────────────────────────────────
+// ─── Мод из сборки Aera AI ─────────────────────────────────────────────────────
 
 /** Модрин-тип проекта по вкладке верстака. */
 const KIND_OF_TAB = { mods: 'mod', resourcepacks: 'resourcepack', shaders: 'shader' } as const
 
 /**
  * Открыть мод из верстака или квитанции: запомнить прокрутку чата и списков,
- * свернуть Милли и открыть окно мода. Любое закрытие окна вернёт в тот же чат
+ * свернуть Aera AI и открыть окно мода. Любое закрытие окна вернёт в тот же чат
  * (эффект закрытия в Project.tsx зовёт `onBack`), прокрутка восстановится.
  */
 export async function openMilliItem(

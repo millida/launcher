@@ -63,7 +63,10 @@ function Preview() {
           position: 'relative',
           height: 420,
           margin: 16,
-          background: '#27402f url(/hero-11.png) center/cover',
+          background: 'radial-gradient(ellipse at 74% 18%, rgba(214, 42, 57, 0.22), transparent 52%), linear-gradient(135deg, #1b1c22 0%, #101114 56%, #241116 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: 18,
+          overflow: 'hidden',
         }}
       >
         <div style={{ position: 'absolute', top: 14, left: 14 }}>

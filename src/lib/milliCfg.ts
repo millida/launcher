@@ -268,7 +268,7 @@ function tomlSet(text: string, path: string, to: string, spec: CfgSpec, create: 
   const hit = keys.find((k) => k.path.length === want.length && k.path.every((p, i) => p === want[i]))
   if (hit) {
     const isStr = /^["']/.test(hit.raw.trim())
-    if (/^[[{]/.test(hit.raw.trim())) return { ok: false, error: 'это список — Милли его не правит' }
+    if (/^[[{]/.test(hit.raw.trim())) return { ok: false, error: 'это список — Aera AI его не правит' }
     const cur = tomlUnq(hit.raw)
     const c = checkValue(to, cur, { ...spec, type: spec.type ?? (isStr ? (spec.values ? 'enum' : 'string') : undefined) })
     if (!c.ok) return c

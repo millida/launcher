@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "millida-launcher",
+      "name": "aera-launcher",
       "dependencies": {
         "@breezystack/lamejs": "^1.2.7",
         "@tauri-apps/api": "^2.11.1",

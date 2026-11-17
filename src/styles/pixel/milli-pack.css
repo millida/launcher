@@ -90,7 +90,7 @@
 .mpc-plate.wait { color: var(--m-fg-muted); }
 .mpc-plate .spin { width: 9px; height: 9px; }
 
-/* Милли починила сборку после пробного запуска */
+/* Aera AI починила сборку после пробного запуска */
 .mpc-fix {
   display: flex; align-items: center; gap: 10px; padding: 8px 8px 9px 12px;
   background-color: var(--m-accent-soft); --px-n: 5px; clip-path: var(--px-5);
@@ -104,7 +104,7 @@
 .mpc-count b { font: 900 19px/1 var(--m-font); color: var(--m-fg); }
 .mpc-count i { font: 750 12px/1 var(--m-font); font-style: normal; color: var(--m-fg-subtle); }
 
-/* ── «Милли перепроверила» ───────────────────────────────── */
+/* ── «Aera AI перепроверила» ───────────────────────────────── */
 .mpc-review {
   display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 9px;
   background-color: var(--m-surface); --px-n: 5px; clip-path: var(--px-5);
@@ -300,7 +300,7 @@
 /* ============================================================
    ПОДСКАЗКА МОДА — плашка лаунчера (как .px-tip, только больше):
    приподнятая поверхность, срез углов, тонкая рамка. Висит в body,
-   слева от панели Милли, список не закрывает.
+   слева от панели Aera AI, список не закрывает.
    ============================================================ */
 .mtip {
   position: fixed; z-index: 2000; top: 0; left: 0; width: 316px; max-width: calc(100vw - 16px);

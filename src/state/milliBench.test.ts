@@ -178,7 +178,7 @@ test('revert без родителя — ничего не шлём', async () =
   expect(calls).toHaveLength(0)
 })
 
-test('новая голова извне (ход Милли) отбрасывает опоздавший ответ клика', async () => {
+test('новая голова извне (ход Aera AI) отбрасывает опоздавший ответ клика', async () => {
   reset()
   const a = benchOp({ op: 'remove', tab: 'mods', ref: 'm9' })
   const fresh = { ...pack(10), buildId: 'other', chain: 'other' }

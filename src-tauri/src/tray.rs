@@ -64,7 +64,7 @@ pub fn relabel() {
     if let Some(tray) = TRAY.get() {
         let status = *STATUS.lock().unwrap_or_else(|e| e.into_inner());
         let update = UPDATE.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let mut tip = "Millida Launcher".to_string();
+        let mut tip = "Aera Launcher".to_string();
         if let Some(s) = status {
             tip = format!("{tip} — {}", crate::engine::ui(s));
         } else if let Some(v) = update {
@@ -226,7 +226,7 @@ pub fn init(app: &AppHandle) {
         Err(_) => return,
     };
     let mut b = TrayIconBuilder::with_id("main")
-        .tooltip("Millida Launcher")
+        .tooltip("Aera Launcher")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, e| match e.id.as_ref() {

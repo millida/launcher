@@ -112,7 +112,7 @@ export function ClassicHome({ on }: { on: boolean }) {
     )
   } else {
     heroName = t('Своя сборка за минуту')
-    heroEyebrow = 'Millida Launcher'
+    heroEyebrow = 'Aera Launcher'
     heroMeta = (
       <>
         <span className="pill">{t('Minecraft и Java поставим сами')}</span>

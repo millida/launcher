@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Millida Launcher</title>
+<title>Aera Launcher</title>
+<link rel="icon" href="/aera-mark.svg" type="image/svg+xml">
 <script src="/boot.js"></script>
 <script>
 // This runs even when an old WebKit cannot parse the application bundle.
@@ -12,14 +13,14 @@ setTimeout(function () {
   if (!boot || boot.className.indexOf('gone') !== -1) return;
   var note = document.createElement('p');
   note.id = 'boot-recovery';
-  note.textContent = 'The launcher could not open. Restart it or download the latest version at millida.net/launcher. / Лаунчер не открылся. Перезапусти его или скачай новую версию на millida.net/launcher.';
+  note.textContent = 'Aera Launcher could not open. Restart the app or check the Aera Launcher repository for updates. / Не удалось открыть Aera Launcher. Перезапусти приложение или проверь обновления в репозитории Aera Launcher.';
   boot.appendChild(note);
 }, 30000);
 </script>
 <meta name="color-scheme" content="dark">
 <link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-#boot{position:fixed;top:0;right:0;bottom:0;left:0;z-index:9999;display:grid;place-items:center;background:#161718;transition:opacity .34s ease}
+#boot{position:fixed;top:0;right:0;bottom:0;left:0;z-index:9999;display:grid;place-items:center;background:#101114;transition:opacity .34s ease}
 #boot.gone{opacity:0;pointer-events:none}
 #boot img{width:52px;height:52px;animation:bootPulse 1.8s ease-in-out infinite}
 #boot{flex-direction:column;gap:18px;padding:24px;text-align:center}
@@ -29,7 +30,7 @@ setTimeout(function () {
 </style>
 </head>
 <body>
-<div id="boot"><img src="/millida-logo.svg" alt=""></div>
+<div id="boot"><img src="/aera-mark.svg" alt=""></div>
 <div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
 </body>

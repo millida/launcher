@@ -15,9 +15,9 @@ import { formatFixed, t, useT } from '../../i18n'
 /*
  * Подсказка мода в карточке сборки (04.10.2026) — всплывающее описание
  * предмета из Minecraft: почти чёрная плашка с тёмно-фиолетовой рамкой.
- * Стоит СБОКУ от панели Милли, на уровне строки, и список под собой не
+ * Стоит СБОКУ от панели Aera AI, на уровне строки, и список под собой не
  * прячет (владелец: «подсказка закрывает строки ниже»); нет места слева —
- * над строкой или под ней внутри панели. Автор назван и кликается: Милли
+ * над строкой или под ней внутри панели. Автор назван и кликается: Aera AI
  * показывает чужую работу, а не прячет её.
  *
  * Данные: необязательные поля MilliItem (author, description, downloads,
@@ -396,7 +396,7 @@ export function MilliModTip({
   const ru = ruDescription(m)
   const en = meta?.description && meta.description !== ru ? meta.description : ''
   const lore = ru || catLine(meta?.categories || [])
-  // «Почему» Милли — если русское и не повторяет описание.
+  // «Почему» Aera AI — если русское и не повторяет описание.
   // «Нужен для …» уже есть строкой связей — второй раз не пишем.
   const why = m.why && isRu(m.why) && m.why !== lore && m.why !== en && !/^нуж(ен|на|но|ны)\s+(для|другим)/i.test(m.why) ? m.why : ''
   const other = meta?.loaders.filter((l) => l !== loader).slice(0, 2) || []
@@ -490,7 +490,7 @@ export function MilliModTip({
       {m.risk === 'risky' ? (
         <p className="mtip-risk">
           <PxIcon name="alert" size={10} />
-          <span>{m.riskNote || t('У этой версии была проблема — Милли её обошла')}</span>
+          <span>{m.riskNote || t('У этой версии была проблема — Aera AI её обошла')}</span>
         </p>
       ) : null}
 

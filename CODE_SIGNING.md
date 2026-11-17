@@ -1,38 +1,18 @@
-# Code signing policy
+# Aera Launcher signing status
 
 Russian version: [CODE_SIGNING.ru.md](CODE_SIGNING.ru.md)
 
-How Millida Launcher files are signed and who is responsible for it.
+Aera Launcher is a rebrand/fork of the GPL-licensed Millida Launcher source. **This repository does not currently publish Aera-signed or Aera-attested release builds.** A local Aera build must not be represented as official, signed, or security-reviewed by Aera unless a separately authorized release process is established.
 
-## What we have now
+## Current state
 
-- **Build attestation.** GitHub Actions builds every release file in this repository. GitHub issues an
-  attestation (Sigstore) for it: which commit and which run built it. Check it with
-  `gh attestation verify <file> -R millida/launcher`. The sums of all files are in `SHA256SUMS` of the release.
-- **Update signature.** Launcher updates are signed with a Millida key (minisign). The public part of the key is in
-  [tauri.conf.json](src-tauri/tauri.conf.json). The launcher will not install an update without this signature.
-- **Windows signature (Authenticode).** The launcher and its installer in every release are signed with a
-  [Certum](https://www.certum.eu) code signing certificate kept in the Certum cloud, with an RFC 3161 timestamp, so the
-  signature stays valid after the certificate expires. The installer on the download button of the site is signed
-  separately, with an EV certificate.
-- **macOS signature.** The build is signed without a developer certificate (ad-hoc). macOS will not open a downloaded disk image.
-  Installing with the command from the [README](README.md) works, because the file arrives without the quarantine flag.
+- **Build attestation:** No Aera release attestation is issued for this branch. Upstream repository attestations do not attest to this rebranded source or to an Aera release.
+- **Windows/macOS signing:** This fork has no Aera Authenticode certificate or Apple Developer signing identity configured. A locally built package may be unsigned and receive operating-system warnings.
+- **Updater:** The Tauri configuration intentionally retains the existing upstream Millida update feed and public verification key for compatibility. A public key verifies signatures; it cannot sign releases. The feed may serve upstream builds, so a packaged test build can be replaced by one. Do not distribute a public Aera package until an authorized Aera feed, signing key, and update procedure are set up.
+- **Connected services:** Account, API, catalog, CDN, and related integrations are still upstream-connected; they are not Aera-operated by virtue of this rebrand.
 
-## Roles
+Do not reuse or claim upstream signing credentials, attestations, certificates, malware scans, or release provenance as Aera credentials. Preserve the upstream copyright and license notices; see [LICENSE](LICENSE), [NOTICE](NOTICE), [THIRD-PARTY.md](THIRD-PARTY.md), and [TRADEMARK.md](TRADEMARK.md).
 
-- **Committers and reviewers** are members of the [millida](https://github.com/orgs/millida/people) organization.
-  They write code and review other people's changes. Changes from outsiders are accepted only through a pull request.
-- **Release managers**: only organization admins can push release tags. The signing credentials are available only to
-  builds of release tags, through a protected GitHub environment.
+## Data and security
 
-All members sign in to GitHub with two-factor authentication. The policy on the site: [millida.net/launcher/code-signing](https://millida.net/launcher/code-signing).
-
-## What is signed
-
-Only files that are built automatically from the source of this repository by the build scripts in
-[.github/workflows](.github/workflows). Third-party libraries and ready-made third-party files are not signed with our signature.
-
-## Data
-
-What the launcher sends, why, and how to turn it off: [TELEMETRY.md](TELEMETRY.md).
-Account and file safety: [SAFETY.md](SAFETY.md). To report a vulnerability: [SECURITY.md](SECURITY.md).
+What the launcher sends, why, and how to turn it off: [TELEMETRY.md](TELEMETRY.md). Account and file safety: [SAFETY.md](SAFETY.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).

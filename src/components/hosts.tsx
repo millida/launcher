@@ -43,7 +43,7 @@ export const McNewsModal = lazyHost(() => import('./McNews').then((m) => ({ defa
 export const CallPanel = lazyHost(() => import('./CallPanel').then((m) => ({ default: m.CallPanel })), () => useCall((s) => s.status !== 'idle'))
 export const RoomModals = lazyHost(() => import('./RoomManage').then((m) => ({ default: m.RoomModals })), () => useRooms((s) => !!s.manageId || s.createOpen))
 
-/** Помощник Милли / кнопка поддержки: появляется после простоя, не с первым кадром. */
+/** Помощник Aera AI / кнопка поддержки: появляется после простоя, не с первым кадром. */
 export const MilliDock = lateMount(() => import('./milli/MilliDock').then((m) => ({ default: m.MilliDock })), 700)
 
 /** Награды: рисуются, только когда есть что показать. В DEV грузится всегда — там ставится демо-кнопка. */

@@ -123,7 +123,7 @@ export async function buildDiagnostics(): Promise<string> {
   const skin = tauri && acc ? await safe(() => skinDiagnose(acc.nick, !!millida)) : null
 
   const lines: (string | null)[] = [
-    '=== Millida Launcher · диагностика ===',
+    '=== Aera Launcher · диагностика ===',
     'Снято: ' + new Date().toISOString(),
     'Версия: ' + (ver || 'неизвестна') + (tauri ? '' : ' (веб-режим, без ядра)'),
     upd ? 'Обновление: доступна ' + upd.version + (updateReady() ? ' (готова к установке)' : ' (качается)') : 'Обновление: нет',

@@ -16,7 +16,7 @@ fn register_aumid() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
         let key = windows_registry::CURRENT_USER.create(format!(r"Software\Classes\AppUserModelId\{AUMID}"));
-        if let Err(e) = key.and_then(|k| k.set_string("DisplayName", "Millida Launcher")) {
+        if let Err(e) = key.and_then(|k| k.set_string("DisplayName", "Aera Launcher")) {
             eprintln!("[notify] the notification id was not registered: {e}");
         }
     });

@@ -7,14 +7,14 @@ import { ENCHANT_GLYPHS } from './milliItems'
 import { useMilli } from '../../state/milli'
 import { milliLook } from '../../lib/milli'
 
-/** Корона Милли по тарифу: PLUS — золотая, Diamond — алмазная, без PLUS — нет (часть спрайта, не наклейка). */
+/** Корона Aera AI по тарифу: PLUS — золотая, Diamond — алмазная, без PLUS — нет (часть спрайта, не наклейка). */
 function useTierCrown(): 'gold' | 'diamond' | null {
   const look = useMilli((s) => milliLook(s.status))
   return look === 'diamond' ? 'diamond' : look === 'plus' ? 'gold' : null
 }
 
 /*
- * Сцена Милли (04.10.2026). Владелец: «просто и чисто, без декораций»: Милли,
+ * Сцена Aera AI (04.10.2026). Владелец: «просто и чисто, без декораций»: Aera AI,
  * мягкая пиксельная тень и несколько медленных частиц. Мышь чуть сдвигает
  * слои по-разному (глубина). Только transform/opacity и steps();
  * панель закрыта (display: none) — ключи стоят; reduced-motion — стоит всё.
@@ -45,7 +45,7 @@ export class MilliSafe extends Component<{ fallback?: ReactNode; children: React
   }
 }
 
-/** Тык в Милли: частицы разлетаются (реакцию самой Милли играет маскот). */
+/** Тык в Aera AI: частицы разлетаются (реакцию самой Aera AI играет маскот). */
 export function usePoke(ms = 1_000) {
   const [n, setN] = useState(0)
   const [on, setOn] = useState(false)
@@ -89,7 +89,7 @@ export const MilliBurst = memo(function MilliBurst({ k, size = 90 }: { k: number
   )
 })
 
-/** Мягкая пиксельная тень под Милли: три ступенчатых эллипса. */
+/** Мягкая пиксельная тень под Aera AI: три ступенчатых эллипса. */
 const Shadow = memo(function Shadow() {
   return (
     <svg className="mls-shadow" viewBox="-48 -10 96 20" width={96} height={20} shapeRendering="crispEdges" aria-hidden="true">
@@ -101,8 +101,8 @@ const Shadow = memo(function Shadow() {
 })
 
 /**
- * Пустой чат: Милли и мягкая тень под ней, вокруг — несколько медленных
- * частиц. Тык в Милли — частицы разлетаются (реакцию играет маскот).
+ * Пустой чат: Aera AI и мягкая тень под ней, вокруг — несколько медленных
+ * частиц. Тык в Aera AI — частицы разлетаются (реакцию играет маскот).
  */
 export function MilliScene({ mode, busy, crown = null }: { mode: MilliMode; busy?: boolean; crown?: 'gold' | 'diamond' | null }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -165,7 +165,7 @@ function Glyph({ g }: { g: readonly string[] }) {
   )
 }
 
-/** Пока Милли думает — как у стола зачарования: глифы слетаются к ней и гаснут. */
+/** Пока Aera AI думает — как у стола зачарования: глифы слетаются к ней и гаснут. */
 const GlyphStream = memo(function GlyphStream() {
   return (
     <span className="mlg" aria-hidden="true">
@@ -178,7 +178,7 @@ const GlyphStream = memo(function GlyphStream() {
   )
 })
 
-/** Аватарка Милли в ленте: думает — к ней слетаются глифы, сборка готова — частицы. */
+/** Аватарка Aera AI в ленте: думает — к ней слетаются глифы, сборка готова — частицы. */
 export function MilliAva({ mode = 'idle', spin, cheer }: { mode?: MilliMode; spin?: boolean; cheer?: boolean }) {
   const crown = useTierCrown()
   return (
@@ -190,7 +190,7 @@ export function MilliAva({ mode = 'idle', spin, cheer }: { mode?: MilliMode; spi
   )
 }
 
-/** Милли в шапке: тык — радуется. */
+/** Aera AI в шапке: тык — радуется. */
 export function MilliHead({ mode }: { mode: MilliMode }) {
   const crown = useTierCrown()
   const { n, poke } = usePoke(900)

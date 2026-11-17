@@ -31,13 +31,13 @@ describe('modTitle', () => {
   for (const [file, want] of cases) test(file, () => expect(modTitle(file)).toBe(want))
 })
 
-describe('isModCrash: «Починить сборку» передаёт разбор Милли вместо тупика', () => {
+describe('isModCrash: «Починить сборку» передаёт разбор Aera AI вместо тупика', () => {
   const cases: [string | undefined, boolean, string][] = [
     ['conflict', true, 'конфликт без готового фикса: сверка файлов его не уберёт, нужен разбор лога'],
     ['mixin', true, 'миксин — тоже поломка мода'],
     ['oom', false, 'память лечится настройкой, а не разбором модов'],
-    ['gpu_driver', false, 'драйвер — не моды, Милли тут не поможет'],
-    [undefined, false, 'вылет без вида не уводим в Милли вслепую'],
+    ['gpu_driver', false, 'драйвер — не моды, Aera AI тут не поможет'],
+    [undefined, false, 'вылет без вида не уводим в Aera AI вслепую'],
   ]
   for (const [kind, want, why] of cases) test(String(kind), () => expect(isModCrash(kind), why).toBe(want))
 })

@@ -135,9 +135,9 @@ async fn offer_manual_download(reason: &str) {
     let text = format!(
         "Лаунчер не смог открыться и не сумел обновиться сам ({}).\n\nСкачай свежую версию с сайта и поставь поверх — сборки, миры и аккаунты останутся на месте.",
         reason
-    ) + "\n\nThe launcher could not open and could not update itself.\n\nDownload the latest version from the website and install it over the current one: your builds, worlds and accounts stay in place.";
+    ) + "\n\nThe launcher could not open and could not update itself.\n\nThe recovery page still uses Millida infrastructure; its installer may replace this Aera test build with the upstream version. Continue only if that is what you want.";
     let answer = rfd::AsyncMessageDialog::new()
-        .set_title("Millida Launcher")
+        .set_title("Aera Launcher")
         .set_description(&text)
         .set_level(rfd::MessageLevel::Error)
         .set_buttons(rfd::MessageButtons::OkCancelCustom(DOWNLOAD_BUTTON.into(), CLOSE_BUTTON.into()))

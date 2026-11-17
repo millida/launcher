@@ -1,5 +1,5 @@
 /*
- * «Доктор сборки» в чате Милли (Pair A): осмотр установленной сборки,
+ * «Доктор сборки» в чате Aera AI (Pair A): осмотр установленной сборки,
  * безопасные обновления, перенос на другую версию, вылет → объяснение и
  * починка. Лаунчер собирает факты (моды, обновления, аудит зависимостей,
  * план переноса, железо), сервер решает и объясняет
@@ -348,7 +348,7 @@ export function crashAction(info: CrashInfo): { text: string; action: MilliActio
 const DAY = 86_400_000
 const SEEN_KEY = 'm-milli-doc-seen'
 
-/** Раз в сутки на сборку: тихий осмотр; нашлось важное — Милли сама предлагает починить. */
+/** Раз в сутки на сборку: тихий осмотр; нашлось важное — Aera AI сама предлагает починить. */
 export async function proactiveDoctor(profile: string | null, opts: { busy: () => boolean }): Promise<boolean> {
   if (!profile || !hasMillidaAccount()) return false
   let seen: Record<string, number> = {}
@@ -368,7 +368,7 @@ export async function proactiveDoctor(profile: string | null, opts: { busy: () =
 }
 
 let started = false
-/** Подключить доктора: шаги, вылеты в чат, тихий осмотр. Зовётся один раз из панели Милли. */
+/** Подключить доктора: шаги, вылеты в чат, тихий осмотр. Зовётся один раз из панели Aera AI. */
 export function startMilliDoctor() {
   if (started) return
   started = true

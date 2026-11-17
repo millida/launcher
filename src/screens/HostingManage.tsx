@@ -887,13 +887,13 @@ export function HostingManage({
             {advOpen ? (
               <div className="card set-group host-set-grid hsx-plate">
                 <Cap first>{t('Сервер')}</Cap>
-                <Row k={t('Иконка')} sub={detail?.iconLocked ? t('На бесплатном — логотип Millida') : 'PNG, 64×64'}>
+                <Row k={t('Иконка')} sub={detail?.iconLocked ? t('На бесплатном — логотип Aera') : 'PNG, 64×64'}>
                   {cur.icon ? (
                     <img
                       src={cur.icon}
                       alt=""
                       onError={(e) => {
-                        e.currentTarget.src = '/millida-logo.svg'
+                        e.currentTarget.src = '/aera-mark.svg'
                       }}
                       style={{ width: 28, height: 28, borderRadius: 6 }}
                     />

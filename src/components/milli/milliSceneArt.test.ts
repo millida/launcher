@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { MOTES, PARTICLES, SHADOW, pixelEllipse } from './milliSceneArt'
 
-describe('сцена Милли', () => {
+describe('сцена Aera AI', () => {
   it('тень — три вложенных ступенчатых эллипса', () => {
     expect(SHADOW).toHaveLength(3)
     for (const d of SHADOW) expect(d.startsWith('M')).toBe(true)

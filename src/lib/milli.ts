@@ -8,7 +8,7 @@ import type { PlanItem } from '../ipc/commands'
 import { formatFixed, formatNumber, formatRelative, getLocale, pluralForm, t } from '../i18n'
 
 /*
- * Милли — ИИ-сборщик чатом. Клиент адресов `/catalog/milli/*` (контракт —
+ * Aera AI — ИИ-сборщик чатом. Клиент адресов `/catalog/milli/*` (контракт —
  * milli/CONTRACT.md бэкенда feat/milli-ai). Все адреса требуют вход в аккаунт
  * Millida: без него запросы не шлём, показываем «Войди в аккаунт».
  */
@@ -161,7 +161,7 @@ export interface MilliItem {
   riskNote?: string
   cat?: MilliCat
   side?: 'client' | 'server' | 'both' | 'single'
-  /** Кто положил в сборку: Милли, игрок, автоматически (зависимость), база загрузчика. */
+  /** Кто положил в сборку: Aera AI, игрок, автоматически (зависимость), база загрузчика. */
   by?: MilliBy
   pinned?: boolean
   heavy?: boolean
@@ -214,7 +214,7 @@ export interface MilliPack {
   excluded: MilliExcluded[]
   notes: string
   locked: { extras: boolean }
-  /** Сборка прошла «Улучшенную» проверку: что Милли добавила и убрала. */
+  /** Сборка прошла «Улучшенную» проверку: что Aera AI добавила и убрала. */
   review?: MilliReview | null
   /** true — сборка с этим составом дошла до главного меню («Проверено запуском»), false — упала. Нет поля — не проверялась. */
   verified?: boolean
@@ -222,7 +222,7 @@ export interface MilliPack {
   optional?: MilliItem[]
   /** Оценка по графу совместимости (сколько версий уже запускались, есть ли известные проблемы). */
   compat?: { proven: number; unknown: number; risky: number; risk: 'low' | 'medium' | 'high'; queued: boolean }
-  /** Сборка упала при проверке, Милли собрала исправленную: её buildId и что сделано. */
+  /** Сборка упала при проверке, Aera AI собрала исправленную: её buildId и что сделано. */
   repair?: { buildId: string; note: string }
   /** Ревизии: buildId первой ревизии, номер, родитель. */
   chain?: string
@@ -291,7 +291,7 @@ export interface MilliMessage {
   createdAt: string
   pack: MilliPack | null
   suggestions: string[]
-  /** 'size' — Милли спрашивает, сколько модов взять (без модели, попытка не списана). */
+  /** 'size' — Aera AI спрашивает, сколько модов взять (без модели, попытка не списана). */
   ask?: 'size'
   /** План сборки до сборки: «Принять / Дополнить / Изменить» (council/CHAT-AGENT.md). */
   plan?: MilliPlanCard
@@ -336,7 +336,7 @@ export interface MilliSession extends MilliSessionHead {
   head?: string
 }
 
-/** Кнопка приветствия: `text` уходит Милли, `sessionId` — сначала открыть этот разговор. */
+/** Кнопка приветствия: `text` уходит Aera AI, `sessionId` — сначала открыть этот разговор. */
 export interface MilliGreetingChip {
   label: string
   text?: string
@@ -401,7 +401,7 @@ export interface MilliPlans {
 
 /**
  * Тарифная сетка (владелец 05.10.2026) — пока не пришёл ответ `/catalog/milli/limits` или если он упал.
- * Считаются сообщения, где Милли думает; кнопки, «Принять», «Взять» — бесплатно.
+ * Считаются сообщения, где Aera AI думает; кнопки, «Принять», «Взять» — бесплатно.
  */
 export const MILLI_PLANS: MilliPlans = { free: { day: 10, month: 40 }, plus: { day: 100, month: 600 }, diamond: { day: 200, month: 1500 } }
 
@@ -433,7 +433,7 @@ export interface MilliError {
   kind: MilliErrorKind
   /** Для лимита: какой счётчик кончился. */
   scope?: 'day' | 'month'
-  /** Короткая фраза для пузыря Милли. */
+  /** Короткая фраза для пузыря Aera AI. */
   text: string
   /** Можно ли повторить тот же запрос. */
   retry: boolean
@@ -442,12 +442,12 @@ export interface MilliError {
 const ERROR_TEXT: Record<MilliErrorKind, string> = {
   get auth() { return t('Войди в аккаунт Millida') },
   get limit() { return t('Лимит на сегодня') },
-  get busy() { return t('Милли ещё думает над прошлым') },
-  get blocked() { return t('Милли тебе недоступна') },
-  get off() { return t('Милли отдыхает — скоро вернётся') },
+  get busy() { return t('Aera AI ещё думает над прошлым') },
+  get blocked() { return t('Aera AI тебе недоступна') },
+  get off() { return t('Aera AI отдыхает — скоро вернётся') },
   get plus() { return t('Это в PLUS') },
   get offline() { return t('Нет связи с Millida') },
-  get failed() { return t('Милли не ответила') },
+  get failed() { return t('Aera AI не ответила') },
 }
 
 const err = (kind: MilliErrorKind, scope?: 'day' | 'month'): MilliError => ({
@@ -532,7 +532,7 @@ export function milliLeft(s: Pick<MilliStatus, 'day' | 'month'> | null): number 
   return Math.max(0, Math.min(s.day.remaining, s.month.remaining))
 }
 
-/** Счётчик в шапке Милли (владелец 30.09 16:11: «маленький счётчик "осталось 5"», без простыни про тарифы). */
+/** Счётчик в шапке Aera AI (владелец 30.09 16:11: «маленький счётчик "осталось 5"», без простыни про тарифы). */
 export function milliCounterChip(s: Pick<MilliStatus, 'day' | 'month'> | null): string | null {
   const left = milliLeft(s)
   return left === null ? null : t('осталось {n}', { n: left })
@@ -634,9 +634,9 @@ const MILLI_LANG_PATH = /^\/catalog\/milli\/(?:messages|greeting|crash|doctor|pa
 
 async function request<T>(bare: string, init?: RequestInit): Promise<T> {
   const path = MILLI_LANG_PATH.test(bare) ? withMilliLang(bare) : bare
-  // Тестовая Милли (milli-server) через прокси Vite: только dev и только с VITE_MILLI_TEST=1 в .env.local.
+  // Тестовая Aera AI (milli-server) через прокси Vite: только dev и только с VITE_MILLI_TEST=1 в .env.local.
   if (import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1') {
-    // Тариф: ручной «стенд» из меню Милли, а без него — настоящая подписка аккаунта
+    // Тариф: ручной «стенд» из меню Aera AI, а без него — настоящая подписка аккаунта
     // (владелец 10.10.2026: «у меня есть PLUS, а показывает ×10 с PLUS»).
     const tier = milliPreviewTier() ?? accountTier()
     return devFetch<T>('/milli-test' + path, init, { 'Content-Type': 'application/json', ...(tier ? { 'x-milli-tier': tier } : {}) })
@@ -647,7 +647,7 @@ async function request<T>(bare: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Стенд: «смотреть как без PLUS / PLUS / Diamond» (меню Милли, только dev с тестовым сервером).
+ * Стенд: «смотреть как без PLUS / PLUS / Diamond» (меню Aera AI, только dev с тестовым сервером).
  * Сервер берёт тариф из заголовка x-milli-tier и ведёт для него свой счётчик.
  */
 export type MilliPreviewTier = 'free' | 'plus' | 'diamond'
@@ -669,7 +669,7 @@ export function setMilliPreviewTier(t: MilliPreviewTier | null) {
 /**
  * Тариф из подписки аккаунта (PLUS / Diamond); подписка ещё не загружена — без заголовка.
  * Источник подключает state/milli.ts: прямой импорт state/daily тянул аккаунты (localStorage)
- * при загрузке модуля и ронял тесты Милли.
+ * при загрузке модуля и ронял тесты Aera AI.
  */
 let tierSource: () => MilliPreviewTier | null = () => null
 export function setMilliAccountTierSource(fn: () => MilliPreviewTier | null): void {
@@ -786,7 +786,7 @@ export const milliCancel = (sessionId?: string | null) =>
   request<{ ok: boolean; cancelled: 'running' | 'saved' | null }>('/catalog/milli/messages/cancel', post(sessionId ? { sessionId } : {}))
 
 // ─── Демо (?preview=user, только dev) ────────────────────────────────────
-// Бэкенда Милли на проде ещё нет: демо отвечает сам. `&milli=live` выключает
+// Бэкенда Aera AI на проде ещё нет: демо отвечает сам. `&milli=live` выключает
 // демо — запросы уходят на /papi (так их подменяют скриншоты Playwright).
 
 function demoOn(): boolean {

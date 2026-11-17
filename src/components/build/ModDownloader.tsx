@@ -442,7 +442,7 @@ export function ModDownloader({
             {(['millida', 'modrinth', 'curseforge'] as Source[]).map((s) => (
               <button key={s} type="button" className={'mdl-src-btn' + (source === s ? ' on' : '')} onClick={() => (setSource(s), setCur(null))}>
                 {s === 'millida' ? (
-                  <img src="/millida-logo.svg" alt="" />
+                  <img src="/aera-mark.svg" alt="" />
                 ) : s === 'modrinth' ? (
                   <img src="https://modrinth.com/favicon.ico" alt="" />
                 ) : (

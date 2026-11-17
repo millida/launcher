@@ -1,11 +1,11 @@
 /* ============ Design tokens ============ */
 :root{
-  --m-bg:#161718; --m-surface:#1E1F20; --m-surface-2:#26272A; --m-raised:#2A2B2E; --m-inset:#131314;
-  --m-border:rgba(255,255,255,.07); --m-border-strong:rgba(255,255,255,.14);
+  --m-bg:#101114; --m-surface:#18191D; --m-surface-2:#222329; --m-raised:#292A31; --m-inset:#0B0C0F;
+  --m-border:rgba(245,247,250,.075); --m-border-strong:rgba(245,247,250,.15);
   --m-fg:#EDEFEE; --m-fg-muted:rgba(237,239,238,.80); --m-fg-subtle:rgba(237,239,238,.66); --m-fg-faint:rgba(237,239,238,.52);
-  --m-accent:#5EC64D; --m-accent-hover:#70D55F; --m-accent-fg:#FFFFFF;
-  --m-grad:linear-gradient(45deg,#11998E 0%,#5EC64D 100%);
-  --m-accent-rgb:94,198,77;
+  --m-accent:#E54252; --m-accent-hover:#F25A68; --m-accent-fg:#FFFFFF;
+  --m-grad:linear-gradient(115deg,#C91F3A 0%,#E54252 54%,#F4EDEE 100%);
+  --m-accent-rgb:229,66,82;
   --m-accent-soft:rgba(var(--m-accent-rgb),.13); --m-accent-glow:0 6px 16px rgba(var(--m-accent-rgb),.20);
   --m-danger:#FF6B5E; --m-danger-soft:rgba(255,107,94,.13);
   --m-warning:#F5AA38; --m-warning-soft:rgba(245,170,56,.14);

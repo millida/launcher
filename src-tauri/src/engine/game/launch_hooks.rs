@@ -205,7 +205,7 @@ pub async fn set_launch_hooks(profile: String, hooks: LaunchHooks) -> Result<boo
     }
     if !clean.is_empty() {
         let answer = message_dialog()
-            .set_title("Millida Launcher")
+            .set_title("Aera Launcher")
             .set_description(describe(&profile, &clean))
             .set_level(rfd::MessageLevel::Warning)
             .set_buttons(rfd::MessageButtons::OkCancel)

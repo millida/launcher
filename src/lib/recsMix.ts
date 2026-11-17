@@ -1,6 +1,6 @@
 /**
  * Смеситель ленты «Рекомендуем» — одна и та же логика на millida.net/katalog и
- * в библиотеке Millida Launcher (оригинал — `src/lib/recs-mix.ts` сайта, правки
+ * в библиотеке Aera Launcher (основан на `src/lib/recs-mix.ts` сайта, правки
  * держать одинаковыми). Разбор приёмов — analysis/2026-09-30_recs-tiktok.md
  * в папке проекта.
  *

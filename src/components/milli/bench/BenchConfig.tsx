@@ -532,7 +532,7 @@ function RamRow({ cfg, totalMb, capGb, needMb, presetRamGb, mods, dirty }: Omit<
   const pct = (x: number) => ((Math.max(2, Math.min(max, x)) - 2) / (max - 2 || 1)) * 100
   const zoneFrom = pct(Math.min(needGb, capGb))
   const zoneTo = pct(capGb)
-  // ПК неизвестен, а память прислала Милли (сервер знал машину) — не спорим.
+  // ПК неизвестен, а память прислала Aera AI (сервер знал машину) — не спорим.
   const low = gb < Math.min(needGb, capGb) && (totalMb > 0 || gb !== gbOf(cfg.ramMb))
   const high = gb > capGb
   const left = totalGb ? totalGb - gb : 0

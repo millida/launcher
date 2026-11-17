@@ -12,19 +12,19 @@ test('кнопка кита .btn.lg задаёт высоту, поля и ра�
   expect(kit, 'кит больше не задаёт .btn.lg высоту и поля — пины строки поиска можно пересмотреть').toMatch(
     /^\.btn\.lg\{height:52px;padding:0 28px/m,
   )
-  expect(kit, 'кит больше не жмёт значок в .btn.lg до 18px — пин размера Милли можно снять').toMatch(
+  expect(kit, 'кит больше не жмёт значок в .btn.lg до 18px — пин размера Aera AI можно снять').toMatch(
     /^\.btn\.lg svg\{width:18px;height:18px\}/m,
   )
 })
 
 const cases: Array<{ why: string; css: string; rule: RegExp }> = [
   {
-    why: 'поле слева под окошко Милли: без него текст «Собрать с ИИ» начинается под окошком',
+    why: 'поле слева под окошко Aera AI: без него текст «Собрать с ИИ» начинается под окошком',
     css: intro,
     rule: /^([^{}\n]*\.hub-find-ai)\s*\{\s*padding-left:\s*92px/m,
   },
   {
-    why: 'Милли в окошке 64px: иначе кит сжимает её до значка 18px',
+    why: 'Aera AI в окошке 64px: иначе кит сжимает её до значка 18px',
     css: intro,
     rule: /^([^{}\n]*\.hub-ai-who svg)\s*\{\s*width:\s*64px/m,
   },

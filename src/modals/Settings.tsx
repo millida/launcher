@@ -125,7 +125,7 @@ const accents = (): (Accent & { name: string })[] => [
   { id: 'indigo', name: t('Индиго'), c: '#6C6BFF', h: '#8180FF', s: 'rgba(108,107,255,.14)' },
   { id: 'purple', name: t('Фиолетовый'), c: '#9B6BFF', h: '#AC80FF', s: 'rgba(155,107,255,.14)' },
   { id: 'pink', name: t('Розовый'), c: '#FF6BAA', h: '#FF80B8', s: 'rgba(255,107,170,.14)' },
-  { id: 'red', name: t('Красный'), c: '#FF6B5E', h: '#FF8073', s: 'rgba(255,107,94,.14)' },
+  { id: 'red', name: t('Красный'), c: '#E54252', h: '#F25A68', s: 'rgba(229,66,82,.14)' },
   { id: 'orange', name: t('Оранжевый'), c: '#F5923B', h: '#FFA24F', s: 'rgba(245,146,59,.14)' },
   { id: 'yellow', name: t('Жёлтый'), c: '#F5C93B', h: '#FFD65A', s: 'rgba(245,201,59,.14)' },
   // Больше готовых цветов (правка владельца 23.09.2026): «лучше больше цветов».
@@ -158,7 +158,7 @@ function initialCustomHex(): string {
     const s = JSON.parse(localStorage.getItem('m-accent') || 'null')
     if (s && s.id === 'custom') return s.c
   } catch {}
-  return '#5EC64D'
+  return '#E54252'
 }
 
 function initialAccent(): string {
@@ -166,7 +166,7 @@ function initialAccent(): string {
     const s = JSON.parse(localStorage.getItem('m-accent') || 'null')
     if (s) return s.id
   } catch {}
-  return 'green'
+  return 'red'
 }
 
 type SecId = 'look' | 'graphics' | 'sound' | 'game' | 'clips' | 'files' | 'account' | 'about'
@@ -1172,9 +1172,10 @@ export function Settings({ on }: { on: boolean }) {
     <>
       <Block keys="версия обновление обновить проверить">
         <div className="s2-hero">
-          <img src="/millida-logo.svg" alt="" width={48} height={48} />
+          <img src="/aera-mark.svg" alt="" width={48} height={48} />
           <span className="s2-hero-txt">
-            <b>Millida Launcher</b>
+            <b>Aera Launcher</b>
+            <small>By Aera Intelligence</small>
             <small>
               {upd
                 ? updStaged
@@ -1222,7 +1223,7 @@ export function Settings({ on }: { on: boolean }) {
         <Row title={t('Собран на GitHub')} hint={ver ? 'v' + ver : undefined} keys="github исходный код открытый безопасность вирус проверить сборка">
           <button
             className="btn md secondary"
-            onClick={() => void openUrl('https://github.com/millida/launcher/releases' + (ver ? '/tag/v' + ver : '')).catch(() => {})}
+            onClick={() => void openUrl('https://github.com/deadlyghost90/aeralauncher/releases' + (ver ? '/tag/v' + ver : '')).catch(() => {})}
           >
             {t('Открыть')}
           </button>

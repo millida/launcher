@@ -19,10 +19,10 @@ import { intlTag, t, useT } from '../../i18n'
 import { liveInterval } from '../../lib/liveInterval'
 
 /*
- * PLUS прямо в чате Милли (владелец 05.10.2026). Своего «стиля» нет: те же детали, что на экране
+ * PLUS прямо в чате Aera AI (владелец 05.10.2026). Своего «стиля» нет: те же детали, что на экране
  * PLUS и в магазине — полосы «Без PLUS / PLUS» (lp-bars, lp-kinds), карточки наград sh-perk-card
  * (рубины, сундук), золото --m-rarity-legendary, переключатель segs и кнопки лаунчера.
- * Милли в короне — тот же спрайт (crown). Цифры живые: лимиты /catalog/milli/limits,
+ * Aera AI в короне — тот же спрайт (crown). Цифры живые: лимиты /catalog/milli/limits,
  * рубины и сундук — дорожка PLUS за 28 дней (как Plus.tsx).
  */
 
@@ -137,18 +137,18 @@ export function MilliPlusSheet() {
   const per = dia ? n.diamond : n.plus
   const buy = () => void useDaily.getState().startPlus((dia ? 'DIAMOND' : 'PLUS') as PlusTier)
   return (
-    <div className={'mps lp' + (dia ? ' is-diamond' : '')} role="dialog" aria-label={t('Милли с PLUS')} data-src={src}>
+    <div className={'mps lp' + (dia ? ' is-diamond' : '')} role="dialog" aria-label={t('Aera AI с PLUS')} data-src={src}>
       <button type="button" className="mps-x" aria-label={t('Закрыть')} onClick={closeSheet}>
         <PxIcon name="x" size={12} />
       </button>
 
-      {/* Главное — сам Милли: в короне, танцует (владелец 05.10.2026) */}
+      {/* Главное — сам Aera AI: в короне, танцует (владелец 05.10.2026) */}
       <div className="mps-hero">
         <span className="mps-rays" aria-hidden="true" />
         <Milli size={96} mode="dance" poke={false} track={false} crown={dia ? 'diamond' : 'gold'} />
       </div>
       <h3 className="mps-title">
-        {t('Милли с')} <em>{dia ? 'PLUS Diamond' : 'PLUS'}</em>
+        {t('Aera AI с')} <em>{dia ? 'PLUS Diamond' : 'PLUS'}</em>
       </h3>
 
       <div className="segs mps-segs" role="tablist" aria-label={t('Тариф')}>
@@ -204,10 +204,10 @@ export function MilliPlusSheet() {
         </div>
       </div>
 
-      {/* Милли: сколько сообщений и что она соберёт — сравнение полосами и 4 плитки */}
+      {/* Aera AI: сколько сообщений и что она соберёт — сравнение полосами и 4 плитки */}
       <div className="mps-ai" key={dia ? 'dia' : 'plus'}>
         <div className="mps-ai-head">
-          <b>{t('Сообщений Милли в день')}</b>
+          <b>{t('Сообщений Aera AI в день')}</b>
           <span className="mps-ai-x">×{Math.round(per / Math.max(1, n.free))}</span>
         </div>
         <div className="mps-ai-cmp">

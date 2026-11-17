@@ -179,7 +179,7 @@ export interface SiteCard {
   curseforgeId?: number | null
   /** Лаунчер только для Java: карточки другого издания отбрасываются (`isJavaCard`). */
   edition?: string
-  /** Сборку собрала Милли (ИИ-сборщик): метка «Милли» на карточке. */
+  /** Сборку собрала Aera AI (ИИ-сборщик): метка «Aera AI» на карточке. */
   aiGenerated?: boolean
   /** Код сборки лаунчера — установка идёт путём «Сборки по коду». */
   packCode?: string | null

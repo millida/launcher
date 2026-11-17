@@ -1,5 +1,5 @@
 /* ============================================================
-   МИЛЛИ (30.09.2026): маскот, плашка лобби, кнопка, панель чата,
+   Aera AI: mascot, lobby panel, button, and chat panel,
    карточка сборки. src/components/milli/*.
    Рамки со срезом — слоями «ступенчатой рамки» из 12-pixel.css
    (селекторы добавлены в её список), никаких inset-теней и border.
@@ -7,13 +7,13 @@
    ============================================================ */
 
 /* ── Маскот ─────────────────────────────────────────────────
-   Персонаж из логотипа Millida (владелец 30.09.2026 16:11): ручки в белых
+   Персонаж Aera AI: ручки в белых
    варежках, ножки в белых кедах. Тот же маскот, что на сайте (milli.css в
    millida-web, `.mk-milli-*`): те же части, те же ключи и тайминги.
    Движение — только transform/opacity и steps. */
 .milli {
   position: relative; display: inline-block; flex: none; line-height: 0;
-  --milli-body: #5ec64d; --milli-ink: #1b1f1c; --milli-glyph: #ffffff; --milli-cheek: #f59aa8; --milli-tongue: #e8566b;
+  --milli-body: #c6243e; --milli-ink: #1b1f1c; --milli-glyph: #ffffff; --milli-cheek: #f59aa8; --milli-tongue: #e8566b;
 }
 .milli svg { display: block; overflow: visible; }
 .milli-body { fill: var(--milli-body); }
@@ -24,15 +24,15 @@
 .milli-rim { fill: var(--milli-ink); opacity: 0.16; }
 .milli-gsh { fill: var(--milli-ink); opacity: 0.22; }
 .milli-glyph, .milli-glint { fill: var(--milli-glyph); }
-.milli-iris { fill: #1f8f93; }
-.milli-iris-hi { fill: #57e0c4; }
-.milli-leaf { fill: #8be35f; }
-.milli-leaf-dk { fill: #3fae4a; }
+.milli-iris { fill: #d32742; }
+.milli-iris-hi { fill: #fff7f7; }
+.milli-leaf { fill: #f3dfe2; }
+.milli-leaf-dk { fill: #a91c34; }
 .milli-ink { fill: var(--milli-ink); }
 .milli-cheek { fill: var(--milli-cheek); }
 .milli-tongue { fill: var(--milli-tongue); }
 .milli-dots rect { fill: #fff; opacity: 0.25; }
-/* Ручки — зелёные, как тело, в белых варежках; ножки — в белых кедах с тёмной подошвой. */
+/* Ручки — красные, как тело, в белых варежках; ножки — в белых кедах с тёмной подошвой. */
 .milli-limb { fill: var(--milli-body); }
 .milli-limb-sh { fill: var(--milli-ink); opacity: 0.22; }
 .milli-glove { fill: var(--milli-glyph); }
@@ -55,7 +55,7 @@
 .milli-idle .milli-eye, .milli-wave .milli-eye, .milli-talk .milli-eye, .milli-think .milli-eye { animation: milli-blink 4.2s steps(1, end) infinite; }
 .milli-idle .milli-sprout, .milli-talk .milli-sprout { animation: milli-sprout 2.4s steps(1, end) infinite; }
 .milli-idle .milli-look { animation: milli-look 7s steps(1, end) infinite; }
-/* машет правой ручкой: приветствие и наведение на кнопку Милли */
+/* машет правой ручкой: приветствие и наведение на кнопку Aera AI */
 .milli-wave .milli-arm.is-r,
 .milli-wave-hover:hover .milli-idle .milli-arm.is-r { animation: milli-wave-arm 0.8s steps(1, end) infinite; }
 /* думает: ручка у затылка чешет, глаза вверх-вбок, точки по очереди */
@@ -109,7 +109,7 @@
   .milli g, .milli rect { animation: none !important; }
 }
 
-/* ── Кнопка-Милли (каталог) и кнопка поддержки (остальные экраны) ── */
+/* ── Кнопка-Aera AI (каталог) и кнопка поддержки (остальные экраны) ── */
 .mlf {
   position: absolute; z-index: 60; right: 22px; bottom: 22px;
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 10px 8px;
@@ -225,7 +225,7 @@
 .ml-panel > .ml-head { z-index: 3; }
 .ml-head .ml-plus { flex: none; }
 
-/* Милли в шапке: тык */
+/* Aera AI в шапке: тык */
 .mlh { position: relative; flex: none; width: 44px; height: 44px; cursor: pointer; }
 .mlh .milli { position: relative; z-index: 1; transition: transform 90ms var(--m-ease-smooth); }
 .mlh:hover .milli { transform: translateY(-2px); }
@@ -290,17 +290,17 @@
   --px-ft: rgba(255, 255, 255, 0.08);
 }
 
-/* Аватарка Милли в ленте; думает — слетаются глифы, готово — частицы */
+/* Аватарка Aera AI в ленте; думает — слетаются глифы, готово — частицы */
 .mla { position: relative; flex: none; width: 40px; height: 40px; margin-top: 2px; }
 .mla > .milli { position: relative; z-index: 1; }
 
 /* Частицы, как у сломанного блока: вбок (внешний слой), вверх и вниз под тяжестью (внутренний), гаснут ступенями */
 .mlb { position: absolute; z-index: 3; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
 .mlb i { position: absolute; left: -2px; top: -2px; animation: ml-px-x 760ms steps(10, end) both; }
-.mlb b { display: block; width: 100%; height: 100%; background: #5ec64d; box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.3); animation: ml-px-y 760ms steps(10, end) both; }
-.mlb i:nth-child(3n) b { background: #8be35f; }
+.mlb b { display: block; width: 100%; height: 100%; background: #c6243e; box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.3); animation: ml-px-y 760ms steps(10, end) both; }
+.mlb i:nth-child(3n) b { background: #f3dfe2; }
 .mlb i:nth-child(4n) b { background: #ffffff; }
-.mlb i:nth-child(5n) b { background: #3fae4a; }
+.mlb i:nth-child(5n) b { background: #a91c34; }
 @keyframes ml-px-x { 0% { transform: translateX(0); } 100% { transform: translateX(var(--dx)); } }
 @keyframes ml-px-y {
   0% { transform: translateY(0); opacity: 1; animation-timing-function: var(--m-ease-smooth); }
@@ -319,7 +319,7 @@
 .ml-panel .seg.ml-chip:hover:not(:disabled) { transform: translateY(-2px); color: var(--m-fg); --px-ol: rgba(var(--m-accent-rgb), 0.55); --px-ol-w: 2px; }
 .ml-panel .seg.ml-chip:active:not(:disabled) { transform: translateY(2px); --px-fb-w: 1px; }
 
-/* ── Пустой чат: Милли и мягкая пиксельная тень ──
+/* ── Пустой чат: Aera AI и мягкая пиксельная тень ──
    Покачивание, моргание и реакции на тык — у самого маскота (milli-mascot.css).
    Мышь сдвигает слои по-разному — глубина без 3D. */
 .ml-hello { margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 4px 14px; text-align: center; }
@@ -349,7 +349,7 @@
   100% { opacity: 0; transform: translate(10px, 46px); }
 }
 
-/* Приветствие: пиксельный пузырь с хвостиком к Милли */
+/* Приветствие: пиксельный пузырь с хвостиком к Aera AI */
 .ml-say { position: relative; margin-top: 2px; padding-top: 7px; animation: ml-say-in 320ms var(--m-ease-smooth) 120ms backwards; }
 .ml-say::before, .ml-say::after { content: ''; position: absolute; left: 50%; }
 .ml-say::before {
@@ -510,7 +510,7 @@
 .mpk-x { width: 26px; height: 26px; display: grid; place-items: center; color: var(--m-fg-muted); cursor: pointer; --px-n: 4px; clip-path: var(--px-4); }
 .mpk-x:hover { color: var(--m-fg); background: var(--m-surface-2); }
 
-/* Кнопка-Милли: звёздочка мигает в углу */
+/* Кнопка-Aera AI: звёздочка мигает в углу */
 .mlf::after {
   content: ''; position: absolute; top: 6px; right: 7px; width: 8px; height: 8px; color: #fff; opacity: 0; pointer-events: none;
   background:
@@ -560,7 +560,7 @@
 .mci-glint .mci-g2 { animation-delay: 0.6s; }
 @keyframes ml-glint { 0% { opacity: 0.42; } 16% { opacity: 0.22; } 33% { opacity: 0; } 83% { opacity: 0; } }
 
-/* Глифы зачарования: слетаются к Милли и гаснут */
+/* Глифы зачарования: слетаются к Aera AI и гаснут */
 .mlg { position: absolute; z-index: 2; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
 .mlg i { position: absolute; left: -5px; top: -5px; opacity: 0; animation: ml-glyph 2.16s var(--m-ease-smooth) infinite; }
 .mlg svg { display: block; fill: #d9c8ff; }
@@ -861,10 +861,10 @@ button.mlx-t:hover { color: var(--m-accent); }
 :root:root .mset-foot .btn.sm { height: 26px; padding: 0 10px 2px; font-size: 12px; color: var(--m-accent); }
 :root:root .mset-foot .btn.sm:hover:not(:disabled) { color: var(--m-fg); }
 
-/* Тосты не ложатся на поле ввода Милли: пока панель открыта — слева от неё. */
+/* Тосты не ложатся на поле ввода Aera AI: пока панель открыта — слева от неё. */
 :root[data-milli-open] #toast { right: calc(min(460px, 100% - 24px) + 24px); }
 
-/* «Милли печатает» — обычный ответ без сборки */
+/* «Aera AI печатает» — обычный ответ без сборки */
 .ml-typing { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 2px; }
 .ml-typing i { width: 6px; height: 6px; background: var(--m-fg-subtle); animation: ml-typing 1.1s ease-in-out infinite; }
 .ml-typing i:nth-child(2) { animation-delay: 0.15s; }

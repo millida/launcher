@@ -16,7 +16,7 @@ export interface AppIconDef {
 }
 
 export const APP_ICONS: readonly AppIconDef[] = [
-  { id: 'default', name: 'Millida', src: '/app-icons/default.png', rule: 'free', need: '' },
+  { id: 'default', name: 'Aera', src: '/app-icons/default.png', rule: 'free', need: '' },
   { id: 'spark', get name() { return t('Искра') }, src: '/app-icons/spark.png', rule: 'friends', friends: 5, get need() { return t('Пригласи 5 друзей') } },
   { id: 'flame', get name() { return t('Пламя') }, src: '/app-icons/flame.png', rule: 'friends', friends: 10, get need() { return t('Пригласи 10 друзей') } },
   { id: 'amethyst', get name() { return t('Аметист') }, src: '/app-icons/amethyst.png', rule: 'friends', friends: 25, get need() { return t('Пригласи 25 друзей') } },

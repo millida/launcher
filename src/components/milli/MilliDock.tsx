@@ -62,14 +62,14 @@ function pickSize(n: number) {
 }
 
 /*
- * Милли в лаунчере (30.09.2026): только в каталоге — кнопка-Милли в правом
+ * Aera AI в лаунчере (30.09.2026): только в каталоге — кнопка-Aera AI в правом
  * нижнем углу, чат панелью справа. На остальных экранах в том же углу кнопка
- * поддержки. Поддержка есть и в меню панели Милли.
+ * поддержки. Поддержка есть и в меню панели Aera AI.
  */
 
 /*
  * Примеры в пустом чате (исследование рынка, milli-server/research/MARKET-2026-10.md):
- * восемь ниш в порядке спроса. На кнопке — короткое имя, Милли уходит полный
+ * восемь ниш в порядке спроса. На кнопке — короткое имя, Aera AI уходит полный
  * запрос. Значок — рисунок художника из px/.
  */
 interface Example {
@@ -280,8 +280,8 @@ function Composer() {
               rows={1}
               value={text}
               maxLength={MILLI_TEXT_MAX}
-              aria-label={t('Сообщение Милли')}
-              placeholder={t('Напиши Милли…')}
+              aria-label={t('Сообщение Aera AI')}
+              placeholder={t('Напиши Aera AI…')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -364,7 +364,7 @@ function PlusNudges({ m, asked }: { m: MilliMessage; asked: string }) {
           <PxArt name="glowstone" size={28} className="mci" />
           <span>
             {asks ? t('Шейдеры, паки и карты — с PLUS') : t('С PLUS добавлю шейдеры и карту')}
-            <small>{t('Милли поставит их в сборку сама')}</small>
+            <small>{t('Aera AI поставит их в сборку сама')}</small>
           </span>
           <em>PLUS</em>
         </button>
@@ -426,7 +426,7 @@ function Bubble({ m, last, cheer, asked = '' }: { m: MilliMessage; last: boolean
   )
 }
 
-/** Без входа — Милли машет и одна кнопка (владелец 30.09 16:11: «дизайн, а не текст»). */
+/** Без входа — Aera AI машет и одна кнопка (владелец 30.09 16:11: «дизайн, а не текст»). */
 function Gate() {
   const t = useT()
   return (
@@ -494,7 +494,7 @@ function Thinking() {
   const live = stages.some((st) => st.key !== 'plan')
   const step = milliThinkStep(elapsed)
   return (
-    <div className="ml-msg ml-think" aria-busy="true" aria-label={t('Милли думает')}>
+    <div className="ml-msg ml-think" aria-busy="true" aria-label={t('Aera AI думает')}>
       <MilliAva mode="think" spin />
       <div className="ml-col">
         <div className={'ml-bubble ' + (live ? 'ml-think' : 'ml-typing-b')}>
@@ -503,7 +503,7 @@ function Thinking() {
               <MilliProgress stages={stages} title={editing ? t('Правлю сборку…') : t('Собираю сборку…')} onStop={cancelMilli} />
             ) : (
               // Этапов сборки нет — это обычный ответ в разговоре: просто «печатает».
-              <span className="ml-typing" aria-label={t('Милли печатает')}>
+              <span className="ml-typing" aria-label={t('Aera AI печатает')}>
                 <i />
                 <i />
                 <i />
@@ -595,13 +595,13 @@ function Menu({ onClose }: { onClose: () => void }) {
 const helloFallback = () => t('Привет! Какую сборку соберём?')
 
 /**
- * Пустой чат: сцена, приветствие и примеры; Милли тянется к примеру под мышью.
+ * Пустой чат: сцена, приветствие и примеры; Aera AI тянется к примеру под мышью.
  * Приветствие — с сервера по памяти игрока (без модели, мгновенно); пока ждём —
  * пузырь невидим (место занято), сбой или >1,5 с — запасная фраза.
  */
 function Hello({ mood }: { mood: MilliMode }) {
   const t = useT()
-  // Без PLUS Милли то и дело «примеряет» золотую корону (владелец: пусть засматривается на PLUS) — 2,4 с из каждых 9.
+  // Без PLUS Aera AI то и дело «примеряет» золотую корону (владелец: пусть засматривается на PLUS) — 2,4 с из каждых 9.
   const free = useMilli((st) => !!st.status && !st.status.plus)
   const [tryOn, setTryOn] = useState(false)
   useEffect(() => {
@@ -643,7 +643,7 @@ function Hello({ mood }: { mood: MilliMode }) {
       {free ? (
         <button type="button" className={'ml-tryon' + (tryOn ? ' on' : '')} data-track="milli_plus_upsell" data-src="tryon" onClick={() => openPlusSheet('tryon')} tabIndex={tryOn ? 0 : -1} aria-hidden={!tryOn}>
           <PxIcon name="crown" size={12} />
-          {t('Милли с PLUS')}
+          {t('Aera AI с PLUS')}
         </button>
       ) : null}
       <div className="ml-say" style={g === undefined ? { visibility: 'hidden' } : undefined}>
@@ -688,7 +688,7 @@ function Panel() {
   const scroller = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
   const restoreSeq = useBench((s) => s.restoreSeq)
-  // Сборка пришла (настроение «радуется») — Милли делает праздничный оборот.
+  // Сборка пришла (настроение «радуется») — Aera AI делает праздничный оборот.
   useEffect(() => {
     if (mood === 'happy') milliCue('spin')
   }, [mood])
@@ -739,7 +739,7 @@ function Panel() {
     })
   }, [open, restoreSeq])
 
-  // Новый ответ — к его началу (текст Милли и шапка сборки), остальное — вниз.
+  // Новый ответ — к его началу (текст Aera AI и шапка сборки), остальное — вниз.
   // Позицию ставим в следующем кадре: чтение offsetTop сразу после коммита
   // заставляло синхронно раскладывать всю ленту с новой карточкой на 300 модов
   // (long task ~100 мс, замер QA). В кадре лейаут и так считается один раз.
@@ -756,7 +756,7 @@ function Panel() {
     return () => cancelAnimationFrame(id)
   }, [messages, pending, error, view])
 
-  // Пока Милли думает и собирает (этапы растут), лента сама держится внизу;
+  // Пока Aera AI думает и собирает (этапы растут), лента сама держится внизу;
   // прокрутил вверх руками — не мешаем.
   useEffect(() => {
     if (!pending) return
@@ -785,7 +785,7 @@ function Panel() {
   ) : off || blocked ? (
     <div className="ml-state">
       <Milli size={96} mode="idle" />
-      <b>{off ? t('Милли отдыхает') : t('Милли тебе недоступна')}</b>
+      <b>{off ? t('Aera AI отдыхает') : t('Aera AI тебе недоступна')}</b>
     </div>
   ) : view === 'history' ? (
     <History />
@@ -808,7 +808,7 @@ function Panel() {
       className={
         'ml-panel' + (open || shown ? ' on' : '') + (!open && shown ? ' is-closing' : '') + (pending ? ' is-busy' : '') + (mood === 'happy' ? ' is-happy' : '') + ' tier-' + milliLook(status)
       }
-      aria-label={t('Милли')}
+      aria-label={t('Aera AI')}
       aria-hidden={!open}
       data-section="milli"
     >
@@ -837,7 +837,7 @@ function Panel() {
             <PxArt name="diamond" size={14} className="mci" />×{Math.max(2, Math.round(milliPlanNumbers(plans).diamond / Math.max(1, milliPlanNumbers(plans).plus)))} {t('с Diamond')}
           </button>
         ) : null}
-        {/* Без PLUS: «осталось» и выгода одной золотой плашкой — видно сразу, клик открывает «Милли на максималках». */}
+        {/* Без PLUS: «осталось» и выгода одной золотой плашкой — видно сразу, клик открывает «Aera AI на максималках». */}
         {signed && status && !status.plus && !off && !blocked ? (
           <button type="button" className={'ml-up' + (milliLeft(status) === 0 ? ' out' : '')} data-track="milli_plus_upsell" data-src="head" aria-label={t('Осталось {n}. Больше с PLUS', { n: milliLeft(status) ?? 0 })} onClick={() => openPlusSheet('head')}>
             <span className="ml-up-n">{milliLeft(status)}</span>
@@ -872,9 +872,9 @@ function Panel() {
 function Fab() {
   const t = useT()
   return (
-    <button type="button" className="mlf milli-wave-hover" data-sound="open" data-track="milli_fab" aria-label={t('Милли')} onClick={() => openMilli({ src: 'fab' })}>
+    <button type="button" className="mlf milli-wave-hover" data-sound="open" data-track="milli_fab" aria-label={t('Aera AI')} onClick={() => openMilli({ src: 'fab' })}>
       <Milli size={60} mode="idle" />
-      <span className="mlf-lab">{t('Милли')}</span>
+      <span className="mlf-lab">{t('Aera AI')}</span>
     </button>
   )
 }
@@ -961,7 +961,7 @@ function SupportFab() {
 const SUPPORT_SCREENS = new Set<string>(['play', 'settings'])
 
 /**
- * Угол лаунчера: в каталоге («Ресурсы», карточки материалов) — Милли и её
+ * Угол лаунчера: в каталоге («Ресурсы», карточки материалов) — Aera AI и её
  * панель, на главной и в настройках — кнопка поддержки.
  */
 export function MilliDock() {

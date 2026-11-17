@@ -155,7 +155,7 @@ export interface PackRepair {
   /** Что поменяли — короткими строками. */
   done: string[]
   failed: string[]
-  /** Вылет был, а автоматом его причину не убрать: дальше — Милли или поддержка. */
+  /** Вылет был, а автоматом его причину не убрать: дальше — Aera AI или поддержка. */
   unresolved: SavedCrash | null
   files: RepairReport | null
   filesText: string
@@ -164,7 +164,7 @@ export interface PackRepair {
 /**
  * «Починить» на странице сборки: план последнего вылета → недостающие
  * зависимости → файлы по хешам. Всё локально и без аккаунта: те же команды
- * ядра, что у окна вылета и у Милли, с их проверками.
+ * ядра, что у окна вылета и у Aera AI, с их проверками.
  */
 export async function repairPack(profile: string): Promise<PackRepair | null> {
   if (!hasTauri()) {
@@ -212,7 +212,7 @@ export function packRepairText(r: Pick<PackRepair, 'done' | 'failed' | 'unresolv
   const head = r.done.length ? t('Готово: {list}. Запусти игру', { list: r.done.join('; ') }) : ''
   const fail = r.failed.length ? t('Не вышло: {list}', { list: r.failed.join('; ') }) : ''
   if (head || fail) return [head, fail].filter(Boolean).join('. ')
-  if (r.unresolved) return t('Файлы в порядке, а причину вылета автоматом не убрать — Милли разберёт лог')
+  if (r.unresolved) return t('Файлы в порядке, а причину вылета автоматом не убрать — Aera AI разберёт лог')
   return r.filesText || t('Всё на месте: файлы игры сверены по хешам')
 }
 

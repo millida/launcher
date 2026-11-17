@@ -3,16 +3,16 @@ import { isMilliScreen } from './milliScreens'
 import type { ScreenId } from '../state/ui'
 
 /*
- * Милли — только в каталоге, на остальных экранах в углу поддержка.
+ * Aera AI — только в каталоге, на остальных экранах в углу поддержка.
  * «Ресурсы» — это playhub с открытым полным каталогом, «Библиотека» — тот же
  * playhub без него.
  */
 describe('isMilliScreen', () => {
-  it('«Ресурсы» (полный каталог и карточки в нём) — Милли', () => {
+  it('«Ресурсы» (полный каталог и карточки в нём) — Aera AI', () => {
     expect(isMilliScreen('playhub', true)).toBe(true)
   })
 
-  it('старый экран каталога — Милли', () => {
+  it('старый экран каталога — Aera AI', () => {
     expect(isMilliScreen('mods', false)).toBe(true)
     expect(isMilliScreen('mods', true)).toBe(true)
   })

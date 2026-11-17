@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { MILLI_EVENTS, MILLI_EVENT_KINDS, MILLI_RARE_CHANCE, milliEventDelay, milliPickEvent } from './milliEventData'
 
-describe('события сцены Милли', () => {
+describe('события сцены Aera AI', () => {
   it('никогда не повторяет прошлое событие', () => {
     for (const prev of MILLI_EVENT_KINDS) {
       for (let i = 0; i <= 20; i++) {

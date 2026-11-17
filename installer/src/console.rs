@@ -58,7 +58,7 @@ fn mib(bytes: u64) -> f64 {
 /// Mirrors the Windows window: the job either finishes or reports why. There is
 /// no way to close a console run halfway, so `None` never happens here.
 pub fn run(job: impl FnOnce(&Report) -> Result<(), String>) -> Option<Result<(), String>> {
-    println!("Millida Launcher — установка");
+    println!("Aera Launcher — установка");
     let report = Report::new();
     let outcome = job(&report);
     report.clear_line();

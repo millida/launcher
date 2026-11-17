@@ -106,7 +106,7 @@ fn existing_build(pdir: &Path) -> Result<(), String> {
     Err("Сборка не найдена на диске: выбери её в списке ещё раз".into())
 }
 
-/// The only gate for Milli's file paths: `options.txt` or a text config under
+/// The only gate for Aera AI's file paths: `options.txt` or a text config under
 /// `config/`. Returns the normalized relative path and the resolved target.
 pub(crate) fn milli_file_path(pdir: &Path, rel: &str) -> Result<(String, PathBuf), String> {
     let norm = rel.replace('\\', "/");
@@ -115,11 +115,11 @@ pub(crate) fn milli_file_path(pdir: &Path, rel: &str) -> Result<(String, PathBuf
         return Ok((norm, safe_join(pdir, OPTIONS)?));
     }
     let Some(inner) = norm.strip_prefix("config/") else {
-        return Err(format!("Милли правит только options.txt и папку config, а не «{}»", rel));
+        return Err(format!("Aera AI правит только options.txt и папку config, а не «{}»", rel));
     };
     let ext = Path::new(inner).extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default();
     if !CONFIG_EXTS.contains(&ext.as_str()) {
-        return Err(format!("«{}» — не текстовый конфиг, Милли его не трогает", rel));
+        return Err(format!("«{}» — не текстовый конфиг, Aera AI его не трогает", rel));
     }
     let target = safe_join(&pdir.join("config"), inner)?;
     Ok((norm, target))
@@ -203,14 +203,14 @@ pub fn milli_files_write(pdir: &Path, edits: &[LocalFileEdit]) -> Result<Vec<Loc
         let (_, target) = milli_file_path(pdir, &e.path)?;
         if let Some(t) = &e.text {
             if t.len() as u64 > MAX_TEXT_BYTES {
-                return Err(format!("«{}» больше {} КБ — такой конфиг Милли не пишет", e.path, MAX_TEXT_BYTES / 1024));
+                return Err(format!("«{}» больше {} КБ — такой конфиг Aera AI не пишет", e.path, MAX_TEXT_BYTES / 1024));
             }
         }
         if let Some(want) = &e.expect {
             let now = read_one(pdir, &e.path)?;
             let same = if want.is_empty() { !now.exists } else { now.exists && now.sha1.eq_ignore_ascii_case(want) };
             if !same {
-                return Err(format!("«{}» изменился, пока Милли его правила: попроси её ещё раз", e.path));
+                return Err(format!("«{}» изменился, пока Aera AI его правила: попроси её ещё раз", e.path));
             }
         }
         plan.push((e, target));
@@ -218,7 +218,7 @@ pub fn milli_files_write(pdir: &Path, edits: &[LocalFileEdit]) -> Result<Vec<Loc
     for (e, target) in &plan {
         match &e.text {
             Some(t) => write_bytes_atomic(target, t.as_bytes())?,
-            // A Milli edit can delete a config. The path is already checked: inside the modpack, only config/ and options.txt.
+            // An Aera AI edit can delete a config. The path is already checked: inside the modpack, only config/ and options.txt.
             None => match std::fs::remove_file(target) {
                 Ok(()) => {}
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -242,7 +242,7 @@ pub fn milli_note_read(pdir: &Path, name: &str) -> Result<Option<String>, String
     match std::fs::read_to_string(&p) {
         Ok(s) => Ok(Some(s)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(io_fail("Чтение дневника Милли", &p, &e)),
+        Err(e) => Err(io_fail("Чтение дневника Aera AI", &p, &e)),
     }
 }
 
@@ -250,7 +250,7 @@ pub fn milli_note_write(pdir: &Path, name: &str, text: &str) -> Result<(), Strin
     existing_build(pdir)?;
     let p = note_path(pdir, name)?;
     if text.len() > MAX_NOTE_BYTES {
-        return Err("Дневник Милли слишком большой для записи".into());
+        return Err("Дневник Aera AI слишком большой для записи".into());
     }
     let _g = locked();
     write_bytes_atomic(&p, text.as_bytes())

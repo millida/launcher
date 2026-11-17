@@ -20,7 +20,7 @@ import { t } from '../i18n'
  * Сборка из плана ИИ: профиль под версию и загрузчик, затем моды, ресурспаки и
  * шейдеры заданиями ядра (`install_dep_items` — каждый мод со своими
  * обязательными). Перенесено из старого одноразового ИИ-сборщика каталога;
- * теперь его зовёт карточка сборки Милли.
+ * теперь его зовёт карточка сборки Aera AI.
  */
 
 interface Step {
@@ -66,7 +66,7 @@ export interface AiBuildTarget {
   loader: MilliLoader
   /** Ревизия верстака: убранное игроком не ставим, даже если оно осталось в `chosen`. */
   userRemoved?: string[]
-  /** Настройки сборки Милли: ОЗУ и JVM применяются к профилю после создания. */
+  /** Настройки сборки Aera AI: ОЗУ и JVM применяются к профилю после создания. */
   config?: MilliConfig
   /** Загрузчик шейдеров сборки: Oculus читает config/oculus.properties, Iris — iris.properties. */
   shaderLoader?: { slug: string } | null
@@ -121,7 +121,7 @@ function withoutRemoved(chosen: MilliChosen, removed: string[] | undefined): Mil
 }
 
 /**
- * Настройки Милли без правки Rust: ОЗУ — памятью сборки в ядре (`lib/ramPref.ts`,
+ * Настройки Aera AI без правки Rust: ОЗУ — памятью сборки в ядре (`lib/ramPref.ts`,
  * её же берёт запуск), JVM — `save_profile_settings`
  * (ширину, высоту и путь к Java сохраняем как были). options.txt и
  * iris.properties сюда не пишем: команды ядра для них нет — они едут в

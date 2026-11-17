@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Aera">
+  <defs>
+    <linearGradient id="aera-red-white" x1="48" y1="204" x2="207" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D32742"/>
+      <stop offset="0.54" stop-color="#E54252"/>
+      <stop offset="1" stop-color="#FFF7F7"/>
+    </linearGradient>
+    <linearGradient id="aera-surface" x1="28" y1="20" x2="228" y2="238" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C1D22"/>
+      <stop offset="1" stop-color="#101114"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#aera-surface)"/>
+  <rect x="8.75" y="8.75" width="238.5" height="238.5" rx="57.25" stroke="#FFFFFF" stroke-opacity=".09" stroke-width="1.5"/>
+  <path d="M66 193 111.4 83.4c6.3-15.2 26.9-15.2 33.2 0L190 193" fill="none" stroke="url(#aera-red-white)" stroke-linecap="square" stroke-linejoin="miter" stroke-width="24"/>
+  <path d="M91 151h74" stroke="#E54252" stroke-linecap="square" stroke-width="20"/>
+  <path d="M182 193h12" stroke="#F3EDEF" stroke-linecap="square" stroke-width="24"/>
+</svg>

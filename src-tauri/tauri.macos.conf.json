@@ -2,7 +2,7 @@
   "app": {
     "windows": [
       {
-        "title": "Millida Launcher",
+        "title": "Aera Launcher",
         "width": 1200,
         "height": 760,
         "minWidth": 980,
@@ -11,7 +11,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": { "x": 18, "y": 24 },
-        "backgroundColor": "#161718",
+        "backgroundColor": "#101114",
         "center": true
       }
     ]

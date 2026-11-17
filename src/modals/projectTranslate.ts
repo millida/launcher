@@ -84,7 +84,7 @@ export class TrError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // Тестовая Милли через прокси Vite — как request() в lib/milli.ts.
+  // Тестовая Aera AI через прокси Vite — как request() в lib/milli.ts.
   if (import.meta.env.DEV && import.meta.env.VITE_MILLI_TEST === '1') return devFetch<T>('/milli-test' + path, init, { 'Content-Type': 'application/json' })
   if (hasTauri() || !import.meta.env.DEV) return api<T>(path, init)
   return devFetch<T>(LAUNCHER_API + path, init, apiHeaders())

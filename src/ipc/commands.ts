@@ -1147,7 +1147,7 @@ export interface MilliOptionsReport {
   shader: boolean
 }
 
-/** Настройки сборки Милли: options.txt (белый список) и включённый шейдер. Ядро без команды — ошибка «not found». */
+/** Настройки сборки Aera AI: options.txt (белый список) и включённый шейдер. Ядро без команды — ошибка «not found». */
 export const applyMilliOptions = (
   profile: string,
   options: Record<string, string>,

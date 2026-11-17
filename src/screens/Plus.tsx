@@ -24,14 +24,14 @@ import { liveInterval } from '../lib/liveInterval'
  * millida.net/plus: то же содержание и тот же порядок глав, что у лендинга,
  * а лендинг повторяет /launcher (приказ владельца «возьми лендинг лаунчера
  * целиком»):
- *   первый экран (золотой воин с копьём, чипы) → рубины → Милли → сундуки и
+ *   первый экран (золотой воин с копьём, чипы) → рубины → Aera AI → сундуки и
  *   целые вещи → значок PLUS в игре → как это работает → без PLUS / с PLUS →
  *   оформить или за друзей → вопросы.
  * Сетка «вторая строка наград» снята («никому не интересно») — сразу итог.
  *
  * Всё обещанное выдаёт служба: строка PLUS — track.ts (копия SEASON_TRACK),
  * осколки ×1,5 и потолок 150 — economy.catalog.ts, шанс целой вещи и пакеты
- * рубинов — живые из /rubies/rules, лимиты Милли и что она кладёт в сборку —
+ * рубинов — живые из /rubies/rules, лимиты Aera AI и что она кладёт в сборку —
  * живые из /catalog/milli/limits, значок — launcher-cosmetics.service.ts и
  * глиф мода badge_plus.png (§6), дни за друзей — friend-referral.rules.ts.
  * Оплата — тот же путь, что у кнопки в магазине (state/daily.ts, startPlus).
@@ -242,7 +242,7 @@ export function Plus({ on }: { on: boolean }) {
   const chips: { art: ReactNode; title: string; sub: string }[] = [
     { art: <Ruby size={34} />, title: t('{n} рубинов', { n: n(PLUS.rubies) }), sub: t('За 28 дней входа') },
     { art: <ChestLive ready={false} tier="LEGEND" size={34} />, title: plural(PLUS.chests, t('{n} сундук', { n: PLUS.chests }), t('{n} сундука', { n: PLUS.chests }), t('{n} сундуков', { n: PLUS.chests })), sub: t('Легендарный — в конце') },
-    ...(milli ? [{ art: <Milli size={34} />, title: t('Милли: {n} в день', { n: milli.plus.day }), sub: t('Вместо {n}', { n: milli.free.day }) }] : []),
+    ...(milli ? [{ art: <Milli size={34} />, title: t('Aera AI: {n} в день', { n: milli.plus.day }), sub: t('Вместо {n}', { n: milli.free.day }) }] : []),
     { art: <Shard size={30} />, title: t('Осколки ×{n}', { n: SHARD_BOOST }), sub: t('{limit} в день вместо {base}', { limit: SHARD_LIMIT_PLUS, base: SHARD_LIMIT }) },
     ...(whole && loot[0] ? [{ art: <img src={loot[0].preview} alt="" draggable={false} />, title: t('Целая вещь'), sub: t('{chance} из сундука', { chance: whole }) }] : []),
     { art: <img src="/plus/badge-plus@8x.png" alt="" draggable={false} className="px" />, title: t('Значок PLUS'), sub: t('В табе и над головой') },
@@ -253,8 +253,8 @@ export function Plus({ on }: { on: boolean }) {
     [t('Сундуки за 28 дней'), String(FREE.chests), String(FREE.chests + PLUS.chests), true],
     ...(whole ? [[t('Целая вещь из сундука'), t('Нет'), whole, false] as [string, string, string, boolean]] : []),
     [t('Осколки в день'), String(SHARD_LIMIT), SHARD_LIMIT_PLUS + ', ×' + SHARD_BOOST, true],
-    ...(milli ? [[t('Милли в день'), String(milli.free.day), String(milli.plus.day), true] as [string, string, string, boolean]] : []),
-    ...(packExtras.length ? [[t('Шейдеры и карты от Милли'), t('Нет'), t('Да'), false] as [string, string, string, boolean]] : []),
+    ...(milli ? [[t('Aera AI в день'), String(milli.free.day), String(milli.plus.day), true] as [string, string, string, boolean]] : []),
+    ...(packExtras.length ? [[t('Шейдеры и карты от Aera AI'), t('Нет'), t('Да'), false] as [string, string, string, boolean]] : []),
     ...(extras.includes('server') ? [[t('Сборка на сервер'), t('Нет'), t('Да'), false] as [string, string, string, boolean]] : []),
     [t('Значок PLUS'), t('Нет'), t('Да'), false],
   ]
@@ -343,11 +343,11 @@ export function Plus({ on }: { on: boolean }) {
         ) : null}
       </Block>
 
-      {/* Милли */}
+      {/* Aera AI */}
       {milli ? (
         <Block
           title={
-            <Em text={t('Милли собирает [больше]')} />
+            <Em text={t('Aera AI собирает [больше]')} />
           }
           sub={t('ИИ-сборщик в каталоге и на сайте')}
         >
@@ -356,7 +356,7 @@ export function Plus({ on }: { on: boolean }) {
               <div className="lp-aib-head">
                 <Milli size={64} mode="talk" />
                 <div>
-                  <b>{t('Милли с PLUS')}</b>
+                  <b>{t('Aera AI с PLUS')}</b>
                   <i>{t('Опиши, во что хочешь играть')}</i>
                 </div>
               </div>
@@ -652,10 +652,10 @@ export function Plus({ on }: { on: boolean }) {
             [t('Как приходят рубины и сундуки?'), t('Каждый день входа открывает клетку наград в бонусе за вход: за 28 дней это {rubies} рубинов и {chests} сундуков сверх бесплатных. Сундуки ждут в «Моих сундуках».', { rubies: n(PLUS.rubies), chests: PLUS.chests })],
             [t('Что, если пропустить день?'), t('Клетка открывается за день входа, пропуск клетку не добавляет. Забранное остаётся.')],
             ...(milli
-              ? [[t('Что даёт PLUS в Милли?'), t('{day} запросов в день и {month} в месяц вместо {freeDay} и {freeMonth}. Милли кладёт в сборку шейдеры, ресурспаки и карты и ставит её на сервер одной кнопкой.', { day: milli.plus.day, month: n(milli.plus.month), freeDay: milli.free.day, freeMonth: milli.free.month })]]
+              ? [[t('Что даёт PLUS в Aera AI?'), t('{day} запросов в день и {month} в месяц вместо {freeDay} и {freeMonth}. Aera AI кладёт в сборку шейдеры, ресурспаки и карты и ставит её на сервер одной кнопкой.', { day: milli.plus.day, month: n(milli.plus.month), freeDay: milli.free.day, freeMonth: milli.free.month })]]
               : []),
             [t('Можно получить бесплатно?'), t('Да, за друзей: первый приглашённый — 3 дня PLUS, пять друзей — ещё 14 дней, десять — 30. Друг засчитывается после двух часов игры.')],
-            [t('Что остаётся после отмены?'), t('Рубины, сундуки, фрагменты и вещи, которые ты забрал. Гаснут клетки PLUS, осколки ×1,5, лимиты Милли и значок.')],
+            [t('Что остаётся после отмены?'), t('Рубины, сундуки, фрагменты и вещи, которые ты забрал. Гаснут клетки PLUS, осколки ×1,5, лимиты Aera AI и значок.')],
           ].map(([q, a]) => (
             <details key={q} name="lp-faq" className="lp-faq-item">
               <summary>

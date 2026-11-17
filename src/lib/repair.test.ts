@@ -65,6 +65,6 @@ describe('Кнопка «Починить» на странице сборки �
     expect(packRepairText({ done: ['поставлены зависимости: fabric-api'], failed: [], unresolved: null, filesText: 'Всё на месте' })).toBe(
       'Готово: поставлены зависимости: fabric-api. Запусти игру',
     )
-    expect(packRepairText({ done: [], failed: [], unresolved: { at: 1, reason: 'x', actions: [] }, filesText: 'Всё на месте' })).toContain('Милли')
+    expect(packRepairText({ done: [], failed: [], unresolved: { at: 1, reason: 'x', actions: [] }, filesText: 'Всё на месте' })).toContain('Aera AI')
   })
 })

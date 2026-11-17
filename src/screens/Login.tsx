@@ -32,7 +32,7 @@ function GameAccountStep() {
     <div className="login-form lg2-card">
       <LangPicker className="lg2-lang" />
       <div className="login-logo">
-        <img src="/millida-logo.svg" alt="" width={56} height={56} />
+        <img src="/aera-mark.svg" alt="" width={56} height={56} />
       </div>
       <h1>{t('Игровой аккаунт')}</h1>
       <p className="sub">{t('Как будешь играть?')}</p>
@@ -81,9 +81,9 @@ export function Login({ on }: { on: boolean }) {
         <div className="login-form lg2-card">
           <LangPicker className="lg2-lang" />
           <div className="login-logo">
-            <img src="/millida-logo.svg" alt="" width={56} height={56} />
+            <img src="/aera-mark.svg" alt="" width={56} height={56} />
           </div>
-          <h1>{t('Вход в Millida')}</h1>
+          <h1>{t('Войти в аккаунт')}</h1>
           {/* Одна строка вместо абзаца: остальное показывает сам поток входа —
               код, «Открыть страницу», «Копировать ссылку» (аудит 22.09.2026). */}
           <p className="sub">{t('Нет аккаунта — создастся при входе')}</p>
@@ -138,7 +138,7 @@ export function Login({ on }: { on: boolean }) {
 
           <div className="trust">
             <Icon id="i-shield" />
-            <span>{t('Пароль — только на сайте Millida')}</span>
+            <span>{t('Пароль вводится только на защищённой странице входа')}</span>
           </div>
         </div>
         )}

@@ -198,13 +198,13 @@ export function CrashModal() {
           >
             <Icon id="i-restart" /> {repairing ? t('Чиним…') : t('Починить сборку')}
           </button>
-          {/* Автопочинка через Милли (09.10.2026): она объясняет причину и сама применяет исправления ядра. */}
+          {/* Автопочинка через Aera AI (09.10.2026): она объясняет причину и сама применяет исправления ядра. */}
           <button
             className="btn lg primary"
             data-track="crash_milli"
             onClick={repairWithMilli}
           >
-            <Icon id="i-sparkle" /> {t('Починить с Милли')}
+            <Icon id="i-sparkle" /> {t('Починить с Aera AI')}
           </button>
           <button
             className="btn lg secondary"
@@ -266,9 +266,9 @@ type CrashAiState =
   | { step: 'done'; explain: string; steps: string[]; offers: { file: string; title: string }[] }
 
 /**
- * «Спросить ИИ»: Милли читает лог и список модов сборки, объясняет вылет
+ * «Спросить ИИ»: Aera AI читает лог и список модов сборки, объясняет вылет
  * простыми словами и предлагает отключить виновный мод одной кнопкой. Нужен
- * аккаунт Millida — у Милли свой суточный лимит на игрока.
+ * аккаунт Millida — у Aera AI свой суточный лимит на игрока.
  */
 function CrashAi({ info }: { info: CrashInfo }) {
   const t = useT()
@@ -288,7 +288,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
       const answer = await milliCrash(crashAskBody(info, mods, profile))
       setState({ step: 'done', explain: answer.explain, steps: answer.steps, offers: crashDisableOffers(answer, mods) })
     } catch (e) {
-      showToast(t('Милли не смогла разобрать вылет: {error}', { error: tx(e) }), 'error')
+      showToast(t('Aera AI не смогла разобрать вылет: {error}', { error: tx(e) }), 'error')
       setState({ step: 'idle' })
     }
   }
@@ -297,7 +297,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
     return (
       <div className="crash-fixes">
         <button className="btn md secondary" data-track="crash_ai" disabled={state.step === 'asking'} onClick={() => void ask()}>
-          <Milli size={20} mode={state.step === 'asking' ? 'think' : 'idle'} /> {state.step === 'asking' ? t('Милли читает лог…') : t('Спросить ИИ')}
+          <Milli size={20} mode={state.step === 'asking' ? 'think' : 'idle'} /> {state.step === 'asking' ? t('Aera AI читает лог…') : t('Спросить ИИ')}
         </button>
       </div>
     )
@@ -306,7 +306,7 @@ function CrashAi({ info }: { info: CrashInfo }) {
   return (
     <>
       <div className="crash-plan" aria-live="polite">
-        <span>{t('Милли: {text}', { text: state.explain })}</span>
+        <span>{t('Aera AI: {text}', { text: state.explain })}</span>
         {state.steps.length ? (
           <ul>
             {state.steps.map((s) => (

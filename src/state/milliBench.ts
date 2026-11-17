@@ -6,7 +6,7 @@ import { PROFILE_OPTIONS } from '../components/milli/bench/benchTabs'
 import { t } from '../i18n'
 
 /*
- * Верстак Милли: одна сборка на весь лаунчер. Квитанция в ленте, верстак и
+ * Верстак Aera AI: одна сборка на весь лаунчер. Квитанция в ленте, верстак и
  * окно мода (Project.tsx) читают и правят одно и то же через `benchOp`.
  *
  * Клик рисуется сразу (локальная проекция ops поверх последней подтверждённой
@@ -404,7 +404,7 @@ export const useBench = create<BenchState>((set, get) => ({
     const same = confirmed?.buildId === p.buildId
     // Другая цепочка ревизий (новая сборка) — история начинается заново.
     const sameChain = !!confirmed && (confirmed.chain ?? confirmed.buildId) === (p.chain ?? p.buildId)
-    // Ход Милли в той же цепочке — тоже шаг, который отменяется.
+    // Ход Aera AI в той же цепочке — тоже шаг, который отменяется.
     if (sameChain && !same && confirmed) past.push(confirmed.buildId)
     if (!sameChain && !same) past = []
     if (!same) future = []

@@ -6,9 +6,9 @@ import { milliEmote } from '../components/milli/milliEmotions'
 import { t } from '../i18n'
 
 /*
- * Выбор ресурс-пака или шейдера — часть разговора: Милли присылает варианты
+ * Выбор ресурс-пака или шейдера — часть разговора: Aera AI присылает варианты
  * (message.looks), игрок наводит и выбирает. Выбранный «улетает» в сборку,
- * остальные гаснут; «ещё» и «другой стиль» — обычные сообщения Милли.
+ * остальные гаснут; «ещё» и «другой стиль» — обычные сообщения Aera AI.
  */
 
 export type PickKind = MilliLooks['kind']
@@ -16,7 +16,7 @@ export type PickKind = MilliLooks['kind']
 /** Сообщения, где выбор уже сделан или закрыт (id сообщения → projectId или ''). */
 export const useMilliPicker = create<{ done: Record<string, string> }>(() => ({ done: {} }))
 
-/** Плитка стиля / уровня во вкладке — просьба к Милли, чтобы показ стал частью диалога. */
+/** Плитка стиля / уровня во вкладке — просьба к Aera AI, чтобы показ стал частью диалога. */
 export function openPicker(kind: PickKind, _key: string, label: string) {
   void sendMilli(kind === 'rp' ? t('Покажи ресурс-паки в стиле «{style}»', { style: label }) : t('Покажи {style} шейдеры', { style: label.toLowerCase() }))
 }

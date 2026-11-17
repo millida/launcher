@@ -1,21 +1,8 @@
 /**
- * Милли — персонаж из логотипа Millida (владелец 30.09.2026 16:11: «персонаж с
- * ручками и ножками в стиле логотипа, очень милый и запоминающийся»).
- *
- * Тело — ровно знак из `public/millida-logo.svg`; к нему приделаны пиксельные
- * ручки в белых перчатках (белый — цвет скобки знака) и ножки в тёмных ботинках
- * (цвет глаз). Ручки и ножки лежат ПОД телом: их корень прячется за знаком, и
- * без конечностей Милли — всё тот же логотип.
- *
- * Геометрия — ровно знак из `public/millida-logo.svg` (поле 376×376, кубик со
- * срезанными углами и белая скобка), разложенный на части, чтобы лицо жило
- * отдельно: скобка — шлем, белый квадрат в центре — нос, глаза стоят в пустых
- * клетках по бокам от него, рот — в клетке под ним. Сетка знака — 5×5 клеток
- * по ~44,57 от 76,38 до 299,22; лицо не заходит на белые клетки, поэтому без глаз
- * Милли — тот же логотип, пиксель в пиксель.
- *
- * Тот же файл лежит в лаунчере (`src/components/milli/milliMascot.ts`): маскот
- * один на сайте и в приложении.
+ * Shared layout and animation geometry for the Aera AI tile character.
+ * The rendered character uses the source-controlled Aera mark from
+ * `public/aera-mark.svg`; existing Milli* identifiers remain internal so the
+ * connected assistant features keep their current call sites and behavior.
  */
 import type { MilliEmotion } from './milliEmotions'
 
@@ -35,29 +22,20 @@ export interface MilliBox {
 
 export const MILLI_VIEW = 376
 /**
- * Поле персонажа: знак 376×376 плюс поля под ручки, ботинки и точки «думает».
+ * Character field: 376×376 tile plus room for arms, boots and thought particles.
  * Квадрат, чтобы `size` по-прежнему задавал и ширину, и высоту.
  */
 export const MILLI_FRAME_BOX = { x: -96, y: -96, size: 568 } as const
 
-/** Клетка сетки скобки: столбец и строка 0…4 → прямоугольник в координатах знака. */
+/** Face-alignment grid: column and row 0…4 → rectangle in tile coordinates. */
 export const MILLI_GRID = { x0: 76.38, step: 44.568 } as const
 export function milliCell(col: number, row: number): MilliBox {
   const { x0, step } = MILLI_GRID
   return { x: x0 + col * step, y: x0 + row * step, w: step, h: step }
 }
 
-/** Белые клетки скобки: строка за строкой, 1 — белая. */
-export const MILLI_GLYPH_CELLS: readonly (readonly number[])[] = [
-  [1, 1, 1, 0, 1],
-  [1, 0, 0, 1, 0],
-  [1, 0, 1, 0, 1],
-  [1, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1],
-]
-
 export const MILLI_TILE = 'M24 0H352V24H376V352H352V376H24V352H0V24H24Z'
-/** Внутренний ободок толщиной 10 — тот же, что обводка знака с clip-path, но без id в DOM. */
+/** Inner tile rim, kept separate from its face artwork. */
 export const MILLI_RIM = `${MILLI_TILE}M34 10V34H10V342H34V366H342V342H366V34H342V10Z`
 export const MILLI_BEVEL = {
   top: { x: 24, y: 0, w: 328, h: 18 },
@@ -66,14 +44,8 @@ export const MILLI_BEVEL = {
   bottom: 'M0 346H376V352H352V376H24V352H0Z',
 } as const
 
-/** Скобка без центрального квадрата: рама и ступенька. Квадрат-нос рисуется отдельно. */
-export const MILLI_FRAME =
-  'M210.071 120.946H120.949V254.654H254.641L254.642 165.517H299.209V254.654H299.222V299.222H76.3809V120.946H76.3672V76.3774H210.071V120.946Z'
-export const MILLI_STEPS = 'M299.209 120.947H254.656V165.515H210.088V120.947H254.641V76.3784H299.209V120.947Z'
-export const MILLI_NOSE: MilliBox = { x: 165.503, y: 165.516, w: 44.568, h: 44.568 }
-/** Скобка в знаке поднята на 8 и отбрасывает тень со сдвигом 10. */
+/** The Aera mark sits 8 px higher inside the character tile. */
 export const MILLI_GLYPH_LIFT = -8
-export const MILLI_SHADOW_SHIFT = 10
 
 function centered(cell: MilliBox, w: number, h: number, dy = 0): MilliBox {
   return { x: cell.x + (cell.w - w) / 2, y: cell.y + (cell.h - h) / 2 + dy, w, h }
@@ -83,22 +55,11 @@ const LEFT = milliCell(1, 2)
 const RIGHT = milliCell(3, 2)
 const BELOW = milliCell(2, 3)
 
-/**
- * Глаза в пиксельном аниме-стиле (владелец 30.09.2026 20:51: «большие красивые
- * аниме-глаза»): 42×56 на пиксельной сетке по 7 — выше клетки, вылезают вниз
- * в пустую клетку под собой (вверх нельзя: над правым глазом белая клетка); по бокам — белые клетки, туда глаз не
- * заходит. Тёмный зрачок в радужке из двух оттенков (светлый верх, тёмный низ),
- * большой блик слева сверху, маленький справа снизу, реснички у внешнего
- * верхнего угла.
- */
+/** Large pixel-art eyes sit at the top of the Aera tile; highlights and lashes
+ * remain separate geometry so each expression can animate independently. */
 export const MILLI_EYE_SIZE = { w: 100, h: 124 } as const
 export const MILLI_EYE_DY = 0
-/**
- * Глаза на макушке (владелец 01.10.2026: «внятнее, в полтора-два раза больше,
- * кверху и по центру — половина выглядывает над телом, половина внутри»):
- * 100×124, по центру знака с зазором 14, середина глаза — на верхней кромке.
- * Логотип под ними не закрыт: скобка начинается ниже.
- */
+/** Eyes are centered across the upper body tile with a 14 px gap. */
 const EYE_GAP = 14
 const EYE_CX = MILLI_VIEW / 2
 /** Верх глаза (07.10.2026, владелец: «глаза слишком высоко, задевают корону»): глаза целиком на теле, у верхней кромки. */
@@ -119,7 +80,7 @@ export const MILLI_IRIS = { inset: 16, top: 33, bottom: 117 } as const
 export const MILLI_PUPIL = { dx: 34, dy: 51, w: 32, h: 48 } as const
 /**
  * Реснички: два пикселя у верхнего внешнего угла, торчат за край глаза на
- * белую клетку (ink на белом читается). side: -1 — левый глаз (наружу влево), 1 — правый.
+ * светлую часть плитки. side: -1 — левый глаз (наружу влево), 1 — правый.
  */
 export function milliLashes(eye: MilliBox, side: -1 | 1): MilliBox[] {
   const w = 10
@@ -295,7 +256,7 @@ export function milliPoke(n: number): MilliCue {
   return POKES[((Math.trunc(n) % 3) + 3) % 3] as MilliCue
 }
 
-/** Сколько покоя (без мыши и клавиатуры), пока Милли не задремлет. */
+/** Сколько покоя (без мыши и клавиатуры), пока Aera AI не задремлет. */
 export const MILLI_SLEEP_AFTER = 45_000
 
 /** Что играть: реакция важнее режима; спит только в покое. `dance` — это `happy`. */
@@ -317,7 +278,7 @@ export interface MilliStep {
 
 /**
  * Куда смотреть: вектор от глаз до цели (экранные px) → шаг зрачка −2…2 по
- * каждой оси. Рядом с Милли (ближе трети её размера) — прямо; дальше полутора
+ * каждой оси. Рядом с Aera AI (ближе трети её размера) — прямо; дальше полутора
  * размеров — до упора. Квантуется, как в спрайте: зрачок прыгает по пикселям.
  */
 export function milliGaze(dx: number, dy: number, size: number): MilliStep {

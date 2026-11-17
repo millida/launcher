@@ -1,7 +1,7 @@
 [package]
 name = "millida-launcher"
 version = "2.0.0"
-description = "Millida Launcher — безопасный лаунчер Minecraft"
+description = "Aera Launcher — настольный лаунчер Minecraft"
 authors = ["Millida"]
 edition = "2021"
 license = "GPL-3.0-only"

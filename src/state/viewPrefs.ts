@@ -63,7 +63,7 @@ const notify = () => window.dispatchEvent(new Event(VIEW_PREFS_EVENT))
 
 /**
  * Переход между экранами (07.10.2026): вместо пиксельного растворения — плавный
- * въезд экрана, как переключатель в чате Милли. Длительность — из настройки.
+ * въезд экрана, как переключатель в чате Aera AI. Длительность — из настройки.
  */
 function applyTabMs(ms: number) {
   if (typeof document === 'undefined') return

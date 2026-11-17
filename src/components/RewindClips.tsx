@@ -173,7 +173,7 @@ export function RewindClips() {
         <Group title={t('Клипы')}>
           <div className="s2-row">
             <span className="s2-lab">
-              <b>{clips.length ? t('{n} в папке', { n: clips.length }) : 'Millida Clips'}</b>
+              <b>{clips.length ? t('{n} в папке', { n: clips.length }) : 'Aera Clips'}</b>
             </span>
             <div className="s2-ctl">
               <button className="btn sm ghost" onClick={() => rewindOpenFolder().catch((e) => showToast('' + e, 'error'))}>

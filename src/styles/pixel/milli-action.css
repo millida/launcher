@@ -1,4 +1,4 @@
-/* Карточка действия Милли (графика, конфиги, бэкапы, откат, импорт, доктор):
+/* Карточка действия Aera AI (графика, конфиги, бэкапы, откат, импорт, доктор):
    было → станет, одна главная кнопка, «Отменить». Токены лаунчера --m-*. */
 .mact { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; color: var(--m-fg);
   font: 600 13px/1.3 var(--m-font); background-color: var(--m-surface); --px-n: 4px; clip-path: var(--px-4);

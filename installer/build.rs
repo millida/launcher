@@ -6,9 +6,9 @@ fn main() {
         let mut res = winresource::WindowsResource::new();
         res.set_icon("../src-tauri/icons/icon.ico");
         res.set_manifest_file("setup.manifest");
-        res.set("ProductName", "Millida Launcher");
-        res.set("FileDescription", "Установщик Millida Launcher");
-        res.set("CompanyName", "Roman Babaskin");
+        res.set("ProductName", "Aera Launcher");
+        res.set("FileDescription", "Aera Launcher Installer");
+        res.set("CompanyName", "Aera Intelligence");
         res.set("LegalCopyright", "© 2026 Millida (Roman Babaskin)");
         res.set("OriginalFilename", "MillidaLauncherSetup.exe");
         res.set_version_info(winresource::VersionInfo::FILEVERSION, 1 << 48);

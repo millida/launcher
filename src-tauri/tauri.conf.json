@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Millida Launcher",
+  "productName": "Aera Launcher",
   "version": "2.8.1",
   "identifier": "net.millida.launcher",
   "build": {
@@ -14,7 +14,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "Millida Launcher",
+        "title": "Aera Launcher",
         "width": 1200,
         "height": 760,
         "minWidth": 980,
@@ -185,12 +185,12 @@
       "rpm",
       "appimage"
     ],
-    "publisher": "Millida",
-    "homepage": "https://millida.net/launcher",
-    "copyright": "© 2026 Millida (Roman Babaskin)",
+    "publisher": "Aera Intelligence",
+    "homepage": "https://github.com/deadlyghost90/aeralauncher",
+    "copyright": "© 2026 Aera Intelligence (Aera Launcher branding); upstream notices are in NOTICE",
     "category": "Game",
     "shortDescription": "Лаунчер Minecraft",
-    "longDescription": "Лаунчер Minecraft от Millida: версии от Mojang, загрузчики Fabric, Quilt, Forge и NeoForge, моды и модпаки с Modrinth и CurseForge.",
+    "longDescription": "Aera Launcher от Aera Intelligence: версии Minecraft от Mojang, загрузчики Fabric, Quilt, Forge и NeoForge, моды и сборки из Modrinth и CurseForge.",
     "icon": [
       "icons/icon.icns",
       "icons/icon.ico",

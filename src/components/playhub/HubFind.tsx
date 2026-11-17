@@ -10,12 +10,12 @@ import { useT } from '../../i18n'
 /**
  * Первый экран библиотеки (владелец 30.09.2026), как на millida.net/katalog:
  * поле, крупная зелёная «Найти» и «Собрать с ИИ». Текст поля — запрос
- * каталога (Enter или «Найти») либо просьба к Милли: «Собрать с ИИ» открывает
+ * каталога (Enter или «Найти») либо просьба к Aera AI: «Собрать с ИИ» открывает
  * её чат и отправляет написанное.
  *
- * Милли (владелец 04.10.2026): живёт в «окошке» внутри кнопки. При каждом входе
+ * Aera AI (владелец 04.10.2026): живёт в «окошке» внутри кнопки. При каждом входе
  * вылезает из него, машет и говорит «Привет! Могу собрать тебе сборку», потом
- * пузырь гаснет, а Милли оседает — торчат только глаза, на наведение снова выглядывает.
+ * пузырь гаснет, а Aera AI оседает — торчат только глаза, на наведение снова выглядывает.
  * Пузырь — в портале поверх всего, иначе его срезает шапка библиотеки.
  */
 export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
@@ -39,7 +39,7 @@ export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
     const m = peek.current?.getBoundingClientRect()
     if (r && m) setAt({ x: m.left + m.width * 0.5, y: r.top, tail: 0 })
   }, [])
-  // пузырь не должен уезжать за правый край окна: сдвигаем его влево, хвост остаётся над Милли
+  // пузырь не должен уезжать за правый край окна: сдвигаем его влево, хвост остаётся над Aera AI
   useLayoutEffect(() => {
     const w = bub.current?.offsetWidth
     if (!at || !w || at.tail) return
@@ -68,7 +68,7 @@ export function HubFind({ onSearch }: { onSearch: (q: string) => void }) {
         {t('Найти')}
       </button>
       <button type="button" className="btn lg secondary hub-find-ai" data-sound="open" data-track="ai_builder_open" onClick={ask}>
-        {/* Милли внутри кнопки: низ спрятан за нижней рамкой, голова и рука выглядывают. */}
+        {/* Aera AI внутри кнопки: низ спрятан за нижней рамкой, голова и рука выглядывают. */}
         <span className={say ? 'hub-ai-peek is-up' : 'hub-ai-peek'} ref={peek} aria-hidden="true">
           <span className="hub-ai-who">
             <Milli size={64} mode={say ? 'wave' : 'idle'} poke={false} />

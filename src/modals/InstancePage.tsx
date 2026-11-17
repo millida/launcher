@@ -2838,7 +2838,7 @@ export function InstancePage() {
                     const name = profile!
                     repairPack(name)
                       .then((r) => {
-                        // Причину вылета ядро не опознало — Милли смотрит лог и сборку целиком.
+                        // Причину вылета ядро не опознало — Aera AI смотрит лог и сборку целиком.
                         if (!r?.unresolved || !hasMillidaAccount()) return
                         const crash = r.unresolved
                         void import('../lib/milliDoctor').then((d) => {

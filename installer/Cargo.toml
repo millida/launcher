@@ -1,7 +1,7 @@
 [package]
 name = "millida-setup"
 version = "1.0.0"
-description = "Установщик Millida Launcher"
+description = "Установщик Aera Launcher"
 edition = "2021"
 license = "GPL-3.0-only"
 publish = false

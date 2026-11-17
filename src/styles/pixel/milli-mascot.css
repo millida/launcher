@@ -12,13 +12,13 @@
 
 .milli {
   position: relative; display: inline-block; flex: none; line-height: 0;
-  --milli-body: #5ec64d; --milli-ink: #1b1f1c; --milli-glyph: #ffffff; --milli-cheek: #f59aa8; --milli-tongue: #e8566b;
+  --milli-body: #c6243e; --milli-ink: #17181d; --milli-glyph: #fff7f7; --milli-cheek: #f2a0ad; --milli-tongue: #e54252;
 }
 .milli svg { display: block; overflow: visible; }
 .milli svg g { transform-origin: 0 0; }
 
 /* ── Палитра ── */
-.mm-body, .mm-limb { fill: #5ec64d; fill: var(--milli-body); }
+.mm-body, .mm-limb { fill: #c6243e; fill: var(--milli-body); }
 .mm-hi { fill: #fff; opacity: 0.3; }
 .mm-hi2 { fill: #fff; opacity: 0.1; }
 .mm-sh { fill: #1b1f1c; opacity: 0.14; }
@@ -26,10 +26,10 @@
 .mm-rim { fill: #1b1f1c; opacity: 0.16; }
 .mm-gsh { fill: #1b1f1c; opacity: 0.22; }
 .mm-glyph, .mm-glint, .mm-glove { fill: #fff; fill: var(--milli-glyph); }
-.mm-iris-hi { fill: #57e0c4; }
-.mm-iris-lo { fill: #1f8f93; }
-.mm-leaf { fill: #8be35f; }
-.mm-leaf-dk { fill: #3fae4a; }
+.mm-iris-hi { fill: #fff7f7; }
+.mm-iris-lo { fill: #d32742; }
+.mm-leaf { fill: #f3dfe2; }
+.mm-leaf-dk { fill: #a91c34; }
 .mm-ink, .mm-boot { fill: #1b1f1c; fill: var(--milli-ink); }
 .mm-cheek { fill: #f59aa8; fill: var(--milli-cheek); }
 .mm-tongue { fill: #e8566b; fill: var(--milli-tongue); }
@@ -40,12 +40,12 @@
 .mm-dot { fill: #fff; opacity: 0.25; }
 /* частицы */
 .mm-c-R { fill: #ff3b4e; } .mm-c-W { fill: #fff; } .mm-c-D { fill: #b0172e; }
-.mm-c-N { fill: #5bea5b; } .mm-note.is-b .mm-c-N { fill: #4fd8ff; } .mm-note.is-c .mm-c-N { fill: #ff62d8; }
+.mm-c-N { fill: #e54252; } .mm-note.is-b .mm-c-N { fill: #fff7f7; } .mm-note.is-c .mm-c-N { fill: #ff9ca8; }
 .mm-c-Z { fill: #e6f0ff; }
 .mm-c-X { fill: #ffe14d; }
-.mm-c-G { fill: #6dff4a; }
+.mm-c-G { fill: #d32742; }
 .mm-c-L { fill: #f1f1ea; } .mm-dust .mm-c-D { fill: #b4b4aa; }
-.mm-totem rect { fill: #ffd83b; } .mm-totem.is-b rect { fill: #8ef05a; } .mm-totem.is-c rect { fill: #fff6a8; }
+.mm-totem rect { fill: #ffd83b; } .mm-totem.is-b rect { fill: #fff7f7; } .mm-totem.is-c rect { fill: #fff6a8; }
 
 /* ── Базовая поза и кадры по умолчанию ── */
 .mm-arm-l { transform: rotate(-14deg); }
@@ -513,7 +513,7 @@
   .milli svg *, .milli-wave-hover:hover .milli svg * { animation: none !important; }
 }
 
-/* Корона Милли — часть персонажа (PLUS — золото, Diamond — алмаз) */
+/* Корона Aera AI — часть персонажа (PLUS — золото, Diamond — алмаз) */
 .mm-crown-ol { fill: #1b1206; }
 .mm-crown.is-gold .mm-crown-base { fill: #f5b82a; }
 .mm-crown.is-gold .mm-crown-hi { fill: #ffe589; }

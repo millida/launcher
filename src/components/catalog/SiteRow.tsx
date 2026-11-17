@@ -103,12 +103,12 @@ interface Tag {
   node?: ReactNode
   tone?: string | null
   accent?: boolean
-  /** Значок без квадратной плашки (маскот Милли). */
+  /** Значок без квадратной плашки (маскот Aera AI). */
   bare?: boolean
 }
 
-/** Сборку собрала Милли (30.09.2026): её маскот первой меткой, как на сайте. */
-const milliTag = (): Tag => ({ label: t('Милли'), accent: true, bare: true, node: <Milli size={18} /> })
+/** Сборку собрала Aera AI (30.09.2026): её маскот первой меткой, как на сайте. */
+const milliTag = (): Tag => ({ label: t('Aera AI'), accent: true, bare: true, node: <Milli size={18} /> })
 
 /** Метка «RU · На русском». Подсказка про студию — только у переводов студии (`by`), русские авторы без неё. */
 const RuMark = ({ className, by }: { className: string; by?: string }) => (
@@ -428,7 +428,7 @@ function Actions({
         onOwned={() => void resolve().then((h) => (h ? setWant('add') : native()))}
       />
     )
-  // Сборка Милли из каталога: файла на зеркале нет, есть код — ставится как «Сборка по коду».
+  // Сборка Aera AI из каталога: файла на зеркале нет, есть код — ставится как «Сборка по коду».
   const code = sec.kind === 'modpack' ? aiPackCode(card) : null
   if (code)
     return (

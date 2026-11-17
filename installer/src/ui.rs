@@ -24,7 +24,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 const CLASS_NAME: &str = "MillidaSetupWindow";
-const WINDOW_TITLE: &str = "Установка Millida Launcher";
+const WINDOW_TITLE: &str = "Установка Aera Launcher";
 const WM_APP_UPDATE: u32 = WM_APP + 1;
 const PROGRESS_CLASS: &str = "msctls_progress32";
 const PROGRESS_STEPS: i32 = 1000;

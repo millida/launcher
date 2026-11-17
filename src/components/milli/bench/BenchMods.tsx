@@ -929,7 +929,7 @@ export function BenchMods() {
                 useMilli.setState((s) => ({ restore: { text: t('Добавь мод: {name}', { name: query }), seq: s.restore.seq + 1 }, focusSeq: s.focusSeq + 1 }))
               }}
             >
-              {t('Спросить Милли')}
+              {t('Спросить Aera AI')}
             </button>
           ) : filter !== 'all' ? (
             <button type="button" className="btn sm secondary" onClick={() => setUi({ filter: 'all' })}>
@@ -953,7 +953,7 @@ export function BenchMods() {
             </button>
           ) : null}
           <button type="button" className="btn sm primary" data-track="milli_bulk_ask" onClick={askMilli}>
-            {t('Спросить Милли')}
+            {t('Спросить Aera AI')}
           </button>
           <button type="button" className="mpc-x" aria-label={t('Снять выбор')} onClick={() => setSelected(new Set())}>
             <PxIcon name="x" size={12} />

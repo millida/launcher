@@ -77,7 +77,7 @@ fn webview_failure_box(msg: &str) {
     // Both languages at once: the page and its translations are exactly what did not start.
     let text = [WEBVIEW_FAILED_RU, WEBVIEW_FAILED_EN, detail.as_str()].join("\n\n");
     let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
-    let (body, title) = (wide(&text), wide("Millida Launcher"));
+    let (body, title) = (wide(&text), wide("Aera Launcher"));
     let answer = unsafe { MessageBoxW(std::ptr::null_mut(), body.as_ptr(), title.as_ptr(), MB_YESNO | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST) };
     if answer == IDYES {
         let _ = crate::engine::open_external(WEBVIEW2_PAGE);

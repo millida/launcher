@@ -1,16 +1,10 @@
-# Как собрать Millida Launcher самому
+# Сборка Aera Launcher
 
 [English version: BUILDING.md](BUILDING.md)
 
-<p align="center">
-  <a href="https://github.com/millida/launcher/raw/main/.github/readme/build-guide-ru.mp4"><img src=".github/readme/build-guide-ru.gif" alt="Сборка лаунчера из исходников: клонирование, зависимости, сборка установщика" width="100%"></a>
-  <br>
-  <a href="https://github.com/millida/launcher/raw/main/.github/readme/build-guide-ru.mp4"><b>Смотреть видео целиком (MP4, 75 с)</b></a>
-</p>
+> **Только для разработки и тестирования.** В этом ребрендинге сохранены существующие подключения аккаунтов, API, CDN, каталога и обновлений Millida. Сервер обновлений и ключ подписи по-прежнему принадлежат upstream-проекту: собранная версия может обращаться к этим сервисам и обновиться до upstream-сборки. Не распространяйте пакет и не используйте его как публичный релиз Aera, пока сервисы, подпись, идентификаторы и защищённые товарные знаки не будут мигрированы с разрешения владельцев. Подробности — в [README.md](README.md) и [TRADEMARK.md](TRADEMARK.ru.md).
 
-Три команды. Первая сборка — 10–20 минут, смотря какой компьютер. Дальше — быстрее: Rust пересобирает только изменённое.
-
-## 1. Поставь инструменты
+## 1. Установите инструменты
 
 <details open>
 <summary><b>Windows 10/11</b></summary>
@@ -24,12 +18,7 @@ winget install --id Rustlang.Rustup -e
 winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 ```
 
-После установки закрой и открой PowerShell заново — иначе он не увидит `bun` и `cargo`.
-
-В Windows 11 и большинстве поддерживаемых версий Windows 10 WebView2 уже есть.
-Если на машине для разработки его нет, [установи Runtime от Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
-Если Runtime нет, собранный из этого исходного кода установщик Windows скачивает bootstrapper
-Microsoft и ставит его (`src-tauri/installer-hooks.nsh`). Сбой на этом шаге установку лаунчера не останавливает.
+После установки закройте и заново откройте PowerShell — иначе он не увидит `bun` и `cargo`.
 </details>
 
 <details>
@@ -51,64 +40,33 @@ curl -fsSL https://bun.sh/install | bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Другие дистрибутивы — названия пакетов в [документации Tauri](https://tauri.app/start/prerequisites/#linux).
+Для других дистрибутивов смотрите названия пакетов в [требованиях Tauri](https://tauri.app/start/prerequisites/#linux).
 </details>
 
-## 2. Собери
+## 2. Соберите и запустите в режиме разработки
 
 ```bash
-git clone https://github.com/millida/launcher.git
-cd launcher
+git clone https://github.com/deadlyghost90/aeralauncher.git
+cd aeralauncher
 bun install
-bun run tauri build
+bun run typecheck
+bun run build:web
+bun run tauri dev
 ```
 
-Хочешь собрать ровно ту версию, что вышла на сайте, — переключись на её тег перед сборкой:
+В режиме разработки приложение всё ещё может обращаться к подключённым сервисам Millida при входе или открытии связанных разделов. Владелец сервиса может блокировать такие запросы или не предоставлять их. Не используйте чужие учётные данные и не выдавайте интеграции за инфраструктуру Aera.
 
-```bash
-git checkout v2.0.177
-```
+## 3. Пакет приложения (не для публичного распространения)
 
-Список версий — на странице [релизов](https://github.com/millida/launcher/releases).
+Команда `bun run tauri build` создаёт локальный неподписанный пакет для тестирования. Не устанавливайте и не запускайте такой пакет как обычный релиз Aera: конфигурация обновлений всё ещё подключена к upstream-серверу и его ключу подписи. Для безопасного публичного релиза нужны собственный разрешённый сервер обновлений и ключ, согласованная миграция идентификатора/данных приложения, регистрации сервисов и проверка сторонних товарных знаков и графики.
 
-## 3. Забери результат
+## Если сборка не получается
 
-| Система | Где лежит |
+| Ошибка | Что проверить |
 | --- | --- |
-| Windows | `src-tauri\target\release\bundle\nsis\Millida Launcher_<версия>_x64-setup.exe` |
-| macOS | `src-tauri/target/release/bundle/dmg/` и `bundle/macos/Millida Launcher.app` |
-| Linux | `src-tauri/target/release/bundle/` — `deb/`, `rpm/`, `appimage/` |
+| `linker 'link.exe' not found` | Установлен ли workload C++ для Visual Studio Build Tools. |
+| `bun` или `cargo` не является командой | Перезапустите терминал после установки инструментов. |
+| `webkit2gtk-4.1 not found` | Установлены ли пакеты Linux из списка выше. |
+| Другая ошибка | Создайте issue в [репозитории Aera Launcher](https://github.com/deadlyghost90/aeralauncher/issues) и приложите вывод команды. |
 
-Запустить без установки, прямо из исходников: `bun run tauri dev`.
-
-## Чем твоя сборка отличается от нашей
-
-| | Твоя сборка | С millida.net |
-| --- | --- | --- |
-| Код | Тот же, что в этом репозитории | Тот же: каждый релиз здесь — коммит, из которого собран установщик |
-| Цифровая подпись | Нет — Windows покажет «Неизвестный издатель» | Есть. Ключ подписи не публикует ни один разработчик: с ним любой выпустил бы вирус от нашего имени |
-| Версия | `2.0.0` | Номер сборки, например `2.0.177` |
-| Обновления | При первом запуске лаунчер сам обновится до официальной версии | Ставятся сами |
-
-Остаться на своей сборке — перед `bun run tauri build` поменяй `"version": "2.0.0"` на `"version": "99.0.0"` в [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json). Номер выше нашего — обновление сборку не тронет.
-
-Обновление проверяется подписью из [`tauri.conf.json`](src-tauri/tauri.conf.json) (`plugins.updater.pubkey`): подменённый файл лаунчер не установит.
-
-## Как проверить официальный установщик
-
-- Скачивай только с [millida.net/launcher](https://millida.net/launcher) или со страницы [релизов](https://github.com/millida/launcher/releases). Всё остальное — не наше.
-- Windows: правый клик по файлу → «Свойства» → «Цифровые подписи» → «Подпись действительна».
-- Что файл из релиза собран здесь, из этого кода: каждый установщик собирает [workflow Release](.github/workflows/release.yml) на серверах GitHub, и GitHub подписывает, из какого коммита он получен. Проверка — `gh attestation verify <файл> -R millida/launcher`, или скачай `provenance.sigstore.json` из релиза и добавь `--bundle provenance.sigstore.json`.
-- Отчёт VirusTotal по каждому установщику — [millida.net/launcher/antivirus](https://millida.net/launcher/antivirus).
-
-## Если не собирается
-
-| Ошибка | Что сделать |
-| --- | --- |
-| `linker 'link.exe' not found` | Не стоит Build Tools с C++ — команда из шага 1 для Windows |
-| `bun` или `cargo` «не является командой» | Перезапусти терминал после установки |
-| `webkit2gtk-4.1 not found` | Не поставлены пакеты из шага 1 для Linux |
-| AppImage падает на `linuxdeploy` | Собери без него: `bun run tauri build --bundles deb` |
-| Что-то другое | [Заведи issue](https://github.com/millida/launcher/issues/new/choose) и приложи вывод команды |
-
-Хочешь прислать правку — [CONTRIBUTING.md](CONTRIBUTING.ru.md). Форк под своим именем — [TRADEMARK.md](TRADEMARK.ru.md).
+О вкладе и лицензиях — [CONTRIBUTING.md](CONTRIBUTING.ru.md), [LICENSE](LICENSE), [NOTICE](NOTICE), [TRADEMARK.ru.md](TRADEMARK.ru.md).

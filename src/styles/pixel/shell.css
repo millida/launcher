@@ -242,7 +242,7 @@
 .acc-menu .acc-item-del { width: 34px; height: 34px; }
 .acc-menu .acc-add-btn { height: 44px; font-size: 14px; font-weight: 800; justify-content: center; }
 
-/* Всплывающие окна не заезжают под полосу заголовка «MILLIDA LAUNCHER»
+/* Всплывающие окна не заезжают под полосу заголовка «AERA LAUNCHER»
    (правка владельца 23.09.2026, 22:28): затемнение начинается под ней, окно
    не выше доступной высоты. */
 :root .modal-bg { top: 44px; }

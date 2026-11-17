@@ -326,7 +326,7 @@ pub fn save_now(app: &AppHandle) {
         let saved = match outcome {
             Ok(path) => {
                 if let Some(notices) = &session.notices {
-                    notices.post(NOTICE_KIND, "Клип сохранён", &format!("Последние {} с · Millida Clips", session.seconds), true);
+                    notices.post(NOTICE_KIND, "Клип сохранён", &format!("Последние {} с · Aera Clips", session.seconds), true);
                 }
                 ClipSaved {
                     ok: true,

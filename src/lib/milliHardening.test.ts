@@ -4,7 +4,7 @@ import { milliPathOk } from './milliPaths'
 
 const card = (steps: unknown[], rows: unknown[]) => parseAction({ id: 'a', kind: 'graphics', title: 'Графика', rows, steps })
 
-describe('Милли: карточка не врёт о шагах', () => {
+describe('Aera AI: карточка не врёт о шагах', () => {
   test('подпись строки собирается из шага, а не из слов сервера', () => {
     const a = card(
       [{ op: 'add', kind: 'mod', projectId: 'evilmod', title: 'Sodium' }],
@@ -28,7 +28,7 @@ describe('Милли: карточка не врёт о шагах', () => {
   })
 })
 
-describe('Милли: пути файлов', () => {
+describe('Aera AI: пути файлов', () => {
   const cases: [string, boolean][] = [
     ['options.txt', true],
     ['config/sodium.json', true],
