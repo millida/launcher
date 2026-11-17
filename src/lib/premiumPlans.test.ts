@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { hasPlanChoice, liveSubscription, type PremiumPackDetail, type PremiumSubscription } from './premium'
+import { hasPlanChoice, isBundlePlan, liveSubscription, withStandardPlan, type PremiumPackDetail, type PremiumSubscription } from './premium'
 
 const base: PremiumPackDetail = { id: 'aeronautics', slug: 'aeronautics', title: 'All Of Aeronautics' }
 const pack = { id: 'pack', title: 'Только эта сборка', priceKopecks: 25900, period: 'month' as const }
@@ -24,4 +24,22 @@ describe('liveSubscription: the cancel line names the subscription that actually
     [null, null, 'no detail'],
   ]
   for (const [detail, want, why] of cases) test(why, () => expect(liveSubscription(detail)?.planId ?? null).toBe(want))
+})
+
+describe('withStandardPlan: the three tiers of the site, Starter, Standard and Premium', () => {
+  const standard = { id: 'pack:standard', title: 'Стандарт', priceKopecks: 32900, period: 'month' as const }
+  const ids = (d: PremiumPackDetail) => (d.plans || []).map((p) => p.id)
+  const cases: [PremiumPackDetail, string[], string][] = [
+    [{ ...base, plans: [pack, bundle], standardPlan: standard }, ['pack', 'pack:standard', 'bundle:arcania-labs'], 'the partner sells Standard: it sits between this pack and all packs'],
+    [{ ...base, plans: [pack, bundle], standardPlan: null }, ['pack', 'bundle:arcania-labs'], 'no Standard price: two buttons as before'],
+    [{ ...base, plans: [pack, bundle] }, ['pack', 'bundle:arcania-labs'], 'a server before the tiers sends no standardPlan'],
+    [{ ...base, plans: [pack, standard, bundle], standardPlan: standard }, ['pack', 'pack:standard', 'bundle:arcania-labs'], 'a server that already lists it is not given a second button'],
+  ]
+  for (const [detail, want, why] of cases) test(why, () => expect(ids(withStandardPlan(detail))).toEqual(want))
+
+  test('Standard pays for one pack: no bundle confirmation that lists every pack of the studio', () => {
+    expect(isBundlePlan(standard)).toBe(false)
+    expect(isBundlePlan(pack)).toBe(false)
+    expect(isBundlePlan(bundle)).toBe(true)
+  })
 })
