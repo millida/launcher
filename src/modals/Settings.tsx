@@ -73,7 +73,7 @@ import { balanceText, openTopup, useMoney } from '../lib/useMoney'
 // реактивен, и вкладка «Приватность», открытая до готовности хранилища сессий
 // (или до входа в аккаунт), навсегда застревала на «Нужен аккаунт Millida».
 import { useHasMillida } from '../state/auth'
-import { setSkinSource, skinSource } from '../lib/gameProfile'
+import { setSkinSource, setSkinTarget, skinSource, skinTarget, type SkinTarget } from '../lib/gameProfile'
 import { autoTuneGlobal, millidaModEnabled, setAutoTuneGlobal, setMillidaModEnabled } from '../ipc/commands'
 import { startTour } from '../state/tour'
 import { buildDiagnostics } from '../lib/diag'
@@ -284,6 +284,7 @@ export function Settings({ on }: { on: boolean }) {
   const [beta, setBeta] = useState(betaChannel)
   const updStaged = useUpdate((s) => s.staged)
   const [skins, setSkins] = useState<SkinSource>(skinSource)
+  const [target, setTarget] = useState<SkinTarget>(skinTarget)
   const charAnim = useViewPrefs((s) => s.charAnim)
   const bgAnim = useViewPrefs((s) => s.bgAnim)
   const tabMs = useViewPrefs((s) => s.tabMs)
@@ -805,6 +806,22 @@ export function Settings({ on }: { on: boolean }) {
             }}
           />
         </Row>
+        {hasTauri() && hasMillida && acc?.kind === 'microsoft' ? (
+          <Row title={t('Куда ставить скин')} keys="скины лицензия millida mojang применить">
+            <Segs<SkinTarget>
+              value={target}
+              options={[
+                ['both', t('Везде')],
+                ['license', t('Лицензия')],
+                ['millida', 'Millida'],
+              ]}
+              onPick={(v) => {
+                setTarget(v)
+                setSkinTarget(v)
+              }}
+            />
+          </Row>
+        ) : null}
         <Row title={t('Мод Millida')} hint={t('Скины, плащи и эмоции в игре')} keys="мод эмоции плащи">
           <Toggle
             id="setMillidaMod"

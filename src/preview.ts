@@ -72,6 +72,10 @@ if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window) && new URLSearchPa
   const open = new URLSearchParams(location.search).get('open')
   if (open) setTimeout(() => void import('./state/ui').then((m) => m.useUi.getState().setScreen(open as never)), 600)
 
+  // `&mods=ask|install|failed` — окно модов сервера при входе (src/lib/demoServerMods.ts).
+  const modsDemo = new URLSearchParams(location.search).get('mods')
+  if (modsDemo) setTimeout(() => void import('./lib/demoServerMods').then((m) => m.showServerModsDemo(modsDemo)), 900)
+
   // `&launch=installing|running` и `&screen=…` — состояния запуска (src/lib/demoLaunch.ts).
   const launchDemo = new URLSearchParams(location.search).get('launch')
   if (launchDemo) {

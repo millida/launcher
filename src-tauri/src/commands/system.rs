@@ -113,6 +113,11 @@ pub fn ui_sounds() -> Vec<engine::UiSound> { engine::ui_sounds() }
 pub async fn download_ui_sounds() -> Result<Vec<engine::UiSound>, String> { engine::download_ui_sounds().await }
 
 #[tauri::command]
+pub async fn breaking_stages() -> Result<Vec<String>, String> {
+    super::blocking(engine::breaking_stages).await
+}
+
+#[tauri::command]
 // Opens a link in the system browser. The address is checked inside engine::open_external_anyhow (core/external.rs).
 pub fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     engine::open_external_anyhow(&app, &url)
