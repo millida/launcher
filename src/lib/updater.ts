@@ -6,6 +6,7 @@ import { hasTauri, tauri } from '../ipc/tauri'
 import {
   appVersion,
   isFlatpak,
+  runningGames,
   showAfterUpdate,
   updateDeltaStage,
   updateFallbackCheck,
@@ -473,6 +474,33 @@ function bootEscape(quietMs: number): { left: Promise<BootLeave>; alive: () => v
   }
 }
 
+/// An update downloaded in an earlier session is already on disk and checked, so it goes in at start
+/// instead of waiting for an exit the player may never make (closing the window only hides it in the tray).
+/// A running game keeps it for later: the window can be reopened while the core still runs one.
+async function installStagedAtBoot(version: string): Promise<boolean> {
+  const file = fallbackFile
+  if (!file || fallbackFileVersion !== version || bootTriesSpent('staged:' + version) || busyProbe()) return false
+  const games = await runningGames().catch((e) => {
+    console.warn('[updater] the core did not say whether a game is running', e)
+    return null
+  })
+  if (!games || games.length) return false
+  const st = useUpdate.getState()
+  st.set({ bootPhase: 'installing', version })
+  noteBootTry('staged:' + version)
+  try {
+    const res = await updateFallbackRun(file)
+    if (!res.started) throw new Error(t('установщик не запустился'))
+    await quit()
+    return true
+  } catch (e) {
+    st.set({ bootPhase: 'idle' })
+    if (stagedByPatch()) dropDelta(e)
+    else updateFailed('updater-boot', e)
+    return false
+  }
+}
+
 /// Looked at on startup, but only a release the manifest calls critical holds the start (the old
 /// way: download and install before the launcher opens, on Windows the installer ends the running
 /// process). Every other release is found and downloaded in the background after the launcher is
@@ -487,10 +515,11 @@ export async function bootUpdate(): Promise<boolean> {
   const st = useUpdate.getState()
   st.set({ bootPhase: 'checking', bootPct: 0 })
   // What an earlier window (or the core in the tray) already downloaded is on disk: take it first.
-  await adoptStaged()
+  const ready = await adoptStaged()
   try {
     if (await pluginGaveUp()) {
       const f = await withTimeout(probeFallback(), BOOT_CHECK_TIMEOUT)
+      if (f && ready === f.version && (await installStagedAtBoot(ready))) return true
       if (!f || !f.critical) {
         // Not urgent: probeFallback has put it to download in the background.
         st.set({ bootPhase: 'idle' })
@@ -527,6 +556,7 @@ export async function bootUpdate(): Promise<boolean> {
       st.set({ bootPhase: 'idle' })
       return false
     }
+    if (ready === upd.version && (await installStagedAtBoot(ready))) return true
     remember(upd)
     if (!isCriticalRelease(upd.rawJson)) {
       st.set({ bootPhase: 'idle' })

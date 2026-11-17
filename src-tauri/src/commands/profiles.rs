@@ -185,6 +185,19 @@ pub async fn install_server_pack_file(
     engine::install_server_pack_file(app, server_id, sha512, size, name).await
 }
 
+/// One of a hosting server's own mods the player approved, checked by its sha512 and size.
+#[tauri::command]
+pub async fn install_server_mod_file(
+    profile: String,
+    server_id: String,
+    sha512: String,
+    size: u64,
+    file_name: String,
+    ticket: String,
+) -> Result<String, String> {
+    engine::install_server_mod_file(profile, server_id, sha512, size, file_name, ticket).await
+}
+
 /// What a Millida catalogue pack holds, from the archive index the catalogue serves.
 #[tauri::command]
 pub async fn catalog_pack_contents(slug: String) -> Result<engine::PackContents, String> {
@@ -466,8 +479,9 @@ pub async fn redeem_pack_key(slug: String, code: String) -> Result<serde_json::V
 
 /// Наши готовые сборки — тот же список, что на сайте.
 #[tauri::command]
-pub async fn millida_packs() -> Result<serde_json::Value, String> {
-    engine::catalog_packs().await
+pub async fn millida_packs(lang: Option<String>) -> Result<serde_json::Value, String> {
+    let lang = engine::lang_header(lang.as_deref())?;
+    engine::catalog_packs(lang).await
 }
 
 /// Ready-made pack from the Millida catalogue. The webview names only the

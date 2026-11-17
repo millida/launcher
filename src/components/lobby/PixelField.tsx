@@ -284,7 +284,10 @@ export function PixelField({ on }: { on: boolean }) {
     const fit = () => {
       if (!alive) return
       const r = cv.getBoundingClientRect()
-      if (!r.width || !r.height) return
+      if (!r.width || !r.height) {
+        scene = null
+        return
+      }
       // Два холста во всё окно: при DPR 2 это ~40 МБ видеопамяти. Пиксель-арт
       // выше 1.5 не выигрывает, в лёгкой графике — 1; слабые устройства режут сильнее.
       const dpr = lite ? 1 : Math.min(window.devicePixelRatio || 1, 1.5, maxCanvasPixelRatio(currentDeviceTier()))
@@ -332,7 +335,7 @@ export function PixelField({ on }: { on: boolean }) {
     const run = () => {
       cancelAnimationFrame(raf)
       raf = 0
-      if (!still() && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
+      if (scene && !still() && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
       else if (scene) {
         // Анимацию фона выключили — оставляем статичный кадр без волны и искр.
         paint(ctx, scene, performance.now(), false)
@@ -342,7 +345,11 @@ export function PixelField({ on }: { on: boolean }) {
 
     fit()
     run()
-    const ro = new ResizeObserver(() => fit())
+    const ro = new ResizeObserver(() => {
+      const had = !!scene
+      fit()
+      if (had !== !!scene) run()
+    })
     ro.observe(cv)
     document.addEventListener('visibilitychange', run)
     window.addEventListener(VIEW_PREFS_EVENT, run)

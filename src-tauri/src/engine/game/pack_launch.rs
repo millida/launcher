@@ -472,9 +472,10 @@ pub fn lwjgl_library_path_arg(dirs: &[PathBuf]) -> Option<String> {
 /// The token rides along when there is one: a partner's tester also sees the
 /// draft packs they check. The service ignores a stale token instead of
 /// refusing, so the public list never breaks on it.
-pub async fn catalog_packs() -> Result<Value, String> {
+pub async fn catalog_packs(lang: Option<&'static str>) -> Result<Value, String> {
     // Request for the modpack list to the Millida API. The Millida account token (not Microsoft) is attached if the user is logged in.
-    millida_api("/catalog/packs".into(), "GET".into(), None, millida_token()).await
+    // The language makes the service answer titles and summaries in the interface language.
+    millida_api_in("/catalog/packs".into(), "GET".into(), None, millida_token(), None, lang).await
 }
 
 /// Маркер «сборка закрыта доступом» для окна ввода ключа.
