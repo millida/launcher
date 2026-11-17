@@ -1329,25 +1329,31 @@ export function Settings({ on }: { on: boolean }) {
     <section className={'screen' + (on ? ' on' : '')} id="s-settings">
       <div className="s2">
         <div className="s2-head">
-          <h1 className="s2-title">{t('Настройки')}</h1>
-          <label className="input sm s2-search">
-            <Icon id="i-search" />
-            <input
-              value={query}
-              placeholder={t('Найти')}
-              aria-label={t('Найти настройку')}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setQuery('')
-              }}
-            />
-            {query ? (
-              <button className="s2-search-x" aria-label={t('Очистить поиск')} onClick={() => setQuery('')}>
-                <Icon id="i-x" />
-              </button>
-            ) : null}
-          </label>
+          <div className="s2-brand">
+            <img className="s2-mark" src="/aera-mark.svg" alt="" aria-hidden="true" />
+            <div className="s2-brand-copy">
+              <span className="s2-brand-name">Aera Launcher</span>
+              <h1 className="s2-title">{t('Настройки')}</h1>
+            </div>
+          </div>
         </div>
+        <label className="input sm s2-search s2-search-wide">
+          <Icon id="i-search" />
+          <input
+            value={query}
+            placeholder={t('Найти')}
+            aria-label={t('Найти настройку')}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setQuery('')
+            }}
+          />
+          {query ? (
+            <button className="s2-search-x" aria-label={t('Очистить поиск')} onClick={() => setQuery('')}>
+              <Icon id="i-x" />
+            </button>
+          ) : null}
+        </label>
         <nav className="set-tabs s2-tabs" role="tablist" aria-label={t('Разделы настроек')}>
           {sections().map((s) => (
             <button
@@ -1368,7 +1374,7 @@ export function Settings({ on }: { on: boolean }) {
         </nav>
 
         <Query.Provider value={q}>
-          <div className="s2-body">
+          <div className={'s2-body' + (q ? ' s2-body--search' : ` s2-body--${sec}`)}>
             {q ? (
               <>
                 {sections().map((s) => (
