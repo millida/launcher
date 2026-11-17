@@ -50,6 +50,7 @@ import {
   ConfirmModal,
   CrashModal,
   DepPlanModal,
+  ServerModsModal,
   ImportModal,
   Login,
   MigrateBuildModal,
@@ -1164,6 +1165,7 @@ export function App() {
         <BuildPicker />
         <PackKeyHost />
         <DepPlanModal />
+        <ServerModsModal />
         <PackCodeHost />
         <PartyHost />
         <CrashModal />

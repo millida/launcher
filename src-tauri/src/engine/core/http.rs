@@ -268,7 +268,9 @@ pub(crate) fn net_err(e: &reqwest::Error) -> String {
     }
     let detail = cause.to_string();
     let low = detail.to_lowercase();
-    let hint = if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
+    let hint = if certificate_rejected_by_clock(&low) {
+        "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер"
+    } else if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
         "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения"
     } else if low.contains("dns") || low.contains("failed to lookup") || low.contains("resolve") {
         "адрес сервера не определился: проверь DNS, VPN и антивирус"
@@ -280,6 +282,12 @@ pub(crate) fn net_err(e: &reqwest::Error) -> String {
         return format!("нет связи ({})", detail);
     };
     format!("нет связи ({} — {})", detail, hint)
+}
+
+fn certificate_rejected_by_clock(low: &str) -> bool {
+    const MARKERS: [&str; 4] =
+        ["certificate expired", "certificate not valid yet", "invalid peer certificate: expired", "invalid peer certificate: notvalidyet"];
+    MARKERS.iter().any(|m| low.contains(m))
 }
 
 /// Digest kind announced by the source: Modrinth publishes sha1/sha512, Mojang
@@ -1740,6 +1748,21 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_certificate_rejected_by_the_clock_is_told_apart_from_interception() {
+        let table: [(&str, bool, &str); 6] = [
+            ("invalid peer certificate: certificate not valid yet: verification time 1575710149 (unix), but certificate is not valid before 1793000000 (unix)", true, "clock reset to the bios date after a power cut"),
+            ("invalid peer certificate: certificate expired: verification time 4320000000 (unix), but certificate is not valid after 1800000000 (unix)", true, "clock far in the future"),
+            ("invalid peer certificate: notvalidyet", true, "older rustls names the same failure without details"),
+            ("invalid peer certificate: expired", true, "older rustls names the same failure without details"),
+            ("invalid peer certificate: unknownissuer", false, "an antivirus substituting the certificate is not a clock problem"),
+            ("invalid peer certificate: certificate not valid for name \"x\"", false, "a wrong name is interception, not time"),
+        ];
+        for (low, want, why) in table {
+            assert_eq!(certificate_rejected_by_clock(low), want, "{}", why);
+        }
+    }
 
     // Port 1 refuses immediately, so any network attempt fails fast.
     const DEAD: &str = "http://127.0.0.1:1/nope.json";
