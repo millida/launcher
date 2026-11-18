@@ -111,15 +111,6 @@
   .rv2-stage { transition: none; }
 }
 
-/* ---------- Трещины света (удары) ---------- */
-.rv2-cracks { position: absolute; inset: 14% 10% 20%; z-index: 3; width: 80%; height: 66%; pointer-events: none; overflow: visible; mix-blend-mode: screen; }
-.rv2-cracks polyline {
-  fill: none; stroke: color-mix(in srgb, var(--box) 35%, #fff); stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter;
-  stroke-dasharray: 60; stroke-dashoffset: 60; opacity: 0; filter: drop-shadow(0 0 2px var(--box));
-}
-.rv2-cracks polyline.on { opacity: 1; animation: rv2-crack 0.16s var(--m-ease-smooth) both; }
-@keyframes rv2-crack { to { stroke-dashoffset: 0; } }
-
 /* ---------- Сундук внизу, награды выходят из него ---------- */
 .rv2-stage { transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
 .rv2-stage.is-low { position: absolute; left: 50%; bottom: 0; margin-left: calc(min(56vh, 92vw) / -2); transform: translateY(26%) scale(0.46); cursor: pointer; }
@@ -173,7 +164,6 @@
 .rv2.has-lvl.rv2-ph-hit .rv2-rays, .rv2.has-lvl.rv2-ph-burst .rv2-rays { --rw-tone: var(--lvl); }
 .rv2.has-lvl .rv2-halo { background: radial-gradient(circle, color-mix(in srgb, var(--lvl) 70%, #fff) 0, color-mix(in srgb, var(--lvl) 50%, transparent) 32%, transparent 64%); transition: background 0.2s var(--m-ease-smooth); }
 .rv2.has-lvl .rv2-leak { background: radial-gradient(closest-side, color-mix(in srgb, var(--lvl) 40%, #fff), transparent); }
-.rv2.has-lvl .rv2-cracks polyline { stroke: color-mix(in srgb, var(--lvl) 35%, #fff); filter: drop-shadow(0 0 2px var(--lvl)); }
 .rv2.has-lvl .rv2-pips > i.on { background: var(--lvl); }
 .rv2-lvl {
   position: absolute; top: 2%; left: 50%; z-index: 5; translate: -50% 0; padding: 4px 14px;
