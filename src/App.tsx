@@ -69,6 +69,7 @@ import {
   Tour,
   LobbyKeeper,
   McNewsModal,
+  WallpaperLibrary,
 } from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
@@ -1178,6 +1179,7 @@ export function App() {
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <McNewsModal />
+        <WallpaperLibrary />
         <CommandPalette />
         <ConfirmModal />
         <ImageLightbox />

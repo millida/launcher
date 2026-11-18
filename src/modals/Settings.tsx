@@ -101,6 +101,7 @@ import type { Accent } from '../lib/accent'
 import { canPickBackdrop, pickBackdrop } from '../lib/pickBackdrop'
 import { STILLS } from '../lib/wallpaper'
 import { useWallpaper } from '../state/wallpaper'
+import { openWallpaperLibrary } from '../components/wallpaperLibStore'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
 import type { PerfMode } from '../state/viewPrefs'
 
@@ -519,6 +520,17 @@ export function Settings({ on }: { on: boolean }) {
                 <img src={convertFileSrc(c.path)} alt="" />
                 <span>{c.name || t('Свой фон')}</span>
                 <button
+                  className="s2-wp-del s2-wp-pub"
+                  aria-label={t('Опубликовать в библиотеку')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (onlyApp(t('Публикация фона'))) return
+                    openWallpaperLibrary('mine', c)
+                  }}
+                >
+                  <Icon id="i-send" />
+                </button>
+                <button
                   className="s2-wp-del"
                   aria-label={t('Удалить фон')}
                   onClick={(e) => {
@@ -530,6 +542,12 @@ export function Settings({ on }: { on: boolean }) {
                 </button>
               </div>
             ))}
+            <button className="s2-wp-tile add" onClick={() => openWallpaperLibrary()}>
+              <span className="s2-wp-ph">
+                <Icon id="i-image" />
+              </span>
+              <span>{t('Библиотека')}</span>
+            </button>
             <button className="s2-wp-tile add" onClick={uploadBackdrop}>
               <span className="s2-wp-ph">
                 <Icon id="i-upload" />

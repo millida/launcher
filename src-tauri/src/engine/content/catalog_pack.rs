@@ -452,6 +452,7 @@ async fn install_catalog_pack_job(
     let mut identity = pack_identity(slug, &meta.version, &sha512, review_file, review_sha512);
     remember_mod_opt_in(&mut identity, &view);
     remember_protected(&mut identity, &view);
+    remember_always_update(&mut identity, &view);
     merge_settings(&pname, identity);
     sync_pack_icon(&pname, &view).await;
 
@@ -618,6 +619,7 @@ async fn prepare_update(
     let mut settings = carried_settings(profile, slug, &meta.version, &sha512);
     remember_mod_opt_in(&mut settings, &view);
     remember_protected(&mut settings, &view);
+    remember_always_update(&mut settings, &view);
     let (from, to, slug) = (pdir.to_path_buf(), staged.to_path_buf(), slug.to_string());
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         place_unpacked(&unpacked, &to)?;
