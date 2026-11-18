@@ -20,7 +20,7 @@ import { lateMount, lazyHost, lazyHostWith } from '../lib/lateMount'
  * а не в стартовом бандле (26.10.2026: стартовый JS был 764 КБ при бюджете 300).
  */
 
-const modalOpen = (id: 'impModal' | 'mvModal' | 'accModal' | 'shotOverlay' | 'mpOverlay' | 'mgModal') => () =>
+const modalOpen = (id: 'impModal' | 'mvModal' | 'accModal' | 'shotOverlay' | 'mpOverlay' | 'mgModal' | 'smModal') => () =>
   useUi((s) => s.modals[id].open || s.modals[id].vis)
 
 export const ImportModal = lazyHost(() => import('../modals/Import').then((m) => ({ default: m.ImportModal })), modalOpen('impModal'))
@@ -36,6 +36,7 @@ export const BuildPicker = lazyHost(() => import('./BuildPicker').then((m) => ({
 export const PackKeyHost = lazyHost(() => import('./PackKeyHost').then((m) => ({ default: m.PackKeyHost })), () => usePackKey((s) => !!s.slug))
 export const PackCodeHost = lazyHost(() => import('./PackCodeHost').then((m) => ({ default: m.PackCodeHost })), () => usePackCode((s) => s.open))
 export const DepPlanModal = lazyHost(() => import('./DepPlanModal').then((m) => ({ default: m.DepPlanModal })), () => useDepPlan((s) => s.open))
+export const ServerModsModal = lazyHost(() => import('./ServerModsModal').then((m) => ({ default: m.ServerModsModal })), modalOpen('smModal'))
 export const CrashModal = lazyHost(() => import('./CrashModal').then((m) => ({ default: m.CrashModal })), () => useCrash((s) => !!s.info))
 export const ServerDetail = lazyHost(() => import('./ServerDetail').then((m) => ({ default: m.ServerDetail })), () => useServerDetail((s) => !!s.sv))
 export const LiveLog = lazyHost(() => import('./LiveLog').then((m) => ({ default: m.LiveLog })), () => useLiveLog((s) => s.open))

@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { PxIcon } from '../PxIcon'
 import { useDaily } from '../../state/daily'
 import { usePlus } from '../../state/plus'
@@ -7,7 +6,7 @@ import { Countdown } from './parts'
 import { Icon } from '../Icon'
 import { PassBody } from '../daily/DailyPassModal'
 import { ChestLive } from '../daily/ChestLive'
-import { playLeftText, usePlayChests } from '../../state/playChests'
+import { playLeftText, usePlayChests, usePlayChestsLive } from '../../state/playChests'
 import { Head } from './parts'
 import { questState } from './packQuests'
 import type { WeeklyPath } from './weekly'
@@ -76,9 +75,7 @@ export function BonusesSection({ on }: { on: boolean }) {
   const status = useDaily((s) => s.status)
   const dailyBusy = useDaily((s) => s.busy)
   const plusActive = usePlus((s) => s.active)
-  useEffect(() => {
-    if (on) void usePlayChests.getState().load()
-  }, [on])
+  usePlayChestsLive(on)
   if (!view) return null
   const left = view.nextInS === null ? null : Math.max(0, view.nextInS - Math.floor((Date.now() - at) / 1000))
   const giftReady = readyCells(passCols(status, !!status?.plus || plusActive)).length
