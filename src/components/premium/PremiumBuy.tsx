@@ -13,8 +13,11 @@ import { healthLine, loadPackHealth, type PackHealth } from '../../lib/packHealt
 import { keyCatalogPack } from '../../lib/installKeys'
 import { useInstalls } from '../../state/installs'
 import {
+  PACK_PLAN_ID,
+  STANDARD_PLAN_ID,
   buyPremiumPack,
   hasPlanChoice,
+  isBundlePlan,
   liveSubscription,
   periodSuffix,
   planPrice,
@@ -156,7 +159,7 @@ function confirmBundle(pack: PremiumPack, plan: PremiumPlan, onOwned: () => void
 }
 
 const choosePlan = (pack: PremiumPack, plan: PremiumPlan, onOwned: () => void) =>
-  plan.id === 'pack' ? startPlan(pack, plan, onOwned) : confirmBundle(pack, plan, onOwned)
+  isBundlePlan(plan) ? confirmBundle(pack, plan, onOwned) : startPlan(pack, plan, onOwned)
 
 /// Подписка одним планом (путь BuyButton: сборка по id).
 function startSub(pack: PremiumPack, plan: PremiumPlan, onOwned?: (() => void) | null) {
@@ -171,8 +174,10 @@ function startBuy(pack: PremiumPack, onOwned?: (() => void) | null) {
   runPayment(pack.id, () => buyPremiumPack(pack.id), result, onOwned, t('Сборка куплена'))
 }
 
-/// Планы по порядку: «все сборки» первыми — партнёр продвигает общую подписку.
-export const orderPlans = (plans: PremiumPlan[]) => [...plans].sort((a, b) => Number(a.id === 'pack') - Number(b.id === 'pack'))
+const planRank = (plan: PremiumPlan) => (plan.id === PACK_PLAN_ID ? 2 : plan.id === STANDARD_PLAN_ID ? 1 : 0)
+
+/// Планы по порядку: «все сборки» первыми — партнёр продвигает общую подписку, дальше «Стандарт» и эта сборка.
+export const orderPlans = (plans: PremiumPlan[]) => [...plans].sort((a, b) => planRank(a) - planRank(b))
 
 const perMonth = (p: PremiumPlan) => (p.period === 'year' ? p.priceKopecks / 12 : p.priceKopecks)
 
@@ -192,7 +197,8 @@ export function planBadge(plan: PremiumPlan, ordered: PremiumPlan[]): string {
   return !anyYearDeal && plan === ordered[0] ? t('Рекомендуем') : ''
 }
 
-const planName = (plan: PremiumPlan) => (plan.id === 'pack' ? t('Эта сборка') : t('Все сборки'))
+const planName = (plan: PremiumPlan) =>
+  plan.id === PACK_PLAN_ID ? t('Эта сборка') : plan.id === STANDARD_PLAN_ID ? t('Стандарт') : t('Все сборки')
 
 /* ============ Кнопки, которыми пользуются другие экраны ============ */
 

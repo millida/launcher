@@ -15,7 +15,7 @@ pub(crate) mod warm;
 
 use self::graph::{work_begins, Graph, Node};
 use self::plan::*;
-use super::launch::{offline_keeping_uuid, start_game, QuickTarget, StartSpec};
+use super::launch::{offline_keeping_uuid, server_join_target, start_game, QuickTarget, StartSpec};
 use super::launch_perf::{GraphFacts, LaunchPerf};
 use super::launch_pre::{gate_verdict, pack_mod_answer, prepare_skin_server, Preflight, SkinJob, Ygg};
 use crate::engine::*;
@@ -670,6 +670,10 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
             (ready.java.clone(), offline_keeping_uuid(&skin.auth), None, None)
         }
     };
+    let join_target = match quick.server.as_deref() {
+        Some(sv) => Some(server_join_target(&game_version, sv).await),
+        None => None,
+    };
     let args = jvm_args(&ArgsInput {
         v: &ready.v,
         main_class: &ready.main_class,
@@ -687,7 +691,7 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
         boost_on: pack.is_none() && settings["fpsBoost"].as_bool().unwrap_or(false),
         auto_tune: heap.auto_tune,
         world: quick.world.as_deref(),
-        server: quick.server.as_deref().map(|sv| (game_version.as_str(), sv)),
+        server: join_target.as_deref().map(|sv| (game_version.as_str(), sv)),
         java_major: java_major_of_bin(&ready.java),
         platform: &platform,
     });
