@@ -69,11 +69,13 @@ export function SocialTasks({
   discord,
   busy,
   onClaim,
+  onRelink,
 }: {
   telegram: TelegramReward | null
   discord: DiscordReward | null
   busy: string
   onClaim: (kind: TaskKind) => Promise<ClaimOutcome>
+  onRelink: () => Promise<boolean>
 }) {
   const t = useT()
   const [opened, setOpened] = useState<Record<TaskKind, TaskOpened>>(() => ({ telegram: { ...OPENED.telegram }, discord: { ...OPENED.discord } }))
@@ -143,6 +145,15 @@ export function SocialTasks({
     mark(k, 'join')
   }
 
+  const relink = async () => {
+    if (busy || opening) return
+    if (!(await onRelink())) return
+    OPENED.telegram = { link: false, join: false }
+    saveOpened()
+    setOpened((was) => ({ ...was, telegram: { link: false, join: false } }))
+    setFail((was) => ({ ...was, telegram: null }))
+  }
+
   const open = (k: TaskKind) => {
     const url = k === 'telegram' ? telegramLink(telegram?.channelUrl) : discordInvite(discord?.inviteUrl)
     if (url) openExt(url)
@@ -177,8 +188,10 @@ export function SocialTasks({
                     failure={f}
                     checking={busy === k}
                     linking={opening === k}
+                    linkedAs={k === 'telegram' ? telegram?.linkedAs ?? null : null}
                     onGo={() => void go(k)}
                     onOpen={() => open(k)}
+                    onRelink={() => void relink()}
                   />
                 </div>
               )
@@ -198,8 +211,10 @@ function Task({
   failure,
   checking,
   linking,
+  linkedAs,
   onGo,
   onOpen,
+  onRelink,
 }: {
   kind: TaskKind
   step: ShownStep
@@ -208,8 +223,10 @@ function Task({
   failure: TaskFailure | null
   checking: boolean
   linking: boolean
+  linkedAs: string | null
   onGo: () => void
   onOpen: () => void
+  onRelink: () => void
 }) {
   const t = useT()
   const tg = kind === 'telegram'
@@ -237,8 +254,10 @@ function Task({
               ? t('Подпишись на канал и нажми «Проверить»')
               : t('Зайди на сервер и нажми «Проверить»')
   const joinLabel = tg ? t('Подписаться') : t('Вступить')
+  const otherAccount = tg && failure === 'miss' && step === 'check'
 
   function failureLine(k: TaskKind, why: TaskFailure): string {
+    if (why === 'miss' && k === 'telegram' && linkedAs) return t('Подписки не видно у @{name} — подпишись с него или привяжи другой Telegram', { name: linkedAs })
     if (why === 'miss') return k === 'telegram' ? t('Не нашли подписку — подпишись и проверь ещё раз') : t('Тебя нет на сервере — вступи и проверь ещё раз')
     if (why === 'taken') return t('Этот аккаунт уже получил награду на другом профиле')
     if (why === 'link') return t('Не получилось открыть привязку Discord, попробуй ещё раз')
@@ -289,6 +308,11 @@ function Task({
             </span>
           ) : step === 'check' ? (
             <>
+              {otherAccount ? (
+                <button className="btn md secondary" data-track="tg_reward_relink" disabled={checking} onClick={onRelink}>
+                  {t('Другой аккаунт')}
+                </button>
+              ) : null}
               <button className="btn md secondary" data-track={tg ? 'tg_reward_channel' : 'dc_reward_join'} disabled={checking} onClick={onOpen}>
                 {joinLabel}
               </button>

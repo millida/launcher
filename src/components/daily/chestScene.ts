@@ -31,6 +31,7 @@ import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { CHEST_PALETTE, faceCanvas, type FaceKind } from './chestPaint'
 import { buildBbRig, type BbRig } from './bbModel'
 import { chestModel, type ChestModel } from './chestModels'
+import { breakingFrames, buildChestDamage, type ChestDamage } from './chestDamage'
 
 /**
  * Воксельный сундук Minecraft на three.js (23.09.2026, «сундуки выглядят
@@ -59,6 +60,8 @@ export interface ChestScene {
   /** Сундук на экране: за краем прокрутки в покое не рисуется. */
   setVisible(visible: boolean): void
   setTier(tier: ChestTier): void
+  /** 0..1: cracks on the model, grown by hits before it opens. */
+  setDamage(k: number): void
   resize(w: number, h: number): void
   dispose(): void
 }
@@ -275,6 +278,8 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
   let owned: Material[] = []
   let rig: BbRig | null = null
   let rigModel: ChestModel | null = null
+  let damage: ChestDamage | null = null
+  let damageK = 0
 
   // Столб света и искры.
   const beamMat = new MeshBasicMaterial({
@@ -349,6 +354,8 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       m.dispose()
     })
     owned = []
+    damage?.dispose()
+    damage = null
     if (rig) {
       hop.remove(rig.root)
       rig.dispose()
@@ -367,6 +374,13 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       rig.root.rotation.y = Math.PI
       rig.root.scale.setScalar(MODEL_SCALE)
       hop.add(rig.root)
+      const target = rig
+      void breakingFrames().then((stages) => {
+        if (dead || rig !== target) return
+        damage = buildChestDamage(target.cubes, stages)
+        damage?.set(damageK)
+        wake()
+      })
     } else buildVoxel()
     paint()
   }
@@ -507,9 +521,9 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       raysK = 0.2 + k * 0.4
       innerK = 0.6 + k * 2.4
       if (!reduced) {
-        const amp = 0.04 + k * 0.16
+        const amp = 0.015 + k * 0.04
         shakeZ = Math.sin(t * (30 + k * 26)) * amp
-        shakeX = Math.sin(t * (24 + k * 20) + 1.3) * amp * 5
+        shakeX = Math.sin(t * (24 + k * 20) + 1.3) * amp * 3
         lidTarget = -Math.abs(Math.sin(t * (18 + k * 16))) * (0.05 + k * 0.2)
         squash = 1 - Math.abs(Math.sin(t * 22)) * 0.03 * k
         trickle += dt * (4 + k * 18)
@@ -663,6 +677,12 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
       wake()
       if (next !== 'open') opened = false
     },
+    setDamage(k) {
+      if (k > damageK && !opts.reduced) emit(8 + Math.round(k * 10), 0.45)
+      damageK = k
+      damage?.set(k)
+      wake()
+    },
     setTier(next) {
       if (next === tier) return
       tier = next
@@ -687,6 +707,7 @@ export function createChestScene(canvas: HTMLCanvasElement, opts: ChestSceneOpti
         const m = o as Mesh
         m.geometry?.dispose?.()
       })
+      damage?.dispose()
       rig?.dispose()
       owned.forEach((m) => {
         ;(m as MeshLambertMaterial).map?.dispose()
