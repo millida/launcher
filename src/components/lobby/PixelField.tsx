@@ -3,6 +3,7 @@ import { ACCENT_EVENT, accentBase, shade } from '../../lib/accent'
 import { currentDeviceTier, currentSceneFpsCap, maxCanvasPixelRatio } from '../../lib/deviceTier'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { gpuLite } from '../../lib/gpuLite'
+import { liteOn, onLiteChange } from '../../lib/liteMode'
 import { showToast } from '../../state/ui'
 import { VIEW_PREFS_EVENT, bgAnimOn } from '../../state/viewPrefs'
 import { backdropOf, useWallpaper } from '../../state/wallpaper'
@@ -272,7 +273,7 @@ export function PixelField({ on }: { on: boolean }) {
     if (!ctx) return
     // Лёгкая графика после сбоя видеокарты — один статичный кадр без искр.
     const lite = gpuLite()
-    const still = () => lite || matchMedia('(prefers-reduced-motion: reduce)').matches || !bgAnimOn()
+    const still = () => lite || liteOn() || matchMedia('(prefers-reduced-motion: reduce)').matches || !bgAnimOn()
     let scene: Scene | null = null
     let raf = 0
     const fx = fxRef.current
@@ -284,7 +285,10 @@ export function PixelField({ on }: { on: boolean }) {
     const fit = () => {
       if (!alive) return
       const r = cv.getBoundingClientRect()
-      if (!r.width || !r.height) return
+      if (!r.width || !r.height) {
+        scene = null
+        return
+      }
       // Два холста во всё окно: при DPR 2 это ~40 МБ видеопамяти. Пиксель-арт
       // выше 1.5 не выигрывает, в лёгкой графике — 1; слабые устройства режут сильнее.
       const dpr = lite ? 1 : Math.min(window.devicePixelRatio || 1, 1.5, maxCanvasPixelRatio(currentDeviceTier()))
@@ -332,7 +336,7 @@ export function PixelField({ on }: { on: boolean }) {
     const run = () => {
       cancelAnimationFrame(raf)
       raf = 0
-      if (!still() && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
+      if (scene && !still() && !document.hidden && renderLive()) raf = requestAnimationFrame(tick)
       else if (scene) {
         // Анимацию фона выключили — оставляем статичный кадр без волны и искр.
         paint(ctx, scene, performance.now(), false)
@@ -342,11 +346,16 @@ export function PixelField({ on }: { on: boolean }) {
 
     fit()
     run()
-    const ro = new ResizeObserver(() => fit())
+    const ro = new ResizeObserver(() => {
+      const had = !!scene
+      fit()
+      if (had !== !!scene) run()
+    })
     ro.observe(cv)
     document.addEventListener('visibilitychange', run)
     window.addEventListener(VIEW_PREFS_EVENT, run)
     const offGate = onRenderGate(run)
+    const offLite = onLiteChange(run)
     // Цвет кнопок сменили в Настройках — сцена перекрашивается целиком. Пока
     // тянут ползунок, событие летит десятки раз в секунду: перерисовка — через
     // 150 мс после последнего.
@@ -364,6 +373,7 @@ export function PixelField({ on }: { on: boolean }) {
       document.removeEventListener('visibilitychange', run)
       window.removeEventListener(VIEW_PREFS_EVENT, run)
       offGate()
+      offLite()
       window.removeEventListener(ACCENT_EVENT, onAccent)
     }
   }, [on, backdrop])

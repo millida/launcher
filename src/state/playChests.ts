@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { create } from 'zustand'
+import { liveInterval } from '../lib/liveInterval'
 import { claimPlayChest, loadPlayChests, type PlayChests } from '../lib/rubies'
 import { hasMillidaAccount } from '../lib/api'
 import { apiErrorText } from '../lib/apiError'
@@ -47,6 +49,17 @@ export const usePlayChests = create<PlayChestsState>((set, get) => ({
     }
   },
 }))
+
+const PLAY_CHESTS_REFRESH_MS = 60_000
+
+export function usePlayChestsLive(on: boolean): void {
+  useEffect(() => {
+    if (!on) return
+    const load = () => void usePlayChests.getState().load()
+    load()
+    return liveInterval(load, PLAY_CHESTS_REFRESH_MS)
+  }, [on])
+}
 
 /** «34 мин» / «1 ч 05 мин» до следующего сундука. */
 export function playLeftText(seconds: number): string {

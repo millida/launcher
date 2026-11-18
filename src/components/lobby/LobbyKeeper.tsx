@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState, useSyncExternalStore } from 'react
 import { createPortal } from 'react-dom'
 import { useIdle3d } from '../../lib/lazy3d'
 import { useGame } from '../../state/game'
+import { useUi } from '../../state/ui'
 import { Guard } from '../Guard'
 import { hostEl, inLobby, keep, markHidden, markShown, notify, subscribe } from './lobbyKeep'
 
@@ -22,7 +23,9 @@ const PARK_MS = 10 * 60_000
  * в фоне заново не собираем — только по возврату в лобби.
  */
 export function LobbyKeeper() {
-  const here = useSyncExternalStore(subscribe, inLobby, () => false)
+  const lobbyMounted = useSyncExternalStore(subscribe, inLobby, () => false)
+  const logged = useUi((s) => s.logged)
+  const here = lobbyMounted && logged
   // Хранитель монтируется с первым заходом в лобби (components/hosts): ждём простоя и вне его.
   // Ложь и посреди сеанса: лаунчер сам перешёл на лёгкую графику (lib/slowLite) — сцену снимаем.
   const want3d = useIdle3d(true)

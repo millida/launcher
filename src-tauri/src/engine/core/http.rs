@@ -268,7 +268,9 @@ pub(crate) fn net_err(e: &reqwest::Error) -> String {
     }
     let detail = cause.to_string();
     let low = detail.to_lowercase();
-    let hint = if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
+    let hint = if certificate_rejected_by_clock(&low) {
+        "на компьютере неверные дата и время: включи их автоматическую установку в настройках системы и перезапусти лаунчер"
+    } else if low.contains("certificate") || low.contains("tls") || low.contains("handshake") {
         "соединение подменяет антивирус или прокси: отключи проверку HTTPS/SSL или добавь лаунчер в исключения"
     } else if low.contains("dns") || low.contains("failed to lookup") || low.contains("resolve") {
         "адрес сервера не определился: проверь DNS, VPN и антивирус"
@@ -280,6 +282,12 @@ pub(crate) fn net_err(e: &reqwest::Error) -> String {
         return format!("нет связи ({})", detail);
     };
     format!("нет связи ({} — {})", detail, hint)
+}
+
+fn certificate_rejected_by_clock(low: &str) -> bool {
+    const MARKERS: [&str; 4] =
+        ["certificate expired", "certificate not valid yet", "invalid peer certificate: expired", "invalid peer certificate: notvalidyet"];
+    MARKERS.iter().any(|m| low.contains(m))
 }
 
 /// Digest kind announced by the source: Modrinth publishes sha1/sha512, Mojang
@@ -434,6 +442,19 @@ pub(crate) fn urlencode(s: &str) -> String {
     out
 }
 
+/// Answers every player gets the same: the Modrinth and CurseForge proxies need no account.
+/// DDoS-Guard caches a JSON answer only for a request without Authorization that carries
+/// If-None-Match or If-Modified-Since, so these go without the token and always conditional.
+pub(crate) const SHARED_ANSWER_ROUTES: [&str; 2] = ["/launcher/mr/", "/launcher/cf/"];
+
+/// Older than any answer: the origin, which sets no Last-Modified, always sends the full body.
+pub(crate) const SHARED_SINCE: &str = "Thu, 01 Jan 1970 00:00:00 GMT";
+
+pub(crate) fn shared_answer_url(url: &str) -> bool {
+    url.strip_prefix(crate::engine::MILLIDA_API)
+        .is_some_and(|route| SHARED_ANSWER_ROUTES.iter().any(|prefix| route.starts_with(prefix)))
+}
+
 // Plain GET with JSON, retries on failure. Addresses come from the calling modules, mirror.rs picks mirrors.
 pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
     let mut last = String::new();
@@ -441,7 +462,11 @@ pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
         let attempt = retrying(|| {
             let target = target.clone();
             async move {
-                match client().get(&target).timeout(JSON_TIMEOUT).send().await {
+                let mut req = client().get(&target).timeout(JSON_TIMEOUT);
+                if shared_answer_url(&target) {
+                    req = req.header(reqwest::header::IF_MODIFIED_SINCE, SHARED_SINCE);
+                }
+                match req.send().await {
                     Ok(r) => read_json(&target, r).await,
                     Err(e) => Err(Attempt::Retry(format!("{} — {}", net_err(&e), target))),
                 }
@@ -569,6 +594,8 @@ async fn fetch_if_changed(url: &str, sent: Option<&Validators>) -> Result<Revali
                 }
                 if let Some(since) = sent.and_then(|v| v.last_modified.as_deref()) {
                     req = req.header(reqwest::header::IF_MODIFIED_SINCE, since);
+                } else if sent.and_then(|v| v.etag.as_deref()).is_none() && shared_answer_url(&target) {
+                    req = req.header(reqwest::header::IF_MODIFIED_SINCE, SHARED_SINCE);
                 }
                 match req.send().await {
                     Ok(r) => read_if_changed(&target, r).await,
@@ -1483,6 +1510,9 @@ async fn fetch_span(
         match or_pause(req.send(), cancel).await {
             Err(e) if e == PAUSED => paused = true,
             Err(e) => return Err(SpanErr::Failed(e)),
+            Ok(Ok(resp)) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && shield_would_cache_whole(&resp, total) => {
+                return Err(SpanErr::Unsupported);
+            }
             Ok(Ok(resp)) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && range_starts_at(&resp, at) => {
                 let mut file = std::fs::OpenOptions::new().write(true).open(part).map_err(io)?;
                 file.seek(SeekFrom::Start(at)).map_err(io)?;
@@ -1661,6 +1691,24 @@ async fn resume_once(url: &str, part: &Path, have: u64, size: u64, cancel: &Halt
     Ok(())
 }
 
+/// The DDoS-Guard shield never fills its cache from a ranged request and keeps
+/// objects only up to 2 GiB. While it answers MISS, every range of a public
+/// archive costs the origin again; one plain GET stores it for every next player.
+pub(crate) const SHIELD_CACHE_MAX_BYTES: u64 = 2048 * 1024 * 1024;
+pub(crate) const SHIELD_CACHE_MISS: &str = "shield cache miss: the archive is fetched in one stream";
+
+pub(crate) fn shield_caches_only_whole(cache_status: Option<&str>, cache_control: Option<&str>, total: u64) -> bool {
+    let missed = cache_status.is_some_and(|s| s.trim().eq_ignore_ascii_case("MISS"));
+    let control = cache_control.unwrap_or("").to_ascii_lowercase();
+    let personal = control.contains("private") || control.contains("no-store");
+    missed && !personal && total <= SHIELD_CACHE_MAX_BYTES
+}
+
+pub(crate) fn shield_would_cache_whole(resp: &reqwest::Response, total: u64) -> bool {
+    let header = |name: &str| resp.headers().get(name).and_then(|v| v.to_str().ok());
+    shield_caches_only_whole(header("ddg-cache-status"), header("cache-control"), total)
+}
+
 fn range_starts_at(resp: &reqwest::Response, at: u64) -> bool {
     resp.headers()
         .get(reqwest::header::CONTENT_RANGE)
@@ -1739,7 +1787,55 @@ mod tests {
         }
     }
 
+    #[test]
+    fn only_the_upstream_proxies_ask_the_shield_to_cache_for_everyone() {
+        let table: [(&str, bool, &str); 6] = [
+            ("https://api.millida.net/v2/launcher/mr/v2/search?limit=20", true, "Modrinth search is the same for every player"),
+            ("https://api.millida.net/v2/launcher/cf/v1/mods/search", true, "CurseForge proxy too"),
+            ("https://api.millida.net/v2/launcher/profile", false, "a personal answer must never be cached for others"),
+            ("https://api.millida.net/v2/launcher/mrx/v2/search", false, "a lookalike route is not the proxy"),
+            ("https://evil.example/v2/launcher/mr/v2/search", false, "another host is never ours"),
+            ("https://api.millida.net/v2/launcher/dl?url=x", false, "file mirror answers are cached by their own headers"),
+        ];
+        for (url, want, why) in table {
+            assert_eq!(shared_answer_url(url), want, "{}", why);
+        }
+    }
+
+    #[test]
+    fn ranges_give_way_to_one_stream_only_when_the_shield_can_cache_the_whole_file() {
+        type Case<'a> = (Option<&'a str>, Option<&'a str>, u64, bool, &'a str);
+        let gb = 1024 * 1024 * 1024;
+        let table: [Case; 7] = [
+            (Some("MISS"), Some("public, max-age=604800, immutable"), gb, true, "public archive not cached yet: one plain GET fills the shield for everyone"),
+            (Some("miss"), None, gb, true, "the header value is compared without case"),
+            (Some("HIT"), Some("public, max-age=604800"), gb, false, "already cached: ranges are served from the shield"),
+            (None, Some("public, max-age=604800"), gb, false, "no DDoS-Guard in front (RU-Transit): parallel ranges stay"),
+            (Some("MISS"), Some("private, no-store"), gb, false, "paid archive is never cached, a single stream would only be slower"),
+            (Some("MISS"), Some("public"), SHIELD_CACHE_MAX_BYTES + 1, false, "over 2 GiB the shield never caches"),
+            (Some("MISS"), Some("public"), SHIELD_CACHE_MAX_BYTES, true, "exactly 2 GiB still fits the shield cache"),
+        ];
+        for (status, control, total, want, why) in table {
+            assert_eq!(shield_caches_only_whole(status, control, total), want, "{}", why);
+        }
+    }
+
     use super::*;
+
+    #[test]
+    fn a_certificate_rejected_by_the_clock_is_told_apart_from_interception() {
+        let table: [(&str, bool, &str); 6] = [
+            ("invalid peer certificate: certificate not valid yet: verification time 1575710149 (unix), but certificate is not valid before 1793000000 (unix)", true, "clock reset to the bios date after a power cut"),
+            ("invalid peer certificate: certificate expired: verification time 4320000000 (unix), but certificate is not valid after 1800000000 (unix)", true, "clock far in the future"),
+            ("invalid peer certificate: notvalidyet", true, "older rustls names the same failure without details"),
+            ("invalid peer certificate: expired", true, "older rustls names the same failure without details"),
+            ("invalid peer certificate: unknownissuer", false, "an antivirus substituting the certificate is not a clock problem"),
+            ("invalid peer certificate: certificate not valid for name \"x\"", false, "a wrong name is interception, not time"),
+        ];
+        for (low, want, why) in table {
+            assert_eq!(certificate_rejected_by_clock(low), want, "{}", why);
+        }
+    }
 
     // Port 1 refuses immediately, so any network attempt fails fast.
     const DEAD: &str = "http://127.0.0.1:1/nope.json";

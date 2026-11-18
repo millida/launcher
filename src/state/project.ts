@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { cfFiles, cfProject } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { fmt } from '../lib/format'
-import { MODRINTH_API, mirrorAsset } from '../lib/api'
+import { MODRINTH_API, mirrorAsset, sharedFetch } from '../lib/api'
 import { blocksToMarkdown, catalog, cleanTitle, sitePage } from '../lib/millidaCatalog'
 import { openModal } from './ui'
 import { useMods } from './mods'
@@ -230,7 +230,7 @@ function mrLinks(p: {
 /// members наш прокси не пускает — берём из поиска по id проекта, как подсказка Милли.
 async function mrAuthor(projectId: string): Promise<{ author: string; authorUrl: string } | null> {
   const facets = encodeURIComponent(JSON.stringify([['project_id:' + projectId]]))
-  const r = await fetch(MODRINTH_API + '/v2/search?limit=1&facets=' + facets).then((x) => x.json())
+  const r = await sharedFetch(MODRINTH_API + '/v2/search?limit=1&facets=' + facets).then((x) => x.json())
   const h = r && Array.isArray(r.hits) ? r.hits[0] : null
   if (!h) return null
   const org = typeof h.organization === 'string' ? h.organization : ''
@@ -341,7 +341,7 @@ export async function openProject(slug: string, kind?: string, game?: string | n
   // Окно могли успеть открыть на другом моде: ответ старого запроса не пишем поверх.
   const still = () => useProject.getState().slug === slug && useProject.getState().source === 'modrinth'
   try {
-    const p = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).then((r) => r.json())
+    const p = await sharedFetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).then((r) => r.json())
     if (!still()) return
     if (!p || !p.id) throw new Error('no project')
     useProject.getState().set({
@@ -385,7 +385,7 @@ export async function openProject(slug: string, kind?: string, game?: string | n
         if (a && still()) useProject.getState().set(a)
       })
       .catch(() => {})
-    const vers: MrVersion[] = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug) + '/version').then((r) =>
+    const vers: MrVersion[] = await sharedFetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug) + '/version').then((r) =>
       r.json(),
     )
     if (!still()) return
