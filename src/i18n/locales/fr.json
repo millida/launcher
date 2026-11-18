@@ -6630,5 +6630,7 @@
   "Не удалось создать сборку под сервер: {error}": "Impossible de créer un build pour le serveur : {error}",
   "Сервер «{server}» собирает список модов…": "Le serveur «{server}» rassemble sa liste de mods…",
   "Список модов «{server}» ещё не готов — заходим без него": "La liste de mods de «{server}» n'est pas encore prête — on rejoint sans elle",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Le lien du mod a expiré — rejoins le serveur à nouveau"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Le lien du mod a expiré — rejoins le serveur à nouveau",
+  "Автор разрешает играть только на последней версии": "L'auteur n'autorise que la dernière version",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Impossible de mettre à jour le modpack en {to} : {reason}. L'ancienne version ne se lance pas — réessaie"
 }

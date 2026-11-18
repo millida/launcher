@@ -6633,5 +6633,7 @@
   "Не удалось создать сборку под сервер: {error}": "Gagal membuat modpack untuk server: {error}",
   "Сервер «{server}» собирает список модов…": "Server «{server}» sedang menyusun daftar mod…",
   "Список модов «{server}» ещё не готов — заходим без него": "Daftar mod «{server}» belum siap — masuk tanpa itu",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Tautan mod sudah kedaluwarsa — masuk ke server lagi"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Tautan mod sudah kedaluwarsa — masuk ke server lagi",
+  "Автор разрешает играть только на последней версии": "Pembuat hanya mengizinkan bermain di versi terbaru",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Modpack gagal diperbarui ke {to}: {reason}. Versi lama tidak bisa dijalankan — coba lagi"
 }

@@ -22,6 +22,21 @@ export const LAUNCHER_API = API_OVERRIDE || (DEV_LOCAL ? '/papi/v2' : 'https://a
 /// картинки идут через наш API: он же отдаёт их с собственного адреса.
 export const MODRINTH_API = LAUNCHER_API + '/launcher/mr'
 
+const SHARED_PREFIXES = [MODRINTH_API + '/', LAUNCHER_API + '/launcher/cf/']
+
+/// Modrinth and CurseForge answers are the same for every player. In the app they go through the core, which sends
+/// them without the account token and with a conditional header: only such a request lets the shield cache the answer.
+export async function sharedFetch(url: string, init?: RequestInit): Promise<Response> {
+  if (!hasTauri() || !SHARED_PREFIXES.some((p) => url.startsWith(p))) return fetch(url, init)
+  try {
+    const body = await millidaApi(url.slice(LAUNCHER_API.length), 'GET')
+    return new Response(JSON.stringify(body ?? null), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  } catch (e) {
+    const status = /^http (\d{3})$/.exec(String(e))
+    return new Response(JSON.stringify({ error: String(e) }), { status: status ? Number(status[1]) : 502 })
+  }
+}
+
 const MIRRORED_ASSET_HOSTS = [
   'cdn.modrinth.com',
   'edge.forgecdn.net',
