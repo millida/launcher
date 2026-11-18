@@ -20,7 +20,7 @@ import { hasMillidaAccount, openExt } from '../../lib/api'
 import { loadDiscordReward, loadTelegramReward } from '../../lib/rubies'
 import { TIER_SERVER } from '../../state/tiers'
 import { openPvpArena } from '../playhub/hubTab'
-import { ARCANIA_SLUG, DISCORD_INVITE, PROMO_ROTATE_MS, TELEGRAM_CHAT, promoAt, promoSeed, promoSlides, promoStart } from './promo'
+import { ARCANIA_SLUG, DISCORD_INVITE, PROMO_ROTATE_MS, TELEGRAM_CHAT, promoAt, promoSeed, telegramChat, promoSlides, promoStart } from './promo'
 import { PRISON_BANNER, PRISON_CO, type PrisonFace } from '../playhub/PrisonTile'
 import { loadInvites } from '../../lib/referrals'
 import { pickFriendsTab } from '../friends/friendsView'
@@ -303,8 +303,10 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
   const t = useT()
   const c = CHAT[kind]
   const market = useMarket()
+  const ruContent = useMarketOffers('ru-content')
   const copy = chatCopy(kind, market)
-  const paid = reward > 0
+  const url = kind === 'telegram' ? telegramChat(ruContent) : c.url
+  const paid = reward > 0 && (kind !== 'telegram' || ruContent)
   return (
     <button
       className={'lobby-rec lobby-an lobby-chat is-' + kind + (paid ? ' is-reward' : '')}
@@ -316,7 +318,7 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
       data-id={kind + (paid ? '_reward' : '')}
       data-pos={0}
       aria-label={paid ? t('+{n} рубинов {what}', { n: reward, what: copy.what }) : copy.title + ' ' + copy.where}
-      onClick={() => (paid ? openShopTask(c.task) : openExt(c.url))}
+      onClick={() => (paid ? openShopTask(c.task) : openExt(url))}
     >
       {paid ? <img className="lch-pile" src="/packs/hoard.png" alt="" draggable={false} /> : null}
       <span className="lch-logo" aria-hidden="true">

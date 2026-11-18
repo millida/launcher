@@ -1,6 +1,6 @@
 import { api, openExt } from '../../lib/api'
 import { cachedCatalog, peekCatalog } from '../../lib/catalogCache'
-import { MODRINTH_API } from '../../lib/api'
+import { MODRINTH_API, sharedFetch } from '../../lib/api'
 import { hasTauri } from '../../ipc/tauri'
 import { millidaPacks } from '../../ipc/commands'
 import type { MillidaPack } from '../../ipc/commands'
@@ -732,7 +732,7 @@ function flushMr() {
   for (const [key] of batch) mrWaiting.delete(key)
   if (mrWaiting.size) mrTimer = setTimeout(flushMr, MR_BATCH_WAIT_MS)
   const ids = batch.map(([key]) => key)
-  void fetch(MODRINTH_API + '/v2/projects?ids=' + encodeURIComponent(JSON.stringify(ids)))
+  void sharedFetch(MODRINTH_API + '/v2/projects?ids=' + encodeURIComponent(JSON.stringify(ids)))
     .then((r) => (r.ok ? (r.json() as Promise<MrRef[]>) : []))
     .catch(() => [] as MrRef[])
     .then((found) => {

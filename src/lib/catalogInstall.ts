@@ -16,7 +16,7 @@ import {
   installVersion,
 } from '../ipc/commands'
 import type { CatalogInstallReq, ContentInstall, Profile } from '../ipc/commands'
-import { MODRINTH_API, hasMillidaAccount, openExt } from './api'
+import { MODRINTH_API, hasMillidaAccount, openExt, sharedFetch } from './api'
 import {
   KIND_OF_SECTION,
   catalog,
@@ -136,7 +136,7 @@ async function chooseBuild(
 async function mrVersionBySha1(sha1: string | null): Promise<string | null> {
   if (!sha1) return null
   try {
-    const r = await fetch(MODRINTH_API + '/v2/version_file/' + encodeURIComponent(sha1) + '?algorithm=sha1')
+    const r = await sharedFetch(MODRINTH_API + '/v2/version_file/' + encodeURIComponent(sha1) + '?algorithm=sha1')
     if (!r.ok) return null
     const v = await r.json()
     return typeof v.id === 'string' ? v.id : null
