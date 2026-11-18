@@ -6632,5 +6632,7 @@
   "Не удалось создать сборку под сервер: {error}": "Không tạo được bản cài cho máy chủ: {error}",
   "Сервер «{server}» собирает список модов…": "Máy chủ «{server}» đang lập danh sách mod…",
   "Список модов «{server}» ещё не готов — заходим без него": "Danh sách mod của «{server}» chưa sẵn sàng — vào mà không có nó",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Liên kết mod đã hết hạn — hãy vào lại máy chủ"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Liên kết mod đã hết hạn — hãy vào lại máy chủ",
+  "Автор разрешает играть только на последней версии": "Tác giả chỉ cho phép chơi phiên bản mới nhất",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Không thể cập nhật gói mod lên {to}: {reason}. Phiên bản cũ không khởi chạy được — hãy thử lại"
 }

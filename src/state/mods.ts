@@ -4,7 +4,7 @@ import { hasTauri } from '../ipc/tauri'
 import { cfSearch, listContent, listWorldInstalls, millidaPacks, packReviewQueue } from '../ipc/commands'
 import type { MillidaPack } from '../ipc/commands'
 import { clipWords, fmt } from '../lib/format'
-import { MODRINTH_API, mirrorAsset } from '../lib/api'
+import { MODRINTH_API, mirrorAsset, sharedFetch } from '../lib/api'
 import { cachedCatalog } from '../lib/catalogCache'
 import { mergeSources } from '../lib/modMerge'
 import { pickTargetName } from '../lib/installKeys'
@@ -329,7 +329,7 @@ export function mrToHit(h: any): ModHit {
 
 export function loadMr(url: string): Promise<any> {
   return cachedCatalog('mr:' + url, async () => {
-    const r = await fetch(url)
+    const r = await sharedFetch(url)
     // The proxy answers 429/502 with a JSON body; caching it hid Modrinth results for the whole cache lifetime.
     if (!r.ok) throw new Error('Modrinth search answered ' + r.status)
     return r.json()
@@ -360,7 +360,7 @@ function packsMatching(list: MillidaPack[], query: string): ModHit[] {
  *  переключении вкладки — полсотни килобайт за клик. */
 export function loadCategoryTags(): Promise<{ project_type: string; name: string }[]> {
   const url = MODRINTH_API + '/v2/tag/category'
-  return cachedCatalog(url, async () => (await fetch(url)).json())
+  return cachedCatalog(url, async () => (await sharedFetch(url)).json())
 }
 
 let warmTimer: ReturnType<typeof setTimeout> | undefined

@@ -6629,5 +6629,7 @@
   "Не удалось создать сборку под сервер: {error}": "Nie udało się utworzyć paczki dla serwera: {error}",
   "Сервер «{server}» собирает список модов…": "Serwer «{server}» zbiera listę modów…",
   "Список модов «{server}» ещё не готов — заходим без него": "Lista modów «{server}» nie jest jeszcze gotowa — wchodzimy bez niej",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Link do moda wygasł — wejdź na serwer jeszcze raz"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Link do moda wygasł — wejdź na serwer jeszcze raz",
+  "Автор разрешает играть только на последней версии": "Autor pozwala grać tylko na najnowszej wersji",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Nie udało się zaktualizować modpacka do {to}: {reason}. Stara wersja się nie uruchamia — spróbuj ponownie"
 }

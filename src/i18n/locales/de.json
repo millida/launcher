@@ -6629,5 +6629,7 @@
   "Не удалось создать сборку под сервер: {error}": "Build für den Server konnte nicht erstellt werden: {error}",
   "Сервер «{server}» собирает список модов…": "Server «{server}» stellt seine Mod-Liste zusammen…",
   "Список модов «{server}» ещё не готов — заходим без него": "Die Mod-Liste von «{server}» ist noch nicht fertig — wir treten ohne sie bei",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Der Mod-Link ist abgelaufen — tritt dem Server erneut bei"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Der Mod-Link ist abgelaufen — tritt dem Server erneut bei",
+  "Автор разрешает играть только на последней версии": "Der Autor erlaubt nur das Spielen der neuesten Version",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Das Modpack konnte nicht auf {to} aktualisiert werden: {reason}. Die alte Version startet nicht — versuche es erneut"
 }

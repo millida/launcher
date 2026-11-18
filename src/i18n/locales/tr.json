@@ -6629,5 +6629,7 @@
   "Не удалось создать сборку под сервер: {error}": "Sunucu için paket oluşturulamadı: {error}",
   "Сервер «{server}» собирает список модов…": "«{server}» sunucusu mod listesini topluyor…",
   "Список модов «{server}» ещё не готов — заходим без него": "«{server}» mod listesi henüz hazır değil — onsuz giriyoruz",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Mod bağlantısının süresi doldu — sunucuya yeniden gir"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Mod bağlantısının süresi doldu — sunucuya yeniden gir",
+  "Автор разрешает играть только на последней версии": "Yazar yalnızca en son sürümle oynamaya izin veriyor",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Mod paketi {to} sürümüne güncellenemedi: {reason}. Eski sürüm başlatılmıyor — tekrar dene"
 }
