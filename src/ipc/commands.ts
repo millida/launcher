@@ -2,7 +2,7 @@
 // Account tokens stay in the core. The UI gets only the result (millidaApi adds the token on the core side).
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
-import { t, tx } from '../i18n'
+import { getLocale, t, tx } from '../i18n'
 
 export interface Profile {
   name: string
@@ -606,6 +606,7 @@ export interface PackAutoUpdate {
   on: boolean
   modified: boolean
   chosen: boolean | null
+  forced: boolean
   removedMods: string[]
   addedMods: string[]
 }
@@ -674,7 +675,7 @@ export interface MillidaPack {
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */
-export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs')
+export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs', { lang: getLocale() })
 
 /** Активация ключа доступа к платной сборке. */
 export const packBuyUrl = (slug: string) => invoke<string>('pack_buy_url', { slug })

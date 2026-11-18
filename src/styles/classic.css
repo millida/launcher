@@ -5,7 +5,18 @@
 :root.lay-classic .content { flex: 1; min-width: 0; padding: 14px 4px 0 0; overflow-y: auto; overflow-x: hidden; }
 :root.lay-classic .sidebar.collapsed .side-collapse { justify-content: center; padding: 5px 0; }
 
+/* Pixel icons are drawn on a 12-cell grid: only whole multiples of it keep every cell the same width. */
+:root.lay-classic .sidebar .nav-item svg { width: 24px; height: 24px; }
+:root.lay-classic .sidebar .side-collapse svg { width: 12px; height: 12px; }
+:root.lay-classic .sidebar:not(.collapsed) .side-collapse { gap: 11px; padding: 4px 12px; color: var(--m-fg-faint); }
+:root.lay-classic .sidebar:not(.collapsed) .side-collapse-ic { width: 24px; height: 24px; background: transparent; clip-path: none; color: inherit; }
+@media (hover: hover) and (pointer: fine) {
+  :root.lay-classic .sidebar:not(.collapsed) .side-collapse:hover { background: rgba(255, 255, 255, 0.04); color: var(--m-fg); }
+}
+
 :root.lay-classic #s-home .hero-live { height: 300px; }
+:root.lay-classic .cl-sec-acts { display: inline-flex; align-items: center; gap: 8px; }
+:root.lay-classic .cl-sec-acts svg { width: 12px; height: 12px; }
 :root.lay-classic .cl-hero-cta { flex-direction: row; align-items: center; }
 :root.lay-classic #s-home .build-grid { margin-bottom: 22px; }
 :root.lay-classic .cl-first { padding: 28px 24px; text-align: center; margin-bottom: 22px; }
