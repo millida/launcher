@@ -15,7 +15,7 @@ pub(crate) mod warm;
 
 use self::graph::{work_begins, Graph, Node};
 use self::plan::*;
-use super::launch::{offline_keeping_uuid, start_game, QuickTarget, StartSpec};
+use super::launch::{offline_keeping_uuid, server_join_target, start_game, QuickTarget, StartSpec};
 use super::launch_perf::{GraphFacts, LaunchPerf};
 use super::launch_pre::{gate_verdict, pack_mod_answer, prepare_skin_server, Preflight, SkinJob, Ygg};
 use crate::engine::*;
@@ -345,12 +345,13 @@ fn prepare_pack(
     let token: Node<Vec<String>> = if spec.needs_token {
         let (app, profile, slug) = (app.clone(), profile.to_string(), spec.slug.clone());
         g.spawn("pack-token", "pack", None, async move {
+            let installed = || installed_pack_body(&profile_settings(&profile), &slug);
             let got = match token_job {
                 Some(job) => match job.answer().await {
                     Some(done) => done,
-                    None => pack_launch_token(&slug).await,
+                    None => pack_launch_token(&slug, installed()).await,
                 },
-                None => pack_launch_token(&slug).await,
+                None => pack_launch_token(&slug, installed()).await,
             };
             match got {
                 Ok(t) => Ok(t),
@@ -670,6 +671,10 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
             (ready.java.clone(), offline_keeping_uuid(&skin.auth), None, None)
         }
     };
+    let join_target = match quick.server.as_deref() {
+        Some(sv) => Some(server_join_target(&game_version, sv).await),
+        None => None,
+    };
     let args = jvm_args(&ArgsInput {
         v: &ready.v,
         main_class: &ready.main_class,
@@ -687,7 +692,7 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
         boost_on: pack.is_none() && settings["fpsBoost"].as_bool().unwrap_or(false),
         auto_tune: heap.auto_tune,
         world: quick.world.as_deref(),
-        server: quick.server.as_deref().map(|sv| (game_version.as_str(), sv)),
+        server: join_target.as_deref().map(|sv| (game_version.as_str(), sv)),
         java_major: java_major_of_bin(&ready.java),
         platform: &platform,
     });
