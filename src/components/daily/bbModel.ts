@@ -14,7 +14,7 @@ import {
 } from 'three'
 
 type Vec3 = [number, number, number]
-type FaceName = 'north' | 'east' | 'south' | 'west' | 'up' | 'down'
+export type FaceName = 'north' | 'east' | 'south' | 'west' | 'up' | 'down'
 
 export interface BbFace {
   uv: [number, number, number, number]
@@ -67,7 +67,7 @@ export interface BbModel {
   clips: BbClip[]
 }
 
-const FACES: FaceName[] = ['north', 'east', 'south', 'west', 'up', 'down']
+export const FACES: FaceName[] = ['north', 'east', 'south', 'west', 'up', 'down']
 const CHANNELS: BbChannel[] = ['rotation', 'position', 'scale']
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -192,7 +192,7 @@ export function clipTime(clip: BbClip, t: number): number {
   return Math.min(Math.max(0, t), clip.length)
 }
 
-function faceCorners(face: FaceName, a: Vec3, b: Vec3): Vec3[] {
+export function faceCorners(face: FaceName, a: Vec3, b: Vec3): Vec3[] {
   const [x0, y0, z0] = a
   const [x1, y1, z1] = b
   switch (face) {
@@ -225,14 +225,20 @@ function faceUv(f: BbFace, tex: BbTexture): [number, number][] {
   return [tl, tr, bl, br].map(([u, v]) => [u / tex.uvWidth, 1 - v / tex.uvHeight])
 }
 
-function cubeGeometry(c: BbCube, textures: BbTexture[]): BufferGeometry | null {
+export function cubeBox(c: BbCube): [Vec3, Vec3] {
   // An inverted cube (from > to) must stay inverted: Blockbench draws outlines this way.
   const grow = (lo: number, hi: number, d: number): [number, number] => (lo <= hi ? [lo - d, hi + d] : [lo + d, hi - d])
   const xs = grow(c.from[0], c.to[0], c.inflate)
   const ys = grow(c.from[1], c.to[1], c.inflate)
   const zs = grow(c.from[2], c.to[2], c.inflate)
-  const a: Vec3 = [xs[0] - c.origin[0], ys[0] - c.origin[1], zs[0] - c.origin[2]]
-  const b: Vec3 = [xs[1] - c.origin[0], ys[1] - c.origin[1], zs[1] - c.origin[2]]
+  return [
+    [xs[0] - c.origin[0], ys[0] - c.origin[1], zs[0] - c.origin[2]],
+    [xs[1] - c.origin[0], ys[1] - c.origin[1], zs[1] - c.origin[2]],
+  ]
+}
+
+function cubeGeometry(c: BbCube, textures: BbTexture[]): BufferGeometry | null {
+  const [a, b] = cubeBox(c)
   const pos: number[] = []
   const uv: number[] = []
   const index: number[] = []
@@ -264,10 +270,17 @@ function cubeGeometry(c: BbCube, textures: BbTexture[]): BufferGeometry | null {
 
 const DEG = Math.PI / 180
 
+export interface RigCube {
+  holder: Group
+  cube: BbCube
+  inLid: boolean
+}
+
 export interface BbRig {
   root: Group
   /** Крышка модели (кость chest_up): к ней добавляют приоткрытие поверх клипа. */
   lid: Group | null
+  cubes: RigCube[]
   pose(clip: BbClip | null, t: number): void
   dispose(): void
 }
@@ -349,8 +362,9 @@ export function buildBbRig(model: BbModel, tint?: string): BbRig {
   const geometries: BufferGeometry[] = []
   const rest = new Map<string, { obj: Group; position: Vec3; rotation: Vec3 }>()
   let lid: Group | null = null
+  const cubes: RigCube[] = []
 
-  const place = (n: BbBone | BbCube, parentOrigin: Vec3): Group => {
+  const place = (n: BbBone | BbCube, parentOrigin: Vec3, inLid: boolean): Group => {
     const obj = new Group()
     const position: Vec3 = [n.origin[0] - parentOrigin[0], n.origin[1] - parentOrigin[1], n.origin[2] - parentOrigin[2]]
     obj.position.set(...position)
@@ -358,24 +372,27 @@ export function buildBbRig(model: BbModel, tint?: string): BbRig {
     obj.rotation.set(n.rotation[0] * DEG, n.rotation[1] * DEG, n.rotation[2] * DEG)
     if (isBone(n)) {
       rest.set(n.uuid, { obj, position, rotation: n.rotation })
-      if (n.name === 'chest_up') lid = obj
-      for (const c of n.children) obj.add(place(c, n.origin))
+      const isLid = n.name === 'chest_up'
+      if (isLid) lid = obj
+      for (const c of n.children) obj.add(place(c, n.origin, inLid || isLid))
     } else {
       const geo = cubeGeometry(n, model.textures)
       if (geo) {
         geometries.push(geo)
         obj.add(new Mesh(geo, materials))
+        cubes.push({ holder: obj, cube: n, inLid })
       }
     }
     return obj
   }
 
   const root = new Group()
-  for (const n of model.roots) root.add(place(n, [0, 0, 0]))
+  for (const n of model.roots) root.add(place(n, [0, 0, 0], false))
 
   return {
     root,
     lid,
+    cubes,
     pose(clip, t) {
       for (const { obj, position, rotation } of rest.values()) {
         obj.position.set(...position)

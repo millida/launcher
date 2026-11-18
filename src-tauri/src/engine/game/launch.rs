@@ -1921,6 +1921,17 @@ fn split_server_addr(addr: &str) -> (String, u16) {
     }
 }
 
+/// Pre-1.17 clients connect to the `--server`/`--port` pair directly and never
+/// look up `_minecraft._tcp`, so a server that lives only behind SRV (no A
+/// record) is unreachable from them unless the launcher resolves it first, the
+/// way their own multiplayer screen does.
+pub(crate) async fn server_join_target(mc_version: &str, addr: &str) -> String {
+    if quick_play_supported(mc_version) {
+        return addr.to_string();
+    }
+    resolve_srv(addr).await
+}
+
 pub(crate) fn server_join_args(mc_version: &str, addr: &str) -> Vec<String> {
     if quick_play_supported(mc_version) {
         return vec!["--quickPlayMultiplayer".into(), addr.to_string()];

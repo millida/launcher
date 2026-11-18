@@ -29,6 +29,7 @@ import { PackHealthLine } from './PackHealthLine'
 import { blockIcon, usePackArt } from './packArt'
 import { HostInstall } from './HostInstall'
 import { PackContents } from '../catalog/PackContents'
+import { withCatalogLang } from '../catalog/catalogLang'
 import type { HostTarget } from './HostInstall'
 import { hostingPackFor, loadHostingPacks } from './data'
 import type { HubPack } from './data'
@@ -101,6 +102,9 @@ interface Update {
 
 const cache = new Map<string, Promise<unknown>>()
 
+const pageViewKey = (slug: string) => 'pv:' + withCatalogLang(slug)
+const pageItemKey = (slug: string) => 'ci:' + withCatalogLang(slug)
+
 /** Публичные данные страницы сборки — ещё и на диске: второй заход открывает её сразу. */
 const DISK_KEYS = /^(pv|ci):/
 
@@ -111,8 +115,8 @@ const DISK_KEYS = /^(pv|ci):/
  */
 export function prefetchPackPage(slug: string, premiumId?: string | null): void {
   if (!slug) return
-  void remember('pv:' + slug, once('pv:' + slug, () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug))))
-  void remember('ci:' + slug, once('ci:' + slug, () => api<CatalogItem>('/catalog/items/' + encodeURIComponent(slug))))
+  void remember(pageViewKey(slug), once(pageViewKey(slug), () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug))))
+  void remember(pageItemKey(slug), once(pageItemKey(slug), () => api<CatalogItem>(withCatalogLang('/catalog/items/' + encodeURIComponent(slug)))))
   if (premiumId) void remember('pd:' + premiumId, once('pd:' + premiumId, () => loadPremiumPack(premiumId)))
 }
 
@@ -334,8 +338,8 @@ export function PackPage({
   const profiles = useProfiles((s) => s.profiles)
   const mr = pack.origin === 'modrinth'
   const slug = pack.slug || ''
-  const [view, setView] = useState<PackView | null>(() => onceNow<PackView>('pv:' + slug))
-  const [item, setItem] = useState<CatalogItem | null>(() => onceNow<CatalogItem>('ci:' + slug))
+  const [view, setView] = useState<PackView | null>(() => onceNow<PackView>(pageViewKey(slug)))
+  const [item, setItem] = useState<CatalogItem | null>(() => onceNow<CatalogItem>(pageItemKey(slug)))
   const [detail, setDetail] = useState<PremiumPackDetail | null>(() => onceNow<PremiumPackDetail>('pd:' + pack.id))
   const [detailFailed, setDetailFailed] = useState(false)
   const signedIn = useHasMillida()
@@ -370,8 +374,8 @@ export function PackPage({
 
   useEffect(() => {
     let alive = true
-    setView(onceNow<PackView>('pv:' + slug))
-    setItem(onceNow<CatalogItem>('ci:' + slug))
+    setView(onceNow<PackView>(pageViewKey(slug)))
+    setItem(onceNow<CatalogItem>(pageItemKey(slug)))
     setDetail(onceNow<PremiumPackDetail>('pd:' + pack.id))
     setDetailFailed(false)
     setProject(null)
@@ -386,7 +390,7 @@ export function PackPage({
         ['pv:', (v: unknown) => setView((old) => old ?? (v as PackView))],
         ['ci:', (v: unknown) => setItem((old) => old ?? (v as CatalogItem))],
       ] as const)
-        void diskGet('pack:' + k + slug).then((r) => alive && r && put(r.value))
+        void diskGet('pack:' + k + withCatalogLang(slug)).then((r) => alive && r && put(r.value))
     if (mr) {
       const base = MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)
       void once('mr:' + slug, () => getJson<MrProject>(base)).then((p) => alive && setProject(p))
@@ -395,10 +399,10 @@ export function PackPage({
       )
       if (pack.serverOk !== false) setHostTarget({ kind: 'modrinth', projectId: slug, title: pack.title })
     } else if (slug) {
-      void remember('pv:' + slug, once('pv:' + slug, () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)))).then(
+      void remember(pageViewKey(slug), once(pageViewKey(slug), () => api<PackView>('/catalog/packs/' + encodeURIComponent(slug)))).then(
         (d) => alive && d && setView(d),
       )
-      void remember('ci:' + slug, once('ci:' + slug, () => api<CatalogItem>('/catalog/items/' + encodeURIComponent(slug)))).then(
+      void remember(pageItemKey(slug), once(pageItemKey(slug), () => api<CatalogItem>(withCatalogLang('/catalog/items/' + encodeURIComponent(slug))))).then(
         (d) => alive && d && setItem(d),
       )
       void loadHostingPacks().then((list) => {
