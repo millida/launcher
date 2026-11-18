@@ -7,7 +7,7 @@ import { LAUNCHER_API, apiHeaders } from './api'
 import { detectGpu } from './gpu'
 import { errorCode, scrubText } from './telemetryPrivacy'
 import { classifyError, type ErrorKind } from './errorKind'
-import { writePref } from './prefs'
+import { readPref, writePref } from './prefs'
 import { noted } from './noted'
 
 export type TelemetryEventType =
@@ -284,9 +284,19 @@ const APPEARANCE = { themePack: '', themeMode: 'dark' } as const
 
 /// Sent through the core (reqwest) rather than fetch: the webview origin tauri://localhost is
 /// blocked by CORS.
+function hasLicense(): boolean {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem('m-accounts') || '[]')
+    return Array.isArray(list) && list.some((a) => !!a && (a as { kind?: unknown }).kind === 'microsoft')
+  } catch {
+    return false
+  }
+}
+
 async function send(events: QueuedEvent[]): Promise<boolean> {
   const dev = await initDevice()
-  const payload = { device: { ...dev, ...APPEARANCE }, events }
+  const layout = readPref('m-layout', 'lobby') === 'classic' ? 'classic' : 'lobby'
+  const payload = { device: { ...dev, ...APPEARANCE, layout, license: hasLicense() }, events }
   if (hasTauri()) {
     try {
       await millidaApi('/launcher/telemetry', 'POST', payload)

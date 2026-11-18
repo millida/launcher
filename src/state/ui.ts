@@ -35,6 +35,7 @@ export type ModalId =
   | 'mpOverlay'
   | 'mgModal'
   | 'wnModal'
+  | 'smModal'
 
 export interface ModalState {
   open: boolean
@@ -129,6 +130,7 @@ export const useUi = create<UiState>((set, get) => ({
     mpOverlay: emptyModal(),
     mgModal: emptyModal(),
     wnModal: emptyModal(),
+    smModal: emptyModal(),
   },
   prelaunch: { open: false, sub: 'Fabulously Optimized · Fabric', stage: 0, msg: null, pct: 0, mode: 'launch' },
   setLogged: (v) => set({ logged: v }),

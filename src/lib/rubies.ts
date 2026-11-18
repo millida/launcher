@@ -664,10 +664,12 @@ export interface TelegramReward {
   amount: number
   claimed: boolean
   linked: boolean
+  linkedAs?: string | null
   botUrl: string
   channelUrl: string
 }
 export const loadTelegramReward = () => api<TelegramReward>('/rubies/telegram')
+export const unlinkTelegram = () => api<unknown>('/users/me/tg/unlink', { method: 'POST' })
 export const claimTelegramReward = () =>
   api<TelegramReward & { granted: boolean; balance: number | null }>('/rubies/telegram/claim', { method: 'POST' })
 

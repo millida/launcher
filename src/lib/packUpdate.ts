@@ -55,18 +55,32 @@ export function packNeedsCheck(s: PackSettings | null | undefined): boolean {
   return !!catalogPackSlug(s) && !(s?.catalogPackReviewFile || '').trim()
 }
 
-export type PackCard = { view: Pick<PackView, 'slug' | 'version' | 'files'> | null } | { error: unknown }
+export type PackCard = { view: Pick<PackView, 'slug' | 'version' | 'files' | 'alwaysUpdate'> | null } | { error: unknown }
 
 export type PackLaunchStep =
   | { kind: 'launch' }
-  | { kind: 'update'; update: PackUpdate }
+  | { kind: 'update'; update: PackUpdate; required: boolean }
   | { kind: 'launch-unchecked'; reason: string }
 
-export function packLaunchStep(s: PackSettings | null | undefined, card: PackCard): PackLaunchStep {
+export const cardRequiresLatest = (card: PackCard): boolean => 'view' in card && card.view?.alwaysUpdate === true
+
+/**
+ * `autoUpdate` is the build's own switch. A card that lets the build start only
+ * on its published version updates it whatever the switch says, and the core
+ * then refuses the launch key for an older one anyway.
+ */
+export function packLaunchStep(
+  s: PackSettings | null | undefined,
+  card: PackCard,
+  autoUpdate: boolean,
+  forced: boolean,
+): PackLaunchStep {
   if (!packNeedsCheck(s)) return { kind: 'launch' }
+  const required = forced || cardRequiresLatest(card)
+  if (!autoUpdate && !required) return { kind: 'launch' }
   if ('error' in card) return { kind: 'launch-unchecked', reason: apiErrorText(card.error, t('каталог Millida не ответил')) }
   const update = packUpdateFor(s, card.view)
-  return update ? { kind: 'update', update } : { kind: 'launch' }
+  return update ? { kind: 'update', update, required } : { kind: 'launch' }
 }
 
 export type PackUpdateOutcome = { kind: 'done' } | { kind: 'failed'; error: unknown } | { kind: 'cancelled' }
@@ -89,10 +103,18 @@ function failureReason(e: unknown): string {
  * A failed update never costs the player the evening: the core keeps the
  * installed version whole, so the game starts on it and the reason is shown.
  * Only a cancel stops the launch, since the player asked for exactly that.
+ * A build its author lets start only on the published version is the
+ * exception: the older one would be refused its launch key anyway.
  */
-export function afterPackUpdate(u: PackUpdate, outcome: PackUpdateOutcome): AfterPackUpdate {
+export function afterPackUpdate(u: PackUpdate, outcome: PackUpdateOutcome, required = false): AfterPackUpdate {
   if (outcome.kind === 'done') return { launch: true, toast: null }
   if (outcome.kind === 'cancelled') return { launch: false, toast: null }
+  if (required) {
+    return {
+      launch: false,
+      toast: t('Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз', { to: u.to, reason: failureReason(outcome.error) }),
+    }
+  }
   return {
     launch: true,
     toast: t('Сборку не удалось обновить до {to}: {reason}. Запускаем установленную версию {from}', { to: u.to, reason: failureReason(outcome.error), from: u.from }),
