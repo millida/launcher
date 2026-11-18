@@ -6629,5 +6629,7 @@
   "Не удалось создать сборку под сервер: {error}": "No se pudo crear un modpack para el servidor: {error}",
   "Сервер «{server}» собирает список модов…": "El servidor «{server}» está reuniendo su lista de mods…",
   "Список модов «{server}» ещё не готов — заходим без него": "La lista de mods de «{server}» aún no está lista — entramos sin ella",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "El enlace del mod caducó — vuelve a entrar al servidor"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "El enlace del mod caducó — vuelve a entrar al servidor",
+  "Автор разрешает играть только на последней версии": "El autor solo permite jugar la versión más reciente",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "No se pudo actualizar el modpack a {to}: {reason}. La versión antigua no se inicia — inténtalo de nuevo"
 }

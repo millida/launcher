@@ -6629,5 +6629,7 @@
   "Не удалось создать сборку под сервер: {error}": "Nepodarilo sa vytvoriť balík pre server: {error}",
   "Сервер «{server}» собирает список модов…": "Server «{server}» zbiera zoznam modov…",
   "Список модов «{server}» ещё не готов — заходим без него": "Zoznam modov «{server}» ešte nie je pripravený — vstupujeme bez neho",
-  "Ссылка на мод устарела — зайди на сервер ещё раз": "Odkaz na mod vypršal — vstúp na server znova"
+  "Ссылка на мод устарела — зайди на сервер ещё раз": "Odkaz na mod vypršal — vstúp na server znova",
+  "Автор разрешает играть только на последней версии": "Autor povoľuje hrať iba najnovšiu verziu",
+  "Сборку не удалось обновить до {to}: {reason}. Старая версия не запускается — попробуй ещё раз": "Nepodarilo sa aktualizovať modpack na {to}: {reason}. Stará verzia sa nespúšťa — skús to znova"
 }

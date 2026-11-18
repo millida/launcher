@@ -212,6 +212,10 @@ fn idempotent_post(route: &str) -> bool {
     IDEMPOTENT_POSTS.contains(&route) || (route.starts_with("/rubies/chests/") && route.ends_with("/open"))
 }
 
+fn shared_answer(method: &str, path: &str) -> bool {
+    method == "GET" && SHARED_ANSWER_ROUTES.iter().any(|prefix| path.starts_with(prefix))
+}
+
 fn repeatable(method: &str, path: &str) -> bool {
     let route = path.split('?').next().unwrap_or(path);
     method == "GET"
@@ -242,7 +246,8 @@ pub async fn millida_api_in(
     if !matches!(m.as_str(), "GET" | "POST" | "PATCH" | "PUT" | "DELETE") {
         return Err("bad method".into());
     }
-    let token = token.filter(|t| !t.is_empty());
+    let shared = shared_answer(&m, &path);
+    let token = token.filter(|t| !t.is_empty() && !shared);
     let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url, market, lang));
     let known = conditional.as_deref().and_then(remembered);
     let build_on = |c: reqwest::Client| {
@@ -266,8 +271,10 @@ pub async fn millida_api_in(
         if let Some(b) = body.as_ref() {
             req = req.json(b);
         }
-        if let Some(k) = known.as_ref() {
-            req = req.header(reqwest::header::IF_NONE_MATCH, k.etag.as_str());
+        match known.as_ref() {
+            Some(k) => req = req.header(reqwest::header::IF_NONE_MATCH, k.etag.as_str()),
+            None if shared => req = req.header(reqwest::header::IF_MODIFIED_SINCE, SHARED_SINCE),
+            None => {}
         }
         req
     };

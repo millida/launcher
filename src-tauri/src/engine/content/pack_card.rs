@@ -32,6 +32,20 @@ pub(crate) fn remember_protected(settings: &mut serde_json::Map<String, Value>, 
     }
 }
 
+/// Where a catalogue build remembers that its author lets it start only on the
+/// published version, so the switch stays locked while the card is unreachable.
+pub const PACK_ALWAYS_UPDATE_KEY: &str = "catalogPackAlwaysUpdate";
+
+pub fn pack_always_update_flag(view: &Value) -> Option<bool> {
+    view["alwaysUpdate"].as_bool()
+}
+
+pub(crate) fn remember_always_update(settings: &mut serde_json::Map<String, Value>, view: &Value) {
+    if let Some(on) = pack_always_update_flag(view) {
+        settings.insert(PACK_ALWAYS_UPDATE_KEY.into(), Value::Bool(on));
+    }
+}
+
 /// Only a build installed from our catalogue can be protected: the flag alone
 /// in a settings file copied into another build means nothing.
 pub fn content_protected(settings: &Value) -> bool {
@@ -151,7 +165,8 @@ pub async fn apply_pack_card(profile: &str, view: &Value) -> bool {
     let settings = profile_settings(profile);
     let mut patch = serde_json::Map::new();
     remember_protected(&mut patch, view);
-    let flag_changed = patch.get(PACK_PROTECTED_KEY).is_some_and(|v| settings.get(PACK_PROTECTED_KEY) != Some(v));
+    remember_always_update(&mut patch, view);
+    let flag_changed = patch.iter().any(|(k, v)| settings.get(k) != Some(v));
     if flag_changed {
         merge_settings(profile, patch);
     }
