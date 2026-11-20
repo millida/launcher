@@ -14,6 +14,7 @@ import { lookHint } from '../../lib/lookHint'
 import { playerUuid } from '../../lib/playerUuid'
 import { noted } from '../../lib/noted'
 import { useViewPrefs } from '../../state/viewPrefs'
+import { useLiteMode } from '../../lib/liteMode'
 import { LOOK_EVENT, catalogKnowing, loadCosmeticCatalog, loadWornCosmetics, lookVersion } from '../../lib/gameProfile'
 import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
@@ -338,6 +339,8 @@ export function LobbyCharacter({
   // «косметика полностью вся пропала»).
   const signedIn = useHasMillida()
   const charAnim = useViewPrefs((s) => s.charAnim)
+  const lite = useLiteMode()
+  const holdStill = !shop && lite && !charAnim
   const [m3d, setM3d] = useState<Mine3dModule | null>(null)
   // Номер живой сцены, 0 — сцены нет. Не флаг: при потере контекста WebGL
   // старая сцена гасит его, новая зажигает в том же кадре, React видел то же
@@ -1053,7 +1056,7 @@ export function LobbyCharacter({
     // Окно без фокуса (человек смотрит, а курсор в другой программе) — персонаж
     // живёт дальше: стоп только когда окна не видно или поверх игра
     // (владелец 06.10.2026: «персонажи стоят как статуи»).
-    const sync = () => setPaused(document.hidden || !on || !renderLive())
+    const sync = () => setPaused(document.hidden || !on || holdStill || !renderLive())
     document.addEventListener('visibilitychange', sync)
     const offGate = onRenderGate(sync)
     sync()
@@ -1061,7 +1064,7 @@ export function LobbyCharacter({
       document.removeEventListener('visibilitychange', sync)
       offGate()
     }
-  }, [ready, on])
+  }, [ready, on, holdStill])
 
   // Нет контекста — снова через 1,5 / 3 / 4,5… с, не дольше 10 попыток.
   useEffect(() => {
@@ -1108,6 +1111,7 @@ export function LobbyCharacter({
         const held = drag.current
         if (engine && held) {
           engine.setPlayerYaw(held.yaw + (e.clientX - held.x) * TURN_PER_PIXEL)
+          if (pausedRef.current) paintStill(engine)
           return
         }
         // Указатель — только над самой фигурой (клик туда открывает гардероб);

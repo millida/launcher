@@ -15,7 +15,11 @@ mock.module('../ipc/commands', () => ({
   millidaPacks: async () => packsNow,
   packReviewQueue: async () => [],
 }))
-mock.module('../lib/api', () => ({ MODRINTH_API: 'https://modrinth.test', mirrorAsset: (u: string) => u }))
+mock.module('../lib/api', () => ({
+  MODRINTH_API: 'https://modrinth.test',
+  mirrorAsset: (u: string) => u,
+  sharedFetch: (u: string, init?: RequestInit) => fetch(u, init),
+}))
 mock.module('./profiles', () => ({ useProfiles: { getState: () => ({ profiles: [], selected: '' }) } }))
 
 const { useMods } = await import('./mods')

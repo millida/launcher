@@ -1,4 +1,4 @@
-import { MODRINTH_API } from '../../lib/api'
+import { MODRINTH_API, sharedFetch } from '../../lib/api'
 import { cachedCatalog } from '../../lib/catalogCache'
 import { loadMr, mrToHit, type ModHit } from '../../state/mods'
 import { cardFromMrHit } from './mrTail'
@@ -40,7 +40,7 @@ export async function similarFor(hit: ModHit, section: SiteSlug, limit = 6): Pro
   const id = hit.pid || hit.slug
   if (!id) return []
   const p = await cachedCatalog('mrp:' + id, async () => {
-    const r = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(id))
+    const r = await sharedFetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(id))
     if (!r.ok) throw new Error('Modrinth project answered ' + r.status)
     return (await r.json()) as MrProject
   })
