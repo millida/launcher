@@ -99,12 +99,19 @@ async function storedModel(modelId: string): Promise<CosmeticModelFile> {
   return fresh
 }
 
+const MODEL_RETRY_MS = 1500
+
+// The API sheds load with a 503 for a few seconds; one late retry keeps a try-on from failing on a blip.
+function storedModelRetried(modelId: string): Promise<CosmeticModelFile> {
+  return storedModel(modelId).catch(() => new Promise<void>((ok) => setTimeout(ok, MODEL_RETRY_MS)).then(() => storedModel(modelId)))
+}
+
 export function cosmeticModel(modelId: string): Promise<CosmeticModelFile | null> {
   const ready = MODEL_CACHE.get(modelId)
   if (ready) return ready
   // Неудачу не держим: сорванный запрос иначе запоминал бы вещь как пустую до
   // перезапуска, и примерка у неё не работала бы весь вечер.
-  const asked = (import.meta.env.DEV && devModels() ? devModel(modelId).then((m) => m ?? storedModel(modelId)) : storedModel(modelId)).catch(() => {
+  const asked = (import.meta.env.DEV && devModels() ? devModel(modelId).then((m) => m ?? storedModel(modelId)) : storedModelRetried(modelId)).catch(() => {
     MODEL_CACHE.delete(modelId)
     return null
   })

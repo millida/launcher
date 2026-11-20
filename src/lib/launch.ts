@@ -361,10 +361,10 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   })
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: t('Готовимся…') })
-  const next = afterPackUpdate(u, outcome)
+  const next = afterPackUpdate(u, outcome, step.required)
   if (next.toast) showToast(next.toast, 'error')
   if (!next.launch) {
-    showToast(t('Обновление сборки отменено — игра не запускалась'))
+    if (outcome.kind === 'cancelled') showToast(t('Обновление сборки отменено — игра не запускалась'))
     throw new Error(CANCELLED_TEXT)
   }
 }
