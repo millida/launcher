@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { RarityChip } from '../shop/rarityUi'
+import { normRarity } from '../shop/rarity'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
@@ -215,7 +216,7 @@ function BigReveal({ r, onClose }: { r: RewardShown; onClose: () => void }) {
                     <Plate>
                       <span className="rw-card-flash" />
                       <span className="rw-card-art">
-                        <Art it={it} size={many ? 96 : 176} />
+                        <Art it={it} size={many ? 96 : it.rubies == null && normRarity(it.rarity) ? 160 : 176} />
                         {it.rubies == null ? <RarityChip rarity={it.rarity} /> : null}
                       </span>
                       {many ? <b className="rw-card-name">{it.name}</b> : null}

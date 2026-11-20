@@ -138,7 +138,7 @@ import { duoClipName, duoScene } from '../lib/duoEmotes'
 import { DUO_PARTNER_NICK, duoStage, soloSequence } from '../lib/duoStage'
 import '../styles/pixel/character.css'
 import { showReward } from '../components/reward/RewardReveal'
-import { rarityOfPrice } from '../components/shop/rarity'
+import { normRarity, rarityOfPrice } from '../components/shop/rarity'
 import { openPaymentUrl } from '../lib/openPayment'
 import { drawFront, skinCanvas } from '../lib/skinFlat'
 import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
@@ -1236,7 +1236,8 @@ export function Skins({ on }: { on: boolean }) {
       setCosmeticBusy('')
     }
     showReward({
-      items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: rarityOfPrice(c.priceRubies || 0) })),
+      // Same rarity the wardrobe card shows: the price is discounted and cannot tell the rank.
+      items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: normRarity(c.rarity) ?? normRarity(variantOf(c)?.rarity) ?? rarityOfPrice(c.priceRubies || 0) })),
       kicker: bought.length > 1 ? (bought.length < 5 ? t('{n} вещи', { n: bought.length }) : t('{n} вещей', { n: bought.length })) : t('Твоя вещь'),
       title: bought.length > 1 ? t('Сет собран') : undefined,
       sub: wore ? t('Уже на тебе') : undefined,

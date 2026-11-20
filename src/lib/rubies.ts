@@ -448,6 +448,12 @@ export interface ItemRef {
   color?: string
   /** v3.1: цвет базовой расцветки — превью перекрашивается из него в color. */
   tintFrom?: string
+  priceRise?: PriceRise
+}
+
+export interface PriceRise {
+  at: string
+  pct: number
 }
 
 export type Channel = 'FREE' | 'QUEST' | 'ACHIEVEMENT' | 'HOURS' | 'SEASON' | 'SHOP' | 'PLUS_MONTH' | 'WELCOME' | 'LEGACY'
@@ -496,13 +502,37 @@ export interface MonthOffer {
   kopecks: number
   oneTime?: boolean
   endsAt: string
+  /** Значок выгоды «+N%»: служба считает его сама, иначе клиент — от самого дешёвого пакета. */
+  badgePct?: number
+}
+
+/**
+ * Разовый оффер «Второй шаг» (первые 72 ч после первой оплаты): покупается тем
+ * же путём, что пакет (POST /rubies/packs/buy, pack:'second'). `null` — оффер
+ * недоступен. Зачёркнутой цены у него нет, только значок выгоды и таймер.
+ */
+export interface SecondOffer {
+  code: 'second'
+  title: string
+  rubies: number
+  kopecks: number
+  oneTime?: boolean
+  endsAt: string
+  badgePct?: number
 }
 
 export interface ShopPack {
   code: string
   title: string
+  /** Итоговое число рубинов — бонус уже внутри. Показываем крупно именно его. */
   rubies: number
   kopecks: number
+  /** Рубинов сверх точки отсчёта. Строкой «+N бонусом» не показываем — только для значка. */
+  bonus?: number
+  /** Значок выгоды «+N%»: 0 у самого маленького пакета, растёт с размером. */
+  badgePct?: number
+  /** Самый выгодный пакет (Казна): «Выгоднее всего». */
+  best?: boolean
   /** Разовый пакет («Стартовый набор», code 'starter'): служба отдаёт его первым, пока не было оплат. */
   oneTime?: boolean
 }
@@ -531,6 +561,8 @@ export interface ShopDay {
   packs: ShopPack[]
   /** Предложение месяца (служба 7e81279a7): разовый пакет до конца месяца МСК; null — куплено или нет. */
   monthOffer?: MonthOffer | null
+  /** Разовый оффер «Второй шаг» первых 72 ч после первой оплаты; null — недоступен. */
+  secondOffer?: SecondOffer | null
   wishlist: string[]
   /** Старая служба поля не шлёт — плитки подарка тогда нет. */
   gift?: ShopGift | null
@@ -713,7 +745,7 @@ export const claimWelcome = () => api<WelcomeGift>('/rubies/welcome/claim', { me
 // которой у игрока ещё нет, шансы открыты, раз в `pity` открытий — эпическая+.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SetTheme = 'flame' | 'dark' | 'future' | 'cozy'
+export type SetTheme = 'flame' | 'dark' | 'future' | 'cozy' | 'street'
 
 export interface SetColorwayView {
   /** '' — у набора одна расцветка. */
@@ -729,6 +761,7 @@ export interface SetColorwayView {
   have: number
   /** Цена с PLUS — только тому, у кого подписки нет. */
   plusPrice?: number
+  priceRise?: { at: string; price: number }
 }
 
 export interface SetView {

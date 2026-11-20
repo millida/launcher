@@ -6,9 +6,11 @@ import type { ItemRef, Rarity, ShopCard, ShopDay, ShopSource } from '../../lib/r
 import { loadCosmeticCatalog, loadCosmeticOwned, type CosmeticItem } from '../../lib/gameProfile'
 import { focusOf, outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitShotLazy'
 import { shopCards } from './wish'
+import { openPackNeed } from './packNeed'
 import { ItemArt, toneStyle } from './parts'
 import { RarityChip } from './rarityUi'
 import { DayClock, OffBadge, useRailEdges } from './SetsV2'
+import { PriceRiseTag } from './priceRise'
 import { SceneBack, usePlayerSkin } from './ShopStage'
 import '../../styles/pixel/shop-motion.css'
 import { intlTag, useT } from '../../i18n'
@@ -98,6 +100,7 @@ function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: Sh
         {source === 'forYou' ? <span className="td-you">{t('для тебя')}</span> : null}
       </button>
       <b className="sv-card-name">{card.item.name}</b>
+      {card.owned ? null : <PriceRiseTag rise={card.item.priceRise} />}
       {card.owned ? (
         <button className="btn md secondary sv-pbtn" data-track="shop_wear" onClick={() => acts.onWear(card.item)}>
           {t('Надеть')}
@@ -176,6 +179,8 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
   const d = day.day
   const wished = new Set(day.wishlist)
   const wishes = shopCards(day).filter(([c]) => wished.has(c.item.code) && !c.owned)
+  const wishTotal = wishes.reduce((sum, [c]) => sum + (c.price ?? 0), 0)
+  const wishShort = wishTotal > day.balance
   const cards: [ShopCard, ShopSource][] = [
     ...(d.featured ? [[d.featured, 'featured'] as [ShopCard, ShopSource]] : []),
     ...(d.deal ? [[d.deal, 'deal'] as [ShopCard, ShopSource]] : []),
@@ -208,6 +213,15 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
               <Icon id="i-heart" />
               {t('Хочу')}
             </h2>
+            {wishShort ? (
+              <button
+                className="btn sm primary"
+                data-track="wish_topup"
+                onClick={() => openPackNeed({ target: wishTotal, from: 'wish', title: t('на всё из «Хочу»') })}
+              >
+                {t('Пополнить')}
+              </button>
+            ) : null}
           </div>
           <CardRail cards={wishes} acts={acts} label={t('Хочу')} />
         </section>
@@ -230,7 +244,7 @@ export function tagCards(items: CosmeticItem[], tag: string, owned: ReadonlySet<
     .filter((c) => c.tags?.includes(tag) && (c.priceRubies ?? 0) > 0)
     .map((c) => [
       {
-        item: { code: c.id, name: c.name, slot: c.slot, rarity: (c.rarity as Rarity | undefined) ?? 'COMMON', preview: c.preview ?? null },
+        item: { code: c.id, name: c.name, slot: c.slot, rarity: (c.rarity as Rarity | undefined) ?? 'COMMON', preview: c.preview ?? null, ...(c.priceRise ? { priceRise: c.priceRise } : {}) },
         price: c.priceRubies!,
         basePrice: c.priceRubies!,
         discountPct: 0,

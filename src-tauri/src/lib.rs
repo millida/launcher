@@ -405,6 +405,8 @@ pub fn run() {
             commands::profiles::set_screenshot_note,
             commands::profiles::crop_screenshot,
             commands::system::pick_wallpaper,
+            commands::system::publish_wallpaper,
+            commands::system::save_library_wallpaper,
             commands::system::pick_texture,
             commands::system::copy_picture,
             commands::system::save_picture_as,

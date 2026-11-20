@@ -3,7 +3,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { PxIcon } from '../PxIcon'
-import { MODRINTH_API, mirrorAsset, openExt } from '../../lib/api'
+import { MODRINTH_API, mirrorAsset, openExt, sharedFetch } from '../../lib/api'
 import type { MilliItem } from '../../lib/milli'
 import { McItem } from './McItem'
 import { ruDescription } from './milliPackTree'
@@ -218,7 +218,7 @@ export function prefetchModInfo(items: MilliItem[]) {
     const part = need.slice(i, i + 40)
     part.forEach((m) => asked.add(m.projectId))
     const facets = JSON.stringify([part.map((m) => 'project_id:' + m.projectId)])
-    fetch(MODRINTH_API + '/v2/search?limit=' + part.length + '&facets=' + encodeURIComponent(facets))
+    sharedFetch(MODRINTH_API + '/v2/search?limit=' + part.length + '&facets=' + encodeURIComponent(facets))
       .then((r) => (r.ok ? (r.json() as Promise<{ hits?: Hit[] }>) : Promise.reject(r.status)))
       .then((r) => {
         const next = { ...useModInfo.getState().map }

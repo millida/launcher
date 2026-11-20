@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Profile } from '../../ipc/commands'
 import { loadProfileSettings } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
-import { MODRINTH_API, mirrorAsset } from '../../lib/api'
+import { MODRINTH_API, mirrorAsset, sharedFetch } from '../../lib/api'
 import { diskGet, diskSet } from '../../lib/diskCache'
 import { loadCatalogPacks } from './data'
 
@@ -19,7 +19,7 @@ const running = new Map<string, Promise<string | null>>()
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яё]+/g, '')
 
 async function modrinthCover(slug: string): Promise<string | null> {
-  const r = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).catch(() => null)
+  const r = await sharedFetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).catch(() => null)
   if (!r || !r.ok) return null
   const p = (await r.json().catch(() => null)) as { gallery?: { url: string; raw_url?: string; featured?: boolean }[] } | null
   const g = (p && p.gallery) || []
