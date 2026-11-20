@@ -1,0 +1,57 @@
+.wplib { display: flex; flex-direction: column; gap: 12px; max-height: 84vh; }
+.wplib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wplib-head h3 { margin: 0; }
+.wplib-x svg { width: 14px; height: 14px; }
+.wplib-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.wplib-search { flex: 1 1 200px; max-width: 280px; }
+.wplib-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+
+.wplib-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.wplib-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 8px;
+  background: var(--m-surface-2); --px-n: 10px; clip-path: var(--px-10);
+}
+.wplib-card.skel { aspect-ratio: 4 / 3; opacity: .6; }
+.wplib-thumb { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--m-inset); --px-n: 5px; clip-path: var(--px-5); }
+.wplib-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wplib-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wplib-name { font-size: 13px; color: var(--m-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wplib-author { font-size: 11.5px; color: var(--m-fg-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wplib-acts { display: flex; align-items: center; gap: 10px; margin-top: auto; }
+.wplib-like, .wplib-dl { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--m-fg-muted); }
+.wplib-like { padding: 4px 6px; background: none; cursor: pointer; transition: color var(--m-t-fast) var(--m-ease-out), background-color var(--m-t-fast) var(--m-ease-out); --px-n: 4px; clip-path: var(--px-4); }
+.wplib-like svg, .wplib-dl svg { width: 12px; height: 12px; }
+.wplib-like.on { color: var(--m-danger); }
+.wplib-like:active { transform: scale(0.96); }
+.wplib-set { margin-left: auto; }
+.wplib-more { align-self: center; }
+
+.wplib-rows { display: flex; flex-direction: column; gap: 8px; }
+.wplib-row {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px;
+  background: var(--m-surface-2); --px-n: 10px; clip-path: var(--px-10);
+}
+.wplib-row.skel { height: 79px; opacity: .6; }
+.wplib-status { font-size: 12px; color: var(--m-warning); }
+.wplib-status.active { color: var(--m-success); }
+.wplib-status.rejected { color: var(--m-danger); }
+.wplib-del svg { width: 14px; height: 14px; }
+
+.wplib-draft {
+  display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px;
+  background: var(--m-surface-2); --px-n: 10px; clip-path: var(--px-10);
+}
+.wplib-draft-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wplib-draft-acts { display: flex; gap: 8px; }
+
+.wplib-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--m-fg-muted); }
+
+@media (hover: hover) and (pointer: fine) {
+  .wplib-like:hover { color: var(--m-fg); background-color: var(--m-inset); }
+  .wplib-like.on:hover { color: var(--m-danger); }
+}
+@media (max-width: 760px) { .wplib-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .wplib-grid { grid-template-columns: 1fr; }
+  .wplib-draft { grid-template-columns: 1fr; }
+}

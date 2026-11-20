@@ -19,6 +19,10 @@ import { gzipSync } from 'node:zlib'
 // чанком модули (liteMode) он выносит из api в свой стартовый чанк. Было 833,0 КБ, стало 834,1 КБ.
 // 17.11.2026: gzip 316 → 317 КБ на подсказку магазина о привязанном Telegram (63d6184f, 319a5989):
 // экран подписки открывается из стартового магазина, сырой набор в лимите (834 из 835 КБ).
+// 18.11.2026: +1 КБ на sharedFetch в lib/api: запросы каталога Modrinth/CurseForge идут через ядро без
+// токена, иначе щит DDoS-Guard их не кэширует; api.ts стартовый, вынести функцию отдельно дороже.
+// 19.11.2026: +1 КБ на библиотеку фонов: флаг окна в hosts.tsx и две обёртки IPC в commands.ts стартовые,
+// само окно и логика — отдельный чанк (lazyHost).
 //
 // Запуск: после `vite build` из корня репозитория: `bun scripts/check-startup-budget.mjs`.
 
@@ -26,7 +30,7 @@ const LIMITS = {
   /** Входной index-*.js, байт. Цель 300 000 (react-dom ≈183 КБ из них). */
   entryJs: 351_000,
   /** Whole startup JS (index + modulepreload), bytes. */
-  startJs: 835_000,
+  startJs: 837_000,
   /** Весь стартовый CSS, байт. */
   startCss: 415_000,
   /** Startup JS in gzip, bytes. Measured with the Bun that CI installs (setup-bun latest): its gzip

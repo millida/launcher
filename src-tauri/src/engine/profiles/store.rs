@@ -220,8 +220,65 @@ pub(crate) fn profile_name_taken(n: &str) -> bool {
 }
 
 pub fn profile_dir(name: &str) -> PathBuf {
+    profile_dir_in(&game_root().join("profiles"), name)
+}
+
+/// Builds made before folder names became ASCII keep the folder they have;
+/// only a build without one gets the ASCII name.
+fn profile_dir_in(root: &std::path::Path, name: &str) -> PathBuf {
+    let legacy = root.join(legacy_dir_name(name));
+    if legacy.exists() {
+        return legacy;
+    }
+    root.join(ascii_dir_name(name))
+}
+
+fn legacy_dir_name(name: &str) -> String {
     let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c=='-' || *c=='_').collect();
-    game_root().join("profiles").join(if safe.is_empty() { "default".into() } else { safe })
+    if safe.is_empty() { "default".into() } else { safe }
+}
+
+/// Java reads the game folder through the ANSI code page, and a letter outside
+/// it becomes `?` and an InvalidPathException. Cyrillic is spelled in Latin;
+/// any other letter is dropped and a hash of the full name keeps such names
+/// apart.
+fn ascii_dir_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut dropped = false;
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            out.push(c);
+        } else if let Some(latin) = cyrillic_in_latin(c) {
+            out.push_str(&latin);
+        } else if c.is_alphanumeric() {
+            dropped = true;
+        }
+    }
+    if dropped {
+        use sha1::Digest;
+        let digest = sha1::Sha1::digest(name.as_bytes());
+        let tag: String = digest.iter().take(4).map(|b| format!("{:02x}", b)).collect();
+        return if out.is_empty() { tag } else { format!("{}-{}", out, tag) };
+    }
+    if out.is_empty() { "default".into() } else { out }
+}
+
+fn cyrillic_in_latin(c: char) -> Option<String> {
+    let lower = c.to_lowercase().next()?;
+    let latin = match lower {
+        'а' => "a", 'б' => "b", 'в' => "v", 'г' => "g", 'д' => "d", 'е' => "e", 'ё' => "e",
+        'ж' => "zh", 'з' => "z", 'и' => "i", 'й' => "y", 'к' => "k", 'л' => "l", 'м' => "m",
+        'н' => "n", 'о' => "o", 'п' => "p", 'р' => "r", 'с' => "s", 'т' => "t", 'у' => "u",
+        'ф' => "f", 'х' => "kh", 'ц' => "ts", 'ч' => "ch", 'ш' => "sh", 'щ' => "shch",
+        'ъ' => "", 'ы' => "y", 'ь' => "", 'э' => "e", 'ю' => "yu", 'я' => "ya",
+        'і' => "i", 'ї' => "yi", 'є' => "ye", 'ґ' => "g", 'ў' => "u",
+        _ => return None,
+    };
+    if lower == c {
+        return Some(latin.to_string());
+    }
+    let mut chars = latin.chars();
+    Some(chars.next().map(|first| first.to_ascii_uppercase().to_string() + chars.as_str()).unwrap_or_default())
 }
 
 /// Sidecar descriptor used to restore a profile moved or copied by hand.
@@ -824,6 +881,44 @@ mod tests {
         assert_eq!(profile_dir("Fabulously Optimized 1.21"), profile_dir("Fabulously Optimized 121"));
         assert_eq!(profile_dir("Моя сборка"), profile_dir("Моясборка"));
         assert_ne!(profile_dir("Sky Factory 4"), profile_dir("Sky Factory 4 (2)"));
+    }
+
+    #[test]
+    fn new_build_folders_are_plain_ascii() {
+        let cases: [(&str, &str, &str); 5] = [
+            ("Sky Factory 4", "SkyFactory4", "ASCII names keep the folder they always had"),
+            ("Моя сборка", "Moyasborka", "Cyrillic is spelled in Latin"),
+            ("Щука Ёж", "ShchukaEzh", "a capital keeps only its first Latin letter capital"),
+            ("!!!", "default", "a name without letters still gets a folder"),
+            ("Подъезд", "Podezd", "the hard sign has no Latin letter"),
+        ];
+        for (name, want, why) in cases {
+            assert_eq!(ascii_dir_name(name), want, "{name}: {why}");
+        }
+    }
+
+    #[test]
+    fn letters_java_cannot_read_never_reach_the_folder_name() {
+        let exotic = ["Ꙭ Mystic Realms", "Ωmega", "李的世界", "Café"];
+        for name in exotic {
+            let dir = ascii_dir_name(name);
+            assert!(dir.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'), "{name} -> {dir}");
+        }
+        assert_ne!(ascii_dir_name("Ωmega"), ascii_dir_name("Ψmega"), "names that differ only in a dropped letter keep apart");
+        assert_ne!(ascii_dir_name("Ωmega"), ascii_dir_name("mega"), "a dropped letter never lands on a plain name's folder");
+        assert_eq!(ascii_dir_name("Ωmega"), ascii_dir_name("Ωmega"), "the same name always finds its folder again");
+    }
+
+    #[test]
+    fn an_existing_build_keeps_its_folder() {
+        let root = std::env::temp_dir().join(format!("millida-profile-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("Моясборка")).unwrap();
+        std::fs::create_dir_all(root.join("Ωmega")).unwrap();
+        assert_eq!(profile_dir_in(&root, "Моя сборка"), root.join("Моясборка"), "a build made before keeps its Cyrillic folder");
+        assert_eq!(profile_dir_in(&root, "Ωmega"), root.join("Ωmega"), "folders are never renamed");
+        assert_eq!(profile_dir_in(&root, "Новая сборка"), root.join("Novayasborka"), "a new build gets the ASCII folder");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// An update of a Modrinth pack used to empty mods/ before the first byte

@@ -345,12 +345,13 @@ fn prepare_pack(
     let token: Node<Vec<String>> = if spec.needs_token {
         let (app, profile, slug) = (app.clone(), profile.to_string(), spec.slug.clone());
         g.spawn("pack-token", "pack", None, async move {
+            let installed = || installed_pack_body(&profile_settings(&profile), &slug);
             let got = match token_job {
                 Some(job) => match job.answer().await {
                     Some(done) => done,
-                    None => pack_launch_token(&slug).await,
+                    None => pack_launch_token(&slug, installed()).await,
                 },
-                None => pack_launch_token(&slug).await,
+                None => pack_launch_token(&slug, installed()).await,
             };
             match got {
                 Ok(t) => Ok(t),
