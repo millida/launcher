@@ -105,6 +105,7 @@ import { ItemGrid, ItemTile } from '../components/character/ItemTile'
 import { FittingBar } from '../components/character/FittingBar'
 import { nametagSpot } from '../components/character/Nametag'
 import { Outfits } from '../components/character/Outfits'
+import { WearShot } from '../components/character/WearShot'
 import { SetLooks } from '../components/character/SetLooks'
 import {
   addOutfit,
@@ -138,7 +139,7 @@ import { duoClipName, duoScene } from '../lib/duoEmotes'
 import { DUO_PARTNER_NICK, duoStage, soloSequence } from '../lib/duoStage'
 import '../styles/pixel/character.css'
 import { showReward } from '../components/reward/RewardReveal'
-import { rarityOfPrice } from '../components/shop/rarity'
+import { normRarity, rarityOfPrice } from '../components/shop/rarity'
 import { openPaymentUrl } from '../lib/openPayment'
 import { drawFront, skinCanvas } from '../lib/skinFlat'
 import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
@@ -1172,6 +1173,16 @@ export function Skins({ on }: { on: boolean }) {
     } catch {}
   }, [fitting, fitKey])
 
+  // The catalog first comes from disk and then fresh from the server: tried-on items must follow it,
+  // or the bill and the reward keep the stale price and rarity.
+  useEffect(() => {
+    if (!cosmetics.length) return
+    setFitting((now) => {
+      const next = now.map((c) => cosmetics.find((x) => x.id === c.id) ?? c)
+      return next.every((c, i) => c === now[i]) ? now : next
+    })
+  }, [cosmetics])
+
   /** Что из примеренного придётся купить и сколько это стоит. */
   const fittingBill = fitting.filter((c) => cosmeticLocked(c) && onSale(c))
   const fittingTotal = fittingBill.reduce((sum, c) => sum + (c.priceRubies ?? 0), 0)
@@ -1236,7 +1247,8 @@ export function Skins({ on }: { on: boolean }) {
       setCosmeticBusy('')
     }
     showReward({
-      items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: rarityOfPrice(c.priceRubies || 0) })),
+      // Same rarity the wardrobe card shows: the price is discounted and cannot tell the rank.
+      items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: normRarity(c.rarity) ?? normRarity(variantOf(c)?.rarity) ?? rarityOfPrice(c.priceRubies || 0) })),
       kicker: bought.length > 1 ? (bought.length < 5 ? t('{n} вещи', { n: bought.length }) : t('{n} вещей', { n: bought.length })) : t('Твоя вещь'),
       title: bought.length > 1 ? t('Сет собран') : undefined,
       sub: wore ? t('Уже на тебе') : undefined,
@@ -3232,7 +3244,7 @@ export function Skins({ on }: { on: boolean }) {
     return (
       <ItemTile
         key={c.id}
-        art={<CosmeticArt item={c} height={128} />}
+        art={<WearShot code={c.id} slot={c.slot} fallback={<CosmeticArt item={c} height={128} />} />}
         name={c.name}
         rarity={(c as CosmeticItem & { rarity?: string }).rarity}
         locked={locked}
@@ -3668,6 +3680,7 @@ export function Skins({ on }: { on: boolean }) {
               setChipBy((now) => ({ ...now, [sec.key]: chip.key }))
               pickSection(sec.key)
             }}
+            onRemove={(id) => setFitting((now) => now.filter((c) => c.id !== id))}
             onTone={(id, tone) => setVariantById((now) => ({ ...now, [id]: tone }))}
             onClear={() => setFitting([])}
             onBuy={() => (!hasMillidaAccount() ? showLogin() : void buyFitting())}
@@ -3714,7 +3727,7 @@ export function Skins({ on }: { on: boolean }) {
             )}
             {/* Одна раскладка во всех разделах (владелец 24.09.2026, 19:34): чипы
                 слева, справа «Снять» (если в разделе что-то надето) и «Все/Мои».
-                Поиска по вещам нет; Remove all is in the top bar, next to Import. */}
+                Remove all is in the top bar, next to Import. */}
             {(() => {
               const off = sectionTakeOff(
                 section,
@@ -3753,6 +3766,10 @@ export function Skins({ on }: { on: boolean }) {
                   selectCatalog({ key: '', nick: catQuery.trim(), label: catQuery.trim() })
               })}
             </div>
+          ) : null}
+
+          {section !== 'shop' && section !== 'skin' && section !== 'looks' ? (
+            <div className="ch-bar">{searchBox(t('Поиск'), cosmeticQuery, setCosmeticQuery)}</div>
           ) : null}
 
           {plusJoy ? <PlusCelebration items={plus?.items ?? 100} onDone={endPlusJoy} /> : null}

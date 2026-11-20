@@ -127,13 +127,15 @@ pub async fn millida_api(
     body: Option<serde_json::Value>,
     market: Option<String>,
     lang: Option<String>,
+    tz: Option<String>,
 ) -> Result<serde_json::Value, String> {
     if !engine::webview_path_allowed(&path) {
         return Err("bad path".into());
     }
     let market = engine::market_header(market.as_deref())?;
     let lang = engine::lang_header(lang.as_deref())?;
-    engine::millida_api_auth_in(path, method, body, market, lang).await
+    let zone = engine::tz_header(tz.as_deref());
+    engine::millida_api_auth_in(path, method, body, market, lang, zone).await
 }
 
 /// Raw-body upload for the website hosting screens (files, resource pack). The webview sends the bytes as

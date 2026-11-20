@@ -670,7 +670,7 @@ async fn take_over_mojmaps(step: &MojmapsStep, dest: &Path, installer: &Path, na
     let dir = data_dir().join("tmp").join(format!("{}-profile", name));
     let _ = std::fs::remove_dir_all(&dir);
     let written = std::fs::create_dir_all(&dir).is_ok() && write_json_atomic(&dir.join("install_profile.json"), &step.profile).is_ok();
-    let classpath = if written { std::env::join_paths([dir.as_path(), installer]).ok() } else { None };
+    let classpath = if written { std::env::join_paths([super::ansi_safe_path(&dir), super::ansi_safe_path(installer)]).ok() } else { None };
     if classpath.is_none() {
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -685,13 +685,7 @@ type ShadowProfile = (PathBuf, std::ffi::OsString, String);
 /// the JVM exits.
 fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&ShadowProfile>, stop: Option<&Halt>) -> Result<std::process::Output, String> {
     // Runs the Forge/NeoForge installer, already checked by hash, under the launcher's Java with the --installClient flag. It installs the loader into the game folder.
-    let mut jvm = Command::new(java);
-    quiet(&mut jvm).arg("-Djava.net.useSystemProxies=true");
-    match shadow {
-        Some((_, classpath, main)) => jvm.arg("-cp").arg(classpath).arg(main),
-        None => jvm.arg("-jar").arg(installer),
-    };
-    jvm.arg("--installClient").arg(root).current_dir(root);
+    let mut jvm = installer_command(java, installer, root, shadow);
     // A cancel ends the installer (and the JVMs it started) within a moment, so the build is free again at once.
     let out = match output_unless_stopped(&mut jvm, || stop.is_some_and(|s| s.cancelled())) {
         Ok(Ran::Done(out)) => Ok(out),
@@ -703,6 +697,20 @@ fn run_installer(java: &Path, installer: &Path, root: &Path, shadow: Option<&Sha
         let _ = std::fs::remove_dir_all(dir);
     }
     out
+}
+
+/// java.exe reads its own path and its arguments through the ANSI code page,
+/// so a user folder outside it reaches the installer as `?`; the same 8.3
+/// short names the game launch uses keep every path readable.
+fn installer_command(java: &Path, installer: &Path, root: &Path, shadow: Option<&ShadowProfile>) -> Command {
+    let mut jvm = Command::new(super::ansi_safe_path(java));
+    quiet(&mut jvm).arg("-Djava.net.useSystemProxies=true");
+    match shadow {
+        Some((_, classpath, main)) => jvm.arg("-cp").arg(classpath).arg(main),
+        None => jvm.arg("-jar").arg(super::ansi_safe_path(installer)),
+    };
+    jvm.arg("--installClient").arg(super::ansi_safe_path(root)).current_dir(root);
+    jvm
 }
 
 fn read_installer_version_json(installer: &Path, profile: &Value) -> Option<Value> {
@@ -1262,6 +1270,20 @@ fn assets_in_place(root: &Path, vjson: &Value) -> Result<Option<PathBuf>, String
     if dir.is_dir() { Ok(Some(dir)) } else { Err(NOT_READY.into()) }
 }
 
+/// The loader's meta answers 400/404 for a game version it never supported,
+/// and the bare status told the player nothing about what to pick instead.
+fn loader_meta_refusal(loader: &str, err: String) -> String {
+    if !(err.starts_with("400 ") || err.starts_with("404 ")) {
+        return err;
+    }
+    let name = match loader {
+        "quilt" => "Quilt",
+        "legacyfabric" => "Legacy Fabric",
+        _ => "Fabric",
+    };
+    format!("{} не поддерживает эту версию игры, выберите Forge или другую версию", name)
+}
+
 /// Fabric, Quilt or Legacy Fabric for this version: the profile of the pinned build (or of the
 /// newest stable one) and its libraries.
 async fn fabric_loader(app: &AppHandle, m: &Meta, loader: &str, loader_version: Option<&str>, mode: Mode) -> Result<LoaderOut, String> {
@@ -1287,7 +1309,7 @@ async fn fabric_loader(app: &AppHandle, m: &Meta, loader: &str, loader_version: 
                 &format!("{}/versions/loader/{}", meta_base, vid),
                 &lcache.join(format!("{}-{}-list.json", loader, vid)),
                 LOADER_TTL,
-            ).await?;
+            ).await.map_err(|e| loader_meta_refusal(loader, e))?;
             let arr = loaders.as_array().cloned().unwrap_or_default();
             // The pinned build wins, but only if meta actually lists it.
             let pinned = loader_version.filter(|v| {
@@ -1310,7 +1332,7 @@ async fn fabric_loader(app: &AppHandle, m: &Meta, loader: &str, loader_version: 
     let profile = get_json_immutable(&format!(
         "{}/versions/loader/{}/{}/profile/json",
         meta_base, vid, loader_v
-    ), &profile_cache(&loader_v)).await?;
+    ), &profile_cache(&loader_v)).await.map_err(|e| loader_meta_refusal(loader, e))?;
     let (main_class, ljobs) = fabric_plan(&profile, loader, vid, &root.join("libraries"))?;
     match mode {
         Mode::Check if !ljobs.iter().all(|j| j.url.is_empty() || loader_lib_intact(&j.path)) => return Err(NOT_READY.into()),
@@ -1849,6 +1871,48 @@ pub(crate) fn needs_log4j_config(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_game_version_gets_words_instead_of_a_status() {
+        let url = "https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fmeta.fabricmc.net%2Fv2%2Fversions%2Floader%2F1.8.9";
+        let fabric = "Fabric не поддерживает эту версию игры, выберите Forge или другую версию";
+        let cases: [(&str, String, &str, &str); 5] = [
+            ("fabric", format!("400 Bad Request от {}", url), fabric, "meta has no intermediary for 1.8.9"),
+            ("fabric", format!("404 Not Found от {}", url), fabric, "the mirror passes the refusal on as 404"),
+            ("quilt", format!("404 Not Found от {}", url), "Quilt не поддерживает эту версию игры, выберите Forge или другую версию", "Quilt is named as itself"),
+            ("fabric", format!("502 Bad Gateway от {}", url), "", "a mirror outage is no verdict about the version"),
+            ("fabric", format!("нет связи (timeout) — {}", url), "", "a dropped line keeps its own advice"),
+        ];
+        for (loader, err, want, why) in cases {
+            let want = if want.is_empty() { err.clone() } else { want.to_string() };
+            assert_eq!(loader_meta_refusal(loader, err), want, "{}", why);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn installer_gets_paths_java_can_read() {
+        let base = std::env::temp_dir().join(format!("millida-installer-ansi-{}", std::process::id())).join("Ωmega");
+        let (bin, root) = (base.join("bin"), base.join("game"));
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&root).unwrap();
+        let (java, installer) = (bin.join("java.exe"), base.join("forge-installer.jar"));
+        std::fs::write(&java, b"x").unwrap();
+        std::fs::write(&installer, b"x").unwrap();
+        let cmd = installer_command(&java, &installer, &root, None);
+        let program = std::path::PathBuf::from(cmd.get_program());
+        if program == java && !super::super::ansi_readable_as_is(&java) {
+            eprintln!("short names are disabled on this volume, nothing to check");
+            return;
+        }
+        let args: Vec<std::path::PathBuf> = cmd.get_args().map(std::path::PathBuf::from).collect();
+        assert!(super::super::ansi_readable_as_is(&program), "java.exe would not find its own home: {}", program.display());
+        for (i, want) in [(2, &installer), (4, &root)] {
+            assert!(super::super::ansi_readable_as_is(&args[i]), "the installer would get `?` in {}", args[i].display());
+            assert_eq!(std::fs::canonicalize(&args[i]).unwrap(), std::fs::canonicalize(want).unwrap(), "the short name must lead to the same place");
+        }
+        let _ = std::fs::remove_dir_all(base.parent().unwrap());
+    }
 
     fn output(code: i32, stdout: &str, stderr: &str) -> std::process::Output {
         #[cfg(unix)]
