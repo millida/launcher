@@ -7,8 +7,8 @@ import { plural } from '../../lib/format'
 /**
  * Панель «Сет» под фигурой. Сет собирается кликами по вещам в разделах: своя
  * вещь надевается сразу, чужая встаёт на фигуру примеркой и попадает сюда.
- * Крестиков у вещей нет — повторный клик по вещи в разделе снимает её из сета
- * (владелец 24.09.2026). Касса одна на весь сет: «Купить всё».
+ * Повторный клик по вещи в разделе или крестик на миниатюре снимает её из сета.
+ * Касса одна на весь сет: «Купить всё».
  */
 export interface SetPiece {
   id: string
@@ -34,6 +34,7 @@ export function FittingBar({
   canWear,
   needLogin,
   onPick,
+  onRemove,
   onTone,
   onClear,
   onBuy,
@@ -53,6 +54,7 @@ export function FittingBar({
   needLogin?: boolean
   /** Клик по миниатюре — показать вещь в её разделе. */
   onPick: (id: string) => void
+  onRemove: (id: string) => void
   onTone: (id: string, tone: string) => void
   onClear: () => void
   onBuy: () => void
@@ -81,6 +83,9 @@ export function FittingBar({
           <div key={piece.id} className={'ch-set-item' + (piece.loading ? ' is-loading' : '')}>
             <button className="ch-set-art" title={piece.name} aria-label={piece.name} data-track="fitting_piece" data-kind="item" data-id={piece.id} onClick={() => onPick(piece.id)}>
               {piece.art}
+            </button>
+            <button className="ch-set-off" aria-label={t('Убрать')} title={t('Убрать')} disabled={busy} data-track="fitting_remove" onClick={() => onRemove(piece.id)}>
+              <Icon id="i-x" />
             </button>
             <span className={'ch-set-price' + (piece.plus ? ' plus' : '')}>
               {piece.plus ? (

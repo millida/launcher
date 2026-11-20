@@ -58,6 +58,7 @@ import type { SoundMode } from '../lib/sound'
 import { notifyLevel, setNotifyLevel } from '../state/notifyPrefs'
 import { setDesktopToasts } from '../lib/desktopToast'
 import { setStreakRemind, streakRemindOn } from '../lib/streakReminder'
+import { affordNoticeOn, setAffordNotice } from '../components/shop/packNeed'
 import { autostartOn, setAutostart } from '../lib/autostart'
 import type { NotifyKind, NotifyLevel } from '../state/notifyPrefs'
 import { Slider } from '../components/Slider'
@@ -101,6 +102,7 @@ import type { Accent } from '../lib/accent'
 import { canPickBackdrop, pickBackdrop } from '../lib/pickBackdrop'
 import { STILLS } from '../lib/wallpaper'
 import { useWallpaper } from '../state/wallpaper'
+import { openWallpaperLibrary } from '../components/wallpaperLibStore'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
 import type { PerfMode } from '../state/viewPrefs'
 
@@ -258,6 +260,7 @@ export function Settings({ on }: { on: boolean }) {
   const [tray, setTray] = useState(hasTray)
   const [autostart, setAutostartOn] = useState(false)
   const [streakRemind, setStreakRemindOn] = useState(streakRemindOn)
+  const [afford, setAfford] = useState(affordNoticeOn)
   const [discord, setDiscord] = useState(() => localStorage.getItem('m-discord') !== '0')
   const [musicAuto, setMusicAuto] = useState(musicAutostartOn)
   const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
@@ -519,6 +522,17 @@ export function Settings({ on }: { on: boolean }) {
                 <img src={convertFileSrc(c.path)} alt="" />
                 <span>{c.name || t('Свой фон')}</span>
                 <button
+                  className="s2-wp-del s2-wp-pub"
+                  aria-label={t('Опубликовать в библиотеку')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (onlyApp(t('Публикация фона'))) return
+                    openWallpaperLibrary('mine', c)
+                  }}
+                >
+                  <Icon id="i-send" />
+                </button>
+                <button
                   className="s2-wp-del"
                   aria-label={t('Удалить фон')}
                   onClick={(e) => {
@@ -530,6 +544,12 @@ export function Settings({ on }: { on: boolean }) {
                 </button>
               </div>
             ))}
+            <button className="s2-wp-tile add" onClick={() => openWallpaperLibrary()}>
+              <span className="s2-wp-ph">
+                <Icon id="i-image" />
+              </span>
+              <span>{t('Библиотека')}</span>
+            </button>
             <button className="s2-wp-tile add" onClick={uploadBackdrop}>
               <span className="s2-wp-ph">
                 <Icon id="i-upload" />
@@ -730,6 +750,17 @@ export function Settings({ on }: { on: boolean }) {
                 setOverlay({ ...overlay, toasts: !next })
                 showToast(t('Не получилось — попробуй ещё раз'), 'error', false)
               })
+            }}
+          />
+        </Row>
+        <Row title={t('Подсказка «Теперь хватает»')} hint={t('В магазине, когда рубинов хватает на вещь из «Хочу»')} keys="уведомления магазин хочу хватает рубины">
+          <Toggle
+            label={t('Подсказка «Теперь хватает»')}
+            on={afford}
+            onChange={() => {
+              const next = !afford
+              setAfford(next)
+              setAffordNotice(next)
             }}
           />
         </Row>

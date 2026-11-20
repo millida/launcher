@@ -1,6 +1,6 @@
 import { ShotImg } from './LoopShot'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 import { lobby3dAllowed, useIdle3d } from '../../lib/lazy3d'
 import { loadWardrobe } from '../../lib/gameProfile'
 import { nickSkinUrl } from '../../lib/characterStage'
@@ -91,7 +91,7 @@ export function SceneBack({ feet }: { feet: number }) {
 }
 
 /** Живая сцена набора. Засыпает, пока её не видно. */
-export function ShopStage({ on, items, className = '' }: { on: boolean; items: ItemRef[]; className?: string }) {
+export function ShopStage({ on, items, className = '', placeholder }: { on: boolean; items: ItemRef[]; className?: string; placeholder?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [vis, setVis] = useState(true)
   const [dressed, setDressed] = useState<{ key: string; n: number } | null>(null)
@@ -125,7 +125,7 @@ export function ShopStage({ on, items, className = '' }: { on: boolean; items: I
           <LobbyCharacter on={on && vis} shop dress={dress} onDressed={(n) => setDressed({ key, n })} />
         </Suspense>
       ) : null}
-      {flat ? <ItemsFallback items={items} /> : null}
+      {flat ? (placeholder ?? <ItemsFallback items={items} />) : null}
     </div>
   )
 }

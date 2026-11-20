@@ -462,7 +462,8 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
       if (!moving || mode === 'first') {
         at(0)
         e.fitPlayerToFrame({ fillY: frame.fillY, offsetY: frame.offsetY })
-        if (moving) at(seconds / 2)
+        // A worn item's clip starts in its authored rest pose; mid-clip, flapping wings can be folded behind the body.
+        if (playing) at(seconds / 2)
         e.renderFrame()
         // No await inside try: cosmeticClock is global and must be reset before yielding.
         return canvasBlob(e.canvas, 'image/png').then((blob) => (blob ? { blob, dressed, partial, moving } : null))

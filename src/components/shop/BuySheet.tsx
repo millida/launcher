@@ -23,6 +23,8 @@ export interface SheetDone {
   rubies?: { from: number; to: number }
   /** «Надеть» под результатом. */
   onWear?: () => void
+  /** Следующее предложение под результатом (например, «Второй шаг» после первой оплаты): окно не закрывается само. */
+  next?: { label: ReactNode; onClick: () => void }
 }
 
 export interface SheetSpec {
@@ -42,6 +44,16 @@ export interface SheetSpec {
   choices?: { key: string; art: ReactNode; confirm: ReactNode; tone?: string; run: () => Promise<SheetDone | null> }[]
   /** Закрыли, не нажав главную кнопку (замер воронки). */
   onCancel?: () => void
+  /** «Подарить» рядом с главной кнопкой: окно закрывается и открывается выбор друга. */
+  gift?: () => void
+  /** Расцветки вещи: кружки под картинкой, выбранная подменяет картинку, имя, кнопку, покупку и подарок. */
+  tones?: SheetTone[]
+}
+
+export interface SheetTone {
+  color: string | null
+  title: string
+  view: () => Pick<SheetSpec, 'art' | 'name' | 'confirm' | 'run' | 'gift'>
 }
 
 interface SheetState {
@@ -99,7 +111,10 @@ function CountUp({ from, to }: { from: number; to: number }) {
 const DONE_MS = 2600
 
 export function BuySheetHost() {
-  const spec = useBuySheet((s) => s.spec)
+  const asked = useBuySheet((s) => s.spec)
+  const [tone, setTone] = useState(0)
+  const toneView = asked?.tones?.[tone]?.view()
+  const spec = asked && toneView ? { ...asked, ...toneView } : asked
   const shut = useBuySheet((s) => s.close)
   const [phase, setPhase] = useState<'ask' | 'busy' | 'done'>('ask')
   const [done, setDone] = useState<SheetDone | null>(null)
@@ -109,10 +124,11 @@ export function BuySheetHost() {
 
   useEffect(() => {
     setPhase('ask')
+    setTone(0)
     setDone(null)
     hold.current = false
     window.clearTimeout(timer.current)
-  }, [spec])
+  }, [asked])
 
   useEffect(() => {
     if (!spec) return
@@ -148,14 +164,14 @@ export function BuySheetHost() {
     setPhase('busy')
     try {
       const res = await run()
-      if (useBuySheet.getState().spec !== spec) return
+      if (useBuySheet.getState().spec !== asked) return
       if (!res) return shut()
       playSound('open')
       setDone(res)
       setPhase('done')
-      autoClose()
+      if (!res.next) autoClose()
     } catch {
-      if (useBuySheet.getState().spec === spec) shut()
+      if (useBuySheet.getState().spec === asked) shut()
     }
   }
 
@@ -195,13 +211,40 @@ export function BuySheetHost() {
             </>
           ) : null}
         </div>
+        {spec.tones && spec.tones.length > 1 && !isDone ? (
+          <div className="bs-tones" role="radiogroup" aria-label={t('Расцветка')}>
+            {spec.tones.map((x, i) => (
+              <button
+                key={i}
+                role="radio"
+                aria-checked={i === tone}
+                aria-label={x.title}
+                title={x.title}
+                className={'bs-tone' + (i === tone ? ' on' : '')}
+                style={x.color ? { background: '#' + x.color } : undefined}
+                disabled={phase === 'busy'}
+                data-track={'sheet_tone_' + spec.kind}
+                onClick={() => setTone(i)}
+              />
+            ))}
+          </div>
+        ) : null}
         {spec.name && !spec.choices ? <b className="bs-name">{spec.name}</b> : null}
-        <div className="bs-acts">
+        <div className={'bs-acts' + (spec.gift && !isDone && !spec.choices ? ' has-gift' : '')}>
           {isDone ? (
             done?.onWear ? (
               <button className="btn lg primary" data-track={'sheet_wear_' + spec.kind} onClick={() => (close(), done.onWear?.())}>
                 {t('Надеть')}
               </button>
+            ) : done?.next ? (
+              <>
+                <button className="btn lg primary" data-track={'sheet_next_' + spec.kind} onClick={() => (close(), done.next?.onClick())}>
+                  {done.next.label}
+                </button>
+                <button className="btn lg secondary" data-track={'sheet_ok_' + spec.kind} onClick={close}>
+                  {t('Ок')}
+                </button>
+              </>
             ) : (
               <button className="btn lg primary" data-track={'sheet_ok_' + spec.kind} onClick={close}>
                 {t('Ок')}
@@ -214,6 +257,22 @@ export function BuySheetHost() {
                   {phase === 'busy' ? <span className="bs-spin" aria-label={t('Ждём')} /> : spec.confirm}
                 </button>
               )}
+              {spec.gift && !spec.choices ? (
+                <button
+                  className="btn lg secondary bs-gift"
+                  disabled={phase === 'busy'}
+                  aria-label={t('Подарить')}
+                  title={t('Подарить')}
+                  data-track={'sheet_gift_' + spec.kind}
+                  onClick={() => {
+                    const gift = spec.gift
+                    shut()
+                    gift?.()
+                  }}
+                >
+                  <Icon id="i-gift" />
+                </button>
+              ) : null}
               <button className="btn lg secondary" disabled={phase === 'busy'} data-track={'sheet_cancel_' + spec.kind} onClick={close}>
                 {t('Отмена')}
               </button>
