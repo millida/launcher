@@ -6,6 +6,7 @@ import { showToast } from '../state/ui'
 import { t, tx, useT } from '../i18n'
 
 export function packAutoUpdateNote(s: PackAutoUpdate): string | null {
+  if (s.forced) return t('Автор разрешает играть только на последней версии')
   if (s.on && s.modified) return t('Твои изменения модов заменятся версией автора')
   if (!s.on && s.modified && s.chosen === null) return t('Выключено: ты менял моды')
   return null
@@ -34,7 +35,7 @@ export function PackAutoUpdateRow({ profile, revision }: { profile: string; revi
   if (!state || !state.catalog) return null
 
   const toggle = () => {
-    if (busy) return
+    if (busy || state.forced) return
     const next = !state.on
     const my = ++seq.current
     setBusy(true)
@@ -59,6 +60,7 @@ export function PackAutoUpdateRow({ profile, revision }: { profile: string; revi
         data-packautoupdate={state.on ? 'on' : 'off'}
         role="switch"
         aria-checked={state.on}
+        aria-disabled={state.forced || undefined}
         aria-label={t('Автообновление сборки')}
         onClick={toggle}
       ></span>

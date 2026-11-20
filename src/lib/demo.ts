@@ -22,6 +22,9 @@ import type { DailyClaim } from './rubies'
 import { demoEconomy, demoTier, type DemoCatalogItem } from '../components/shop/demoShop'
 import { demoSets } from '../components/shop/demoSets'
 import { digitalUsdCents, kopecksForUsdCents, type MoneyView, type PriceList, type Quote } from './money'
+import type { CloudBackupsStatus, WorldAutoBackup } from '../ipc/worldBackups'
+import type { Tuning } from '../ipc/commands'
+import type { CrashInfo } from '../ipc/events'
 
 const demoParam = (): boolean => {
   try {
@@ -1584,4 +1587,123 @@ export function demoAnswer(pathname: string, opts?: RequestInit): Promise<unknow
     return Promise.resolve(answer)
   }
   return undefined
+}
+
+/**
+ * World backups in `?preview`: the core commands do not exist in a browser.
+ * `&cloud=free` shows the account without PLUS, `&cloud=out` a signed-out launcher;
+ * without it the account has PLUS and three copies.
+ */
+const previewCloud = (): string => {
+  try {
+    if (typeof location === 'undefined' || '__TAURI_INTERNALS__' in window) return ''
+    const q = new URLSearchParams(location.search)
+    return q.has('preview') ? q.get('cloud') || 'plus' : ''
+  } catch {
+    return ''
+  }
+}
+
+/** Demo world backups are on. Always false in a release: `import.meta.env.DEV` is a constant there. */
+export const DEMO_WORLD_BACKUPS: boolean = !!import.meta.env.DEV && previewCloud() !== ''
+
+const GB = 1024 * 1024 * 1024
+
+export function demoWorldAutoBackup(): WorldAutoBackup {
+  return { mode: 'exit', keep: 5, cloud: previewCloud() === 'plus' }
+}
+
+export function demoCloudBackups(): CloudBackupsStatus {
+  const mode = previewCloud()
+  const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+  const limits = { quotaBytes: 10 * GB, maxPerWorld: 3, maxFileBytes: 2 * GB }
+  if (mode === 'out') return { signedIn: false, plus: false, usedBytes: 0, items: [], ...limits }
+  if (mode === 'free') return { signedIn: true, plus: false, usedBytes: 0, items: [], ...limits }
+  const sha256 = 'a'.repeat(64)
+  return {
+    signedIn: true,
+    plus: true,
+    usedBytes: Math.round(3.4 * GB),
+    ...limits,
+    items: [
+      { id: 'demo-1', build: 'Выживание', world: 'Мой мир', bytes: Math.round(1.2 * GB), sha256, createdAt: day(0) },
+      { id: 'demo-2', build: 'Выживание', world: 'Мой мир', bytes: Math.round(1.1 * GB), sha256, createdAt: day(3) },
+      { id: 'demo-3', build: 'Скайблок', world: 'Остров', bytes: Math.round(1.1 * GB), sha256, createdAt: day(9) },
+    ],
+  }
+}
+
+/** Auto memory in the browser preview, with the heavy-mods and integrated-GPU lines. */
+export function demoTuning(): Tuning {
+  return {
+    ramMb: 5120,
+    flags: ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=50', '-XX:ReservedCodeCacheSize=400M'],
+    reasons: [
+      '64 модов в сборке — под них нужно 4 ГБ',
+      'Учтены тяжёлые моды: Distant Horizons, Create (+2,8 ГБ)',
+      'В системе 16 ГБ ОЗУ',
+      'Столько ОЗУ в системе нет — оставили 4 ГБ системе и другим программам',
+      'Встроенная видеокарта: оставили системе +1 ГБ',
+      'Профиль сборщика мусора G1 подобран под короткие паузы — без него на больших сборках заметны рывки',
+    ],
+    totalRamMb: 16384,
+    mods: 64,
+    shaders: false,
+    manualRamMb: 0,
+  }
+}
+
+const DEMO_TAIL = [
+  '[12:00:01] [main/ERROR]: Incompatible mods found!',
+  '\t - Remove one of the following duplicate mods:',
+  '\t\t - Sodium (sodium) 0.5.3+mc1.20.1',
+  '\t\t - Sodium (sodium) 0.5.8+mc1.20.1',
+].join('\n')
+
+/**
+ * Crash dialog in the browser preview: `?preview&crash=dup` (a duplicate mod),
+ * `crash=culprit` (a mod named by the stack), `crash=added` (broke after new mods).
+ */
+export function demoCrashInfo(kind: string): CrashInfo | null {
+  const common = { profile: 'Выживание с друзьями', tail: DEMO_TAIL, logFile: 'logs/crash-snapshot-demo.log' }
+  const fallback = [
+    { kind: 'repair', label: 'Починить сборку', hint: 'Проверит и перекачает файлы игры' },
+    { kind: 'share-log', label: 'Поделиться логом', hint: 'Ссылку можно отправить в поддержку' },
+  ]
+  if (kind === 'dup')
+    return {
+      ...common,
+      kind: 'conflict',
+      reason: 'Один и тот же мод лежит в сборке дважды — загрузчик отказался запускать игру.',
+      culprits: ['sodium-fabric-0.5.3+mc1.20.1.jar'],
+      actions: [
+        { kind: 'disable-mod', label: 'Отключить дубль «sodium-fabric-0.5.3+mc1.20.1.jar»', arg: 'sodium-fabric-0.5.3+mc1.20.1.jar', hint: 'Второй файл «sodium» — останется sodium-fabric-0.5.8+mc1.20.1.jar' },
+        { kind: 'fix-plan', label: 'Починить сборку', arg: JSON.stringify([['disable-mod', 'sodium-fabric-0.5.3+mc1.20.1.jar']]), steps: ['Отключить дубль «sodium-fabric-0.5.3+mc1.20.1.jar»'] },
+        ...fallback,
+      ],
+    }
+  if (kind === 'culprit')
+    return {
+      ...common,
+      kind: 'unknown',
+      reason: 'Игра вылетела. Загляни в лог — там причина.',
+      culprits: ['alexsmobs-1.22.9.jar'],
+      actions: [
+        { kind: 'set-mod-version', label: "Обновить «Alex's Mobs»", arg: 'alexsmobs-1.22.9.jar|*', hint: 'Поставим его последнюю версию под эту сборку' },
+        { kind: 'disable-mod', label: "Отключить «Alex's Mobs»", arg: 'alexsmobs-1.22.9.jar', hint: 'Вылет случился в коде этого мода' },
+        { kind: 'fix-plan', label: 'Починить сборку', arg: JSON.stringify([['set-mod-version', 'alexsmobs-1.22.9.jar|*']]), steps: ["Обновить «Alex's Mobs»"] },
+        ...fallback,
+      ],
+    }
+  if (kind === 'added') {
+    const added = ['create-1.20.1-0.5.1.f.jar', 'createaddition-1.20.1-1.2.4.jar', 'jei-1.20.1-forge-15.3.0.4.jar']
+    return {
+      ...common,
+      kind: 'unknown',
+      reason: 'Игра вылетела. Загляни в лог — там причина.',
+      culprits: [],
+      actions: [{ kind: 'disable-added', label: 'Выключить новые моды (3)', arg: JSON.stringify(added), hint: 'Без них сборка запускалась', steps: added }, ...fallback],
+    }
+  }
+  return null
 }

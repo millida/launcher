@@ -61,8 +61,10 @@ export async function packStepForLaunch(profile: string): Promise<PackLaunchStep
     (view) => ({ view }),
     (error: unknown) => ({ error }),
   )
-  if (!(await packAutoUpdateOn(profile))) return { kind: 'launch' }
-  return packLaunchStep(settings, await cardAsked)
+  const state = await packAutoUpdate(profile).catch(() => null)
+  const autoUpdate = !!state?.catalog && state.on
+  const forced = !!state?.catalog && state.forced
+  return packLaunchStep(settings, await cardAsked, autoUpdate, forced)
 }
 
 /**

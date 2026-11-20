@@ -472,9 +472,10 @@ pub fn lwjgl_library_path_arg(dirs: &[PathBuf]) -> Option<String> {
 /// The token rides along when there is one: a partner's tester also sees the
 /// draft packs they check. The service ignores a stale token instead of
 /// refusing, so the public list never breaks on it.
-pub async fn catalog_packs() -> Result<Value, String> {
+pub async fn catalog_packs(lang: Option<&'static str>) -> Result<Value, String> {
     // Request for the modpack list to the Millida API. The Millida account token (not Microsoft) is attached if the user is logged in.
-    millida_api("/catalog/packs".into(), "GET".into(), None, millida_token()).await
+    // The language makes the service answer titles and summaries in the interface language.
+    millida_api_in("/catalog/packs".into(), "GET".into(), None, millida_token(), None, lang, None).await
 }
 
 /// Маркер «сборка закрыта доступом» для окна ввода ключа.
@@ -509,9 +510,9 @@ pub async fn redeem_pack_key(slug: &str, code: &str) -> Result<Value, String> {
 /// launcher asks for it on every start and passes it straight into the command
 /// line, so revoking access on our side takes effect the next time the player
 /// presses «Играть».
-pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
+pub async fn pack_launch_token(slug: &str, installed: Option<Value>) -> Result<Vec<String>, String> {
     // Asks the Millida API for the launch key of a paid modpack with the Millida account token. The key goes into the game arguments. A copy is written to disk only as a spare (see below).
-    let res = match millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), None).await {
+    let res = match millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), installed).await {
         Ok(v) => v,
         // Сбой сервера или сети — не отказ в доступе. 11.10.2026 база API десять
         // минут не принимала записи, и платные сборки не запускались ни у кого.
@@ -539,6 +540,21 @@ pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
         forget_launch_token(slug);
     }
     Ok(kept)
+}
+
+/// The published version this build was installed as, for a pack whose author
+/// lets only the latest one start. A reviewer's candidate and a build of
+/// another card say nothing: their version is not the card's to judge.
+pub fn installed_pack_body(settings: &Value, slug: &str) -> Option<Value> {
+    if launch_gate_slug(settings).as_deref() != Some(slug) {
+        return None;
+    }
+    if settings["catalogPackReviewFile"].as_str().is_some_and(|f| !f.trim().is_empty()) {
+        return None;
+    }
+    let version = settings["catalogPackVersion"].as_str().map(str::trim).filter(|v| !v.is_empty())?;
+    let sha512 = settings["catalogPackSha512"].as_str().map(str::trim).unwrap_or("");
+    Some(json!({ "version": version, "sha512": sha512 }))
 }
 
 /// A seller ticket is burnt on its first use: replayed after an outage it only
@@ -749,6 +765,7 @@ pub async fn pack_millida_mod(profile: &str, slug: &str) -> (bool, bool) {
     }
     if let Some(view) = &view {
         remember_protected(&mut patch, view);
+        remember_always_update(&mut patch, view);
     }
     if !patch.is_empty() {
         merge_settings(profile, patch);
@@ -923,6 +940,32 @@ mod tests {
         ];
         for (settings, want, why) in cases {
             assert_eq!(launch_gate_slug(&settings).as_deref(), want, "{}", why);
+        }
+    }
+
+    /// (build settings, launch slug) -> what the launch key request says was installed.
+    #[test]
+    fn the_launch_key_request_names_the_installed_published_version() {
+        let sha = "a".repeat(128);
+        let cases: [(Value, &str, Option<Value>, &str); 5] = [
+            (
+                json!({ "catalogPackSlug": "arcania", "catalogPackVersion": "1.4.3", "catalogPackSha512": sha }),
+                "arcania",
+                Some(json!({ "version": "1.4.3", "sha512": sha })),
+                "the server compares it with the published version",
+            ),
+            (
+                json!({ "catalogPackSlug": "arcania", "catalogPackVersion": "1.4.3", "catalogPackReviewFile": "f1" }),
+                "arcania",
+                None,
+                "a reviewer's candidate must not be refused for being newer than the card",
+            ),
+            (json!({ "catalogPackSlug": "arcania", "catalogPackVersion": "1.4.3" }), "arcania-2", None, "a build of another card says nothing about this one"),
+            (json!({ "catalogPackSlug": "arcania", "catalogPackVersion": " " }), "arcania", None, "no version, nothing to compare"),
+            (json!({}), "arcania", None, "a build outside the catalogue says nothing"),
+        ];
+        for (settings, slug, want, why) in cases {
+            assert_eq!(installed_pack_body(&settings, slug), want, "{}", why);
         }
     }
 

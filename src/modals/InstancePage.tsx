@@ -2,6 +2,13 @@ import { ModDownloader } from '../components/build/ModDownloader'
 import { UpdateAllModal } from '../components/build/UpdateAllModal'
 import { TagEditor } from '../components/build/TagEditor'
 import { FilesTab } from '../components/build/FilesTab'
+import { SnapshotsTab } from '../components/build/SnapshotsTab'
+import { WorldBackupSchedule } from '../components/build/WorldBackupSchedule'
+import { CloudWorldBackups } from '../components/build/CloudWorldBackups'
+import { deleteSnapshot, rollbackAction, snapshotCovers, takeSnapshot } from '../lib/buildSnapshots'
+import type { MilliSnap } from '../lib/buildSnapshots'
+import { askDependents } from '../lib/modDependents'
+import { openFolderAction } from '../lib/savedFile'
 import { normalizeGroup } from '../lib/buildGroups'
 import { ExportModal } from '../components/build/ExportModal'
 import { LinuxToolsRows } from '../components/build/LinuxToolsRows'
@@ -980,6 +987,7 @@ export function InstancePage() {
         (blocked.length ? t(' Нет сборки под {version}: {list} — останутся как есть и могут не запуститься.', { version: target, list: listed(blocked) }) : '') +
         (unchecked.length ? t(' Не проверить, добавлены вручную: {list}.', { list: listed(unchecked) }) : '')
       if (!(await uiConfirm(text, { confirmLabel: t('Обновить') }))) return
+      if (refit.length) await takeSnapshot(profile, t('Перед обновлением Minecraft до {version}', { version: target }), true)
       await setProfileLoader(profile, target, loader, lver)
       const failed: string[] = []
       for (const i of refit) {
@@ -1168,7 +1176,7 @@ export function InstancePage() {
     }
     showToast(t('Собираем .mrpack…'))
     exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
-      .then((p) => showToast(t('Экспортировано: {file}', { file: ('' + p).split('/').pop() ?? '' })))
+      .then((p) => showToast(t('Экспортировано: {file}', { file: ('' + p).split('/').pop() ?? '' }), undefined, undefined, openFolderAction('' + p)))
       .catch((e) => showToast('' + e))
   }
 
@@ -1257,10 +1265,12 @@ export function InstancePage() {
   const freshAll = items.filter((i) => !!i.added && nowSec - i.added < FRESH_SEC)
   const freshNames = new Set(freshAll.length && freshAll.length <= Math.max(3, items.length * 0.25) ? freshAll.map((i) => i.name) : [])
 
-  const toggleOne = (md: ModFile) =>
-    toggleContent(profile!, kind, md.name, !md.enabled)
+  const toggleOne = async (md: ModFile) => {
+    if (md.enabled && kind === 'mod' && (await askDependents(profile!, [md.name], 'disable')) === false) return
+    await toggleContent(profile!, kind, md.name, !md.enabled)
       .then(() => loadMods())
       .catch((e) => showToast(apiErrorText(e, t('Не удалось выполнить действие')), 'error'))
+  }
 
   const row = (md: ModFile) => {
     const up = upd[md.name]
@@ -1375,9 +1385,12 @@ export function InstancePage() {
               aria-label={t('Удалить')}
               title={t('Удалить (Shift — без вопроса)')}
               onClick={async (e) => {
+                const quick = e.shiftKey
+                const deps = kind === 'mod' ? await askDependents(profile!, [md.name], 'delete') : null
+                if (deps === false) return
                 if (kind === 'mod' && isOwnModFile(md.name)) {
                   if (!(await askOwnModRemoval())) return
-                } else if (!e.shiftKey && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
+                } else if (deps === null && !quick && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
                 deleteContent(profile!, kind, md.name)
                   .then(() => loadMods())
                   .catch((er) => showToast(apiErrorText(er, t('Не удалось выполнить действие')), 'error'))
@@ -1562,6 +1575,7 @@ export function InstancePage() {
               ['shots', 'i-image', t('Скриншоты')],
               ['logs', 'i-list', t('Логи')],
               ['files', 'i-folder', t('Файлы')],
+              ['snaps', 'i-clock', t('Снимки')],
               ['opts', 'i-settings', t('Параметры')],
             ].map(([id, ic, label]) => (
               <button
@@ -1594,6 +1608,7 @@ export function InstancePage() {
                   onClose={() => setDlOpen(false)}
                   onDone={(demo) => (demo ? setItems((l) => [...demo, ...l.filter((m) => !demo.some((d) => d.name === m.name))]) : loadMods())}
                   onRemove={async (file) => {
+                    if (kind === 'mod' && (await askDependents(profile!, [file], 'delete')) === false) return
                     if (kind === 'mod' && isOwnModFile(file) && !(await askOwnModRemoval())) return
                     if (!hasTauri()) {
                       setItems((l) => l.filter((m) => m.name !== file))
@@ -1892,15 +1907,35 @@ export function InstancePage() {
                           const it = items.find((i) => i.name === file)
                           return it ? titleOf(it) : prettyFile(file)
                         }}
+                        snapshotNote={snapshotCovers(kind)}
                         onClose={() => setUpdAsk(false)}
-                        onConfirm={() => {
+                        onConfirm={async () => {
+                          const p = profile!
+                          const k = kind
                           setUpdAsk(false)
                           setUpdateAllLabel(t('Обновляем…'))
-                          updateAll(profile!, kind)
+                          let snap: MilliSnap | null = null
+                          if (snapshotCovers(k) && updCount > 0) {
+                            try {
+                              snap = await takeSnapshot(p, t('Перед «Обновить всё»'), true)
+                            } catch (e) {
+                              setUpdateAllLabel(t('Обновить всё'))
+                              showToast(t('Обновление не запущено: не удалось сохранить снимок сборки. {error}', { error: tx(e) }), 'error')
+                              return
+                            }
+                          }
+                          const before = snap
+                          updateAll(p, k)
                             .then((n) => {
                               setUpdateAllLabel(t('Обновить всё'))
                               loadMods()
-                              showToast(n ? t('Обновлено: {n}', { n }) : t('Всё актуально'))
+                              if (!n && before) void deleteSnapshot(p, before.id).catch(() => {})
+                              showToast(
+                                n ? t('Обновлено: {n}', { n }) : t('Всё актуально'),
+                                undefined,
+                                undefined,
+                                n && before ? rollbackAction(p, before, () => loadMods()) : undefined,
+                              )
                             })
                             .catch((e) => {
                               setUpdateAllLabel(t('Обновить всё'))
@@ -2049,7 +2084,15 @@ export function InstancePage() {
                   <button className="btn sm secondary" data-bulk="enable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}>
                     <Icon id="i-check" /> {t('Включить')}
                   </button>
-                  <button className="btn sm secondary" data-bulk="disable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}>
+                  <button
+                    className="btn sm secondary"
+                    data-bulk="disable"
+                    onClick={async () => {
+                      const names = [...sel]
+                      if (kind === 'mod' && (await askDependents(profile!, names, 'disable')) === false) return
+                      void bulk(names, (n) => toggleContent(profile!, kind, n, false))
+                    }}
+                  >
                     <Icon id="i-ban" /> {t('Выключить')}
                   </button>
                   {[...sel].some((n) => upd[n]) ? (
@@ -2066,7 +2109,9 @@ export function InstancePage() {
                     data-bulk="delete"
                     onClick={async () => {
                       const names = [...sel]
-                      if (!(await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))) return
+                      const deps = kind === 'mod' ? await askDependents(profile!, names, 'delete') : null
+                      if (deps === false) return
+                      if (deps === null && !(await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))) return
                       const go = kind === 'mod' ? await keepAfterOwnModConfirm(names, askOwnModRemoval) : names
                       void bulk(go, (n) => deleteContent(profile!, kind, n))
                     }}
@@ -2181,6 +2226,22 @@ export function InstancePage() {
                     }}
                   />
                 </section>
+              ) : null}
+
+              {tab === 'worlds' && profile && wFilter !== 'server' ? (
+                <section className="bpg-sec">
+                  <WorldBackupSchedule profile={profile} />
+                </section>
+              ) : null}
+              {tab === 'worlds' && profile && wFilter !== 'server' ? (
+                <CloudWorldBackups
+                  profile={profile}
+                  onRestored={() => setWorldsReload((n) => n + 1)}
+                  onOpenPlus={() => {
+                    close()
+                    setScreen('plus')
+                  }}
+                />
               ) : null}
 
               {wFilter !== 'single' ? (
@@ -2298,6 +2359,7 @@ export function InstancePage() {
             ) : null}
 
             {tab === 'files' && profile ? <FilesTab profile={profile} active /> : null}
+            {tab === 'snaps' && profile ? <SnapshotsTab profile={profile} active running={thisRunning} onRestored={() => loadMods()} /> : null}
             <div id="bsTabLogs" style={{ display: tab === 'logs' ? '' : 'none' }}>
               <div className="segs" style={{ marginBottom: '10px', width: 'auto' }}>
                 <button

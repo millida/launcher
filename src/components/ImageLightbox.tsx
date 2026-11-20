@@ -7,6 +7,7 @@ import { copyPicture, savePictureAs, type PictureRef } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
+import { openFolderAction } from '../lib/savedFile'
 import { t, useT } from '../i18n'
 
 interface LightboxState {
@@ -48,7 +49,7 @@ export async function copyPictureTo(ref: PictureRef) {
 export async function savePictureTo(ref: PictureRef) {
   try {
     const out = await savePictureAs(ref)
-    if (out) showToast(t('Сохранено: {path}', { path: out }), 'ok')
+    if (out) showToast(t('Сохранено: {path}', { path: out }), 'ok', undefined, openFolderAction(out))
   } catch (e) {
     showToast('' + e, 'error')
   }

@@ -857,6 +857,16 @@ fn duplicate_of(line: &str) -> Option<LoaderFinding> {
         return (!id.is_empty()).then(|| LoaderFinding::Duplicate { id, files: files(&line[i + 31..]) });
     }
     let low = line.to_lowercase();
+    if let Some(i) = low.find("found a duplicate mod ").filter(|_| low.len() == line.len()) {
+        let rest = line.get(i + 22..).unwrap_or("");
+        if let Some((id, list)) = rest.split_once(" at [") {
+            let id = id.trim().to_lowercase();
+            let list = list.split(']').next().unwrap_or("");
+            if !id.is_empty() && is_mod_token(&id) {
+                return Some(LoaderFinding::Duplicate { id, files: files(list) });
+            }
+        }
+    }
     for key in ["duplicate mod: ", "found a duplicate mod: "] {
         if let Some(i) = low.find(key) {
             let id: String = low[i + key.len()..].chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')).collect();
@@ -864,6 +874,152 @@ fn duplicate_of(line: &str) -> Option<LoaderFinding> {
         }
     }
     None
+}
+
+fn is_mod_token(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 64 && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+}
+
+/// The header of a list of duplicate mods: Fabric «Remove one of the following
+/// duplicate mods:», Forge «Found duplicate mods:», Forge 1.12 «Duplicate Mods:».
+fn is_duplicate_header(low: &str) -> bool {
+    low.contains("duplicate mod") && low.trim_end().ends_with(':')
+}
+
+/// One entry under a duplicate header: Fabric «Sodium (sodium) 0.5.3», Forge
+/// 1.12 «jei : C:\…\mods\jei-4.15.jar». The id, and the file when it is named.
+fn duplicate_entry(line: &str) -> Option<(String, Option<String>)> {
+    let t = line.trim().trim_start_matches(['-', ' ', '\t']).trim();
+    let jar = |s: &str| -> Option<String> {
+        let path = s.trim().trim_matches(['\'', '"', ',', '.']);
+        let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
+        file.to_lowercase().ends_with(".jar").then(|| file.to_string())
+    };
+    if let Some((id, path)) = t.split_once(" : ") {
+        let id = id.trim().to_lowercase();
+        return is_mod_token(&id).then(|| (id, jar(path)));
+    }
+    let open = t.find(" (")?;
+    let close = open + 2 + t[open + 2..].find(')')?;
+    let id = t[open + 2..close].trim().to_lowercase();
+    if !is_mod_token(&id) || is_platform_id(&id) {
+        return None;
+    }
+    let file = t[close + 1..].split_whitespace().find_map(jar);
+    Some((id, file))
+}
+
+/// The jar names an entry list gathered per id, as duplicates.
+fn flush_duplicates(found: &mut Vec<(String, Vec<String>)>, out: &mut Vec<LoaderFinding>) {
+    for (id, files) in found.drain(..) {
+        push(LoaderFinding::Duplicate { id, files }, out);
+    }
+}
+
+/// «Failure message: Create (create) has failed to load correctly» (Forge,
+/// NeoForge crash report) and «Mod create has failed to load».
+fn failed_to_load_of(line: &str) -> Option<ModRef> {
+    let at = line.find(" has failed to load")?;
+    let head = line[..at].trim();
+    let head = head.rsplit_once("Failure message:").map(|(_, h)| h.trim()).unwrap_or(head);
+    if let Some(inner) = head.strip_suffix(')') {
+        let open = inner.rfind('(')?;
+        let id = inner[open + 1..].trim().to_lowercase();
+        let name = inner[..open].trim().trim_matches('\'');
+        if !is_mod_token(&id) || is_platform_id(&id) {
+            return None;
+        }
+        let name = if name.is_empty() { id.clone() } else { name.to_string() };
+        return Some(ModRef { name, id });
+    }
+    let id = head.rsplit(' ').next().unwrap_or("").trim_matches('\'').to_lowercase();
+    (is_mod_token(&id) && !is_platform_id(&id)).then(|| ModRef::same(&id))
+}
+
+/// Fabric «Could not execute entrypoint stage 'client' due to errors, provided
+/// by 'sodium' at '…'!»: the mod whose entrypoint threw.
+fn entrypoint_owner_of(line: &str) -> Option<ModRef> {
+    let low = line.to_lowercase();
+    if !low.contains("entrypoint") {
+        return None;
+    }
+    let rest = &low[low.find("provided by '")? + 13..];
+    let id = rest.split('\'').next().unwrap_or("");
+    (is_mod_token(id) && !is_platform_id(id)).then(|| ModRef::same(id))
+}
+
+/// A version restriction as NeoForge words it in its loading screen and crash
+/// report («4.4.4 or above», «between 1.0 and 2.0 (exclusive)»), in predicate syntax.
+fn neoforge_range(phrase: &str) -> String {
+    let p = phrase.trim().trim_end_matches(['.', ',']).trim();
+    let tok = |s: &str| s.split_whitespace().next().unwrap_or("").trim_end_matches(',').to_string();
+    if p.is_empty() || p == "any" || p == "any version" {
+        return "*".into();
+    }
+    if let Some(rest) = p.strip_prefix("between ") {
+        let (a, b) = rest.split_once(" and ").unwrap_or((rest, ""));
+        return if b.contains("(exclusive)") {
+            format!(">{} <{}", tok(a), tok(b))
+        } else {
+            format!(">={} <={}", tok(a), tok(b))
+        };
+    }
+    if let Some((lo, hi)) = p.split_once(", and ") {
+        let lo = if let Some(v) = lo.strip_prefix("above ") { format!(">{}", tok(v)) } else { format!(">={}", tok(lo)) };
+        let hi = if let Some(v) = hi.strip_prefix("below ") { format!("<{}", tok(v)) } else { format!("<={}", tok(hi)) };
+        return format!("{} {}", lo, hi);
+    }
+    if let Some(v) = p.strip_prefix("above ") {
+        return format!(">{}", tok(v));
+    }
+    if let Some(v) = p.strip_prefix("below ") {
+        return format!("<{}", tok(v));
+    }
+    if let Some(v) = p.strip_suffix(" or above") {
+        return format!(">={}", tok(v));
+    }
+    if let Some(v) = p.strip_suffix(" or below") {
+        return format!("<={}", tok(v));
+    }
+    maven_range(&tok(p))
+}
+
+/// NeoForge 20.4+: «Mod mowziesmobs requires geckolib 4.4.4 or above», the
+/// line its loading screen and crash report print instead of the Forge listing.
+fn neoforge_requirement(line: &str) -> Option<LoaderFinding> {
+    if line.contains('\'') || line.contains('@') {
+        return None;
+    }
+    let t = line.rsplit_once("Failure message:").map(|(_, r)| r).unwrap_or(line);
+    let t = t.trim().trim_start_matches(['-', ' ', '\t']);
+    let rest = t.strip_prefix("Mod ")?;
+    let (by, after) = rest.split_once(" requires ")?;
+    let by = by.trim();
+    if by.is_empty() || by.len() > 80 {
+        return None;
+    }
+    let after = after.split("Currently,").next().unwrap_or(after).trim();
+    let (dep, phrase) = after.split_once(' ').unwrap_or((after, ""));
+    let dep = dep.trim_end_matches(['.', ',']).to_lowercase();
+    if !is_mod_token(&dep) {
+        return None;
+    }
+    let present = currently_of(line).filter(|(id, _)| *id == dep).and_then(|(_, v)| v);
+    Some(LoaderFinding::Requires { by: ModRef::same(by), dep: ModRef::same(&dep), range: neoforge_range(phrase), present })
+}
+
+/// «Currently, geckolib is not installed» / «Currently, curios is 8.0.1»: the
+/// id and the version the build has, `None` when it has none.
+fn currently_of(line: &str) -> Option<(String, Option<String>)> {
+    let rest = &line[line.find("Currently, ")? + 11..];
+    let (id, state) = rest.split_once(" is ")?;
+    let id = id.trim().to_lowercase();
+    if !is_mod_token(&id) {
+        return None;
+    }
+    let state = state.trim().trim_end_matches(['.', '!']);
+    let version = (!state.starts_with("not installed")).then(|| state.split_whitespace().next().unwrap_or("").to_string()).filter(|v| !v.is_empty());
+    Some((id, version))
 }
 
 /// «Sodium (sodium), Version: 0.5.8» — one entry of a Suspected Mods list.
@@ -915,6 +1071,8 @@ pub(crate) fn loader_findings(text: &str) -> Vec<LoaderFinding> {
     let mut out: Vec<LoaderFinding> = vec![];
     let mut optional_block = false;
     let mut suspects = false;
+    let mut dup_indent: Option<usize> = None;
+    let mut dup_found: Vec<(String, Vec<String>)> = vec![];
     for (raw, benign) in with_levels(text) {
         let clean = strip_formatting(raw);
         let line = clean.as_str();
@@ -963,6 +1121,41 @@ pub(crate) fn loader_findings(text: &str) -> Vec<LoaderFinding> {
         if benign && line.trim_start().starts_with('[') {
             continue;
         }
+        let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
+        if let Some(head) = dup_indent {
+            let entry = !line.trim().is_empty() && (indent > head || (head == 0 && line.starts_with('-')));
+            if !entry {
+                dup_indent = None;
+                flush_duplicates(&mut dup_found, &mut out);
+            } else if duplicate_of(line).is_none() {
+                if let Some((id, file)) = duplicate_entry(line) {
+                    match dup_found.iter_mut().find(|(known, _)| *known == id) {
+                        Some((_, files)) => files.extend(file),
+                        None => dup_found.push((id, file.into_iter().collect())),
+                    }
+                    continue;
+                }
+            }
+        }
+        if is_duplicate_header(&low) {
+            flush_duplicates(&mut dup_found, &mut out);
+            dup_indent = Some(indent);
+            continue;
+        }
+        if let Some(by) = failed_to_load_of(line).or_else(|| entrypoint_owner_of(line)) {
+            push(LoaderFinding::Suspected { by }, &mut out);
+            continue;
+        }
+        if let Some((id, Some(version))) = currently_of(line) {
+            let waiting = out.iter_mut().rev().find_map(|f| match f {
+                LoaderFinding::Requires { dep, present, .. } if dep.id == id && present.is_none() => Some(present),
+                _ => None,
+            });
+            if let Some(present) = waiting {
+                *present = Some(version);
+            }
+            continue;
+        }
         if let Some(f) = duplicate_of(line) {
             push(f, &mut out);
             continue;
@@ -993,10 +1186,17 @@ pub(crate) fn loader_findings(text: &str) -> Vec<LoaderFinding> {
                 continue;
             }
         }
+        if low.contains(" requires ") {
+            if let Some(f) = neoforge_requirement(line) {
+                push(f, &mut out);
+                continue;
+            }
+        }
         if let Some(by) = mixin_owner_of(line) {
             push(LoaderFinding::MixinFailed { by }, &mut out);
         }
     }
+    flush_duplicates(&mut dup_found, &mut out);
     out
 }
 
@@ -1070,6 +1270,108 @@ pub(crate) fn fatal_line_with(text: &str, markers: &[&str]) -> Option<String> {
         return None;
     }
     loud_lines(text).find(|l| has(l))
+}
+
+/// Code a crash went through on its way from a mod: a mixin handler names its
+/// mod, any other frame names its class.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum FrameCulprit {
+    Mixin(String),
+    /// Class path with slashes, without `.class`: `com/simibubi/create/Create`.
+    Class(String),
+}
+
+/// Libraries that mods shade or depend on: a frame there is the messenger, the
+/// caller below it is the mod.
+const LIBRARIES: [&str; 8] = ["kotlin.", "kotlinx.", "org.jetbrains.", "scala.", "org.objectweb.", "com.electronwill.", "org.joml.", "com.github.benmanes."];
+
+enum FrameRole {
+    /// The game, a loader, the JDK or a library: the search goes on below it.
+    Platform,
+    /// Mods the launcher puts in itself: they have their own quarantine, and a
+    /// mod that merely called into them is not the one that failed.
+    Builtin,
+    Mod(FrameCulprit),
+}
+
+fn frame_role(method: &str) -> FrameRole {
+    let low = method.to_lowercase();
+    let builtin = [&OWN_MOD, &SKIN_MOD];
+    if let Some(owner) = mixin_owner(&low) {
+        return if builtin.iter().any(|m| m.id == owner) { FrameRole::Builtin } else { FrameRole::Mod(FrameCulprit::Mixin(owner)) };
+    }
+    if builtin.iter().any(|m| m.packages.iter().any(|p| low.contains(p))) {
+        return FrameRole::Builtin;
+    }
+    if FRAMEWORK.iter().chain(LIBRARIES.iter()).any(|p| low.starts_with(p)) {
+        return FrameRole::Platform;
+    }
+    let Some((class, _)) = method.rsplit_once('.') else { return FrameRole::Platform };
+    if class.contains('.') && class.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '$' | '_')) {
+        FrameRole::Mod(FrameCulprit::Class(class.replace('.', "/")))
+    } else {
+        FrameRole::Platform
+    }
+}
+
+/// Where the fatal exception starts: the newest crash report, an exception
+/// that escaped a thread, or the first exception not logged under WARN/INFO.
+fn fatal_start(lines: &[&str], levels: &[(&str, bool)]) -> Option<usize> {
+    if let Some(d) = lines.iter().rposition(|l| l.trim_start().starts_with("Description:")) {
+        return Some(d);
+    }
+    if let Some(at) = lines.iter().position(|l| l.trim_start().starts_with("Exception in thread")) {
+        return Some(at);
+    }
+    let noise = offline_noise_mask(lines);
+    levels
+        .iter()
+        .enumerate()
+        .position(|(i, (l, benign))| !benign && !noise.get(i).copied().unwrap_or(false) && is_exception_line(l))
+}
+
+/// The mods the fatal exception went through, the most likely first: the root
+/// «Caused by» decides before the wrapper exceptions above it. In every link of
+/// the chain only the first frame past the game, the loaders and the JDK counts.
+pub(crate) fn frame_culprits(text: &str) -> Vec<FrameCulprit> {
+    let lines: Vec<&str> = text.lines().collect();
+    let levels = with_levels(text);
+    let Some(start) = fatal_start(&lines, &levels) else { return vec![] };
+    let mut links: Vec<Option<FrameCulprit>> = vec![];
+    let mut decided = true;
+    for (i, line) in lines.iter().enumerate().skip(start) {
+        let t = line.trim_start();
+        let low = t.to_lowercase();
+        if i > start && (t.starts_with('[') || CRASH_REPORT_END.iter().any(|m| low.starts_with(m))) {
+            break;
+        }
+        if let Some(method) = frame_method(line) {
+            if !decided {
+                match frame_role(&method) {
+                    FrameRole::Platform => {}
+                    FrameRole::Builtin => decided = true,
+                    FrameRole::Mod(c) => {
+                        if let Some(last) = links.last_mut() {
+                            *last = Some(c);
+                        }
+                        decided = true;
+                    }
+                }
+            }
+            continue;
+        }
+        if t.starts_with("Caused by:") || is_exception_line(line) {
+            links.push(None);
+            decided = false;
+        }
+    }
+    let mut out: Vec<FrameCulprit> = vec![];
+    for c in links.into_iter().rev().flatten() {
+        if !out.contains(&c) {
+            out.push(c);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1501,5 +1803,126 @@ mod tests {
         assert!(got.contains("~\\AppData") && got.contains("profiles\\<build>\\config"), "{got}");
         let long = "x".repeat(1000);
         assert_eq!(scrub_cause(&long, None, "").chars().count(), CAUSE_MAX);
+    }
+
+    /// log fragment -> findings, for wordings the loaders print besides their
+    /// listings: the NeoForge loading screen in the crash report, the Forge
+    /// «Failure message», a Fabric entrypoint, duplicate lists one mod per line.
+    #[test]
+    fn crash_report_wordings_become_findings() {
+        let cases: Vec<(&str, &str, Vec<LoaderFinding>)> = vec![
+            (
+                "NeoForge 20.4+: зависимости нет — в отчёте о вылете своя формулировка",
+                "-- Mod loading issue --\nDetails:\n\tMod file: /mods/mowziesmobs-1.7.0.jar\n\tFailure message: Mod §emowziesmobs§r requires §6geckolib§r §o4.4.4§r or above\n\t\t§7Currently, §6geckolib§r§7 is §onot installed",
+                vec![req(r("mowziesmobs", "mowziesmobs"), r("geckolib", "geckolib"), ">=4.4.4", None)],
+            ),
+            (
+                "NeoForge 20.4+: зависимость не той версии — версия берётся из строки Currently",
+                "\tFailure message: Mod §eartifacts§r requires §6curios§r §o9.0.5 or above, and below 10§r\n\t\t§7Currently, §6curios§r§7 is §o8.0.1",
+                vec![req(r("artifacts", "artifacts"), r("curios", "curios"), ">=9.0.5 <10", Some("8.0.1"))],
+            ),
+            (
+                "NeoForge 20.4+: моду нужен загрузчик новее — это потом станет «Обновить загрузчик»",
+                "\tFailure message: Mod §esodium§r requires §6neoforge§r §o21.1.50§r or above\n\t\t§7Currently, §6neoforge§r§7 is §o21.1.20",
+                vec![req(r("sodium", "sodium"), r("neoforge", "neoforge"), ">=21.1.50", Some("21.1.20"))],
+            ),
+            (
+                "Forge: мод упал при загрузке",
+                "\tMod File: /mods/create-1.20.1-0.5.1.f.jar\n\tFailure message: Create (create) has failed to load correctly\n\t\tjava.lang.NoSuchMethodError: 'void net.minecraft.world.level.Level.m_46672_()'",
+                vec![LoaderFinding::Suspected { by: r("Create", "create") }],
+            ),
+            (
+                "Fabric: точка входа мода бросила исключение",
+                "[main/ERROR]: Could not execute entrypoint stage 'client' due to errors, provided by 'sodium' at 'net.caffeinemc.mods.sodium.fabric.SodiumFabricMod'!",
+                vec![LoaderFinding::Suspected { by: r("sodium", "sodium") }],
+            ),
+            (
+                "Fabric: список дублей по одному на строку, без файлов",
+                "net.fabricmc.loader.impl.FormattedException: Mod resolution encountered an incompatible mod set!\nA potential solution has been determined:\n\t - Remove one of the following duplicate mods:\n\t\t - Sodium (sodium) 0.5.3+mc1.20.1\n\t\t - Sodium (sodium) 0.5.8+mc1.20.1\n\t - Replace mod 'Iris' (iris) 1.6.4 with version 1.7.0",
+                vec![LoaderFinding::Duplicate { id: "sodium".into(), files: vec![] }],
+            ),
+            (
+                "Forge 1.12: дубль в логе",
+                "[Client thread/ERROR] [FML]: Found a duplicate mod jei at [C:\\mc\\mods\\jei_1.12.2-4.15.0.268.jar, C:\\mc\\mods\\jei_1.12.2-4.16.1.302.jar]",
+                vec![LoaderFinding::Duplicate {
+                    id: "jei".into(),
+                    files: vec!["jei_1.12.2-4.15.0.268.jar".into(), "jei_1.12.2-4.16.1.302.jar".into()],
+                }],
+            ),
+            (
+                "Forge 1.12: DuplicateModsFoundException в отчёте о вылете",
+                "Duplicate Mods:\n\tjei : C:\\mc\\mods\\jei_a.jar\n\tjei : C:\\mc\\mods\\jei_b.jar\n\nnet.minecraftforge.fml.common.DuplicateModsFoundException",
+                vec![LoaderFinding::Duplicate { id: "jei".into(), files: vec!["jei_a.jar".into(), "jei_b.jar".into()] }],
+            ),
+            (
+                "дубли под WARN — игра их пережила",
+                "[main/WARN]: Found duplicate mods:\n[main/INFO]: Loading 120 mods",
+                vec![],
+            ),
+        ];
+        for (why, log, want) in cases {
+            assert_eq!(loader_findings(log), want, "{}: разбор отказа загрузчика неверен — починка сделает не то\n{}", why, log);
+        }
+    }
+
+    /// NeoForge restriction wording -> predicate the catalogue pick reads.
+    #[test]
+    fn neoforge_restrictions_read_as_predicates() {
+        let cases: [(&str, &str, &str); 8] = [
+            ("4.4.4 or above", ">=4.4.4", "обычное «не ниже»"),
+            ("above 1.0", ">1.0", "строго выше"),
+            ("2.0 or below", "<=2.0", "не выше"),
+            ("below 2.0", "<2.0", "строго ниже"),
+            ("9.0.5 or above, and below 10", ">=9.0.5 <10", "полуинтервал [9.0.5,10)"),
+            ("between 1.0 and 2.0 (exclusive)", ">1.0 <2.0", "открытый интервал"),
+            ("any", "*", "любая версия"),
+            ("1.2.3", ">=1.2.3", "голая версия у Maven — рекомендуемая, не точная"),
+        ];
+        for (phrase, want, why) in cases {
+            assert_eq!(neoforge_range(phrase), want, "{phrase}: {why}");
+        }
+    }
+
+    /// crash log -> the mods its fatal exception came out of, most likely first.
+    /// Without this a crash inside a foreign mod with no «Suspected Mods» left
+    /// the dialog with nothing to switch off.
+    #[test]
+    fn the_first_mod_frame_of_the_root_cause_is_the_culprit() {
+        let class = |c: &str| FrameCulprit::Class(c.to_string());
+        let cases: Vec<(&str, &str, Vec<FrameCulprit>)> = vec![
+            (
+                "отчёт о вылете: корень цепочки решает раньше обёртки, кадры после отчёта не считаются",
+                "---- Minecraft Crash Report ----\nDescription: Ticking entity\n\njava.lang.RuntimeException: Ticking entity\n\tat net.minecraft.server.MinecraftServer.tick(MinecraftServer.java:900)\n\tat com.example.wrapper.Wrap.run(Wrap.java:10)\nCaused by: java.lang.NullPointerException: Cannot read field \"level\"\n\tat java.util.Objects.requireNonNull(Objects.java:233)\n\tat TRANSFORMER/alexsmobs@1.22.9/com.github.alexthe666.alexsmobs.entity.EntityCrow.tick(EntityCrow.java:301)\n\tat TRANSFORMER/minecraft@1.20.1/net.minecraft.world.entity.Entity.tick(Entity.java:100)\n\nA detailed walkthrough of the error, its code path and all known details is as follows:\n\tat com.other.Late.run(Late.java:1)",
+                vec![class("com/github/alexthe666/alexsmobs/entity/EntityCrow"), class("com/example/wrapper/Wrap")],
+            ),
+            (
+                "лог Fabric: миксин мода в методе игры называет мод",
+                "[12:00:01] [Render thread/ERROR]: Unhandled exception\njava.lang.IllegalStateException: boom\n\tat net.minecraft.class_310.method_1523(class_310.java:5)\n\tat knot//net.minecraft.class_310.handler$zza000$sodium$render(class_310.java:9)\n[12:00:02] [Render thread/INFO]: Stopping!",
+                vec![FrameCulprit::Mixin("sodium".into())],
+            ),
+            (
+                "только игра и JDK — винить некого",
+                "Exception in thread \"main\" java.lang.OutOfMemoryError: Java heap space\n\tat java.util.Arrays.copyOf(Arrays.java:3512)\n\tat net.minecraft.client.main.Main.main(Main.java:1)",
+                vec![],
+            ),
+            (
+                "наш мод наверху стека — его разбирает карантин, а не мод, который его вызвал",
+                "Exception in thread \"Render thread\" java.lang.NullPointerException\n\tat net.millida.mod.Hud.render(Hud.java:3)\n\tat com.terraformersmc.modmenu.ModMenu.draw(ModMenu.java:2)",
+                vec![],
+            ),
+            (
+                "библиотека Kotlin — посредник, виноват мод под ней",
+                "Exception in thread \"Server thread\" java.lang.IllegalArgumentException: bad\n\tat kotlin.jvm.internal.Intrinsics.checkNotNull(Intrinsics.java:1)\n\tat dev.mod.thing.Machine.tick(Machine.kt:42)",
+                vec![class("dev/mod/thing/Machine")],
+            ),
+            (
+                "пойманная мод-ом ошибка под WARN — не вылет",
+                "[main/WARN]: Failed to fetch\njava.io.IOException: offline\n\tat com.example.net.Fetch.run(Fetch.java:1)",
+                vec![],
+            ),
+        ];
+        for (why, log, want) in cases {
+            assert_eq!(frame_culprits(log), want, "{why}");
+        }
     }
 }

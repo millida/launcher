@@ -1450,6 +1450,7 @@ pub(super) fn watch_session<T>(
     }
     // Без окна (выгружено на время игры) событие ждёт новую страницу.
     crate::background::emit_main(app, "game-exit", pname.to_string());
+    crate::engine::world_backups_after_exit(app, pname, elapsed);
     let waker = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(1500));
@@ -1760,6 +1761,7 @@ fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
         let _media = media;
         let _rewind = rewind;
         let _agent = agent;
+        let mods_at_start = super::goodrun::enabled_mod_files(&pname);
         let (status, evidence, elapsed) = watch_session(&mut child, start, pid, &pname, &server_now, &app2, |status| {
             if status.is_ok() {
                 wait_log_readers(&readers, LOG_DRAIN_WAIT);
@@ -1781,6 +1783,9 @@ fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
             Err(_) => false,
         };
         let review_ok = (status.is_ok() && !crashed) || elapsed >= LAUNCH_CHECK_ALIVE;
+        if review_ok && !crashed && elapsed >= EARLY_EXIT_SECS {
+            super::goodrun::record_good_run(&pname, &mods_at_start);
+        }
         if review_ok {
             let checked = pname.clone();
             tauri::async_runtime::spawn(async move {
