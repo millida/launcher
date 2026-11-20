@@ -69,6 +69,7 @@ import {
   Tour,
   LobbyKeeper,
   McNewsModal,
+  WallpaperLibrary,
 } from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
@@ -461,6 +462,14 @@ export function App() {
     const stopPromo = watchPromo()
     const stopArcania2 = watchArcania2(warmArcaniaCover)
     const stopStreakReminder = initStreakReminder()
+    // Its own chunk: the startup set is at its size budget (scripts/check-startup-budget.mjs).
+    let stopPlusReminder: (() => void) | null = null
+    let plusReminderOff = false
+    void import('./lib/plusReminder')
+      .then((m) => {
+        if (!plusReminderOff) stopPlusReminder = m.initPlusReminder()
+      })
+      .catch(() => {})
     const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
     // The update never holds the start: screens warm up at once, the check runs next to them,
@@ -573,6 +582,8 @@ export function App() {
       stopPromo()
       stopArcania2()
       stopStreakReminder()
+      plusReminderOff = true
+      stopPlusReminder?.()
       stopStreakActivity()
       stopPromoServers()
       releaseRealtime()
@@ -1178,6 +1189,7 @@ export function App() {
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <McNewsModal />
+        <WallpaperLibrary />
         <CommandPalette />
         <ConfirmModal />
         <ImageLightbox />

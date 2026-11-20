@@ -1,10 +1,11 @@
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { RARITY_NAMES, type ShopCard } from '../../lib/rubies'
-import { accountCurrency, affords, balanceText, moneyText, useMoney } from '../../lib/useMoney'
+import { useMoney } from '../../lib/useMoney'
 import { BuyBtn, WishBtn, type BuyProps } from './Storefront'
 import { gridCols, Head, ItemArt, Price, Shard, toneStyle } from './parts'
-import { daysUntil, kopecksFor, sortWishes, topUpRubies, type WishEntry, type WishHow, type WishList } from './wish'
+import { daysUntil, sortWishes, type WishEntry, type WishHow, type WishList } from './wish'
+import { openPackNeed } from './packNeed'
 import { word } from './rarity'
 import { intlTag, t, useT } from '../../i18n'
 
@@ -90,14 +91,12 @@ function WishCard({
 export function Wishlist({
   data,
   shards,
-  onTopUp,
   onCraft,
   onBrowse,
   ...p
 }: {
   data: WishList | null
   shards: number
-  onTopUp: (rubies: number) => void
   onCraft: (w: WishEntry) => void
   onBrowse: () => void
 } & BuyProps) {
@@ -118,9 +117,6 @@ export function Wishlist({
       </div>
     )
   const missing = data.missing
-  const kopecks = kopecksFor(topUpRubies(missing))
-  const sum = accountCurrency() === 'RUB' ? moneyText(kopecks, 'RUB') : null
-  const held = affords({ displayCurrency: 'RUB', priceMinor: kopecks, chargeKopecks: kopecks }) === false ? balanceText() : null
   return (
     <div className="card sh-block">
       <Head title={t('Хочу · {n}', { n: items.length })}>
@@ -133,12 +129,11 @@ export function Wishlist({
           {missing > 0 ? (
             <button
               className="btn md primary"
-              disabled={p.busy === 'topup'}
               data-track="wish_topup"
-              data-tip={t('Не хватает {n} {word}', { n: missing.toLocaleString(intlTag()), word: word(missing) }) + (held ? ' · ' + t('на кошельке {sum}', { sum: held }) : '')}
-              onClick={() => onTopUp(topUpRubies(missing))}
+              data-tip={t('Не хватает {n} {word}', { n: missing.toLocaleString(intlTag()), word: word(missing) })}
+              onClick={() => openPackNeed({ target: data.total, from: 'wish', title: t('на всё из «Хочу»') })}
             >
-              {sum ? t('Докупить · {sum}', { sum }) : t('Докупить')}
+              {t('Пополнить')}
             </button>
           ) : data.total > 0 ? (
             <span className="sh-wshort ok">

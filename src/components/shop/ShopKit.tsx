@@ -6,6 +6,10 @@ import {
   buyPack,
   buySet,
   buyShopCard,
+  giftQuote,
+  giftShopItem,
+  newRequestId,
+  type GiftQuote,
   claimPackQuest,
   loadCases,
   loadPackQuests,
@@ -43,7 +47,7 @@ import { showLogin } from '../../lib/session'
 import { Ruby } from '../Ruby'
 import { Guard } from '../Guard'
 import { MonthOfferBlock, PackArt, PackCount, Packs } from './Packs'
-import { word } from './rarity'
+import { SECOND_ART } from './packMath'
 import { claimWeeklyStep, loadWeeklyAny, type WeeklyPath } from './weekly'
 import { useShopGift } from './giftState'
 import { Shard } from './parts'
@@ -51,22 +55,36 @@ import { PLUS_PASS } from '../daily/chestDrops'
 import { CreatorBanner, CreatorCode } from './CreatorCode'
 import { useDaily } from '../../state/daily'
 import { purchaseFlow } from '../../lib/purchaseTrack'
-import { trackFailure } from '../../lib/telemetry'
+import { track, trackFailure } from '../../lib/telemetry'
+import { PackPicker, ShortfallBar } from './PackPicker'
+import {
+  affordNoticeOn,
+  affordNoticedToday,
+  markAffordNoticed,
+  nowAffordable,
+  openPackNeed,
+  type PackNeed,
+  type PickOption,
+} from './packNeed'
 import '../../styles/pixel/shop-juice.css'
 import { wearNow } from '../../state/wearIntent'
 import { questsToShow } from './packQuests'
 import { SocialTasks } from './SocialTasks'
 import { claimFailure, type TaskFailure, type TaskKind } from './taskRules'
 import { SetsSection, type SetActs } from './SetsV2'
-import { SetShot } from './ShopStage'
+import { ShopStage } from './ShopStage'
 import { CaseArt, CaseOpening, CasesSection, caseHex, casePriceOf, type CaseMode, type CaseRun } from './Cases'
 import { BonusesSection, TasksSection } from './TasksSection'
 import { PlanCard } from './PlusBanner'
 import { SHOP_SECTIONS } from './ShopNav'
 import { PlusChip } from './PlusBanner'
-import { ItemShot, TodaySection, TrendSection, type TodayActs } from './Today'
+import { ItemShot, ItemStage, TodaySection, TrendSection, type TodayActs } from './Today'
+import { CollectionsSection } from './Collections'
 import { BuyLabel, BuySheetHost, openSheet } from './BuySheet'
+import { openGiftPicker, useGiftPick, type GiftTarget } from './giftPick'
+import { lazyHost } from '../../lib/lateMount'
 import { THEME_TONE } from './Sets'
+import { PriceRiseTag } from './priceRise'
 import { usePlus } from '../../state/plus'
 import { usePremiumTheme } from '../../lib/premiumTheme'
 import { StatusCompare } from '../premium/StatusCompare'
@@ -80,6 +98,11 @@ const err = () => t('Магазин не ответил, попробуй поз
 /** Вещь каталога — плашка мига награды. */
 const entry = (it: ItemRef): RewardEntry => ({ name: it.name, preview: it.preview, rarity: it.rarity })
 /** «Надеть» — сразу на фигуру (владелец 24.09.2026, 19:56). */
+const GiftPickerHost = lazyHost(
+  () => import('./GiftFriends').then((m) => ({ default: m.GiftPickerHost })),
+  () => useGiftPick((s) => !!s.ask),
+)
+
 const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code, variant: it.variant })))
 
 import { ShardsSection } from './Shards'
@@ -139,6 +162,8 @@ export function useShop(on: boolean) {
   /** Счётчик в шапке «подпрыгивает», когда в него прилетела награда. */
   const [bump, setBump] = useState(false)
   const bumpTimer = useRef(0)
+  /** Вещь, которую предложить купить, как только пополнение покроет её цену. */
+  const pendingBuy = useRef<PackNeed['item'] | null>(null)
   const claimed = useDaily((st) => st.reveal)
 
   const reloadShop = () =>
@@ -261,26 +286,89 @@ export function useShop(on: boolean) {
     }, 400)
   }, [claimed])
 
-  /** Не хватает рубинов: честный тост и к пакетам. */
-  const short = (price: number, result: ReturnType<typeof purchaseFlow>) => {
+  /** Не хватает рубинов: окно выбора пакета под эту нехватку (вместо прокрутки к ряду). */
+  const short = (price: number, result: ReturnType<typeof purchaseFlow>, need: Partial<PackNeed> = {}) => {
     if (price <= balance) return false
     result(false, 'insufficient')
-    showToast(t('Не хватает {n} {word}', { n: price - balance, word: word(price - balance) }), 'error')
-    toPacks()
+    openPackNeed({ target: price, from: need.from ?? 'shortfall', item: need.item, title: need.title })
     return true
   }
 
-  /** Вещь витрины: окно с вещью на игроке, после оплаты — вспышка и «Надеть». */
-  const doBuy = (card: ShopCard, source: ShopSource) => {
+  const balanceRef = useRef(balance)
+  balanceRef.current = balance
+
+  /** Подарок другу: цена — из ответа службы (личные скидки дарящего не действуют), повтор нажатия не списывает дважды. */
+  const giftTo = async (item: ItemRef, source: ShopSource, friend: GiftTarget) => {
+    let quote: GiftQuote
+    try {
+      quote = await giftQuote(item.code)
+    } catch (e) {
+      showToast(apiErrorText(e, t('Не удалось узнать цену подарка')), 'error')
+      return
+    }
+    if (quote.price > balanceRef.current) {
+      openPackNeed({ target: quote.price, from: 'gift', title: item.name })
+      return
+    }
+    const requestId = newRequestId()
+    openSheet({
+      kind: 'gift',
+      name: t('Подарить «{item}» другу {nick}', { item: item.name, nick: friend.nickname }),
+      art: <ItemShot item={item} big />,
+      confirm: <BuyLabel verb={t('Подарить за')} price={quote.price} />,
+      run: async () => {
+        try {
+          const res = await giftShopItem(item.code, friend.userId, source, requestId)
+          setDay((d) => (d ? { ...d, balance: res.balance } : d))
+          showToast(t('Подарок отправлен {name}', { name: res.to?.nickname || friend.nickname }), 'ok')
+          return null
+        } catch (e) {
+          const text = apiErrorText(e, t('Не удалось подарить. Попробуй ещё раз'))
+          showToast(text, 'error')
+          if (text === t('Не хватает рубинов')) openPackNeed({ target: quote.price, from: 'gift', title: item.name })
+          throw e
+        }
+      },
+    })
+  }
+
+  const doGift = (item: ItemRef, source: ShopSource) => {
     if (!signedIn) return showLogin()
+    openGiftPicker(item.name, (friend) => void giftTo(item, source, friend))
+  }
+
+  /** Своя вещь витрины: то же окно, главная кнопка «Надеть», рядом «Подарить». */
+  const doOwned = (card: ShopCard, source: ShopSource) =>
+    openSheet({
+      kind: 'item_owned',
+      name: card.item.name,
+      art: <ItemStage item={card.item} />,
+      confirm: t('Надеть'),
+      gift: () => doGift(card.item, source),
+      run: async () => {
+        wearItems([card.item])
+        return null
+      },
+    })
+
+  /** Вещь витрины: окно с вещью на игроке, после оплаты — вспышка и «Надеть». */
+  const doBuy = (card: ShopCard, source: ShopSource, after?: () => void) => {
+    if (!signedIn) return showLogin()
+    if (card.owned) return doOwned(card, source)
     const result = purchaseFlow('item', card.item.code, card.price, 'rubies')
-    if (short(card.price, result)) return
+    if (short(card.price, result, { from: 'item', item: { card, source } })) return
     openSheet({
       kind: 'item',
       name: card.item.name,
-      art: <ItemShot item={card.item} big />,
+      art: (
+        <>
+          <ItemStage item={card.item} />
+          <PriceRiseTag rise={card.item.priceRise} corner />
+        </>
+      ),
       confirm: <BuyLabel price={card.price} />,
       onCancel: () => result(false, 'cancel'),
+      gift: () => doGift(card.item, source),
       run: async () => {
         setBusy(card.item.code)
         try {
@@ -288,6 +376,7 @@ export function useShop(on: boolean) {
           result(true)
           setDay((d) => (d ? { ...d, balance: res.balance } : d))
           void reloadShop()
+          after?.()
           const got = res.granted[0] ?? card.item
           return { onWear: () => wearItems([got]) }
         } catch (e) {
@@ -305,13 +394,13 @@ export function useShop(on: boolean) {
   const doBuySet = (set: SetView, way: SetColorwayView) => {
     if (!signedIn) return showLogin()
     const result = purchaseFlow('bundle', set.id + (way.name ? '~' + way.name : ''), way.price, 'rubies')
-    if (short(way.price, result)) return
+    if (short(way.price, result, { from: 'set', title: set.title })) return
     const all = way.items.map((x) => x.item)
     openSheet({
       kind: 'set',
       name: set.title,
       tone: THEME_TONE[set.theme],
-      art: <SetShot items={all} />,
+      art: <ShopStage on items={all} />,
       confirm: <BuyLabel price={way.price} />,
       onCancel: () => result(false, 'cancel'),
       run: async () => {
@@ -355,7 +444,7 @@ export function useShop(on: boolean) {
         result(false, 'insufficient')
         return showToast(t('Не хватает осколков'), 'error')
       }
-    } else if (short(price, result)) return
+    } else if (short(price, result, { from: 'case' })) return
     openSheet({
       kind: 'case',
       name: mode === 'x10' ? c.title + ' ×10' : c.title,
@@ -502,8 +591,12 @@ export function useShop(on: boolean) {
     showToast(s.topup ? t('Пополни счёт на {sum} и вернись за пакетом', { sum: formatMoney(s.topup.amountMinor, s.topup.currency) }) : shortfallText(s), 'ok')
   }
 
-  /** Пакет: окно с мешком рубинов, после оплаты рубины досчитываются. */
-  const doPack = async (pack: ShopPack, art: string, promo: PackPromo | null = null) => {
+  /**
+   * Пакет: окно с мешком рубинов, после оплаты рубины досчитываются. `picked` —
+   * покупка через окно выбора пакета: после успеха пишем pack_bought и, если
+   * копили на вещь, предлагаем её купить, как только баланса хватит.
+   */
+  const doPack = async (pack: ShopPack, art: string, promo: PackPromo | null = null, picked?: { recommended: boolean; target: number; item?: PackNeed['item'] }) => {
     if (!signedIn) return showLogin()
     const result = purchaseFlow('ruby_pack', pack.code, promo?.kopecks ?? pack.kopecks, 'kopecks')
     const quote = promo ? (isQuote(promo.quote) ? promo.quote : scaleQuote(rubyQuote(pack.code), pack.kopecks, promo.kopecks)) : rubyQuote(pack.code)
@@ -523,7 +616,7 @@ export function useShop(on: boolean) {
       confirm: missing?.topup
         ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) })
         : ((promo ? quoteText(quote) : rubyPackPrice(pack.code, pack.kopecks)) ?? ''),
-      extra: <PackPromoField key={promo?.code ?? ''} pack={pack.code} applied={promo} onApplied={(next) => void doPack(pack, art, next)} />,
+      extra: <PackPromoField key={promo?.code ?? ''} pack={pack.code} applied={promo} onApplied={(next) => void doPack(pack, art, next, picked)} />,
       onCancel: () => result(false, 'cancel'),
       run: async () => {
         if (missing) {
@@ -538,7 +631,28 @@ export function useShop(on: boolean) {
           result(true)
           if (promo) forgetPackPromo()
           setDay((d) => (d ? { ...d, balance: res.balance } : d))
-          return { rubies: { from, to: res.balance } }
+          if (picked) {
+            track('pack_bought', { pack: pack.code, recommended: picked.recommended, left: res.balance - picked.target })
+            if (picked.item) pendingBuy.current = picked.item
+          }
+          // «Второй шаг» открывается первой оплатой: служба отдаёт его в свежей витрине, предлагаем прямо в окне с рубинами.
+          const fresh = pack.code === 'second' ? null : await reloadShop()
+          const second = fresh?.secondOffer
+          return {
+            rubies: { from, to: res.balance },
+            ...(second
+              ? {
+                  next: {
+                    label: t('{title}: {n} за {price}', {
+                      title: second.title,
+                      n: second.rubies.toLocaleString(intlTag()),
+                      price: rubyPackPrice(second.code, second.kopecks) ?? '',
+                    }),
+                    onClick: () => void doPack(second, SECOND_ART),
+                  },
+                }
+              : {}),
+          }
         } catch (e) {
           const miss = moneyShortfall(e)
           result(false, miss ? 'insufficient' : 'error', e)
@@ -592,8 +706,46 @@ export function useShop(on: boolean) {
     })
   }
 
+  /** Пополнение покрыло цену вещи, ради которой копили, — сразу предлагаем её купить. */
+  useEffect(() => {
+    const p = pendingBuy.current
+    if (!p || !day || balance < p.card.price) return
+    pendingBuy.current = null
+    doBuy(p.card, p.source)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balance, !!day])
+
+  /** «Теперь хватает»: баланс вырос не покупкой и покрыл вещь из «Хочу»/дня. */
+  const prevBal = useRef<number | null>(null)
+  useEffect(() => {
+    if (!day) return
+    const was = prevBal.current
+    prevBal.current = balance
+    // Первый баланс дня — только базовая точка: рост с нуля при загрузке магазина не считается.
+    if (was === null || balance <= was || pendingBuy.current || !affordNoticeOn() || affordNoticedToday(day.day.refreshAt)) return
+    const hit = nowAffordable(day, was)
+    if (!hit) return
+    markAffordNoticed(day.day.refreshAt)
+    track('afford_notice_shown', { item: hit.card.item.code })
+    showToast(t('Теперь хватает на «{name}»', { name: hit.card.item.name }), 'ok', undefined, {
+      label: t('Посмотреть'),
+      run: () => {
+        track('afford_notice_click', { item: hit.card.item.code })
+        useShopGift.getState().setTab('today')
+        useUi.getState().setScreen('rubies')
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balance, !!day])
+
+  /** Покупка из окна выбора пакета: ведёт через то же окно подтверждения, что и пакет. */
+  const doNeedBuy = (option: PickOption, need: PackNeed, recommended: boolean) =>
+    void doPack(option.pack, option.art, null, { recommended, target: need.target, item: need.item })
+
   const todayActs: TodayActs = { balance, busy, sub: !!tier, onBuy: doBuy, onWear: (it) => wearItems([it]) }
-  const setActs: SetActs = { balance, busy, onBuy: doBuySet, onWear: doWearSet, sub: !!tier }
+  const doBuySetItem = (item: ItemRef, price: number) =>
+    doBuy({ item, price, basePrice: price, discountPct: 0, owned: false, leavesAt: '' }, 'wardrobe', () => void reloadSets())
+  const setActs: SetActs = { balance, busy, onBuy: doBuySet, onWear: doWearSet, sub: !!tier, onBuyItem: doBuySetItem }
   /** Привычка: 4+ дня подряд — задания ниже ящиков; новичку — сразу под героем. */
   const streak = useDaily((st) => st.status?.streak ?? 0)
   const habit = streak >= 4
@@ -622,7 +774,7 @@ export function useShop(on: boolean) {
   return {
     on, signedIn, day, setDay, rules, busy, plus, tier, balance, error, bump, sets, setsAt, cases, drops, casesAt, ofDayPct, opening, setOpening, caseResult,
     weekly, quests, telegram, discord, workshop, habit, order, dayCase, daySet, plusTile, todayActs, setActs, scrollTo, toPacks,
-    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, claimTask, relinkTelegram, doPlus, doManage, doPack, doCraft,
+    reloadShop, reloadSets, reloadCases, doOpenCase, doWeekly, doPackQuest, claimTask, relinkTelegram, doPlus, doManage, doPack, doCraft, doNeedBuy,
   }
 }
 
@@ -681,7 +833,15 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
             ) : null}
           </div>
           <Guard what="Рубины" silent>
-            <Packs packs={day.packs} plusTile={plusTile} busy={busy} onBuy={(p, art) => void doPack(p, art)} />
+            <Packs
+              packs={day.packs}
+              plusTile={plusTile}
+              busy={busy}
+              onBuy={(p, art) => void doPack(p, art)}
+              second={day.secondOffer}
+              onSecond={day.secondOffer ? () => void doPack(day.secondOffer!, SECOND_ART) : undefined}
+              onOfferEnd={() => void reloadShop()}
+            />
           </Guard>
         </section>
 
@@ -702,6 +862,12 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
             <MonthOfferBlock offer={day.monthOffer} packs={day.packs} busy={busy === day.monthOffer.code} onBuy={() => void doPack(day.monthOffer!, '/packs/vault.png')} onEnd={() => void reloadShop()} />
           </Guard>
         ) : null}
+
+        <ShortfallBar day={day} />
+
+        <Guard what="Коллекции" silent>
+          <CollectionsSection acts={todayActs} />
+        </Guard>
 
         <Guard what="Скидки дня" silent>
           <TodaySection day={day} acts={todayActs} onEnd={() => void reloadShop()} />
@@ -749,11 +915,13 @@ export function ShopFeed({ s, chip = false }: { s: Shop; chip?: boolean }) {
 /** Окно покупки и открытие ящика: рисует только видимый экран. */
 export function ShopOverlays({ s }: { s: Shop }) {
   const t = useT()
-  const { on, opening, setOpening, balance, setDay, caseResult, toPacks, reloadCases, reloadSets } = s
+  const { on, day, busy, opening, setOpening, balance, setDay, caseResult, toPacks, reloadCases, reloadSets, doNeedBuy } = s
   if (!on) return null
   return (
     <>
       <BuySheetHost />
+      <GiftPickerHost />
+      {day ? <PackPicker day={day} busy={busy} onBuy={doNeedBuy} /> : null}
       {opening ? (
         <CaseOpening
           view={opening}

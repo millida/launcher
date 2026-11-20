@@ -670,7 +670,7 @@ fn beat_body(mut body: serde_json::Value) -> serde_json::Value {
 async fn send_beat() {
     let Some((path, body)) = lock(&BEAT).clone() else { return };
     let body = beat_body(body);
-    let _ = crate::engine::millida_api_auth_in(path, "POST".into(), Some(body), None, None).await;
+    let _ = crate::engine::millida_api_auth_in(path, "POST".into(), Some(body), None, None, None).await;
 }
 
 /// A launcher in the tray is online and idle: what the game was doing does not outlive the game.
@@ -692,7 +692,7 @@ async fn send_live_beat(playing: bool) {
     }
     let Some(body) = lock(&LIVE_BEAT).clone() else { return };
     let body = live_beat_body(body, playing);
-    let _ = crate::engine::millida_api_auth_in(LIVE_BEAT_PATH.into(), "POST".into(), Some(body), None, None).await;
+    let _ = crate::engine::millida_api_auth_in(LIVE_BEAT_PATH.into(), "POST".into(), Some(body), None, None, None).await;
 }
 
 static ASLEEP_BEATS: AtomicBool = AtomicBool::new(false);
@@ -1054,7 +1054,7 @@ pub fn send_perf(app: &AppHandle, items: Vec<serde_json::Value>) {
     tauri::async_runtime::spawn(async move {
         let body = perf_body(&version, &install_id, items, now_ms());
         // Telemetry endpoint of our own API; the batch holds numbers and stage names only.
-        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None).await;
+        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None, None).await;
     });
 }
 
@@ -1098,7 +1098,7 @@ fn send_sample(app: &AppHandle, state: &'static str, why: &'static str, measured
             None => tauri::async_runtime::spawn_blocking(proc_stats).await.unwrap_or_default(),
         };
         let body = sample_event(&version, &install_id, state, why, &stats, up_minutes());
-        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None).await;
+        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None, None).await;
     });
 }
 
