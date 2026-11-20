@@ -302,21 +302,21 @@ export function ClassicHome({ on }: { on: boolean }) {
         <>
           <div className="sec-title sec-title-row">
             <span>{t('Сборки')}</span>
-            <button className="sec-link" onClick={() => openHub(false)}>
-              {t('Все сборки')}
-              <Icon id="i-chev-r" />
-            </button>
+            <span className="cl-sec-acts">
+              <button className="btn sm secondary" id="newBuild2" data-sound="open" onClick={() => openModal('nbModal')}>
+                <Icon id="i-plus" />
+                {t('Новая сборка')}
+              </button>
+              <button className="btn sm secondary" onClick={() => openHub(false)}>
+                {t('Все сборки')}
+                <Icon id="i-chev-r" />
+              </button>
+            </span>
           </div>
           <div className="build-grid" id="buildGrid">
             {byRecent.map((p) => (
               <BuildCard key={p.name} p={p} hours={hoursOf(p.name)} />
             ))}
-            <button className="build-new" id="newBuild2" data-sound="open" onClick={() => openModal('nbModal')}>
-              <span className="inner">
-                <Icon id="i-plus" />
-                {t('Новая сборка')}
-              </span>
-            </button>
           </div>
         </>
       ) : (

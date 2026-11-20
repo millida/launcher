@@ -165,7 +165,10 @@ impl Preflight {
         Preflight {
             planned,
             gate: plan.gate.map(|slug| Job::spawn(async move { pack_launch_gate(&slug).await })),
-            token: plan.token.map(|slug| Job::spawn(async move { pack_launch_token(&slug).await })),
+            token: plan.token.map(|slug| {
+                let installed = installed_pack_body(settings, &slug);
+                Job::spawn(async move { pack_launch_token(&slug, installed).await })
+            }),
             pack_mod: plan.pack_mod.map(|slug| {
                 let profile = profile.to_string();
                 Job::spawn(async move { pack_millida_mod(&profile, &slug).await })

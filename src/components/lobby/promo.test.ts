@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { PROMO_ORDER, promoAt, promoSlides, promoStart } from './promo'
+import { PROMO_ORDER, TELEGRAM_CHAT, TELEGRAM_CHAT_EN, promoAt, promoSlides, promoStart, telegramChat } from './promo'
 
 const RU = { partners: true, ruContent: true }
 
@@ -14,12 +14,13 @@ test('the invite slide shows only once the referral terms came from the server',
   expect(promoSlides({ arcania: false, prisonrpg: false, invite: true, ...RU }).slice(-1)[0], 'the friend offer closes the carousel after the owner-ordered slides').toBe('invite')
 })
 
-test('outside the Russian market partner servers and the Russian Telegram channel drop out', () => {
+test('outside the Russian market partner servers drop out and Telegram leads to the English channel', () => {
   const intl = promoSlides({ arcania: true, prisonrpg: true, invite: true, partners: false, ruContent: false })
   expect(intl, 'MCRU anarchy and MetaLabs prison are Russian partner servers, an English player has nowhere to talk to them').not.toContain('anarchy')
   expect(intl, 'the prison slide is a partner server even when its pack is in the catalogue').not.toContain('prisonrpg')
-  expect(intl, 'the Telegram channel posts in Russian only').not.toContain('telegram')
-  expect(intl, 'Millida own slides stay on every market').toEqual(['discord', 'arcania', 'smp', 'invite'])
+  expect(intl, 'Millida own slides stay on every market').toEqual(['discord', 'telegram', 'arcania', 'smp', 'invite'])
+  expect(telegramChat(false), 'an English player is sent to the English channel, not the Russian one').toBe(TELEGRAM_CHAT_EN)
+  expect(telegramChat(true), 'the Russian market keeps the channel the shop reward checks').toBe(TELEGRAM_CHAT)
 })
 
 test('rotation walks every slide and wraps', () => {

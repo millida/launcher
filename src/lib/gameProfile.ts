@@ -491,6 +491,7 @@ export interface PlusStatus {
   tier?: 'PLUS' | 'DIAMOND' | null
   checkout?: 'gateway' | 'dollar-wallet'
   checkoutOptions?: ('gateway' | 'dollar-wallet' | 'stripe')[]
+  autoRenew?: boolean
   quote?: Quote
 }
 
@@ -499,7 +500,7 @@ export function loadPlus(): Promise<PlusStatus> {
 }
 
 /// A month of PLUS from the wallet in the buyer's own currency (dollars abroad), no renewal.
-export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' }> {
+export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' | 'INR' }> {
   return api('/launcher/plus/wallet/buy', { method: 'POST', body: JSON.stringify({ tier, requestId }) })
 }
 

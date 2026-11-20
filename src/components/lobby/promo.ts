@@ -15,6 +15,10 @@ export const PROMO_ROTATE_MS = 7_000
 export const DISCORD_INVITE = 'https://discord.gg/ec8xAhDSH7'
 /** Канал Millida в Telegram: баннер зовёт подписаться. */
 export const TELEGRAM_CHAT = 'https://t.me/millida'
+/** The English channel: outside the Russian market the slide leads here, and the shop reward stays with the Russian one. */
+export const TELEGRAM_CHAT_EN = 'https://t.me/+jIWFeqVflbdiNjUy'
+
+export const telegramChat = (ruContent: boolean) => (ruContent ? TELEGRAM_CHAT : TELEGRAM_CHAT_EN)
 export { ARCANIA_SLUG } from '../../lib/arcaniaRelease'
 
 /** Слайды, которые сейчас можно показать: сборка без карточки в каталоге выпадает. */
@@ -25,7 +29,6 @@ export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invit
     s === 'arcania' ? ready.arcania
     : s === 'prisonrpg' ? ready.prisonrpg && ready.partners
     : s === 'anarchy' ? ready.partners
-    : s === 'telegram' ? ready.ruContent
     : s === 'invite' ? ready.invite
     : true,
   ))

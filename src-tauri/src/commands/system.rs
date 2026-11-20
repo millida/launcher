@@ -51,6 +51,17 @@ pub async fn pick_wallpaper() -> Result<Option<engine::CustomWallpaper>, String>
     engine::pick_wallpaper().await
 }
 
+/// Publishes an own wallpaper to the shared library; the core reads the file and adds the token itself.
+#[tauri::command]
+pub async fn publish_wallpaper(path: String, name: String) -> Result<serde_json::Value, String> {
+    engine::publish_wallpaper(path, name).await
+}
+
+#[tauri::command]
+pub async fn save_library_wallpaper(id: String) -> Result<engine::CustomWallpaper, String> {
+    engine::save_library_wallpaper(id).await
+}
+
 #[tauri::command]
 pub async fn pick_texture() -> Result<Option<engine::PickedTexture>, String> {
     engine::pick_texture().await
