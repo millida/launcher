@@ -23,6 +23,8 @@ export interface SheetDone {
   rubies?: { from: number; to: number }
   /** «Надеть» под результатом. */
   onWear?: () => void
+  /** Следующее предложение под результатом (например, «Второй шаг» после первой оплаты): окно не закрывается само. */
+  next?: { label: ReactNode; onClick: () => void }
 }
 
 export interface SheetSpec {
@@ -153,7 +155,7 @@ export function BuySheetHost() {
       playSound('open')
       setDone(res)
       setPhase('done')
-      autoClose()
+      if (!res.next) autoClose()
     } catch {
       if (useBuySheet.getState().spec === spec) shut()
     }
@@ -202,6 +204,15 @@ export function BuySheetHost() {
               <button className="btn lg primary" data-track={'sheet_wear_' + spec.kind} onClick={() => (close(), done.onWear?.())}>
                 {t('Надеть')}
               </button>
+            ) : done?.next ? (
+              <>
+                <button className="btn lg primary" data-track={'sheet_next_' + spec.kind} onClick={() => (close(), done.next?.onClick())}>
+                  {done.next.label}
+                </button>
+                <button className="btn lg secondary" data-track={'sheet_ok_' + spec.kind} onClick={close}>
+                  {t('Ок')}
+                </button>
+              </>
             ) : (
               <button className="btn lg primary" data-track={'sheet_ok_' + spec.kind} onClick={close}>
                 {t('Ок')}
