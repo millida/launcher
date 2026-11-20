@@ -479,8 +479,9 @@ pub async fn redeem_pack_key(slug: String, code: String) -> Result<serde_json::V
 
 /// Наши готовые сборки — тот же список, что на сайте.
 #[tauri::command]
-pub async fn millida_packs() -> Result<serde_json::Value, String> {
-    engine::catalog_packs().await
+pub async fn millida_packs(lang: Option<String>) -> Result<serde_json::Value, String> {
+    let lang = engine::lang_header(lang.as_deref())?;
+    engine::catalog_packs(lang).await
 }
 
 /// Ready-made pack from the Millida catalogue. The webview names only the

@@ -1,4 +1,4 @@
-import { MODRINTH_API, api, mirrorAsset } from '../../lib/api'
+import { MODRINTH_API, api, mirrorAsset, sharedFetch } from '../../lib/api'
 import type { PremiumPack } from '../../lib/premium'
 import { hasTauri } from '../../ipc/tauri'
 import { millidaPacks } from '../../ipc/commands'
@@ -494,7 +494,7 @@ let mrCache: Promise<HubPack[]> | null = null
 const MR_FRESH = ['26.3', '26.2', '26.1.2', '1.21.11', '1.21.4', '1.21.1', '1.20.1', '1.19.2']
 export function loadModrinthPacks(): Promise<HubPack[]> {
   if (!mrCache)
-    mrCache = fetch(
+    mrCache = sharedFetch(
       MODRINTH_API +
         '/v2/search?limit=24&offset=0&index=downloads&facets=' +
         encodeURIComponent(JSON.stringify([['project_type:modpack'], MR_FRESH.map((v) => 'versions:' + v)])),
@@ -611,7 +611,7 @@ let modsCache: Promise<HubMod[]> | null = null
  */
 export function loadTopMods(): Promise<HubMod[]> {
   if (!modsCache)
-    modsCache = fetch(
+    modsCache = sharedFetch(
       MODRINTH_API +
         '/v2/search?limit=100&offset=0&index=downloads&facets=' +
         encodeURIComponent(JSON.stringify([['project_type:mod'], MR_FRESH.map((v) => 'versions:' + v)])),

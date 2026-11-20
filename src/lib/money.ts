@@ -1,6 +1,9 @@
 import { getLocale, intlTag, t, type Locale } from '../i18n'
 
-export type MoneyCurrency = 'RUB' | 'USD'
+export type MoneyCurrency = 'RUB' | 'USD' | 'INR'
+
+/// The account itself holds rubles or dollars; rupees exist only as a displayed price.
+export type AccountCurrency = 'RUB' | 'USD'
 
 /// `chargeKopecks` is always rubles whatever `displayCurrency` is: the account holds rubles only.
 export interface Quote {
@@ -21,7 +24,7 @@ export interface MoneyView {
   displayCurrency: MoneyCurrency
   balance: { kopecks: number; displayMinor: number; displayCurrency: MoneyCurrency; rate: number }
   rubPerUsd: number
-  topup: Record<MoneyCurrency, TopupOffer>
+  topup: Record<AccountCurrency, TopupOffer>
 }
 
 export interface PriceList {
@@ -45,7 +48,7 @@ export interface MoneyShortfall {
   topup: TopupAsk | null
 }
 
-const CURRENCIES: ReadonlySet<string> = new Set(['RUB', 'USD'])
+const CURRENCIES: ReadonlySet<string> = new Set(['RUB', 'USD', 'INR'])
 
 const isCurrency = (v: unknown): v is MoneyCurrency => typeof v === 'string' && CURRENCIES.has(v)
 
@@ -80,10 +83,11 @@ export function isPriceList(v: unknown): v is PriceList {
 }
 
 /// The language only formats; the currency is the one the server quoted.
+/// Rupees are always grouped the Indian way (₹2,099, ₹1,00,000), whatever the interface language.
 export function formatMoney(minor: number, currency: MoneyCurrency, locale: Locale = getLocale()): string {
   const amount = Math.round(minor) / 100
   const whole = Number.isInteger(amount)
-  return new Intl.NumberFormat(intlTag(locale), {
+  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : intlTag(locale), {
     style: 'currency',
     currency,
     minimumFractionDigits: whole ? 0 : 2,
@@ -119,16 +123,17 @@ export const usdCentsCoveringKopecks = (kopecks: number, rubPerUsd: number): num
 export function goodsQuote(rubKopecks: number, currency: MoneyCurrency | null, rubPerUsd: number | null, line?: 'RUB'): Quote | null {
   if (!isAmount(rubKopecks) || rubKopecks < 0) return null
   if (line === 'RUB' || currency === 'RUB') return { displayCurrency: 'RUB', priceMinor: rubKopecks, chargeKopecks: rubKopecks }
-  if (currency !== 'USD' || !rubPerUsd) return null
+  // A rupee buyer's account is in dollars, so a ruble-only good is charged at its dollar list.
+  if (!currency || !rubPerUsd) return null
   const cents = digitalUsdCents(rubKopecks)
   return { displayCurrency: 'USD', priceMinor: cents, chargeKopecks: kopecksForUsdCents(cents, rubPerUsd) }
 }
 
-/// The ruble gateway charges rubles, so a buyer shown a dollar price pays from the balance at that price.
+/// The ruble gateway charges rubles, so a buyer shown any other price pays from the balance at that price.
 /// The price list follows the interface language and is reloaded when it changes; a PLUS status may be older.
 export function plusCheckout(current: Quote | null | undefined, statusQuote: Quote | null | undefined): 'gateway' | 'balance' {
   const currency = current?.displayCurrency ?? statusQuote?.displayCurrency
-  return currency === 'USD' ? 'balance' : 'gateway'
+  return !currency || currency === 'RUB' ? 'gateway' : 'balance'
 }
 
 export function scaleQuote(q: Quote | null | undefined, fromKopecks: number, toKopecks: number): Quote | null {
@@ -137,9 +142,11 @@ export function scaleQuote(q: Quote | null | undefined, fromKopecks: number, toK
   return { ...q, priceMinor: Math.round(q.priceMinor * k), chargeKopecks: Math.round(q.chargeKopecks * k) }
 }
 
+const topupCurrency = (view: MoneyView): AccountCurrency => (view.displayCurrency === 'RUB' ? 'RUB' : 'USD')
+
 /// Sized like the server's own top-up options, so a pre-check and a refusal ask for the same sum.
 export function topupFor(missingKopecks: number, view: MoneyView): TopupAsk {
-  const currency = view.displayCurrency
+  const currency = topupCurrency(view)
   const offer = view.topup[currency]
   const raw = currency === 'USD' ? usdCentsCoveringKopecks(missingKopecks, view.rubPerUsd) : Math.ceil(missingKopecks / 100) * 100
   return { currency, amountMinor: Math.min(Math.max(raw, offer.minMinor), offer.maxMinor) }
@@ -149,7 +156,7 @@ export function shortfallOf(q: Quote | null | undefined, view: MoneyView | null)
   if (!view || !q || !isQuote(q)) return null
   const missingKopecks = q.chargeKopecks - view.balance.kopecks
   if (missingKopecks <= 0) return null
-  const currency = view.displayCurrency
+  const currency = topupCurrency(view)
   const missingMinor = currency === 'USD' ? usdCentsCoveringKopecks(missingKopecks, view.rubPerUsd) : missingKopecks
   return { displayCurrency: currency, missingMinor, missingKopecks, topup: topupFor(missingKopecks, view) }
 }

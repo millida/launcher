@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import type { SetColorwayView, SetView } from '../../lib/rubies'
+import type { ItemRef, SetColorwayView, SetView } from '../../lib/rubies'
 import { Dots, PxThumb, THEME_TONE, defaultWay } from './Sets'
 import { SetShot, ShopStage } from './ShopStage'
 import { warmOutfitShots } from '../../lib/outfitShotLazy'
 import { Countdown, Head } from './parts'
+import { PriceRiseTag, setPriceRise } from './priceRise'
 import { intlTag, useT } from '../../i18n'
 
 /**
@@ -25,6 +26,7 @@ export interface SetActs {
   onWear: (set: SetView, way: SetColorwayView) => void
   /** Подписчик: рядом с ценой зачёркнута цена без скидок. */
   sub?: boolean
+  onBuyItem?: (item: ItemRef, price: number) => void
 }
 
 const items = (way: SetColorwayView) => way.items.map((x) => x.item)
@@ -169,6 +171,7 @@ function SetCard({ set, way, picked, onPick, acts }: { set: SetView; way: SetCol
           </span>
         ))}
       </span>
+      {!full(way) ? <PriceRiseTag rise={setPriceRise(way.priceRise, way.price)} then={way.priceRise?.price} /> : null}
       <PriceBtn set={set} way={way} acts={acts} />
     </div>
   )
@@ -239,7 +242,19 @@ export function SetsSection({ sets, refreshAt, onEnd, on, acts }: { sets: SetVie
                         <PxThumb item={x.item} />
                       </span>
                       <b>{x.item.name}</b>
-                      {x.owned ? <Icon id="i-check" /> : null}
+                      {x.owned ? (
+                        <Icon id="i-check" />
+                      ) : acts.onBuyItem && x.price > 0 ? (
+                        <button
+                          className="btn sm secondary sv-pbtn"
+                          disabled={acts.busy === x.item.code}
+                          data-track="set_buy_item"
+                          onClick={() => (setOpenId(null), acts.onBuyItem?.(x.item, x.price))}
+                        >
+                          <Ruby size={14} />
+                          {x.price.toLocaleString(intlTag())}
+                        </button>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
