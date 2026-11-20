@@ -4,6 +4,7 @@ import { installContentFlow } from '../../lib/install'
 import { track, trackFailure } from '../../lib/telemetry'
 import { useMods, type ModHit } from '../../state/mods'
 import { useProfiles } from '../../state/profiles'
+import { loaderBlock, type LoaderId } from '../../lib/loaderSupport'
 import { showToast } from '../../state/ui'
 import { t, tx } from '../../i18n'
 
@@ -14,7 +15,7 @@ import { t, tx } from '../../i18n'
  */
 
 const RELEASE = /^\d+\.\d+(\.\d+)?$/
-const LOADER_ORDER = ['fabric', 'neoforge', 'forge', 'quilt']
+const LOADER_ORDER: LoaderId[] = ['fabric', 'neoforge', 'forge', 'quilt']
 
 function cmpVer(a: string, b: string): number {
   const x = a.split('.').map(Number)
@@ -37,11 +38,11 @@ export function planFor(h: ModHit, kind: string): { version: string; loader: str
   const version = newestRelease(h.gameVers)
   if (!version) return null
   if (kind === 'mod') {
-    const loader = LOADER_ORDER.find((l) => (h.loaders || []).includes(l))
+    const loader = LOADER_ORDER.find((l) => (h.loaders || []).includes(l) && !loaderBlock(l, version, 'release'))
     return loader ? { version, loader } : null
   }
   // Шейдеру нужен Iris, а Iris живёт на Fabric.
-  if (kind === 'shader') return { version, loader: 'fabric' }
+  if (kind === 'shader') return loaderBlock('fabric', version, 'release') ? null : { version, loader: 'fabric' }
   if (kind === 'resourcepack' || kind === 'datapack') return { version, loader: 'vanilla' }
   return null
 }
