@@ -23,7 +23,18 @@ const MAX_LABEL_CHARS: usize = 60;
 const KEEP_AUTO_SNAPSHOTS: usize = 10;
 const KEEP_MANUAL_SNAPSHOTS: usize = 20;
 const CONFIG_EXTS: [&str; 11] = ["toml", "json", "json5", "properties", "cfg", "txt", "yaml", "yml", "snbt", "conf", "ini"];
-const SNAPSHOT_DIRS: [&str; 2] = ["mods", "config"];
+/// Folders a snapshot captures, with the extensions of files it may hard-link
+/// there. Only archives the game never rewrites are linked: Iris keeps shader
+/// settings as `<pack>.txt` next to the zip and rewrites them in place.
+const SNAPSHOT_DIRS: [(&str, &[&str]); 4] = [
+    ("mods", &["jar", "disabled"]),
+    ("config", &[]),
+    ("resourcepacks", &["zip"]),
+    ("shaderpacks", &["zip"]),
+];
+/// What a snapshot written before `dirs` existed holds. Restoring one must not
+/// touch folders it never captured, or the player's packs would be wiped.
+const LEGACY_SNAPSHOT_DIRS: [&str; 2] = ["mods", "config"];
 const OPTIONS: &str = "options.txt";
 
 // One lock for every mutating call: a restore racing a snapshot or a write
@@ -68,6 +79,12 @@ pub struct MilliSnap {
     pub files: u32,
     pub mods: u32,
     pub auto: bool,
+    #[serde(default = "legacy_snapshot_dirs")]
+    pub dirs: Vec<String>,
+}
+
+fn legacy_snapshot_dirs() -> Vec<String> {
+    LEGACY_SNAPSHOT_DIRS.iter().map(|d| d.to_string()).collect()
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -300,10 +317,11 @@ struct CopyStats {
     files: u32,
 }
 
-/// Jars are hard-linked: the dedup store already shares them between builds
-/// and the game never writes into a jar. Configs are copied, because the game
-/// rewrites them in place and a link would carry that edit into the snapshot.
-fn mirror_tree(src: &Path, dst: &Path, link_jars: bool, stats: &mut CopyStats) -> Result<(), String> {
+/// Jars and pack archives are hard-linked: the dedup store already shares them
+/// between builds and the game never writes into them. Everything else is
+/// copied, because the game rewrites it in place and a link would carry that
+/// edit into the snapshot. A failed link falls back to a copy.
+fn mirror_tree(src: &Path, dst: &Path, link_exts: &[&str], stats: &mut CopyStats) -> Result<(), String> {
     std::fs::create_dir_all(dst).map_err(|e| io_fail("Снимок сборки", dst, &e))?;
     let rd = std::fs::read_dir(src).map_err(|e| io_fail("Снимок сборки", src, &e))?;
     for e in rd.flatten() {
@@ -314,12 +332,12 @@ fn mirror_tree(src: &Path, dst: &Path, link_jars: bool, stats: &mut CopyStats) -
         let from = e.path();
         let to = dst.join(e.file_name());
         if ft.is_dir() {
-            mirror_tree(&from, &to, link_jars, stats)?;
+            mirror_tree(&from, &to, link_exts, stats)?;
             continue;
         }
         let len = e.metadata().map(|m| m.len()).unwrap_or(0);
-        let is_jar = from.extension().and_then(|x| x.to_str()).map(|x| x.eq_ignore_ascii_case("jar") || x.eq_ignore_ascii_case("disabled")).unwrap_or(false);
-        if link_jars && is_jar && std::fs::hard_link(&from, &to).is_ok() {
+        let linkable = from.extension().and_then(|x| x.to_str()).is_some_and(|x| link_exts.iter().any(|l| x.eq_ignore_ascii_case(l)));
+        if linkable && std::fs::hard_link(&from, &to).is_ok() {
             stats.bytes += len;
             stats.files += 1;
             continue;
@@ -336,6 +354,30 @@ fn count_mods(dir: &Path) -> u32 {
     std::fs::read_dir(dir)
         .map(|rd| rd.flatten().filter(|e| e.file_name().to_string_lossy().to_ascii_lowercase().ends_with(".jar")).count() as u32)
         .unwrap_or(0)
+}
+
+/// Manifest entries (`millida-content.json`) of the content kinds whose folder
+/// is one of `dirs`. Kept as raw JSON so fields a newer launcher added survive.
+fn owned_entries(entries: Vec<serde_json::Value>, dirs: &[&str]) -> Vec<serde_json::Value> {
+    entries.into_iter().filter(|e| dirs.contains(&content_dir(e["kind"].as_str().unwrap_or("")))).collect()
+}
+
+/// `Ok(None)` for a file that is not there; an unreadable one is an error, so
+/// the caller can tell "no entries" from "do not touch".
+fn read_manifest(path: &Path) -> Result<Option<Vec<serde_json::Value>>, String> {
+    match std::fs::read(path) {
+        Ok(raw) => serde_json::from_slice(&raw).map(Some).map_err(|e| format!("{}: {}", path.display(), e)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(io_fail("Снимок сборки", path, &e)),
+    }
+}
+
+/// The manifest after a restore: entries of the restored kinds come from the
+/// snapshot, everything else (datapacks, worlds) stays as the build has it.
+fn merged_manifest(live: Vec<serde_json::Value>, snap: Vec<serde_json::Value>, dirs: &[&str]) -> Vec<serde_json::Value> {
+    let mut out: Vec<serde_json::Value> = live.into_iter().filter(|e| !dirs.contains(&content_dir(e["kind"].as_str().unwrap_or("")))).collect();
+    out.extend(owned_entries(snap, dirs));
+    out
 }
 
 fn read_meta(dir: &Path) -> Option<MilliSnap> {
@@ -356,7 +398,7 @@ pub fn milli_snapshots(pdir: &Path) -> Vec<MilliSnap> {
     out
 }
 
-fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, String> {
+fn capture(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, String> {
     let id = new_snap_id(pdir);
     let dir = snaps_dir(pdir).join(&id);
     let staging = snaps_dir(pdir).join(format!(".{}-part", id));
@@ -364,10 +406,10 @@ fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, Stri
     let _ = std::fs::remove_dir_all(&staging);
     let mut stats = CopyStats::default();
     let built = (|| -> Result<(), String> {
-        for d in SNAPSHOT_DIRS {
+        for (d, link_exts) in SNAPSHOT_DIRS {
             let src = pdir.join(d);
             if src.is_dir() {
-                mirror_tree(&src, &staging.join(d), d == "mods", &mut stats)?;
+                mirror_tree(&src, &staging.join(d), link_exts, &mut stats)?;
             }
         }
         let opts = pdir.join(OPTIONS);
@@ -377,6 +419,22 @@ fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, Stri
             stats.bytes += len;
             stats.disk += len;
             stats.files += 1;
+        }
+        // An unreadable manifest is left out: the restore then keeps whatever
+        // the build has, as it does for a snapshot from before manifests.
+        let live = {
+            let _m = manifest_guard();
+            read_manifest(&pdir.join(CONTENT_MANIFEST))
+        };
+        if let Ok(entries) = live {
+            let dirs: Vec<&str> = SNAPSHOT_DIRS.iter().map(|(d, _)| *d).collect();
+            let part = owned_entries(entries.unwrap_or_default(), &dirs);
+            std::fs::create_dir_all(&staging).map_err(|e| io_fail("Снимок сборки", &staging, &e))?;
+            let path = staging.join(CONTENT_MANIFEST);
+            write_json_atomic(&path, &part)?;
+            let len = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            stats.bytes += len;
+            stats.disk += len;
         }
         Ok(())
     })();
@@ -394,6 +452,7 @@ fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, Stri
         files: stats.files,
         mods: count_mods(&staging.join("mods")),
         auto,
+        dirs: SNAPSHOT_DIRS.iter().map(|(d, _)| d.to_string()).collect(),
     };
     let finished = write_json_atomic(&staging.join("meta.json"), &snap)
         .and_then(|_| std::fs::rename(&staging, &dir).map_err(|e| io_fail("Снимок сборки", &dir, &e)));
@@ -401,6 +460,11 @@ fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, Stri
         let _ = std::fs::remove_dir_all(&staging);
         return Err(e);
     }
+    Ok(snap)
+}
+
+fn take_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap, String> {
+    let snap = capture(pdir, label, auto)?;
     prune(pdir);
     Ok(snap)
 }
@@ -427,28 +491,40 @@ pub fn milli_snapshot(pdir: &Path, label: &str, auto: bool) -> Result<MilliSnap,
 pub fn milli_snapshot_restore(pdir: &Path, id: &str) -> Result<MilliSnap, String> {
     existing_build(pdir)?;
     let src = snap_dir(pdir, id)?;
-    if read_meta(&src).is_none() {
+    let Some(meta) = read_meta(&src) else {
         return Err("Этого снимка уже нет: обнови список".into());
-    }
+    };
     let _g = locked();
-    let before = take_snapshot(pdir, "Перед откатом", true)?;
+    // Pruning waits until the swap is over: the extra "before" capture could
+    // otherwise evict the very snapshot being restored.
+    let before = capture(pdir, "Перед откатом", true)?;
+    let restored = swap_in_snapshot(pdir, &src, &meta);
+    prune(pdir);
+    restored.map(|()| before)
+}
+
+/// Only folders the snapshot recorded are replaced, and only names the core
+/// knows: `meta.json` sits on disk and may come from an older launcher.
+fn swap_in_snapshot(pdir: &Path, src: &Path, meta: &MilliSnap) -> Result<(), String> {
+    let dirs: Vec<(&'static str, &'static [&'static str])> =
+        SNAPSHOT_DIRS.into_iter().filter(|(d, _)| meta.dirs.iter().any(|m| m == d)).collect();
     let work = milli_dir(pdir).join("restore");
     let _ = std::fs::remove_dir_all(&work);
     let staged = work.join("new");
     let trash = work.join("old");
     let mut stats = CopyStats::default();
-    for d in SNAPSHOT_DIRS {
+    for (d, link_exts) in &dirs {
         let from = src.join(d);
         let to = staged.join(d);
         if from.is_dir() {
-            mirror_tree(&from, &to, d == "mods", &mut stats)?;
+            mirror_tree(&from, &to, link_exts, &mut stats)?;
         } else {
             std::fs::create_dir_all(&to).map_err(|e| io_fail("Откат сборки", &to, &e))?;
         }
     }
     std::fs::create_dir_all(&trash).map_err(|e| io_fail("Откат сборки", &trash, &e))?;
     let mut swapped: Vec<&str> = Vec::new();
-    for d in SNAPSHOT_DIRS {
+    for &(d, _) in &dirs {
         let live = pdir.join(d);
         let had_live = live.exists();
         if had_live {
@@ -471,8 +547,23 @@ pub fn milli_snapshot_restore(pdir: &Path, id: &str) -> Result<MilliSnap, String
         let bytes = std::fs::read(&opts).map_err(|e| io_fail("Откат сборки", &opts, &e))?;
         write_bytes_atomic(&pdir.join(OPTIONS), &bytes)?;
     }
+    // A snapshot without a readable manifest part predates it: the build's
+    // manifest is left exactly as it is.
+    if let Ok(Some(snap_entries)) = read_manifest(&src.join(CONTENT_MANIFEST)) {
+        let names: Vec<&str> = dirs.iter().map(|(d, _)| *d).collect();
+        let live_path = pdir.join(CONTENT_MANIFEST);
+        let _m = manifest_guard();
+        // A live manifest that no longer parses has nothing worth keeping, but
+        // one that cannot be read must not be overwritten blind.
+        let live: Vec<serde_json::Value> = match std::fs::read(&live_path) {
+            Ok(raw) => serde_json::from_slice(&raw).unwrap_or_default(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => return Err(io_fail("Откат сборки", &live_path, &e)),
+        };
+        write_json_atomic(&live_path, &merged_manifest(live, snap_entries, &names))?;
+    }
     let _ = std::fs::remove_dir_all(&work);
-    Ok(before)
+    Ok(())
 }
 
 fn undo_swap(pdir: &Path, trash: &Path, swapped: &[&str]) {
@@ -812,6 +903,174 @@ mod tests {
         milli_snapshot_restore(&pdir, &before.id).unwrap();
         assert!(pdir.join("mods/bad.jar").exists(), "restoring the 'before' snapshot must undo the rollback");
         assert!(!milli_dir(&pdir).join("restore").exists(), "staging must be cleaned up");
+    }
+
+    /// Resource and shader packs ride along with the mods. The shader settings
+    /// file is rewritten in place by Iris, so it must be a copy: a link would
+    /// let the live edit leak into the snapshot.
+    #[test]
+    fn packs_are_captured_and_restored() {
+        let pdir = tmp("packs");
+        std::fs::create_dir_all(pdir.join("resourcepacks")).unwrap();
+        std::fs::create_dir_all(pdir.join("shaderpacks")).unwrap();
+        std::fs::write(pdir.join("resourcepacks/Faithful.zip"), "rp").unwrap();
+        std::fs::write(pdir.join("shaderpacks/BSL.zip"), "sh").unwrap();
+        std::fs::write(pdir.join("shaderpacks/BSL.zip.txt"), "shadow=on").unwrap();
+        let snap = milli_snapshot(&pdir, "С паками", false).unwrap();
+        assert_eq!(snap.dirs, vec!["mods", "config", "resourcepacks", "shaderpacks"], "a new snapshot must record every folder it owns");
+
+        std::fs::write(pdir.join("shaderpacks/BSL.zip.txt"), "shadow=off").unwrap();
+        let kept = snaps_dir(&pdir).join(&snap.id).join("shaderpacks/BSL.zip.txt");
+        assert_eq!(std::fs::read_to_string(&kept).unwrap(), "shadow=on", "shader settings must be copied, not linked");
+
+        std::fs::remove_file(pdir.join("resourcepacks/Faithful.zip")).unwrap();
+        std::fs::write(pdir.join("resourcepacks/Other.zip"), "x").unwrap();
+        milli_snapshot_restore(&pdir, &snap.id).unwrap();
+        assert!(pdir.join("resourcepacks/Faithful.zip").exists() && !pdir.join("resourcepacks/Other.zip").exists(), "resource packs must match the snapshot");
+        assert_eq!(std::fs::read_to_string(pdir.join("shaderpacks/BSL.zip.txt")).unwrap(), "shadow=on");
+    }
+
+    /// (meta.json as written, folders a restore may replace, why). A snapshot
+    /// from before `dirs` existed captured only mods and config; restoring it
+    /// must leave the player's packs alone instead of swapping in empty folders.
+    #[test]
+    fn a_legacy_snapshot_never_touches_folders_it_did_not_capture() {
+        let pdir = tmp("legacy");
+        std::fs::create_dir_all(pdir.join("mods")).unwrap();
+        std::fs::create_dir_all(pdir.join("resourcepacks")).unwrap();
+        std::fs::create_dir_all(pdir.join("shaderpacks")).unwrap();
+        std::fs::write(pdir.join("mods/new.jar"), "new").unwrap();
+        std::fs::write(pdir.join("resourcepacks/Mine.zip"), "rp").unwrap();
+        std::fs::write(pdir.join("shaderpacks/Mine.zip"), "sh").unwrap();
+        let old = snaps_dir(&pdir).join("sold1");
+        std::fs::create_dir_all(old.join("mods")).unwrap();
+        std::fs::write(old.join("mods/old.jar"), "old").unwrap();
+        std::fs::write(
+            old.join("meta.json"),
+            r#"{"id":"sold1","label":"Старый","at":1,"bytes":3,"disk":3,"files":1,"mods":1,"auto":false}"#,
+        )
+        .unwrap();
+
+        let listed = milli_snapshots(&pdir);
+        assert_eq!(listed.len(), 1, "an old meta.json must still parse");
+        assert_eq!(listed[0].dirs, vec!["mods", "config"], "a missing dirs field means mods and config only");
+
+        milli_snapshot_restore(&pdir, "sold1").unwrap();
+        assert!(pdir.join("mods/old.jar").exists() && !pdir.join("mods/new.jar").exists(), "mods still come back from an old snapshot");
+        assert!(pdir.join("resourcepacks/Mine.zip").exists(), "an old snapshot must not wipe resource packs it never saw");
+        assert!(pdir.join("shaderpacks/Mine.zip").exists(), "an old snapshot must not wipe shader packs it never saw");
+    }
+
+    /// Unknown names in `dirs` come from a file on disk and must never turn
+    /// into a folder the restore replaces.
+    #[test]
+    fn restore_ignores_folders_the_core_does_not_own() {
+        let pdir = tmp("foreign");
+        std::fs::create_dir_all(pdir.join("saves/World")).unwrap();
+        std::fs::write(pdir.join("saves/World/level.dat"), "w").unwrap();
+        let snap = snaps_dir(&pdir).join("sforeign");
+        std::fs::create_dir_all(&snap).unwrap();
+        std::fs::write(
+            snap.join("meta.json"),
+            r#"{"id":"sforeign","label":"x","at":1,"bytes":0,"disk":0,"files":0,"mods":0,"auto":false,"dirs":["saves","../x"]}"#,
+        )
+        .unwrap();
+        milli_snapshot_restore(&pdir, "sforeign").unwrap();
+        assert!(pdir.join("saves/World/level.dat").exists(), "worlds are never part of a snapshot restore");
+    }
+
+    /// Restoring the oldest automatic snapshot when the auto quota is full:
+    /// the "before" capture must not prune the snapshot being restored.
+    #[test]
+    fn restoring_the_oldest_auto_snapshot_survives_the_quota() {
+        let pdir = tmp("quota");
+        std::fs::create_dir_all(pdir.join("mods")).unwrap();
+        std::fs::write(pdir.join("mods/first.jar"), "1").unwrap();
+        let oldest = milli_snapshot(&pdir, "Первый", true).unwrap();
+        std::fs::write(pdir.join("mods/later.jar"), "2").unwrap();
+        for _ in 1..KEEP_AUTO_SNAPSHOTS {
+            milli_snapshot(&pdir, "Ещё", true).unwrap();
+        }
+        assert!(milli_snapshots(&pdir).iter().any(|s| s.id == oldest.id), "the quota holds exactly ten automatic snapshots");
+        milli_snapshot_restore(&pdir, &oldest.id).expect("the oldest auto snapshot must still restore");
+        assert!(!pdir.join("mods/later.jar").exists(), "the build must be back at the oldest state");
+        assert_eq!(milli_snapshots(&pdir).iter().filter(|s| s.auto).count(), KEEP_AUTO_SNAPSHOTS, "the quota is enforced after the restore");
+    }
+
+    fn manifest_entry(kind: &str, file: &str, version: &str) -> serde_json::Value {
+        serde_json::json!({ "kind": kind, "file_name": file, "project_id": "p-".to_string() + file, "version_id": version })
+    }
+
+    fn manifest_files(pdir: &Path) -> Vec<(String, String, String)> {
+        let raw = std::fs::read(pdir.join(CONTENT_MANIFEST)).unwrap();
+        let list: Vec<serde_json::Value> = serde_json::from_slice(&raw).unwrap();
+        let mut out: Vec<(String, String, String)> = list
+            .iter()
+            .map(|e| (e["kind"].as_str().unwrap().to_string(), e["file_name"].as_str().unwrap().to_string(), e["version_id"].as_str().unwrap().to_string()))
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// After «Обновить всё» and a rollback the catalogue must know the old jar
+    /// again, while datapacks and worlds added since keep their entries:
+    /// (kind, file, version) left in the manifest.
+    #[test]
+    fn restore_swaps_manifest_entries_of_the_restored_kinds_only() {
+        let pdir = tmp("manifest");
+        std::fs::create_dir_all(pdir.join("mods")).unwrap();
+        std::fs::write(pdir.join("mods/sodium-1.jar"), "1").unwrap();
+        let before = [manifest_entry("mod", "sodium-1.jar", "v1"), manifest_entry("datapack", "dp.zip", "d1")];
+        std::fs::write(pdir.join(CONTENT_MANIFEST), serde_json::to_vec(&before).unwrap()).unwrap();
+        let snap = milli_snapshot(&pdir, "До обновления", true).unwrap();
+
+        std::fs::remove_file(pdir.join("mods/sodium-1.jar")).unwrap();
+        std::fs::write(pdir.join("mods/sodium-2.jar"), "2").unwrap();
+        let after = [
+            manifest_entry("mod", "sodium-2.jar", "v2"),
+            manifest_entry("datapack", "dp.zip", "d1"),
+            manifest_entry("datapack", "added.zip", "d2"),
+            manifest_entry("world", "World", "w1"),
+            manifest_entry("resourcepack", "rp.zip", "r1"),
+        ];
+        std::fs::write(pdir.join(CONTENT_MANIFEST), serde_json::to_vec(&after).unwrap()).unwrap();
+
+        milli_snapshot_restore(&pdir, &snap.id).unwrap();
+        let want: Vec<(String, String, String)> = [
+            ("datapack", "added.zip", "d2", "a datapack added after the snapshot is not the snapshot's to drop"),
+            ("datapack", "dp.zip", "d1", "datapack entries stay as the build has them"),
+            ("mod", "sodium-1.jar", "v1", "the mod entry comes back with the old jar"),
+            ("world", "World", "w1", "world entries stay as the build has them"),
+        ]
+        .iter()
+        .map(|(k, f, v, _)| (k.to_string(), f.to_string(), v.to_string()))
+        .collect();
+        assert_eq!(
+            manifest_files(&pdir),
+            want,
+            "restored kinds (mods, resource packs) must match the snapshot: sodium-2 and rp.zip are gone, the rest is untouched"
+        );
+    }
+
+    /// A snapshot written before the manifest was captured must leave the
+    /// manifest byte for byte as it was.
+    #[test]
+    fn a_snapshot_without_a_manifest_leaves_it_alone() {
+        let pdir = tmp("manifest-legacy");
+        std::fs::create_dir_all(pdir.join("mods")).unwrap();
+        let live = serde_json::to_vec(&[manifest_entry("mod", "new.jar", "v2"), manifest_entry("datapack", "dp.zip", "d1")]).unwrap();
+        std::fs::write(pdir.join(CONTENT_MANIFEST), &live).unwrap();
+        let old = snaps_dir(&pdir).join("soldm");
+        std::fs::create_dir_all(old.join("mods")).unwrap();
+        std::fs::write(old.join("mods/old.jar"), "old").unwrap();
+        std::fs::write(
+            old.join("meta.json"),
+            r#"{"id":"soldm","label":"Старый","at":1,"bytes":3,"disk":3,"files":1,"mods":1,"auto":false}"#,
+        )
+        .unwrap();
+        milli_snapshot_restore(&pdir, "soldm").unwrap();
+        assert!(pdir.join("mods/old.jar").exists(), "the folders still come back");
+        assert_eq!(std::fs::read(pdir.join(CONTENT_MANIFEST)).unwrap(), live, "no manifest in the snapshot means the manifest is not touched");
     }
 
     #[test]

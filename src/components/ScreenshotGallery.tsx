@@ -6,6 +6,7 @@ import { copyText } from '../lib/clipboard'
 import { openImage } from './ImageLightbox'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
+import { openFolderAction } from '../lib/savedFile'
 import {
   deleteScreenshot,
   openScreenshots,
@@ -228,7 +229,7 @@ export function ScreenshotGallery({ profile }: Props) {
                   aria-label={t('Сохранить как…')}
                   onClick={() =>
                     saveScreenshotAs(shot.profile, shot.name)
-                      .then((p) => p && showToast(t('Сохранено'), 'ok'))
+                      .then((p) => p && showToast(t('Сохранено'), 'ok', undefined, openFolderAction(p)))
                       .catch((e) => showToast('' + e, 'error'))
                   }
                 >

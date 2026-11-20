@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { useT } from '../../i18n'
 import { showToast } from '../../state/ui'
+import { openFolderAction } from '../../lib/savedFile'
 import { uiConfirm } from '../../state/confirm'
 import { hasTauri } from '../../ipc/tauri'
 import { hostDownload, hostUpload } from '../../ipc/commands'
@@ -120,7 +121,7 @@ export function TabFiles({ serverId, full, onTariff }: { serverId: string; full:
     setBusy(e.name)
     try {
       const path = await hostDownload(serverId, joinPath(dir, e.name))
-      showToast(path ? t('Сохранено: {path}', { path }) : t('Отменено'))
+      showToast(path ? t('Сохранено: {path}', { path }) : t('Отменено'), undefined, undefined, openFolderAction(path))
     } catch (err) {
       showToast(errText(err), 'error')
     } finally {

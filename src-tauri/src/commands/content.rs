@@ -62,6 +62,12 @@ pub async fn audit_deps(profile: String) -> Result<engine::DepAudit, String> {
     engine::audit_deps(profile).await
 }
 
+/// Titles of the enabled mods that need the given files: asked before a removal or a switch-off.
+#[tauri::command]
+pub async fn mod_dependents(profile: String, files: Vec<String>) -> Vec<String> {
+    engine::mod_dependents(profile, files).await
+}
+
 #[tauri::command(async)]
 pub fn list_content(profile: String, kind: String) -> Vec<engine::ModFile> { engine::list_content(&profile, &kind) }
 
@@ -239,6 +245,7 @@ pub async fn export_mrpack(profile: String, name: String, version: String, descr
     let dst = out.to_string_lossy().to_string();
     let loader_build = engine::export_loader_build(&profile).await;
     let res = super::blocking(move || engine::export_mrpack(profile, dst, name, version, description, loader_build)).await??;
+    engine::remember_saved_file(&res);
     if let Some(p) = out.parent() {
         engine::open_path(&p.to_string_lossy());
     }
@@ -451,6 +458,7 @@ pub async fn export_pack(profile: String, format: String, ram_mb: Option<u32>, l
         _ => engine::export_multimc(profile.clone(), dst, profile, loader_build, author),
     })
     .await??;
+    engine::remember_saved_file(&res);
     if let Some(p) = out.parent() {
         engine::open_path(&p.to_string_lossy());
     }

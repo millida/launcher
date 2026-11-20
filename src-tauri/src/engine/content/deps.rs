@@ -9,7 +9,7 @@ use tauri::AppHandle;
 /// Dotted-numeric precedence, ignoring `+build.metadata` — enough to tell
 /// `0.155.2+26.1.2` is newer than `0.144.3+26.1` the way Fabric mod authors mean
 /// it, without pulling in a full semver crate for four comparison operators.
-fn cmp_version(a: &str, b: &str) -> Ordering {
+pub(crate) fn cmp_version(a: &str, b: &str) -> Ordering {
     let (core_a, pre_a) = pre_release_split(a);
     let (core_b, pre_b) = pre_release_split(b);
     cmp_numeric(core_a, core_b).then_with(|| match (pre_a, pre_b) {
@@ -1412,6 +1412,47 @@ pub(crate) fn launch_missing(locals: &[LocalMeta], runs: &[String], loader_id: &
     out
 }
 
+/// Titles of the enabled mods that stop loading once `leaving` (file names) is removed or switched
+/// off: a mod counts only when something it requires was answered for by a leaving file alone. A
+/// requirement another kept jar also answers for (a duplicate, a `provides`) is not lost.
+pub(crate) fn dependents_of(locals: &[LocalMeta], leaving: &HashSet<&str>, runs: &[String]) -> Vec<String> {
+    let (gone, kept): (Vec<&LocalMeta>, Vec<&LocalMeta>) = locals.iter().partition(|m| leaving.contains(m.file_name.as_str()));
+    let lost: HashSet<&str> = gone
+        .iter()
+        .copied()
+        .flat_map(|m| std::iter::once(m.mod_id.as_str()).chain(m.provides.iter().map(String::as_str)))
+        .filter(|id| !id.is_empty() && !kept.iter().any(|k| answers_for(k, id)))
+        .collect();
+    if lost.is_empty() {
+        return vec![];
+    }
+    let mut out: Vec<String> = vec![];
+    for m in kept {
+        let Some((requires, _)) = relations_on(m, runs) else { continue };
+        if !requires.iter().any(|id| lost.contains(id.as_str())) {
+            continue;
+        }
+        let title = if m.title.is_empty() { m.file_name.clone() } else { m.title.clone() };
+        if !out.contains(&title) {
+            out.push(title);
+        }
+    }
+    out
+}
+
+/// Which enabled mods of the build need the given files, read from the jars alone (no network), so
+/// the page can warn before a removal leaves the build unable to start.
+pub async fn mod_dependents(profile: String, files: Vec<String>) -> Vec<String> {
+    if files.is_empty() || !load_profiles().iter().any(|p| p.name == profile) {
+        return vec![];
+    }
+    let runs = build_runs(&ctx_of(&profile, "mod"));
+    let enabled = enabled_mod_files(&profile);
+    let locals: Vec<LocalMeta> = scan_mods(&profile).await.into_iter().filter(|m| enabled.contains(&m.file_name)).collect();
+    let leaving: HashSet<&str> = files.iter().map(String::as_str).collect();
+    dependents_of(&locals, &leaving, &runs)
+}
+
 /// Fewest-first cap on what one launch looks for: a build that misses more than this is broken in
 /// a way a launch should not try to repair on its own.
 const LAUNCH_DEPS_MAX: usize = 6;
@@ -1636,7 +1677,7 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, removed_requirements, retry_dep, BreakRule, DepNode, LocalMeta};
+    use super::{dependents_of, jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, removed_requirements, retry_dep, BreakRule, DepNode, LocalMeta};
 
     #[test]
     fn a_player_removed_dependency_is_not_restored_at_launch() {
@@ -1853,6 +1894,39 @@ mod tests {
         let (id, by) = launch_missing(&[culling], &runs, "fabric", None).remove(0);
         assert_eq!((id.as_str(), by.as_str()), ("cloth-config", "moreculling"), "the player hears which mod asked for it");
         assert!(missing(&[api], None).is_empty(), "a complete build costs no lookup at all");
+    }
+
+    /// (files leaving the build, who must be named, why). A removal warns only about mods that
+    /// lose the last jar answering for something they require.
+    #[test]
+    fn removing_a_mod_names_exactly_the_mods_left_without_it() {
+        let runs = ["fabric".to_string()];
+        let mut api = declared_jar("fabric-api.jar", "fabric-api", "0.92", &[], &[]);
+        api.provides = vec!["fabric-rendering-v1".into()];
+        let cloth = declared_jar("cloth.jar", "cloth-config", "15", &["fabric-api"], &[]);
+        let culling = declared_jar("culling.jar", "moreculling", "1.0", &["cloth-config", "fabric-api"], &[]);
+        let module_user = declared_jar("x.jar", "x", "1", &["fabric-rendering-v1"], &[]);
+        let lonely = declared_jar("lonely.jar", "lonely", "1", &[], &[]);
+        let cloth_copy = declared_jar("cloth-copy.jar", "cloth-config", "15", &["fabric-api"], &[]);
+        let mut forge_only = declared_jar("forge-only.jar", "fo", "1", &["cloth-config"], &[]);
+        forge_only.loader = "forge".into();
+        let build = [api, cloth.clone(), culling, module_user, lonely];
+        let names = |locals: &[LocalMeta], leaving: &[&str]| -> Vec<String> { dependents_of(locals, &leaving.iter().copied().collect::<std::collections::HashSet<&str>>(), &runs) };
+
+        let cases: [(&[&str], &[&str], &str); 5] = [
+            (&["fabric-api.jar"], &["cloth-config", "moreculling", "x"], "a module provided by the jar counts as the jar"),
+            (&["cloth.jar"], &["moreculling"], "only the mods that require it"),
+            (&["lonely.jar"], &[], "nobody needs it: no extra window"),
+            (&["cloth.jar", "culling.jar"], &[], "a dependent leaving in the same batch is not warned about"),
+            (&["missing.jar"], &[], "a file the build does not have changes nothing"),
+        ];
+        for (leaving, want, why) in cases {
+            assert_eq!(names(&build, leaving), want.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{leaving:?}: {why}");
+        }
+
+        let with_copy = [cloth.clone(), cloth_copy, declared_jar("culling.jar", "moreculling", "1.0", &["cloth-config"], &[])];
+        assert!(names(&with_copy, &["cloth.jar"]).is_empty(), "another jar with the same mod id still answers for it");
+        assert!(names(&[cloth, forge_only], &["cloth.jar"]).is_empty(), "a jar for another loader never loads, so it loses nothing");
     }
 
     #[test]

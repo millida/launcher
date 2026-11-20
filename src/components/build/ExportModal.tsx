@@ -4,6 +4,7 @@ import { exportPack } from '../../ipc/commands'
 import type { ExportFormat } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { apiErrorText } from '../../lib/apiError'
+import { openFolderAction } from '../../lib/savedFile'
 import { backdropClose } from '../../lib/dismiss'
 import { showToast } from '../../state/ui'
 import { Icon } from '../Icon'
@@ -39,7 +40,7 @@ export function ExportModal({ profile, ramGb, onClose }: { profile: string; ramG
     setBusy(true)
     exportPack(profile, format, withRam ? ramGb * 1024 : 0, lock)
       .then((p) => {
-        showToast(t('Экспортировано: {file}', { file: String(p).split(/[\\/]/).pop() ?? '' }), 'ok')
+        showToast(t('Экспортировано: {file}', { file: String(p).split(/[\\/]/).pop() ?? '' }), 'ok', undefined, openFolderAction(String(p)))
         onClose()
       })
       .catch((e) => showToast(apiErrorText(e, t('Не удалось экспортировать')), 'error'))

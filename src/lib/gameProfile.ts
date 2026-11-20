@@ -243,6 +243,7 @@ export interface CosmeticItem {
   rarity?: string
   /// Метки подборок каталога: `TREND` — эмоции из трендов (чип гардероба и раздел магазина).
   tags?: string[]
+  priceRise?: { at: string; pct: number }
   /// v3.1: код исходной вещи у вещи-расцветки («ANGEL_WINGS» у «ANGEL_WINGS~red»).
   baseId?: string
   /// v3.1: цвет своей расцветки и базовой — превью перекрашивается из второго в первый.
@@ -491,6 +492,7 @@ export interface PlusStatus {
   tier?: 'PLUS' | 'DIAMOND' | null
   checkout?: 'gateway' | 'dollar-wallet'
   checkoutOptions?: ('gateway' | 'dollar-wallet' | 'stripe')[]
+  autoRenew?: boolean
   quote?: Quote
 }
 
@@ -499,7 +501,7 @@ export function loadPlus(): Promise<PlusStatus> {
 }
 
 /// A month of PLUS from the wallet in the buyer's own currency (dollars abroad), no renewal.
-export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' }> {
+export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' | 'INR' }> {
   return api('/launcher/plus/wallet/buy', { method: 'POST', body: JSON.stringify({ tier, requestId }) })
 }
 

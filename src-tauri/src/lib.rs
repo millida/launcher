@@ -304,6 +304,7 @@ pub fn run() {
             }
             uiwatch::watch(app.handle());
             overlay::rebind_hotkey(app.handle());
+            engine::world_backups_on_start(app.handle());
             // Автотест — только в отладочной сборке (аудит 24.09.2026, S-04).
             #[cfg(debug_assertions)]
             if let Ok(mode) = std::env::var("MILLIDA_AUTOTEST") {
@@ -405,6 +406,8 @@ pub fn run() {
             commands::profiles::set_screenshot_note,
             commands::profiles::crop_screenshot,
             commands::system::pick_wallpaper,
+            commands::system::publish_wallpaper,
+            commands::system::save_library_wallpaper,
             commands::system::pick_texture,
             commands::system::copy_picture,
             commands::system::save_picture_as,
@@ -437,6 +440,7 @@ pub fn run() {
             commands::content::dep_plan,
             commands::content::install_dep_items,
             commands::content::audit_deps,
+            commands::content::mod_dependents,
             commands::content::scan_content_local,
             commands::content::scan_content,
             commands::content::toggle_content,
@@ -538,6 +542,7 @@ pub fn run() {
             commands::profiles::dismiss_embedded_jars,
             commands::profiles::list_build_files,
             commands::profiles::reveal_build_file,
+            commands::profiles::reveal_saved_file,
             commands::profiles::delete_build_file,
             commands::content::add_local_file,
             commands::content::pick_content_files,
@@ -685,6 +690,13 @@ pub fn run() {
             commands::profiles::cloud_push,
             commands::profiles::cloud_pull,
             commands::profiles::cloud_forget,
+            commands::world_backups::world_autobackup,
+            commands::world_backups::set_world_autobackup,
+            commands::world_backups::cloud_backups_status,
+            commands::world_backups::cloud_backup_upload,
+            commands::world_backups::cloud_backup_restore,
+            commands::world_backups::cloud_backup_delete,
+            commands::world_backups::cloud_backup_cancel,
             commands::party_voice::party_voice_join,
             commands::party_voice::party_voice_leave,
             commands::party_voice::party_voice_transmit,

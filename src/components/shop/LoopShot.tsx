@@ -9,7 +9,7 @@ import { useViewPrefs } from '../../state/viewPrefs'
  * видимой карточке. За краем экрана, при «Персонаж танцует: выкл» и при
  * reduced motion стоит первый кадр.
  */
-export function ShotImg({ shot }: { shot: OutfitShot }) {
+export function ShotImg({ shot, play }: { shot: OutfitShot; play?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null)
   const [seen, setSeen] = useState(false)
   const dance = useViewPrefs((s) => s.charAnim)
@@ -24,7 +24,7 @@ export function ShotImg({ shot }: { shot: OutfitShot }) {
   if (!loop) return <img src={shot.url} alt="" draggable={false} />
   const style = { ['--n' as string]: shot.frames, ['--dur' as string]: (shot.seconds || 1) + 's' } as CSSProperties
   return (
-    <span ref={ref} className={'sv-loop' + (seen && dance ? ' is-on' : '')} style={style}>
+    <span ref={ref} className={'sv-loop' + (seen && (play ?? dance) ? ' is-on' : '')} style={style}>
       <img src={shot.url} alt="" draggable={false} />
     </span>
   )

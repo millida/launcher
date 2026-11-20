@@ -28,6 +28,7 @@ mod world_packs;
 mod linux_tools;
 mod crashfix;
 mod crashcause;
+mod goodrun;
 pub(crate) mod nbt;
 mod serversdat;
 mod playtime;

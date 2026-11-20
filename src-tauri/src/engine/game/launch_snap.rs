@@ -47,17 +47,17 @@ pub(super) const WIN: Platform = Platform { os: "windows", arch: "x86_64", bits:
 pub(super) const MAC: Platform = Platform { os: "osx", arch: "arm64", bits: "64" };
 pub(super) const LINUX: Platform = Platform { os: "linux", arch: "x86_64", bits: "64" };
 
-const MACHINE_16: Machine = Machine { total_mb: 16384, available_mb: 9000 };
-const MACHINE_8: Machine = Machine { total_mb: 8192, available_mb: 3500 };
-const MACHINE_4: Machine = Machine { total_mb: 4096, available_mb: 1500 };
-const MACHINE_32: Machine = Machine { total_mb: 32768, available_mb: 20000 };
+const MACHINE_16: Machine = Machine { total_mb: 16384, available_mb: 9000, shared_gpu: false };
+const MACHINE_8: Machine = Machine { total_mb: 8192, available_mb: 3500, shared_gpu: false };
+const MACHINE_4: Machine = Machine { total_mb: 4096, available_mb: 1500, shared_gpu: false };
+const MACHINE_32: Machine = Machine { total_mb: 32768, available_mb: 20000, shared_gpu: false };
 
 pub(super) const MILLIDA_UUID: &str = "c6d9db59f6fc4b81a447cd6b60936a6f";
 pub(super) const MS_UUID: &str = "069a79f444e94726a5befca90e38aaf5";
 pub(super) const AGENT_JAR: &str = "/D/agents/authlib-injector.jar";
 
 fn auto(mods: u32, shaders: bool) -> HeapAsk {
-    HeapAsk { requested: 0, manual: 0, auto_tune: true, mods, shaders }
+    HeapAsk { requested: 0, manual: 0, auto_tune: true, mods, shaders, heavy_mb: 0 }
 }
 
 fn base(name: &'static str, version: &'static str, loader: &'static str, loader_json: Option<&'static str>) -> Case {
@@ -107,7 +107,7 @@ pub(super) fn cases() -> Vec<Case> {
         Case {
             platform: LINUX,
             java_major: 21,
-            heap: HeapAsk { requested: 0, manual: 0, auto_tune: false, mods: 0, shaders: false },
+            heap: HeapAsk { requested: 0, manual: 0, auto_tune: false, mods: 0, shaders: false, heavy_mb: 0 },
             machine: MACHINE_32,
             ..base("vanilla-26.3-linux-java21-autotune-off", "26.3", "vanilla", None)
         },
@@ -156,7 +156,7 @@ pub(super) fn cases() -> Vec<Case> {
             java_major: 17,
             account: Account::Millida,
             own_mod: true,
-            heap: HeapAsk { requested: 0, manual: 6144, auto_tune: false, mods: 200, shaders: false },
+            heap: HeapAsk { requested: 0, manual: 6144, auto_tune: false, mods: 200, shaders: false, heavy_mb: 0 },
             settings: json!({"jvmArgs": "-XX:MaxGCPauseMillis=200 -Dfile.encoding=windows-1251", "autoTune": false, "ramMb": 6144}),
             ..base("forge-1.20.1-millida-mod-manual-ram", "1.20.1", "forge", Some("forge-1.20.1-47.4.10"))
         },
@@ -172,7 +172,7 @@ pub(super) fn cases() -> Vec<Case> {
         Case {
             java_major: 17,
             account: Account::Millida,
-            heap: HeapAsk { requested: 4096, manual: 0, auto_tune: true, mods: 300, shaders: false },
+            heap: HeapAsk { requested: 4096, manual: 0, auto_tune: true, mods: 300, shaders: false, heavy_mb: 0 },
             settings: json!({"fpsBoost": true}),
             pack: Some(sample_pack()),
             ..base("pack-1.20.1-protected-millida", "1.20.1", "forge", None)

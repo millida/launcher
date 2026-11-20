@@ -133,7 +133,7 @@ const steps: Array<[string, Settings, PackCard, PackLaunchStep]> = [
     'партнёр выпустил 1.0.6, у игрока 1.0.4 — «Играть» сначала обновляет, иначе игрок так и сидит на старой',
     oneblock,
     published,
-    { kind: 'update', update: { slug: 'oneblock-metalabs', from: '1.0.4', to: '1.0.6' } },
+    { kind: 'update', update: { slug: 'oneblock-metalabs', from: '1.0.4', to: '1.0.6' }, required: false },
   ],
   [
     'стоит опубликованная версия — сразу запуск, без лишней установки',
@@ -171,7 +171,50 @@ const steps: Array<[string, Settings, PackCard, PackLaunchStep]> = [
 describe('packLaunchStep', () => {
   for (const [why, settings, card, want] of steps) {
     test(why, () => {
-      expect(packLaunchStep(settings, card), why).toEqual(want)
+      expect(packLaunchStep(settings, card, true, false), why).toEqual(want)
+    })
+  }
+})
+
+const arcania = { catalogPackSlug: 'arcania', catalogPackVersion: '1.4.3' }
+const arcaniaCard: PackCard = { view: { slug: 'arcania', version: '1.4.4', alwaysUpdate: true } }
+const arcaniaUpdate = { kind: 'update', update: { slug: 'arcania', from: '1.4.3', to: '1.4.4' }, required: true } as const
+
+// settings, card, the build's switch, the core's stored «latest only» -> what Play does before the game starts.
+const forcedSteps: Array<[string, Settings, PackCard, boolean, boolean, PackLaunchStep]> = [
+  ['автообновление выключено — обычная сборка запускается как стоит', oneblock, published, false, false, { kind: 'launch' }],
+  ['автор требует последнюю версию — выключенный тумблер не оставляет игрока на старой', arcania, arcaniaCard, false, false, arcaniaUpdate],
+  [
+    'ядро уже помнит требование автора, а карточка без поля — всё равно обновляем',
+    arcania,
+    { view: { slug: 'arcania', version: '1.4.4' } },
+    false,
+    true,
+    arcaniaUpdate,
+  ],
+  ['последняя версия уже стоит — сразу запуск', { ...arcania, catalogPackVersion: '1.4.4' }, arcaniaCard, false, true, { kind: 'launch' }],
+  [
+    'кандидат проверяющего не трогается и у сборки «только последняя»',
+    { ...arcania, catalogPackReviewFile: 'av1clean3zqk7m2p9x4t8n6b' },
+    arcaniaCard,
+    false,
+    true,
+    { kind: 'launch' },
+  ],
+  [
+    'каталог не ответил при требовании автора — говорим почему, ключ запуска старой версии откажет сервер',
+    arcania,
+    { error: new Error('error sending request for url') },
+    false,
+    true,
+    { kind: 'launch-unchecked', reason: 'Нет связи с Millida — проверь интернет и повтори' },
+  ],
+]
+
+describe('packLaunchStep with the author requiring the latest version', () => {
+  for (const [why, settings, card, autoUpdate, forced, want] of forcedSteps) {
+    test(why, () => {
+      expect(packLaunchStep(settings, card, autoUpdate, forced), why).toEqual(want)
     })
   }
 })
@@ -212,4 +255,19 @@ describe('afterPackUpdate', () => {
       expect(afterPackUpdate(u, outcome), why).toEqual(want)
     })
   }
+})
+
+describe('afterPackUpdate for a build that starts only on its published version', () => {
+  test('сбой обновления не запускает старую версию: её ключ запуска сервер всё равно не выдаст', () => {
+    expect(afterPackUpdate(u, { kind: 'failed', error: 'Error: Нет связи с сервером сборок' }, true)).toEqual({
+      launch: false,
+      toast: 'Сборку не удалось обновить до 1.0.6: Нет связи с сервером сборок. Старая версия не запускается — попробуй ещё раз',
+    })
+  })
+  test('успешное обновление запускает новую версию', () => {
+    expect(afterPackUpdate(u, { kind: 'done' }, true)).toEqual({ launch: true, toast: null })
+  })
+  test('отмена по-прежнему просто останавливает запуск', () => {
+    expect(afterPackUpdate(u, { kind: 'cancelled' }, true)).toEqual({ launch: false, toast: null })
+  })
 })
