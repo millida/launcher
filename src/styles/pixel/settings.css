@@ -189,6 +189,8 @@
 .s2-wp-tile:hover .s2-wp-del,
 .s2-wp-tile:focus-within .s2-wp-del { display: grid; }
 .s2-wp-del:hover { background: var(--m-danger); }
+.s2-wp-pub { right: 36px; }
+.s2-wp-pub:hover { background: var(--m-accent); color: var(--m-accent-fg); }
 
 /* ---------- Громкость ---------- */
 .s2-slider { display: flex; align-items: center; gap: 8px; width: 320px; }

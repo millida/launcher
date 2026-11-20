@@ -74,6 +74,8 @@ permissions = [
   "allow-set-screenshot-note",
   "allow-crop-screenshot",
   "allow-pick-wallpaper",
+  "allow-publish-wallpaper",
+  "allow-save-library-wallpaper",
   "allow-pick-texture",
   "allow-copy-picture",
   "allow-save-picture-as",

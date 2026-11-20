@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { renderLive } from '../../lib/renderGate'
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3, type Material, type Object3D } from 'three'
 import type { SkinViewEngine } from '../../vendor/mine3d'
 import type { Mine3dModule } from '../../lib/mine3d'
@@ -149,7 +148,7 @@ export function usePartyStage(engine: SkinViewEngine | null, m3d: Mine3dModule |
         .then(() => {
           // The lobby loop stands still while the game has the focus: figures that
           // arrive then get a frame of their own instead of waiting for the next focus.
-          if (alive && !renderLive()) paintStill(engine)
+          if (alive && !engine.running) paintStill(engine)
         })
         .catch(() => {})
     })
@@ -351,7 +350,7 @@ export function PartyOverlay({
     // they pile up in the corner of the stage until the next focus.
     let placed = false
     const loop = () => {
-      if (renderLive() || !placed) placed = place()
+      if (awake || !placed) placed = place()
       if (awake) raf = requestAnimationFrame(loop)
       else t = window.setTimeout(loop, 500)
     }
