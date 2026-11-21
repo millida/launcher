@@ -368,6 +368,43 @@ jobs:
               fi
             done
           done
+          # Every package is unpacked and its binary checked the way the player's system uses it: the
+          # loader must find .dynamic and map it (2.2.0-2.7.0 deb/rpm died in ld.so: zeros behind a valid
+          # ELF header), and the program must answer --version. Self-test first: a zeroed copy must fail.
+          command -v rpm2cpio > /dev/null && command -v cpio > /dev/null || { apt-get update -qq && apt-get install -y -qq rpm2cpio cpio zstd > /dev/null; }
+          check_binary() {
+            # $3 = exact: deb and rpm carry the built binary byte for byte in size; linuxdeploy may
+            # rewrite the AppImage copy's rpath, so there only the loader and --version are checked.
+            local bin="$1" what="$2" exact="${3:-}"
+            [ -f "$bin" ] || { echo "::error::$what: no usr/bin/millida-launcher inside"; return 1; }
+            local bytes
+            bytes=$(stat -c %s "$bin")
+            if [ -n "$exact" ] && [ "$bytes" != "$binary_bytes" ]; then echo "::error::$what: binary is $bytes bytes, built $binary_bytes"; return 1; fi
+            readelf -d "$bin" 2> /dev/null | grep -q '(NEEDED)' || { echo "::error::$what: no dynamic section the loader can read"; return 1; }
+            local said
+            said=$(timeout 20 "$bin" --version 2>&1) || { echo "::error::$what: --version failed: $said"; return 1; }
+            echo "$what: ok ($said)"
+          }
+          broken="$RUNNER_TEMP/broken-launcher"
+          head -c 4096 "$RELEASE_DIR/millida-launcher" > "$broken"
+          head -c $((binary_bytes - 4096)) /dev/zero >> "$broken"
+          chmod +x "$broken"
+          if check_binary "$broken" "self-test (zeroed copy)" exact > /dev/null 2>&1; then
+            echo "::error::the package check passed a zeroed binary, so it would not catch a broken package"
+            exit 1
+          fi
+          for package in "$RELEASE_DIR"/bundle/deb/*.deb "$RELEASE_DIR"/bundle/rpm/*.rpm "$RELEASE_DIR"/bundle/appimage/*.AppImage; do
+            out="$RUNNER_TEMP/unpacked-check"
+            rm -rf "$out"
+            mkdir -p "$out"
+            case "$package" in
+              *.deb) dpkg-deb -x "$package" "$out"; bin="$out/usr/bin/millida-launcher"; exact=1 ;;
+              *.rpm) (cd "$out" && rpm2cpio "$package" | cpio -idm --quiet); bin="$out/usr/bin/millida-launcher"; exact=1 ;;
+              *.AppImage) (cd "$out" && env -u APPIMAGE_EXTRACT_AND_RUN "$(realpath "$package")" --appimage-extract > /dev/null); bin="$out/squashfs-root/usr/bin/millida-launcher"; exact= ;;
+            esac
+            check_binary "$bin" "$(basename "$package")" "$exact" || exit 1
+            rm -rf "$out"
+          done
           ls -l "$RELEASE_DIR"/bundle/*/
 
       # Signed Windows build: the app exe is signed before it goes into the
@@ -381,6 +418,21 @@ jobs:
         run: |
           export CARGO_INCREMENTAL=1
           bun run tauri build ${{ matrix.runner_args }} --no-bundle --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":"bun run build:web:release"}}'
+
+      # TaskDialogIndirect, which Tauri's own crates import from comctl32, exists only in Common
+      # Controls v6, and Windows loads v6 only for an exe whose manifest asks for it. A build that lost
+      # the manifest dies at start with «entry point TaskDialogIndirect not found» (report 13.11.2026).
+      - name: Check the Windows manifest
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          set -eu
+          exe="$RELEASE_DIR/millida-launcher.exe"
+          if ! grep -aq 'Microsoft.Windows.Common-Controls' "$exe"; then
+            echo "::error::$exe has no Common Controls v6 manifest: it would fail on TaskDialogIndirect at start"
+            exit 1
+          fi
+          echo "manifest ok"
 
       - name: Stage the app for signing
         if: env.WINDOWS_SIGNING == 'true'
