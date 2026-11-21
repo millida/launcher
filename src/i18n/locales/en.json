@@ -6908,5 +6908,8 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Heavy mods taken into account: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Integrated graphics: left the system +{0} GB",
   "Не удалось сохранить настройку автобэкапа: {0}": "Could not save the auto-backup setting: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "the world was being saved during copying, we’ll try again next time"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "the world was being saved during copying, we’ll try again next time",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "The link opens a web page, not a pack file — a direct link to pack.toml is needed",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "This is a Millida build link — install it with «By code»",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "The author shares custom mod {0} only with friends — sign in to your Millida account"
 }

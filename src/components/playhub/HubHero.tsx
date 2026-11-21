@@ -39,9 +39,11 @@ export type HeroSlide = {
 const ownOnlineKnown = (online: number | null | undefined): online is number =>
   typeof online === 'number' && Number.isFinite(online) && online >= 0
 
+/** Every partner server tile stands only while its catalogue card is published: hiding the card retires the tile in all launchers without a release. */
 export function heroSlides(o: {
   prison: HubPack | null
   pixelmon?: HubPack | null
+  oneblock: HubPack | null
   anarchyOnline: number | null
   oneblockOnline: number | null
   anarchyName: string
@@ -52,7 +54,7 @@ export function heroSlides(o: {
 }): HeroSlide[] {
   const out: HeroSlide[] = []
   out.push({ key: 'anarchy', tag: t('Наш сервер'), title: o.anarchyName, line: o.anarchyLine, online: o.anarchyOnline, art: <AnarchyArt className="hh-an" />, cta: t('Играть'), onClick: o.onAnarchy })
-  out.push({
+  if (o.oneblock) out.push({
     key: 'oneblock',
     tag: t('Наш сервер'),
     title: 'OneBlock',

@@ -6908,5 +6908,8 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Mods pesados considerados: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Placa de vídeo integrada: deixamos +{0} GB para o sistema",
   "Не удалось сохранить настройку автобэкапа: {0}": "Não foi possível salvar a configuração de backup automático: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "o mundo estava sendo salvo durante a cópia, vamos tentar na próxima vez"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "o mundo estava sendo salvo durante a cópia, vamos tentar na próxima vez",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "O link abre uma página da web, não um arquivo do pack — é preciso um link direto para pack.toml",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "Este é um link de build do Millida — instale pelo «Por código»",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "O autor só compartilha o mod próprio {0} com amigos — entre na sua conta Millida"
 }

@@ -1,10 +1,12 @@
 /**
- * Альтернативные иконки приложения — 3D-рендер знака Millida в разных материалах (06.10.2026).
+ * Альтернативные иконки приложения — 3D-знак Millida в материалах и со своими сценами.
  *
  * Открывается dev-сервером Vite: http://127.0.0.1:5173/scripts/voxel-art/icons.html
- * Знак (плитка со срезанными углами + белый глиф) выдавлен с фасками, у каждой иконки
- * свой материал и сцена. Кадр — квадрат 1024 «в край»: скругление, поля и тень
- * накладывает scripts/gen-app-icons.py. Сохранить: PAGE=icons node scripts/voxel-art/save.mjs <папка>.
+ * Знак — плитка и глиф из public/millida-logo.svg (читаются оттуда же, не копируются),
+ * выдавлены с фасками. У каждой иконки свой материал и элементы сцены: искры, пламя,
+ * кристаллы, корона, слитки, алмазный камень, портал. Кадр — квадрат 1024 «в край»:
+ * скругление, поля и тень накладывает scripts/gen-app-icons.py.
+ * Сохранить: PAGE=icons node scripts/voxel-art/save.mjs <папка>, затем gen-app-icons.py --masters <папка>.
  * В сборку лаунчера не входит.
  */
 import * as THREE from 'three'
@@ -23,10 +25,14 @@ const DIST = 35
 
 /* ---------- Знак ---------- */
 
+// Контуры берём из логотипа: плитка — контур клипа, глиф — белый путь; глиф сдвинут как в логотипе.
+const logo = await (await fetch('/millida-logo.svg')).text()
+const logoDoc = new DOMParser().parseFromString(logo, 'image/svg+xml')
+const TILE_D = logoDoc.querySelector('clipPath path')!.getAttribute('d')!
+const glyphEl = logoDoc.querySelector('g[transform] > path[fill="#FFFFFF"]')!
+const GLYPH_D = glyphEl.getAttribute('d')!
+const GLYPH_DY = Number(/translate\(0 (-?[\d.]+)\)/.exec(glyphEl.parentElement!.getAttribute('transform')!)![1])
 const S = 10 / 376
-const TILE_D = 'M24 0H352V24H376V352H352V376H24V352H0V24H24Z'
-const GLYPH_D =
-  'M210.071 120.946H120.949V254.654H254.641L254.642 165.517H299.209V254.654H299.222V299.222H76.3809V120.946H76.3672V76.3774H210.071V120.946ZM210.071 210.084H165.503V165.516H210.071V210.084ZM299.209 120.947H254.656V165.515H210.088V120.947H254.641V76.3784H299.209V120.947Z'
 
 function shapes(d: string, dy = 0): THREE.Shape[] {
   const data = new SVGLoader().parse(`<svg xmlns="http://www.w3.org/2000/svg"><path d="${d}"/></svg>`)
@@ -40,7 +46,7 @@ function shapes(d: string, dy = 0): THREE.Shape[] {
 }
 
 const TILE = shapes(TILE_D)[0]
-const GLYPH = shapes(GLYPH_D, -8) // глиф в логотипе поднят на 8
+const GLYPH = shapes(GLYPH_D, GLYPH_DY)
 // Точка в центре — самый маленький кусок глифа.
 const area = (s: THREE.Shape) => Math.abs(THREE.ShapeUtils.area(s.getPoints()))
 const GLYPH_SORTED = [...GLYPH].sort((a, b) => area(a) - area(b))
@@ -60,9 +66,7 @@ interface MarkOpts {
   glyphDepth?: number
   glyphBevel?: number
   glyphSeg?: number
-  /** Глиф крупнее плитки — для мелких размеров. */
-  glyphScale?: number
-  /** Тёмная кайма вокруг глифа: читается на 16–32 px. */
+  /** Тёмная кайма вокруг глифа: читается на мелких размерах. */
   outline?: string
   outlineW?: number
 }
@@ -88,7 +92,6 @@ function mark(o: MarkOpts): THREE.Group {
   const gb = o.glyphBevel ?? 0.13
   const opts = { depth: gd, bevelEnabled: true, bevelThickness: gb, bevelSize: gb * 0.8, bevelSegments: o.glyphSeg ?? 5, curveSegments: 1 }
   const gg = new THREE.Group()
-  gg.scale.set(o.glyphScale ?? 1, o.glyphScale ?? 1, 1)
   g.add(gg)
   if (o.outline) {
     const ow = o.outlineW ?? 0.16
@@ -128,6 +131,7 @@ const rnd = (() => {
 })()
 
 const cubeGeo = new THREE.BoxGeometry(1, 1, 1)
+const phys = (p: THREE.MeshPhysicalMaterialParameters) => new THREE.MeshPhysicalMaterial(p)
 function glow(c: string, k = 1.6) {
   return new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k, roughness: 0.6 })
 }
@@ -136,10 +140,12 @@ function vox(parent: THREE.Object3D, x: number, y: number, z: number, s: number,
   b.position.set(x, y, z)
   b.scale.setScalar(s)
   b.rotation.set(rot * 0.6, rot, rot * 0.3)
+  b.castShadow = true
   parent.add(b)
   return b
 }
 
+/** Призма с острым концом, основание в нуле, растёт вверх по +Y. */
 function crystalGeo(r: number, h: number) {
   const body = new THREE.CylinderGeometry(r, r * 1.08, h, 6, 1)
   body.translate(0, h / 2, 0)
@@ -150,33 +156,63 @@ function crystalGeo(r: number, h: number) {
   return m
 }
 
-function crown(gold: Mat, gems: Mat[]): THREE.Group {
-  const c = new THREE.Group()
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.1, 1.3, 12, 1, true), gold)
-  ;(band.material as THREE.MeshPhysicalMaterial).side = THREE.DoubleSide
-  c.add(band)
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(2.12, 0.22, 6, 24), gold)
-  rim.rotation.x = Math.PI / 2
-  rim.position.y = -0.62
-  c.add(rim)
-  const ball = new THREE.SphereGeometry(0.32, 12, 8)
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.9, 4), gold)
-    spike.position.set(Math.sin(a) * 2.22, 1.5, Math.cos(a) * 2.22)
-    spike.rotation.y = a + Math.PI / 4
-    c.add(spike)
-    const b = new THREE.Mesh(ball, gold)
-    b.position.set(Math.sin(a) * 2.22, 2.5, Math.cos(a) * 2.22)
-    c.add(b)
-    const gm = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), gems[i % gems.length])
-    gm.position.set(Math.sin(a) * 2.32, 0, Math.cos(a) * 2.32)
-    gm.rotation.y = a
-    gm.scale.set(1, 1.25, 0.6)
-    c.add(gm)
+/** Огранённый камень: восьмигранник с плоским столом и павильоном, центр в нуле. */
+function gemGeo(r: number, h: number, cut: 'brilliant' | 'emerald' = 'brilliant') {
+  const pts =
+    cut === 'emerald'
+      ? [[0, -h * 0.9], [r * 0.6, -h * 0.5], [r, -h * 0.2], [r, h * 0.45], [r * 0.82, h * 0.7], [0, h * 0.7]]
+      : [[0, -h], [r, 0], [r, h * 0.2], [r * 0.6, h * 0.62], [0, h]]
+  return new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), 8)
+}
+
+/** Слиток: трапеция в плоскости XZ, толщина по Y. */
+function ingotGeo() {
+  const sh = new THREE.Shape([new THREE.Vector2(-1.5, -0.8), new THREE.Vector2(1.5, -0.8), new THREE.Vector2(1.1, 0.8), new THREE.Vector2(-1.1, 0.8)])
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.7, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 2, curveSegments: 1 })
+  g.rotateX(-Math.PI / 2)
+  g.center()
+  return g
+}
+
+/** Текстура жилок: белые линии на чёрном, для emissiveMap. */
+function veins(seed = 0.5) {
+  const cv = document.createElement('canvas')
+  cv.width = cv.height = 512
+  const c = cv.getContext('2d')!
+  c.fillStyle = '#000'
+  c.fillRect(0, 0, 512, 512)
+  c.strokeStyle = '#fff'
+  c.lineCap = 'round'
+  const r = (() => {
+    let s = Math.floor(seed * 1e6) + 11
+    return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
+  })()
+  for (let k = 0; k < 16; k++) {
+    let x = r() * 512
+    let y = r() * 512
+    let a = r() * Math.PI * 2
+    c.lineWidth = 4 + r() * 6
+    c.beginPath()
+    c.moveTo(x, y)
+    for (let i = 0; i < 9; i++) {
+      a += (r() - 0.5) * 1.4
+      x += Math.cos(a) * 26
+      y += Math.sin(a) * 26
+      c.lineTo(x, y)
+    }
+    c.stroke()
   }
-  c.traverse((o) => ((o as THREE.Mesh).castShadow = true))
-  return c
+  const t = new THREE.CanvasTexture(cv)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(1 / 11, 1 / 11)
+  t.offset.set(0.5, 0.5)
+  return t
+}
+
+/** Четырёхконечная звёздочка из пяти кубиков. */
+function star(parent: THREE.Object3D, x: number, y: number, z: number, s: number, m: Mat) {
+  vox(parent, x, y, z, s, m)
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) vox(parent, x + dx * s * 0.7, y + dy * s * 0.7, z, s * 0.45, m)
 }
 
 /* ---------- Фоны (2D) ---------- */
@@ -243,13 +279,6 @@ function glint(g: CanvasRenderingContext2D, x: number, y: number, r: number, col
     g.quadraticCurveTo(x, y, x - r * sx, y)
     g.fill()
   }
-  g.beginPath()
-  g.moveTo(x, y - r)
-  g.quadraticCurveTo(x, y, x + r * 0.09, y)
-  g.quadraticCurveTo(x, y, x, y + r)
-  g.quadraticCurveTo(x, y, x - r * 0.09, y)
-  g.quadraticCurveTo(x, y, x, y - r)
-  g.fill()
   g.restore()
 }
 
@@ -272,199 +301,164 @@ interface Spec {
   overlay?: (g: CanvasRenderingContext2D) => void
 }
 
-const phys = (p: THREE.MeshPhysicalMaterialParameters) => new THREE.MeshPhysicalMaterial(p)
+/** Плитка занимает ~82% тела иконки (скругление macOS): элементы сцены выходят за край недалеко. */
+const SCALE = 0.98
 
 const SPECS: Spec[] = [
   {
-    id: 'default',
-    bg: (g, n) => {
-      radial(g, n, 0.35, 0.22, 1.05, [[0, '#ffffff'], [0.45, '#e9f6e4'], [1, '#bfdcb6']])
-      grain(g, n, 4)
-    },
-    build: () =>
-      mark({
-          outline: '#1f5a17',
-        tile: phys({ color: '#5ec64d', roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 }),
-        glyph: phys({ color: '#ffffff', roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 }),
-      }),
-    shadow: 0.32,
-    studio: true,
-    env: 0.9,
-  },
-  {
     id: 'spark',
-    rot: [0.12, 0.22, 0],
+    rot: [0.1, 0.18, 0],
     bg: (g, n) => {
       g.fillStyle = '#04110a'
       g.fillRect(0, 0, n, n)
-      radial(g, n, 0.5, 0.48, 0.62, [[0, 'rgba(110,255,90,0.38)'], [0.4, 'rgba(40,150,60,0.2)'], [1, 'rgba(0,0,0,0)']])
-      rays(g, n, 0.5, 0.48, 14, 'rgba(150,255,110,0.16)', 1)
+      radial(g, n, 0.5, 0.5, 0.62, [[0, 'rgba(110,255,90,0.38)'], [0.4, 'rgba(40,150,60,0.2)'], [1, 'rgba(0,0,0,0)']])
+      rays(g, n, 0.5, 0.5, 14, 'rgba(150,255,110,0.16)', 1)
       grain(g, n, 5)
     },
     build: (scene) => {
       const root = new THREE.Group()
-      const m = mark({
+      root.add(
+        mark({
           outline: '#000000',
-        tile: phys({ color: '#0b3a17', roughness: 0.2, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.03 }),
-        glyph: phys({ color: '#a8ff3a', emissive: '#7dff1e', emissiveIntensity: 0.26, roughness: 0.3, clearcoat: 1 }),
-      })
-      root.add(m)
-      const pl = new THREE.PointLight('#9cff4a', 30, 30, 1.6)
+          tile: phys({ color: '#0a3014', roughness: 0.35, metalness: 0, clearcoat: 0.4, clearcoatRoughness: 0.2 }),
+          glyph: phys({ color: '#b6ff3a', emissive: '#7dff1e', emissiveIntensity: 0.12, roughness: 0.3, clearcoat: 1 }),
+        }),
+      )
+      const pl = new THREE.PointLight('#9cff4a', 18, 30, 1.6)
       pl.position.set(0, 0, 6)
       scene.add(pl)
-      // Искры-кубики по орбите и молнии из угловых клеток.
-      const cols = ['#eaff9a', '#b6ff4a', '#7dff5a', '#fff6b0']
-      for (let i = 0; i < 22; i++) {
-        const a = rnd() * Math.PI * 2
-        const r = 6.6 + rnd() * 3.4
-        const s = 0.14 + rnd() * rnd() * 0.4
-        vox(root, Math.cos(a) * r, Math.sin(a) * r * 0.92, -1 + rnd() * 5, s, glow(cols[i % 4], 0.7), rnd() * 3)
-      }
-      const bolt = (x: number, y: number, dx: number, dy: number, steps: number) => {
-        let px = x
-        let py = y
+      // Молнии: ступенчатые цепочки кубиков, бьют из краёв плитки наружу.
+      const bolt = (x: number, y: number, dx: number, dy: number, steps: number, size: number) => {
+        const len = Math.hypot(dx, dy)
+        const ux = dx / len
+        const uy = dy / len
         for (let i = 0; i < steps; i++) {
-          const side = i % 2 ? 1 : -1
-          px += dx + side * dy * 0.45
-          py += dy - side * dx * 0.45
-          vox(root, px, py, 2.4, 0.42 - i * 0.04, glow('#e8ff8a', 0.9))
+          const off = (i % 2 ? 0.45 : -0.45) * size
+          const px = x + ux * i * size * 1.25 - uy * off
+          const py = y + uy * i * size * 1.25 + ux * off
+          vox(root, px, py, 2.4, size * (1 - i * 0.07), glow(i < 2 ? '#f0ffb0' : '#b8ff3a', 1.5))
         }
       }
-      bolt(-5.6, 2.5, -0.55, 0.12, 5)
-      bolt(5.7, -2.2, 0.55, -0.12, 5)
-      bolt(2.0, 5.8, 0.15, 0.5, 4)
-      bolt(-2.4, -5.9, -0.15, -0.5, 4)
+      bolt(-5.2, 1.4, -1, 0.2, 5, 0.5)
+      bolt(5.2, -1.4, 1, -0.2, 5, 0.5)
+      bolt(1.6, 5.2, 0.25, 1, 4, 0.46)
+      bolt(-1.8, -5.2, -0.25, -1, 4, 0.46)
+      // Искры вокруг знака.
+      const cols = ['#eaff9a', '#b6ff4a', '#7dff5a', '#fff6b0']
+      for (let i = 0; i < 16; i++) {
+        const a = rnd() * Math.PI * 2
+        const r = 5.9 + rnd() * 1.1
+        vox(root, Math.cos(a) * r, Math.sin(a) * r, 1.5 + rnd() * 2, 0.13 + rnd() * 0.16, glow(cols[i % 4], 1.0), rnd() * 3)
+      }
       return root
     },
-    bloom: [0.55, 0.3, 0.75],
+    bloom: [0.45, 0.3, 0.95],
     shadow: 0.15,
     studio: true,
-    env: 1.1,
+    env: 0.45,
     exposure: 1.05,
+    scale: SCALE,
     overlay: (g) => {
       glint(g, 0.2, 0.2, 0.07, '#f4ffc8')
-      glint(g, 0.8, 0.8, 0.05, '#f4ffc8')
-      glint(g, 0.84, 0.26, 0.035, '#f4ffc8')
+      glint(g, 0.84, 0.26, 0.04, '#f4ffc8')
     },
   },
   {
     id: 'flame',
+    rot: [0.12, -0.16, 0],
     bg: (g, n) => {
       g.fillStyle = '#120403'
       g.fillRect(0, 0, n, n)
-      radial(g, n, 0.5, 1.05, 0.9, [[0, 'rgba(255,150,40,0.95)'], [0.35, 'rgba(220,60,15,0.7)'], [0.7, 'rgba(90,10,5,0.35)'], [1, 'rgba(0,0,0,0)']])
+      radial(g, n, 0.5, 1.02, 0.95, [[0, 'rgba(255,150,40,0.95)'], [0.35, 'rgba(220,60,15,0.7)'], [0.7, 'rgba(90,10,5,0.35)'], [1, 'rgba(0,0,0,0)']])
       grain(g, n, 6)
     },
     build: (scene) => {
       const root = new THREE.Group()
-      // Каменная плитка с лавовыми трещинами на лицевой стороне.
-      const cv = document.createElement('canvas')
-      cv.width = cv.height = 512
-      const c = cv.getContext('2d')!
-      c.fillStyle = '#000'
-      c.fillRect(0, 0, 512, 512)
-      c.strokeStyle = '#fff'
-      c.lineCap = 'round'
-      for (let k = 0; k < 16; k++) {
-        let x = rnd() * 512
-        let y = rnd() * 512
-        let a = rnd() * Math.PI * 2
-        c.lineWidth = 2 + rnd() * 5
-        c.beginPath()
-        c.moveTo(x, y)
-        for (let i = 0; i < 9; i++) {
-          a += (rnd() - 0.5) * 1.4
-          x += Math.cos(a) * 26
-          y += Math.sin(a) * 26
-          c.lineTo(x, y)
-        }
-        c.stroke()
-      }
-      const cracks = new THREE.CanvasTexture(cv)
-      cracks.wrapS = cracks.wrapT = THREE.RepeatWrapping
-      cracks.repeat.set(1 / 11, 1 / 11)
-      cracks.offset.set(0.5, 0.5)
-      const rock = phys({ color: '#2a1c18', roughness: 0.82, emissive: '#ff5a10', emissiveIntensity: 1.6, emissiveMap: cracks })
-      const rockSide = phys({ color: '#22140f', roughness: 0.9, emissive: '#ff4a0c', emissiveIntensity: 1.2, emissiveMap: cracks })
       root.add(
         mark({
-          outline: '#1a0302',
-          tile: [rock, rockSide],
-          glyph: phys({ color: '#ffd84a', emissive: '#ffa21a', emissiveIntensity: 0.42, roughness: 0.35, metalness: 0.3 }),
-          seg: 3,
+          outline: '#3a0602',
+          tile: phys({ color: '#d8321a', roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.25, emissive: '#c02000', emissiveIntensity: 0.12 }),
+          glyph: phys({ color: '#ffe04a', emissive: '#ffb010', emissiveIntensity: 0.35, roughness: 0.3, clearcoat: 1 }),
         }),
       )
-      const pl = new THREE.PointLight('#ff7a20', 140, 40, 1.4)
+      const pl = new THREE.PointLight('#ff7a20', 60, 40, 1.4)
       pl.position.set(0, -9, 5)
       scene.add(pl)
-      // Огонь — столбики вокселей: у основания жарче, к верху мельче и краснее.
-      const heat = ['#fff4b8', '#ffd23a', '#ff9418', '#ff5a10', '#d8260a', '#7a1206']
-      const mats = heat.map((h, i) => glow(h, i > 3 ? 0.55 : 0.8))
-      for (let x = -10.5; x <= 10.5; x += 0.95) {
-        const side = Math.abs(x) / 10.5
-        const h = 3 + rnd() * 3 + side * side * 9
-        for (const z of [-2.2, 3.2]) {
-          if (z > 0 && Math.abs(x) < 4.5) continue
-          let y = -10.5
-          let s = 1.05
-          while (y < -10.5 + h) {
-            const t = (y + 10.5) / h
-            const mi = Math.min(heat.length - 1, Math.floor(t * heat.length))
-            vox(root, x + (rnd() - 0.5) * 0.35, y, z + (rnd() - 0.5) * 0.6, s, mats[mi])
-            y += s * 0.92
-            s = Math.max(0.3, s * 0.88)
-          }
+      // Языки пламени: столбики вокселей, у основания жарче, вверху мельче и краснее.
+      const heat = ['#ffe866', '#ffc21a', '#ff8a10', '#ff4a0a', '#c81a06', '#6a0c04']
+      const mats = heat.map((h, i) => glow(h, i > 3 ? 0.4 : 0.6))
+      const tongue = (x: number, z: number, base: number, hgt: number, size: number) => {
+        let y = base
+        let s = size
+        while (y < base + hgt) {
+          const t = (y - base) / hgt
+          const mi = Math.min(heat.length - 1, Math.floor(t * heat.length))
+          vox(root, x + (rnd() - 0.5) * 0.3 * (t + 0.3), y, z, s, mats[mi], rnd() * 3)
+          y += s * 0.85
+          s = Math.max(0.3, s * 0.95)
         }
       }
-      for (let i = 0; i < 26; i++) vox(root, (rnd() - 0.5) * 20, -4 + rnd() * 14, -1 + rnd() * 5, 0.14 + rnd() * 0.22, mats[1 + (i % 3)], rnd() * 3)
+      for (let x = -5.2; x <= 5.2; x += 0.6) {
+        const e = Math.abs(x) / 5.2
+        tongue(x, 2.3 + rnd() * 0.5, -5.7, 1.8 + rnd() * 1.8 + (1 - e * e) * 3.4, 0.68)
+      }
+      // Языки по бокам плитки.
+      for (const sx of [-5.6, 5.6]) for (let k = 0; k < 2; k++) tongue(sx, 1 + k * 0.6, -5 + k * 1.2, 2.2 + rnd() * 1.4, 0.5)
+      // Угли.
+      for (let i = 0; i < 26; i++) vox(root, (rnd() - 0.5) * 13, -6 + rnd() * 12.5, 1 + rnd() * 3, 0.1 + rnd() * 0.16, mats[1 + (i % 3)], rnd() * 3)
       return root
     },
     bloom: [0.45, 0.4, 0.95],
     shadow: 0.2,
-    env: 0.45,
-    key: [-8, 12, 12, 1.4, '#ffd8b0'],
+    env: 0.6,
+    key: [-8, 12, 12, 1.2, '#ffffff'],
+    scale: SCALE,
   },
   {
     id: 'amethyst',
-    rot: [0.22, -0.3, 0.03],
+    rot: [0.2, -0.26, 0.03],
     bg: (g, n) => {
-      radial(g, n, 0.5, 0.38, 0.95, [[0, '#7b3fd0'], [0.45, '#3b1477'], [1, '#12052a']])
-      rays(g, n, 0.5, 0.38, 12, 'rgba(230,180,255,0.10)', 1)
+      radial(g, n, 0.5, 0.42, 0.95, [[0, '#7b3fd0'], [0.45, '#3b1477'], [1, '#12052a']])
+      rays(g, n, 0.5, 0.42, 12, 'rgba(230,180,255,0.10)', 1)
       grain(g, n, 5)
     },
     build: (scene) => {
       const root = new THREE.Group()
-      const crys = (tint: string) =>
-        phys({ color: tint, emissive: '#7a2bd6', emissiveIntensity: 0.18, transmission: 1, thickness: 2.5, ior: 1.55, roughness: 0.06, attenuationColor: '#b46cff', attenuationDistance: tint === '#ecd8ff' ? 7 : 2.4, flatShading: true, specularIntensity: 1, clearcoat: 1 })
+      const crys = (tint: string, t = 1) =>
+        phys({ color: tint, emissive: '#7a2bd6', emissiveIntensity: 0.18, transmission: t, thickness: 2.5, ior: 1.55, roughness: 0.06, attenuationColor: '#b46cff', attenuationDistance: 2.4, flatShading: true, specularIntensity: 1, clearcoat: 1 })
       root.add(
         mark({
           outline: '#260a52',
-          tile: crys('#ecd8ff'),
+          tile: crys('#c9a2ff'),
           glyph: phys({ color: '#f6eeff', roughness: 0.25, clearcoat: 1, emissive: '#c9a6ff', emissiveIntensity: 0.05 }),
           seg: 1,
           bevel: 0.6,
         }),
       )
-      // Друза кристаллов растёт снизу и из-за плитки.
-      const cl: [number, number, number, number, number, number, number][] = [
-        // x, y, z, r, h, наклон z, наклон x
-        [-4.6, -7.6, -1.2, 1.3, 7.0, 0.45, 0.1],
-        [-6.6, -7.0, -1.8, 0.9, 4.6, 0.95, -0.1],
-        [-2.6, -8.4, 1.8, 0.75, 3.0, 0.2, 0.4],
-        [4.4, -7.8, -1.0, 1.4, 8.2, -0.38, 0.05],
-        [6.6, -7.0, -1.8, 0.85, 4.4, -0.95, -0.2],
-        [2.6, -8.6, 1.9, 0.7, 2.8, -0.28, 0.4],
-        [0.8, -8.8, 2.6, 0.55, 2.0, 0.05, 0.6],
-      ]
+      // Друзы в четырёх углах плитки: кристаллы торчат наружу по диагонали.
       const tints = ['#c48aff', '#a865ff', '#dcb8ff', '#9b52ff']
-      cl.forEach(([x, y, z, r, h, tz, tx], i) => {
-        const m = new THREE.Mesh(crystalGeo(r, h), crys(tints[i % 4]))
-        m.position.set(x, y, z)
-        m.rotation.set(tx, i * 0.7, tz)
-        if (y > 0) m.rotation.z += Math.PI * 0.25
-        m.castShadow = true
-        root.add(m)
-      })
+      const cluster = (cx: number, cy: number, k: number) => {
+        const a = Math.atan2(cy, cx)
+        const set: [number, number, number, number][] = [
+          // сдвиг вдоль стороны, радиус, высота, наклон
+          [0, 0.7, 3.2, 0],
+          [-0.55, 0.5, 2.2, 0.45],
+          [0.55, 0.5, 2.0, -0.45],
+        ]
+        for (const [off, r, h, tilt] of set) {
+          const m = new THREE.Mesh(crystalGeo(r, h), crys(tints[(k + Math.round(off * 3)) & 3]))
+          const px = cx - Math.sin(a) * off
+          const py = cy + Math.cos(a) * off
+          m.position.set(px, py, 0.6)
+          m.rotation.set(0, 0, a - Math.PI / 2 + tilt)
+          m.castShadow = true
+          root.add(m)
+        }
+      }
+      cluster(4.3, 4.3, 0)
+      cluster(-4.3, 4.3, 1)
+      cluster(-4.3, -4.3, 2)
+      cluster(4.3, -4.3, 3)
       const rim = new THREE.DirectionalLight('#ff9cf0', 2.2)
       rim.position.set(12, 6, -10)
       scene.add(rim)
@@ -473,13 +467,12 @@ const SPECS: Spec[] = [
       scene.add(rim2)
       return root
     },
-    bloom: undefined,
     shadow: 0.35,
     env: 1.15,
+    scale: SCALE,
     overlay: (g) => {
       glint(g, 0.24, 0.19, 0.06, '#f3dcff')
-      glint(g, 0.73, 0.74, 0.045, '#f3dcff')
-      glint(g, 0.84, 0.36, 0.03, '#f3dcff')
+      glint(g, 0.8, 0.8, 0.04, '#f3dcff')
     },
   },
   {
@@ -493,21 +486,33 @@ const SPECS: Spec[] = [
     build: (scene) => {
       const root = new THREE.Group()
       const gold = phys({ color: '#ffc547', metalness: 1, roughness: 0.2, clearcoat: 0.6 })
-      const gem = (c: string) => phys({ color: c, transmission: 0.55, thickness: 1, ior: 1.8, roughness: 0.04, flatShading: true, emissive: c, emissiveIntensity: 0.35, clearcoat: 1 })
+      const ruby = phys({ color: '#ff2448', transmission: 0.55, thickness: 1, ior: 1.8, roughness: 0.04, flatShading: true, emissive: '#ff2448', emissiveIntensity: 0.35, clearcoat: 1 })
       root.add(
         mark({
           outline: '#050a2e',
-          tile: phys({ color: '#0e1b6a', roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.04, sheen: 0.5, sheenColor: '#6a7dff' }),
+          tile: phys({ color: '#13227a', roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.04, sheen: 0.5, sheenColor: '#6a7dff' }),
           glyph: gold,
-          dot: gem('#ff2448'),
+          dot: ruby,
           dotGem: true,
         }),
       )
-      const cr = crown(gold, [gem('#ff2448'), gem('#2ee68a'), gem('#3a8bff')])
-      cr.scale.setScalar(0.64)
-      cr.position.set(3.5, 4.4, 1.8)
-      cr.rotation.set(0.3, 0.2, -0.38)
-      root.add(cr)
+      // Пиксельная корона на верхнем крае: три зубца, камни на вершинах.
+      const C = 0.7
+      const crownGems = ['#3a8bff', '#ff2448', '#2ee68a']
+      const cells: [number, number, Mat | null][] = []
+      for (let x = -2; x <= 2; x++) {
+        cells.push([x, 0, null], [x, 1, null])
+        if (Math.abs(x) % 2 === 0) cells.push([x, 2, null])
+      }
+      const crownM = phys({ color: '#ffc547', metalness: 0.9, roughness: 0.3, emissive: '#7a5200', emissiveIntensity: 0.35, clearcoat: 0.6 })
+      for (const [x, y] of cells) vox(root, x * C, 4.4 + y * C, 2.2, C * 0.98, crownM)
+      crownGems.forEach((c, i) => vox(root, (i - 1) * 2 * C, 4.4 + 2.55 * C, 2.2, C * 0.7, glow(c, 0.9)))
+      // Звёздочки вокруг.
+      const starM = glow('#ffe7a8', 1.4)
+      star(root, -5.1, 3.0, 2.2, 0.2, starM)
+      star(root, 5.0, 2.4, 2.2, 0.18, starM)
+      star(root, -4.6, -4.2, 2.2, 0.16, starM)
+      star(root, 4.9, -4.6, 2.2, 0.2, starM)
       const spot = new THREE.SpotLight('#fff0c8', 380, 60, 0.42, 0.6, 1.2)
       spot.position.set(-3, 22, 18)
       spot.target.position.set(0, 0, 0)
@@ -522,9 +527,11 @@ const SPECS: Spec[] = [
     studio: true,
     env: 1.0,
     key: [-10, 14, 12, 1.6, '#ffffff'],
+    scale: SCALE,
+    y: -0.25,
     overlay: (g) => {
-      glint(g, 0.2, 0.22, 0.05, '#ffe7a8')
-      glint(g, 0.8, 0.8, 0.04, '#ffe7a8')
+      glint(g, 0.2, 0.3, 0.05, '#ffe7a8')
+      glint(g, 0.8, 0.76, 0.04, '#ffe7a8')
     },
   },
   {
@@ -539,7 +546,7 @@ const SPECS: Spec[] = [
       root.add(
         mark({
           outline: '#5a3000',
-          tile: phys({ color: '#e89a22', metalness: 1, roughness: 0.2 }),
+          tile: phys({ color: '#f5b230', metalness: 0.9, roughness: 0.25, emissive: '#6a3d00', emissiveIntensity: 0.35 }),
           glyph: phys({ color: '#fff6e0', roughness: 0.25, clearcoat: 1 }),
           seg: 1,
           bevel: 0.75,
@@ -548,18 +555,40 @@ const SPECS: Spec[] = [
           glyphBevel: 0.18,
         }),
       )
+      const gold = phys({ color: '#ffc13a', metalness: 0.7, roughness: 0.3, clearcoat: 0.5, emissive: '#5a3300', emissiveIntensity: 0.3 })
+      // Слитки внизу, перед плиткой: два и три.
+      const ingot = (x: number, y: number, z: number, rz: number) => {
+        const m = new THREE.Mesh(ingotGeo(), gold)
+        m.position.set(x, y, z)
+        m.rotation.set(0.35, 0, rz)
+        m.castShadow = true
+        root.add(m)
+      }
+      ingot(-2.7, -5.1, 2.6, -0.05)
+      ingot(-2.6, -4.2, 2.8, 0.04)
+      ingot(-2.8, -3.3, 2.5, -0.08)
+      ingot(2.9, -5.3, 2.6, 0.03)
+      ingot(2.8, -4.4, 2.8, -0.04)
+      // Монеты в верхнем углу.
+      for (const [x, y, z, rz] of [[4.6, 4.5, 2.6, 0.2], [5.4, 3.5, 1.8, -0.1]] as [number, number, number, number][]) {
+        const c = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.22, 28), gold)
+        c.rotation.set(Math.PI / 2 + 0.25, 0, rz)
+        c.position.set(x, y, z)
+        c.castShadow = true
+        root.add(c)
+      }
       const a = new THREE.DirectionalLight('#fff2d0', 2.4)
       a.position.set(10, -6, 10)
       scene.add(a)
       return root
     },
-    bloom: undefined,
     shadow: 0.55,
     studio: true,
     env: 1.5,
+    scale: SCALE,
     overlay: (g) => {
-      glint(g, 0.27, 0.25, 0.075, '#fff6dc')
-      glint(g, 0.77, 0.75, 0.045, '#fff6dc')
+      glint(g, 0.25, 0.22, 0.075, '#fff6dc')
+      glint(g, 0.8, 0.72, 0.045, '#fff6dc')
     },
   },
   {
@@ -577,13 +606,16 @@ const SPECS: Spec[] = [
       root.add(
         mark({
           outline: '#06306a',
-          tile: glass(),
+          tile: glass('#bff0ff'),
           glyph: phys({ color: '#ffffff', roughness: 0.22, clearcoat: 1, emissive: '#d8f6ff', emissiveIntensity: 0.05 }),
+          dot: phys({ color: '#e6fbff', roughness: 0, metalness: 0, clearcoat: 1, emissive: '#9ff0ff', emissiveIntensity: 0.35, flatShading: true }),
+          dotGem: true,
           seg: 2,
           bevel: 0.8,
           glyphSeg: 1,
         }),
       )
+      // Осколки льда по краям.
       const shard = (x: number, y: number, z: number, s: number, rz: number) => {
         const m = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), glass('#e8fbff'))
         m.scale.set(s * 0.7, s * 1.8, s * 0.7)
@@ -592,112 +624,182 @@ const SPECS: Spec[] = [
         m.castShadow = true
         root.add(m)
       }
-      shard(-7.4, -6.6, 1.5, 1.5, 0.45)
-      shard(6.8, 5.6, -0.5, 1.1, 0.5)
-      shard(8.4, -4.6, 2, 0.8, -0.35)
-      shard(-8.2, 4.8, -1, 0.7, -0.4)
+      shard(-5.6, -4.4, 1.6, 1.4, 0.45)
+      shard(5.5, 4.2, 0.2, 1.2, 0.5)
+      shard(5.7, -4.0, 1.8, 1.0, -0.35)
+      shard(-5.4, 4.0, 1.4, 0.8, -0.3)
       const rim = new THREE.DirectionalLight('#dff8ff', 2.0)
       rim.position.set(12, 8, -6)
       scene.add(rim)
       return root
     },
-    bloom: undefined,
     shadow: 0.38,
     studio: true,
     env: 1.4,
+    scale: SCALE,
     overlay: (g) => {
       glint(g, 0.29, 0.26, 0.085)
       glint(g, 0.7, 0.71, 0.05)
-      glint(g, 0.83, 0.3, 0.03)
       glint(g, 0.18, 0.72, 0.03)
     },
   },
-]
-
-/* ---------- Мелкие размеры (16–64 px) ----------
- * Плитка во весь кадр, глиф крупнее и в тёмной кайме, без россыпей и сцен:
- * у каждой иконки своя семья цвета, знак читается с 16 px. */
-
-function small(id: string, o: MarkOpts, extra?: (scene: THREE.Scene, root: THREE.Group) => void, more: Partial<Spec> = {}): Spec {
-  return {
-    id: id + '-small',
+  {
+    id: 'emerald',
+    rot: [0.14, -0.2, 0],
     bg: (g, n) => {
-      g.fillStyle = '#000'
-      g.fillRect(0, 0, n, n)
+      radial(g, n, 0.5, 0.45, 0.95, [[0, '#0c6a48'], [0.5, '#063a28'], [1, '#02100b']])
+      rays(g, n, 0.5, 0.45, 14, 'rgba(120,255,190,0.12)', 1)
+      grain(g, n, 5)
     },
     build: (scene) => {
       const root = new THREE.Group()
-      root.add(mark({ outlineW: 0.2, seg: 6, ...o }))
-      extra?.(scene, root)
+      const emerald = (c = '#1fd07e') =>
+        phys({ color: c, transmission: 0.45, thickness: 2.2, ior: 1.58, roughness: 0.08, attenuationColor: '#0a8f54', attenuationDistance: 3, emissive: c, emissiveIntensity: 0.12, clearcoat: 1, flatShading: true })
+      root.add(
+        mark({
+          outline: '#03261a',
+          tile: phys({ color: '#14b06e', roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.04, metalness: 0.05 }),
+          glyph: phys({ color: '#ffffff', roughness: 0.2, clearcoat: 1, emissive: '#c8ffe4', emissiveIntensity: 0.06 }),
+          seg: 3,
+        }),
+      )
+      // Кристаллы изумрудной руды: призмы из нижнего края и огранённые камни перед плиткой.
+      const ore: [number, number, number, number, number, number][] = [
+        // x, y, r, h, наклон, поворот
+        [-3.6, -5.1, 0.7, 3.2, 0.25, 0.4],
+        [-1.2, -5.5, 0.55, 2.4, -0.2, 0.9],
+        [2.8, -5.2, 0.8, 3.6, -0.3, 0.2],
+        [4.9, -4.4, 0.6, 2.6, -0.5, 1.1],
+      ]
+      for (const [x, y, r, h, tz, ry] of ore) {
+        const m = new THREE.Mesh(crystalGeo(r, h), emerald())
+        m.position.set(x, y, 1.2)
+        m.rotation.set(0.1, ry, tz)
+        m.castShadow = true
+        root.add(m)
+      }
+      const cut = (x: number, y: number, z: number, r: number, h: number, rz: number) => {
+        const m = new THREE.Mesh(gemGeo(r, h, 'emerald'), emerald('#38f0a0'))
+        m.position.set(x, y, z)
+        m.rotation.set(0.3, 0, rz)
+        m.castShadow = true
+        root.add(m)
+      }
+      cut(-5.2, 3.8, 2.4, 0.85, 1.4, 0.3)
+      cut(5.3, 2.9, 2.2, 0.7, 1.2, -0.25)
+      const rim = new THREE.DirectionalLight('#bfffe0', 1.8)
+      rim.position.set(-12, 8, -6)
+      scene.add(rim)
       return root
     },
-    rot: [0.05, -0.07, 0],
-    scale: 1.76,
-    y: 0,
-    shadow: 0,
+    shadow: 0.35,
     studio: true,
-    env: 1,
-    ...more,
-  }
-}
-
-const SMALL: Spec[] = [
-  small('default', {
-    tile: phys({ color: '#5ec64d', roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 }),
-    glyph: phys({ color: '#ffffff', roughness: 0.3, clearcoat: 1 }),
-    outline: '#1f5a17',
-  }),
-  small(
-    'spark',
-    {
-      tile: phys({ color: '#0a2410', roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
-      glyph: phys({ color: '#a8ff3a', emissive: '#7dff1a', emissiveIntensity: 0.3, roughness: 0.3, clearcoat: 1 }),
-      outline: '#000000',
+    env: 1.2,
+    scale: SCALE,
+    overlay: (g) => {
+      glint(g, 0.78, 0.22, 0.07, '#e6fff2')
+      glint(g, 0.22, 0.78, 0.04, '#e6fff2')
     },
-    (scene) => {
-      const pl = new THREE.PointLight('#9cff4a', 40, 30, 1.6)
-      pl.position.set(0, 0, 6)
+  },
+  {
+    id: 'quartz',
+    rot: [0.15, 0.2, 0],
+    bg: (g, n) => {
+      radial(g, n, 0.5, 0.42, 1.0, [[0, '#8a2f5e'], [0.5, '#3e1229'], [1, '#14060d']])
+      rays(g, n, 0.5, 0.42, 12, 'rgba(255,220,240,0.12)', 1)
+      grain(g, n, 5)
+    },
+    build: (scene) => {
+      const root = new THREE.Group()
+      root.add(
+        mark({
+          outline: '#5a1a3c',
+          tile: phys({ color: '#ec6aa2', roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.05, transmission: 0.25, thickness: 1.5, ior: 1.54, sheen: 0.4, sheenColor: '#ffd0e6' }),
+          glyph: phys({ color: '#ffffff', roughness: 0.2, clearcoat: 1, emissive: '#ffe0f0', emissiveIntensity: 0.05 }),
+          seg: 4,
+        }),
+      )
+      // Кварцевые столбы: растут из нижнего края, два мелких — из верхних углов.
+      const pillar = (x: number, y: number, z: number, r: number, h: number, tilt: number, c: string, tx = 0) => {
+        const m = new THREE.Mesh(crystalGeo(r, h), phys({ color: c, transmission: 0.6, thickness: 2, ior: 1.54, roughness: 0.05, flatShading: true, clearcoat: 1, emissive: c, emissiveIntensity: 0.06 }))
+        m.position.set(x, y, z)
+        m.rotation.set(tx, 0, tilt)
+        m.castShadow = true
+        root.add(m)
+      }
+      pillar(-4.8, -5.3, 1.8, 0.7, 3.4, 0.12, '#fff5fa')
+      pillar(-2.6, -5.6, 2.4, 0.8, 3.8, -0.06, '#ffd6e8')
+      pillar(2.9, -5.5, 2.2, 0.8, 3.6, -0.1, '#ffc2dc')
+      pillar(5.0, -4.6, 1.6, 0.6, 2.8, -0.3, '#fff5fa')
+      pillar(-5.4, 3.6, 1.2, 0.5, 2.6, 0.6, '#ffd6e8')
+      pillar(5.5, 4.2, 1.0, 0.45, 2.2, -0.7, '#fff5fa')
+      const rim = new THREE.DirectionalLight('#ffe6f2', 2.0)
+      rim.position.set(12, 8, -6)
+      scene.add(rim)
+      return root
+    },
+    shadow: 0.3,
+    studio: true,
+    env: 1.25,
+    scale: SCALE,
+    overlay: (g) => {
+      glint(g, 0.26, 0.22, 0.07, '#fff0f8')
+      glint(g, 0.76, 0.66, 0.04, '#fff0f8')
+    },
+  },
+  {
+    id: 'obsidian',
+    rot: [0.16, -0.2, 0.02],
+    bg: (g, n) => {
+      g.fillStyle = '#07040c'
+      g.fillRect(0, 0, n, n)
+      radial(g, n, 0.5, 0.5, 0.6, [[0, 'rgba(150,80,255,0.42)'], [0.5, 'rgba(70,30,140,0.2)'], [1, 'rgba(0,0,0,0)']])
+      grain(g, n, 5)
+    },
+    build: (scene) => {
+      const root = new THREE.Group()
+      const v = veins(0.37)
+      const obs = phys({ color: '#150c24', roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.05, emissive: '#9a5cff', emissiveMap: v, emissiveIntensity: 1.1, metalness: 0.1 })
+      root.add(
+        mark({
+          outline: '#0a0416',
+          tile: [obs, phys({ color: '#140c22', roughness: 0.3 })],
+          glyph: phys({ color: '#b98cff', emissive: '#9a5cff', emissiveIntensity: 0.55, roughness: 0.25, clearcoat: 1 }),
+          seg: 3,
+        }),
+      )
+      // Портал: кольцо из кубиков за плиткой и мягкое свечение в нём.
+      const halo = new THREE.Mesh(
+        new THREE.CircleGeometry(6.4, 48),
+        new THREE.MeshBasicMaterial({ color: '#9a5cff', transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }),
+      )
+      halo.position.z = -2.6
+      root.add(halo)
+      const ring = new THREE.Group()
+      ring.rotation.set(0.5, 0, 0.35)
+      for (let i = 0; i < 46; i++) {
+        const a = (i / 46) * Math.PI * 2
+        const r = 6.1 + (rnd() - 0.5) * 0.9
+        const col = i % 3 ? '#b98cff' : '#f0e0ff'
+        vox(ring, Math.cos(a) * r, Math.sin(a) * r * 0.85, -1.4 + (rnd() - 0.5) * 0.8, 0.16 + rnd() * 0.22, glow(col, 1.3), rnd() * 3)
+      }
+      root.add(ring)
+      const pl = new THREE.PointLight('#a070ff', 35, 40, 1.4)
+      pl.position.set(0, 0, 7)
       scene.add(pl)
+      const rim = new THREE.DirectionalLight('#c8a0ff', 1.6)
+      rim.position.set(10, 8, -8)
+      scene.add(rim)
+      return root
     },
-    { bloom: [0.3, 0.2, 0.85], overlay: (g) => glint(g, 0.8, 0.2, 0.09, '#f4ffc8') },
-  ),
-  small(
-    'flame',
-    {
-      tile: phys({ color: '#b81e08', roughness: 0.4, clearcoat: 0.6, emissive: '#ff3a00', emissiveIntensity: 0.18 }),
-      glyph: phys({ color: '#ffe14a', emissive: '#ffc000', emissiveIntensity: 0.4, roughness: 0.3, clearcoat: 1 }),
-      outline: '#3a0602',
+    bloom: [0.5, 0.4, 0.8],
+    shadow: 0.2,
+    env: 0.3,
+    scale: SCALE,
+    overlay: (g) => {
+      glint(g, 0.8, 0.2, 0.05, '#e4d0ff')
     },
-    (scene) => {
-      const pl = new THREE.PointLight('#ffb020', 260, 40, 1.3)
-      pl.position.set(0, -12, 6)
-      scene.add(pl)
-    },
-    { exposure: 0.85 },
-  ),
-  small('amethyst', {
-    tile: phys({ color: '#7d3ff0', roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.04, flatShading: true }),
-    glyph: phys({ color: '#f4eaff', roughness: 0.25, clearcoat: 1 }),
-    outline: '#260a52',
-    seg: 1,
-  }),
-  small('legend', {
-    tile: phys({ color: '#13227a', roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.04 }),
-    glyph: phys({ color: '#ffc547', metalness: 1, roughness: 0.38 }),
-    dot: phys({ color: '#ff2448', roughness: 0.15, clearcoat: 1, emissive: '#ff2448', emissiveIntensity: 0.35 }),
-    outline: '#050a2e',
-  }),
-  small('gold', {
-    tile: phys({ color: '#f0a828', metalness: 1, roughness: 0.22 }),
-    glyph: phys({ color: '#fffaf0', roughness: 0.25, clearcoat: 1 }),
-    outline: '#5a3000',
-  }, undefined, { env: 1.4 }),
-  small('diamond', {
-    tile: phys({ color: '#38c4f5', roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.02, flatShading: true }),
-    glyph: phys({ color: '#ffffff', roughness: 0.2, clearcoat: 1 }),
-    outline: '#06306a',
-    seg: 1,
-  }, undefined, { overlay: (g) => glint(g, 0.78, 0.22, 0.1) }),
+  },
 ]
 
 /* ---------- Рендер ---------- */
@@ -772,7 +874,7 @@ function shoot(sp: Spec): string {
   const obj = sp.build(scene)
   const [rx, ry, rz] = sp.rot ?? [0.17, -0.22, 0]
   obj.rotation.set(rx, ry, rz)
-  obj.scale.setScalar(sp.scale ?? 1.14)
+  obj.scale.setScalar(sp.scale ?? SCALE)
   obj.position.y = sp.y ?? 0.15
   obj.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true
@@ -802,7 +904,7 @@ function shoot(sp: Spec): string {
 const only = new URLSearchParams(location.search).get('only')
 const art: Record<string, string> = {}
 const outEl = document.getElementById('out')!
-for (const sp of [...SPECS, ...SMALL]) {
+for (const sp of SPECS) {
   if (only && !only.split(',').includes(sp.id)) continue
   art[sp.id] = shoot(sp)
   const f = document.createElement('figure')

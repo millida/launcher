@@ -674,6 +674,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const ownSlides = !partners ? [] : heroSlides({
     prison: prisonPack || null,
     pixelmon: pixelmonPack,
+    oneblock: obPack,
     anarchyOnline,
     oneblockOnline: obOnline,
     anarchyName: anarchy.name,
