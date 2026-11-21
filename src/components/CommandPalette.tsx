@@ -4,6 +4,7 @@ import { isPaletteShortcut, rankItems, type PaletteItem, type PaletteKind } from
 import { realLaunch } from '../lib/launch'
 import { openSettings, setScreen, type ScreenId, type SettingsTab } from '../state/ui'
 import { useProfiles } from '../state/profiles'
+import { useLobby } from '../state/lobbyMode'
 import { useServers } from '../state/servers'
 import { openServerDetail } from '../state/serverDetail'
 import { openChat, useFriends } from '../state/friends'
@@ -84,7 +85,7 @@ export function CommandPalette() {
   const items = useMemo<PaletteItem[]>(() => {
     if (!open) return []
     const builds: PaletteItem[] = profiles.flatMap((p) => [
-      { id: 'play:' + p.name, kind: 'build', title: t('Играть: {name}', { name: p.name }), words: p.version, run: () => realLaunch(p.name) },
+      { id: 'play:' + p.name, kind: 'build', title: t('Играть: {name}', { name: p.name }), words: p.version, run: () => (useLobby.getState().pick({ kind: 'build', name: p.name }), realLaunch(p.name)) },
       { id: 'build:' + p.name, kind: 'build', title: t('Сборка: {name}', { name: p.name }), words: p.version, run: () => openBuildSettings(p.name) },
     ])
     const svs: PaletteItem[] = servers.map((sv) => ({ id: 'server:' + sv.slug, kind: 'server', title: sv.name, run: () => openServerDetail(sv) }))

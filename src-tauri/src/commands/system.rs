@@ -51,6 +51,17 @@ pub async fn pick_wallpaper() -> Result<Option<engine::CustomWallpaper>, String>
     engine::pick_wallpaper().await
 }
 
+/// Publishes an own wallpaper to the shared library; the core reads the file and adds the token itself.
+#[tauri::command]
+pub async fn publish_wallpaper(path: String, name: String) -> Result<serde_json::Value, String> {
+    engine::publish_wallpaper(path, name).await
+}
+
+#[tauri::command]
+pub async fn save_library_wallpaper(id: String) -> Result<engine::CustomWallpaper, String> {
+    engine::save_library_wallpaper(id).await
+}
+
 #[tauri::command]
 pub async fn pick_texture() -> Result<Option<engine::PickedTexture>, String> {
     engine::pick_texture().await
@@ -411,6 +422,18 @@ pub async fn cache_size() -> Result<u64, String> {
 // Clears the launcher cache (the cache folder inside the launcher data, not the game folder).
 pub async fn clear_cache() -> Result<u64, String> {
     super::blocking(engine::clear_cache).await
+}
+
+/// Settings → «Место на диске»: what every build takes, by folder. Walks the whole game folder.
+#[tauri::command]
+pub async fn disk_usage() -> Result<engine::DiskUsage, String> {
+    super::blocking(engine::disk_usage).await
+}
+
+/// Removes logs and crash reports older than two weeks from one build, or from all when `profile` is empty.
+#[tauri::command]
+pub async fn clean_old_logs(profile: Option<String>) -> Result<u64, String> {
+    super::blocking(move || engine::clean_old_logs(profile.filter(|p| !p.is_empty()), engine::OLD_LOG_DAYS)).await?
 }
 
 /// Shared-store numbers for the settings screen. Scanning hashes every mod in

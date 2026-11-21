@@ -30,6 +30,14 @@ export function demoTrack(days = TRACK_DAYS): DailyTrackDay[] {
 const demo = { open: 0, claimed: new Set<string>(), chests: [] as PendingChest[], seq: 0 }
 const key = (day: number, row: 'free' | 'plus') => day + ':' + row
 
+/** Демо-календарь кладёт свои сундуки в те же «Мои сундуки». */
+export function pushDemoChest(c: Omit<PendingChest, 'id'>): PendingChest {
+  const chest = { ...c, id: 'demo-chest-' + ++demo.seq }
+  demo.chests.push(chest)
+  return chest
+}
+export const demoChests = () => demo.chests.slice()
+
 /** Сундук открыт (демо): убрать из «Моих сундуков». */
 export function forgetDemoChest(id: string) {
   demo.chests = demo.chests.filter((c) => c.id !== id)

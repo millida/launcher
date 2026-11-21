@@ -87,17 +87,34 @@ function Snow({ scene }: { scene: FestiveScene }) {
   return <canvas ref={ref} className="fx-snow" />
 }
 
-/** Новогодняя тема поверх окна (lib/festive). Лёгкий режим, «меньше движения» и выключенный живой фон — без холста. */
-export function FestiveLayer() {
-  const scene = useFestive(festiveActive)
+/** Холст снега можно рисовать: живой фон включён, не лёгкий режим и не «меньше движения». */
+function useSnowAllowed(): boolean {
   const bgAnim = useSyncExternalStore(subscribeBg, bgAnimNow, bgAnimNow)
   const lite = useLiteMode()
   const reduced = useSyncExternalStore(subscribeReduce, reduceNow, reduceNow)
+  return bgAnim && !lite && !reduced
+}
+
+/**
+ * Тот же снег со своими сугробами внутри блока (новогодний календарь): холст
+ * заполняет ближайший предок с position. Когда тема и так идёт во всём окне,
+ * второй снег не рисуется.
+ */
+export function FestiveSnow() {
+  const allowed = useSnowAllowed()
+  const global = useFestive(festiveActive)
+  return allowed && !global ? <Snow scene="winter" /> : null
+}
+
+/** Новогодняя тема поверх окна (lib/festive). Лёгкий режим, «меньше движения» и выключенный живой фон — без холста. */
+export function FestiveLayer() {
+  const scene = useFestive(festiveActive)
+  const allowed = useSnowAllowed()
   if (!scene) return null
   return (
     <div className="fx-layer" aria-hidden="true">
       <div className="fx-garland" />
-      {bgAnim && !lite && !reduced ? <Snow scene={scene} /> : null}
+      {allowed ? <Snow scene={scene} /> : null}
     </div>
   )
 }

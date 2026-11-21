@@ -9,6 +9,7 @@ import { rarityTone, rewardLabel, rewardTitle, RewardArt } from './rewards'
 import '../../styles/pixel/pass.css'
 import { intlTag, useT } from '../../i18n'
 import { plusPrice, useMoney } from '../../lib/useMoney'
+import { liteOn as liteNow } from '../../lib/liteMode'
 
 /**
  * Пропуск сезона v4 (06.10.2026, «как в Brawl Stars и на Majestic»):
@@ -37,11 +38,11 @@ function flyTarget(r: TrackReward): DOMRect | null {
 
 let flyId = 0
 
-/** Полёт наград к балансу: картинка награды по дуге, у цели — вспышка. */
-function useFlights() {
+/** Полёт наград к балансу: картинка награды по дуге, у цели — вспышка. Его же берёт новогодний календарь. */
+export function useFlights() {
   const [flights, setFlights] = useState<Fly[]>([])
   const launch = (items: { el: HTMLElement | null; reward: TrackReward }[]) => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || liteNow()) return
     const next: Fly[] = []
     items.slice(0, 6).forEach(({ el, reward }, i) => {
       const from = el?.querySelector('.ra')?.getBoundingClientRect()
@@ -307,11 +308,8 @@ export function SeasonPass({
   return (
     <div className={'bp' + (compact ? ' compact' : '') + (own ? ' own' : '')}>
       <div className="bp-stage" onPointerMove={parallax} onPointerLeave={parallaxOff}>
+        {/* Героя сезона нет (замечания по магазину 13.11.2026): его колонна отдана ленте наград. */}
         <SeasonScene />
-        {/* Герой сезона — своя колонна справа, не заходит на карточки и стоит неподвижно. */}
-        <span className="bp-side" aria-hidden="true">
-          <img className="bp-rig" src="/season/hero.webp" alt="" draggable={false} />
-        </span>
         <div className="bp-main">
       <div className="bp-hero">
         <div className="bp-hero-main">

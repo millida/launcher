@@ -48,6 +48,8 @@ pub fn install_panic_hook(version: String) {
         #[cfg(windows)]
         if webview_failed_to_open(&msg) {
             webview_failure_box(&msg);
+        } else if failed_to_start(&msg) {
+            start_failure_box(&msg, &dir);
         }
         prev(info);
     }));
@@ -57,32 +59,58 @@ pub fn install_panic_hook(version: String) {
 /// WebView2 that does not start (runtime missing or broken, its data folder
 /// locked, a policy) ends in a panic there. With no console the process just
 /// vanished: players saw «the launcher does not open» and wrote that WebView2
-/// was installed. Only that failure is told to the player; other panics stay
-/// in the crash folder as before.
+/// was installed. Failures of that start are told to the player (WebView2 with
+/// its own page); panics once the launcher is up stay in the crash folder.
 #[cfg(any(windows, test))]
-fn webview_failed_to_open(msg: &str) -> bool {
-    let at_start = msg.starts_with("Failed to setup app") || msg.starts_with("error while running tauri application");
-    at_start && msg.to_lowercase().contains("webview")
+fn failed_to_start(msg: &str) -> bool {
+    msg.starts_with("Failed to setup app") || msg.starts_with("error while running tauri application")
 }
 
+#[cfg(any(windows, test))]
+fn webview_failed_to_open(msg: &str) -> bool {
+    failed_to_start(msg) && msg.to_lowercase().contains("webview")
+}
+
+/// One box per process, YES/NO; `true` = the player pressed YES.
 #[cfg(windows)]
-fn webview_failure_box(msg: &str) {
+fn failure_box(text: &str) -> bool {
     use std::sync::atomic::{AtomicBool, Ordering};
     use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, IDYES, MB_ICONERROR, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO};
     static SHOWN: AtomicBool = AtomicBool::new(false);
     if SHOWN.swap(true, Ordering::SeqCst) {
-        return;
+        return false;
     }
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let (body, title) = (wide(text), wide("Millida Launcher"));
+    let answer = unsafe { MessageBoxW(std::ptr::null_mut(), body.as_ptr(), title.as_ptr(), MB_YESNO | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST) };
+    answer == IDYES
+}
+
+#[cfg(windows)]
+fn webview_failure_box(msg: &str) {
     let detail: String = msg.chars().take(400).collect();
     // Both languages at once: the page and its translations are exactly what did not start.
     let text = [WEBVIEW_FAILED_RU, WEBVIEW_FAILED_EN, detail.as_str()].join("\n\n");
-    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
-    let (body, title) = (wide(&text), wide("Millida Launcher"));
-    let answer = unsafe { MessageBoxW(std::ptr::null_mut(), body.as_ptr(), title.as_ptr(), MB_YESNO | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST) };
-    if answer == IDYES {
+    if failure_box(&text) {
         let _ = crate::engine::open_external(WEBVIEW2_PAGE);
     }
 }
+
+/// Any other failure before the window: the process used to vanish with only a file in the crash folder, and the
+/// player saw «nothing happens» (report of 14.11.2026). YES opens that folder for the support chat.
+#[cfg(windows)]
+fn start_failure_box(msg: &str, dir: &std::path::Path) {
+    let detail: String = msg.chars().take(400).collect();
+    let text = [START_FAILED_RU, START_FAILED_EN, detail.as_str()].join("\n\n");
+    if failure_box(&text) {
+        crate::engine::open_path(&dir.to_string_lossy());
+    }
+}
+
+#[cfg(windows)]
+const START_FAILED_RU: &str = "Лаунчер не смог запуститься.\n\nЧто поможет:\n1. Перезагрузи компьютер и запусти лаунчер ещё раз.\n2. Установи Microsoft Visual C++ Redistributable (x64) с сайта Microsoft.\n3. Не помогло — пришли в поддержку файл из папки отчётов.\n\nОткрыть папку отчётов?";
+#[cfg(windows)]
+const START_FAILED_EN: &str = "The launcher could not start. Restart the computer and try again; if it repeats, send the file from the crash folder to support. Open the crash folder?";
 
 #[cfg(windows)]
 const WEBVIEW2_PAGE: &str = "https://developer.microsoft.com/microsoft-edge/webview2/";
@@ -166,7 +194,7 @@ pub fn clear_crashes() {
 
 #[cfg(test)]
 mod tests {
-    use super::{entry_kind, webview_failed_to_open};
+    use super::{entry_kind, failed_to_start, webview_failed_to_open};
 
     #[test]
     fn a_freeze_is_not_reported_as_a_panic() {
@@ -184,6 +212,18 @@ mod tests {
         ];
         for (msg, want) in cases {
             assert_eq!(webview_failed_to_open(msg), want, "{msg}");
+        }
+    }
+
+    #[test]
+    fn any_failure_before_the_window_is_told_and_a_later_panic_is_not() {
+        let cases = [
+            ("Failed to setup app: error encountered during setup hook: tray icon", true),
+            ("error while running tauri application: Runtime(CreateWindow)", true),
+            ("called `Option::unwrap()` on a `None` value in webview_health", false),
+        ];
+        for (msg, want) in cases {
+            assert_eq!(failed_to_start(msg), want, "{msg}");
         }
     }
 }

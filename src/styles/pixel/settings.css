@@ -189,6 +189,8 @@
 .s2-wp-tile:hover .s2-wp-del,
 .s2-wp-tile:focus-within .s2-wp-del { display: grid; }
 .s2-wp-del:hover { background: var(--m-danger); }
+.s2-wp-pub { right: 36px; }
+.s2-wp-pub:hover { background: var(--m-accent); color: var(--m-accent-fg); }
 
 /* ---------- Громкость ---------- */
 .s2-slider { display: flex; align-items: center; gap: 8px; width: 320px; }
@@ -371,3 +373,33 @@
    (WebKit не поддерживает scrollbar-gutter), а каждая вкладка не ниже экрана. */
 .content:has(> #s-settings.on), .content:has(#s-settings.on) { overflow-y: scroll; }
 #s-settings .s2-body { min-height: calc(100vh - 150px); }
+
+/* ---------- Место на диске (components/DiskUsage) ---------- */
+.s2-disk-saved { margin: 0 0 8px; font-size: 13px; color: var(--m-fg-subtle); }
+.s2-disk { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.s2-disk[aria-busy='true'] { opacity: 0.6; }
+.s2-disk-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(60px, 160px) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--m-fg);
+  text-align: left;
+  background: var(--m-inset);
+  border: 0;
+  cursor: pointer;
+}
+.s2-disk-row:hover, .s2-disk li.open .s2-disk-row { background: var(--m-surface); }
+.s2-disk-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.s2-disk-row > span:last-child { font: 700 12.5px var(--m-mono); color: var(--m-fg-muted); }
+.s2-disk-bar { height: 6px; background: var(--m-border); overflow: hidden; }
+.s2-disk-bar i { display: block; height: 100%; background: var(--m-accent); transform-origin: left; }
+.s2-disk-more { padding: 8px 10px 12px; background: var(--m-surface); }
+.s2-disk-more dl { margin: 0 0 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; }
+.s2-disk-more dl > div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.s2-disk-more dt { color: var(--m-fg-subtle); }
+.s2-disk-more dd { margin: 0; font-family: var(--m-mono); }
+.s2-disk-acts { display: flex; flex-wrap: wrap; gap: 8px; }

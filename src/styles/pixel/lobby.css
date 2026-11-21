@@ -858,3 +858,9 @@ body:has(#s-play.on) #toast { bottom: auto; top: 72px; }
 @media (prefers-reduced-motion: reduce) {
   .lobby-char, .lobby-char-still { transition: none; }
 }
+.lobby-rec.lobby-an.lobby-chat.is-coll { --an-night: #3a1838; --an-lava: var(--m-rarity-legendary); --an-lava-hover: var(--m-warning); --an-ink: var(--m-bg); background: #3a1838; }
+.lobby-chat.is-coll .lco-art { right: 0; top: 8px; height: 140px; image-rendering: pixelated; }
+.lobby-chat.is-coll .lco-title { top: 34px; max-width: 170px; font: 900 26px/1 var(--m-font); text-transform: none; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45); }
+.lco-clock { position: absolute; left: 14px; top: 66px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding-inline: 7px; font: 700 11px/1 var(--m-font); color: rgba(255, 255, 255, 0.7); background: rgba(0, 0, 0, 0.32); clip-path: var(--c4, none); white-space: nowrap; }
+.lco-clock b { color: #fff; font-weight: 800; }
+.lco-clock svg { width: 12px; height: 12px; }

@@ -50,11 +50,16 @@ pub fn backups_root_dir() -> Option<String> {
     backups_root().map(|p| p.to_string_lossy().into_owned())
 }
 
-fn now_secs() -> u64 {
+pub(super) fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 fn zip_world(src: &Path, out: &Path) -> Result<(), String> {
+    zip_world_where(src, out, |_| true)
+}
+
+/// `keep` sees each path relative to the world folder, with forward slashes.
+pub(super) fn zip_world_where(src: &Path, out: &Path, keep: impl Fn(&str) -> bool) -> Result<(), String> {
     use std::io::Write;
     if let Some(p) = out.parent() {
         std::fs::create_dir_all(p).map_err(|e| format!("Не удалось создать папку бэкапов: {}", e))?;
@@ -67,6 +72,7 @@ fn zip_world(src: &Path, out: &Path) -> Result<(), String> {
         let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for entry in walk(src) {
             let rel = match entry.strip_prefix(src) { Ok(r) => r.to_string_lossy().replace('\\', "/"), Err(_) => continue };
+            if !keep(&rel) { continue; }
             zip.start_file(rel, opts).map_err(|e| e.to_string())?;
             zip.write_all(&std::fs::read(&entry).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
         }
