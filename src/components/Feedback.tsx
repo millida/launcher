@@ -14,7 +14,7 @@ import { t, useT } from '../i18n'
 import { replyText, type BugAck } from '../lib/bugReplies'
 import { checkForUpdate } from '../lib/updater'
 import { BugPx } from './BugPx'
-import { FEEDBACK_SHARDS, applyStatus, useRewardReady } from './feedbackStatus'
+import { FEEDBACK_SHARDS, SHARDS_CHANGED, applyStatus, useRewardReady } from './feedbackStatus'
 
 type FeedbackAnswer = { granted: boolean; shards: number; nextAt?: string }
 export { FEEDBACK_SHARDS }
@@ -83,6 +83,7 @@ export function FeedbackModal({ onClose, about, kind: startKind }: { onClose: ()
         const trimmed = text.trim()
         const answer = await sendFeedback(trimmed, stars)
         applyStatus(false, answer.nextAt)
+        if (answer.granted) window.dispatchEvent(new Event(SHARDS_CHANGED))
         showReward({
           level: 'mid',
           kicker: t('Спасибо за отзыв'),

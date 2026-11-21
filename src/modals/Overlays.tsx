@@ -6,7 +6,7 @@ import { uiConfirm } from '../state/confirm'
 import { useScreens } from '../state/screens'
 import { useModpackVersions } from '../state/modpack'
 import { useProfiles } from '../state/profiles'
-import { openImage } from '../components/ImageLightbox'
+import { openImage } from '../components/lightboxStore'
 import { backdropClose } from '../lib/dismiss'
 import { tx, useT } from '../i18n'
 

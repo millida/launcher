@@ -10,11 +10,13 @@ import '../../styles/pixel/build-extras.css'
 export function UpdateAllModal({
   updates,
   titleOf,
+  snapshotNote = false,
   onConfirm,
   onClose,
 }: {
   updates: UpdateInfo[]
   titleOf: (file: string) => string
+  snapshotNote?: boolean
   onConfirm: () => void
   onClose: () => void
 }) {
@@ -51,6 +53,7 @@ export function UpdateAllModal({
             )
           })}
         </div>
+        {snapshotNote ? <p className="faint-note bx-upd-snap">{t('Перед обновлением сохраним снимок — откатить можно во вкладке «Снимки»')}</p> : null}
         <div className="bx-upd-acts">
           <button className="btn md secondary" onClick={onClose}>
             {t('Отмена')}

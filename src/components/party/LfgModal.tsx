@@ -24,6 +24,7 @@ function closeness(card: LfgCard, mine: LfgTags | null): number {
 
 export function AgeGate() {
   const t = useT()
+  const current = usePartyStore((s) => s.safety.ageBracket)
   const [busy, setBusy] = useState(false)
   return (
     <>
@@ -32,11 +33,13 @@ export function AgeGate() {
         {AGE_BRACKETS.map((b) => (
           <button
             key={b.id}
-            className="party-tag pick"
+            className={'party-tag pick' + (current === b.id ? ' on' : '')}
+            aria-pressed={current === b.id}
             disabled={busy}
             onClick={() => {
+              if (current === b.id) return
               setBusy(true)
-              void setAgeBracket(b.id).finally(() => setBusy(false))
+              void setAgeBracket(b.id).then((ok) => ok && current && showToast(t('Возраст изменён'))).finally(() => setBusy(false))
             }}
           >
             {b.label}
@@ -44,6 +47,7 @@ export function AgeGate() {
         ))}
       </div>
       <p className="faint-note">{t('Напарников подбираем только из твоего возраста')}</p>
+      {current ? <p className="faint-note">{t('Менять возраст можно раз в 30 дней')}</p> : null}
     </>
   )
 }

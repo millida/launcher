@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { openMilli } from '../state/milli'
 import { Icon } from './Icon'
 import { hasTauri } from '../ipc/tauri'
-import { applyCrashFix, listContent, listProfiles, openProfileFolder, openUrl } from '../ipc/commands'
+import { applyCrashFix, listContent, listProfiles, openProfileFolder, openUrl, toggleContent } from '../ipc/commands'
 import type { CrashInfo } from '../ipc/events'
 import { copyText } from '../lib/clipboard'
-import { showToast } from '../state/ui'
+import { showToast, type ToastAction } from '../state/ui'
+import { filesDisabledBy } from '../lib/crashUndo'
 import { NOTHING_TO_REPAIR, markFixApplied, modFixOf, repairChangedFiles, runRepair } from '../lib/repair'
 import { useCrash } from '../state/crash'
+import { openBisect } from '../state/bisect'
 import { backdropClose } from '../lib/dismiss'
 import { buildCrashReport, shareCrashLog } from '../lib/crashSupport'
 import { SUPPORT_URL } from '../lib/api'
@@ -17,9 +19,23 @@ import { useHasMillida } from '../state/auth'
 import { Milli } from './milli/Milli'
 import { crashWhy, isModCrash } from '../lib/crashWhy'
 import { exactCrashFix } from '../lib/liveLog'
-import { tx, useT } from '../i18n'
+import { t, tx, useT } from '../i18n'
 
 const SUPPORT_ACT = 'support'
+
+/** A fix that switched mods off is a guess the player may disagree with, so the toast offers to undo it. */
+function undoDisable(profile: string, kind: string, arg: string | undefined): ToastAction | undefined {
+  const files = filesDisabledBy(kind, arg)
+  if (!files.length) return undefined
+  return {
+    label: t('Вернуть'),
+    run: () => {
+      void Promise.all(files.map((f) => toggleContent(profile, 'mod', f, true)))
+        .then(() => showToast(t('Моды снова включены'), 'ok'))
+        .catch((e) => showToast(tx(e), 'error'))
+    },
+  }
+}
 
 export function CrashModal() {
   const t = useT()
@@ -44,6 +60,7 @@ export function CrashModal() {
   // общая починка, которая эту причину не лечит (аудит 22.09.2026).
   const fixes = (info.actions ?? []).filter((a) => a.kind !== 'repair' && a.kind !== 'fix-plan')
   const planSteps = (info.actions ?? []).find((a) => a.kind === 'fix-plan')?.steps ?? []
+  const addedMods = fixes.find((a) => a.kind === 'disable-added')?.steps ?? []
   const mainFix = exactCrashFix(info.actions)
   const hasMainFix = !!mainFix
   const mainFixKey = mainFix ? mainFix.kind + (mainFix.arg ?? '') : ''
@@ -87,6 +104,17 @@ export function CrashModal() {
           </div>
         ) : null}
 
+        {addedMods.length ? (
+          <div className="crash-plan">
+            <span>{t('Добавлены после последнего удачного запуска:')}</span>
+            <ul>
+              {addedMods.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {info.tail ? (
           <>
             <button className="crash-toggle" onClick={() => setShowTail((v) => !v)}>
@@ -111,8 +139,8 @@ export function CrashModal() {
                     if (!hasTauri()) return
                     const key = a.kind + (a.arg ?? '')
                     setActing(key)
-                    const done = (msg: string) => {
-                      showToast(msg, 'ok')
+                    const done = (msg: string, undo?: ToastAction) => {
+                      showToast(msg, 'ok', undefined, undo)
                       setActing('')
                     }
                     const failed = (e: unknown) => {
@@ -141,7 +169,7 @@ export function CrashModal() {
                     const main = key === mainFixKey
                     applyCrashFix(info.profile, a.kind, a.arg ?? '')
                       .then((msg) => {
-                        done(msg)
+                        done(msg, undoDisable(info.profile, a.kind, a.arg))
                         // The main fix is one action for one button: applied, the game starts again by itself.
                         if (!main) return
                         markFixApplied(info.profile, 'crash:' + a.kind)
@@ -175,7 +203,7 @@ export function CrashModal() {
                 applyCrashFix(info.profile, fix.kind, fix.arg ?? '')
                   .then((msg) => {
                     markFixApplied(info.profile, 'crash:' + fix.kind)
-                    showToast(msg, 'ok')
+                    showToast(msg, 'ok', undefined, undoDisable(info.profile, fix.kind, fix.arg))
                     close()
                   })
                   .catch((e) => showToast('' + e, 'error'))
@@ -206,6 +234,19 @@ export function CrashModal() {
           >
             <Icon id="i-sparkle" /> {t('Починить с Милли')}
           </button>
+          {/* Лог не назвал мод: мастер найдёт виновника выключением половин (modals/BisectWizard). */}
+          {(!info.kind || info.kind === 'unknown') && !hasMainFix && info.profile ? (
+            <button
+              className="btn lg secondary"
+              data-track="crash_bisect"
+              onClick={() => {
+                close()
+                openBisect(info.profile)
+              }}
+            >
+              <Icon id="i-search" /> {t('Найти мод, из-за которого вылет')}
+            </button>
+          ) : null}
           <button
             className="btn lg secondary"
             disabled={acting === SUPPORT_ACT}

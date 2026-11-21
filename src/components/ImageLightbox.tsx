@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { create } from 'zustand'
 import { Icon } from './Icon'
 import { ContextMenu, type ContextItem } from './ContextMenu'
 import { backdropClose } from '../lib/dismiss'
@@ -7,23 +6,9 @@ import { copyPicture, savePictureAs, type PictureRef } from '../ipc/commands'
 import { hasTauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
 import { showToast } from '../state/ui'
+import { openFolderAction } from '../lib/savedFile'
 import { t, useT } from '../i18n'
-
-interface LightboxState {
-  src: string
-  ref: PictureRef
-  open: (src: string, ref?: PictureRef) => void
-  close: () => void
-}
-
-export const useLightbox = create<LightboxState>((set) => ({
-  src: '',
-  ref: {},
-  open: (src, ref) => set({ src, ref: ref || { url: src } }),
-  close: () => set({ src: '', ref: {} }),
-}))
-
-export const openImage = (src: string, ref?: PictureRef) => useLightbox.getState().open(src, ref)
+import { useLightbox } from './lightboxStore'
 
 const MIN_SCALE = 1
 const MAX_SCALE = 6
@@ -48,7 +33,7 @@ export async function copyPictureTo(ref: PictureRef) {
 export async function savePictureTo(ref: PictureRef) {
   try {
     const out = await savePictureAs(ref)
-    if (out) showToast(t('Сохранено: {path}', { path: out }), 'ok')
+    if (out) showToast(t('Сохранено: {path}', { path: out }), 'ok', undefined, openFolderAction(out))
   } catch (e) {
     showToast('' + e, 'error')
   }

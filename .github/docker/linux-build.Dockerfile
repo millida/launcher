@@ -27,6 +27,9 @@ RUN apt-get update \
       xdg-utils \
       desktop-file-utils \
       binutils \
+      rpm2cpio \
+      cpio \
+      zstd \
       libgstreamer1.0-0 \
       libgstreamer-plugins-base1.0-0 \
       gstreamer1.0-plugins-base \

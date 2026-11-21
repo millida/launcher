@@ -112,6 +112,9 @@ pub fn toggle_content(profile: &str, kind: &str, name: &str, enable: bool) -> Re
     let dir = profile_dir(profile).join(content_dir(kind));
     let on = safe_child(&dir, &file)?;
     let off = safe_child(&dir, &format!("{}.disabled", file))?;
+    if enable && kind == "mod" {
+        forget_kept_off(profile, if off.exists() { &off } else { &on }, &file);
+    }
     let (from, to) = if enable { (off, on) } else { (on, off) };
     if from.exists() { std::fs::rename(&from, &to).map_err(file_busy)?; }
     if kind == "mod" && is_injected_skin_mod(&file) {
@@ -119,6 +122,37 @@ pub fn toggle_content(profile: &str, kind: &str, name: &str, enable: bool) -> Re
     }
     Ok(())
 }
+/// Loader ids a mod file answers for: its own id and what it provides.
+fn mod_ids_of(path: &std::path::Path, file: &str) -> Vec<String> {
+    let m = read_file_meta(path, "mod", file);
+    std::iter::once(m.mod_id).chain(m.provides).filter(|id| !id.is_empty()).collect()
+}
+
+/// Switching a mod on ends «switched off on purpose»: launch repair may look after it again.
+fn forget_kept_off(profile: &str, path: &std::path::Path, file: &str) {
+    if kept_off_mod_ids(profile).is_empty() || !path.exists() {
+        return;
+    }
+    let _ = set_kept_off_mod_ids(profile, &mod_ids_of(path, file), false);
+}
+
+/// The player switched these mods off although other enabled mods need them
+/// («Выключить только этот»): launch must not install a copy back.
+pub fn keep_mods_off(profile: &str, names: &[String]) -> Result<(), String> {
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    let mut ids: Vec<String> = vec![];
+    for name in names {
+        let file = safe_file_name(name)?;
+        let on = safe_child(&dir, &file)?;
+        let off = safe_child(&dir, &format!("{}.disabled", file))?;
+        let path = if off.exists() { off } else { on };
+        if path.exists() {
+            ids.extend(mod_ids_of(&path, &file));
+        }
+    }
+    set_kept_off_mod_ids(profile, &ids, true)
+}
+
 pub fn toggle_mod(profile: &str, name: &str, enable: bool) -> Result<(), String> { toggle_content(profile, "mod", name, enable) }
 
 pub fn delete_content(profile: &str, kind: &str, name: &str) -> Result<(), String> {

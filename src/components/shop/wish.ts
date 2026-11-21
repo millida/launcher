@@ -1,4 +1,3 @@
-import { api } from '../../lib/api'
 import type { ItemRef, ShopCard, ShopDay, ShopSource, Workshop } from '../../lib/rubies'
 
 /**
@@ -44,25 +43,11 @@ export interface WishList {
   missing: number
 }
 
-/** Докупить ровно недостающее по базовому курсу (7 рубинов = 1 ₽), без пакета. */
-export const buyExact = (rubies: number) =>
-  api<{ rubies: number; kopecks: number; balance: number }>('/rubies/topup', {
-    method: 'POST',
-    body: JSON.stringify({ rubies }),
-  })
-
 /** Копейки за 1 рубин по базовому курсу v3: 7 рубинов за рубль (≈14,29 коп.). */
 export const RUBY_KOPECKS = 100 / 7
 
 /** Копейки за N рубинов, вверх до копейки: дробной цены не бывает. */
 export const kopecksFor = (rubies: number) => Math.ceil(rubies * RUBY_KOPECKS)
-
-/**
- * Сколько рубинов просить у /rubies/topup: вверх до кратного 7. Служба считает
- * `rubies * 100/7` копеек и кладёт в целое поле — на некратном числе падала
- * с 500 (6 раз из 7). Кратное 7 — ровные рубли, лишних максимум 6 рубинов.
- */
-export const topUpRubies = (missing: number) => Math.max(7, Math.ceil(missing / 7) * 7)
 
 /** Карточки магазина дня с их источником покупки. */
 export function shopCards(day: ShopDay): [ShopCard, ShopSource][] {

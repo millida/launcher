@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { useT } from '../../i18n'
 import { showToast } from '../../state/ui'
+import { openFolderAction } from '../../lib/savedFile'
 import { uiConfirm } from '../../state/confirm'
 import { hasTauri } from '../../ipc/tauri'
 import { hostDownload, hostUpload } from '../../ipc/commands'
@@ -68,7 +69,7 @@ export function TabWorld({
     const unlisten = await listenHostWorldDownload(setWorldProgress)
     try {
       const path = await hostDownload(serverId)
-      showToast(path ? t('Мир сохранён: {path}', { path }) : t('Отменено'))
+      showToast(path ? t('Мир сохранён: {path}', { path }) : t('Отменено'), undefined, undefined, openFolderAction(path))
     } catch (e) {
       showToast(t('Не удалось скачать: {error}', { error: errText(e) }), 'error')
     } finally {
