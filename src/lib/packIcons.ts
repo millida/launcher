@@ -1,5 +1,5 @@
 // Modpack icons from the catalog: metadata comes through our API (/launcher/mr), pictures from blocked CDNs go through api.millida.net/launcher/dl.
-import { api, mirrorAsset, MODRINTH_API } from './api'
+import { api, mirrorAsset, MODRINTH_API, sharedFetch } from './api'
 import { DEFAULT_ICON } from './buildIcon'
 import { loadProfileSettings, setProfileIcon } from '../ipc/commands'
 import type { Profile } from '../ipc/commands'
@@ -26,7 +26,7 @@ async function catalogIcon(slug: string): Promise<string | null> {
 }
 
 async function modrinthIcon(slug: string): Promise<string | null> {
-  const r = await fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).catch(() => null)
+  const r = await sharedFetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(slug)).catch(() => null)
   if (!r || !r.ok) return null
   const p = (await r.json().catch(() => null)) as { icon_url?: string | null } | null
   return p && p.icon_url ? mirrorAsset(p.icon_url) || p.icon_url : null

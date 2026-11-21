@@ -76,12 +76,28 @@ if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window) && new URLSearchPa
   const modsDemo = new URLSearchParams(location.search).get('mods')
   if (modsDemo) setTimeout(() => void import('./lib/demoServerMods').then((m) => m.showServerModsDemo(modsDemo)), 900)
 
+  // `&crash=dup|culprit|added` opens the crash dialog with a repair (demoCrashInfo in src/lib/demo.ts).
+  const crashDemo = new URLSearchParams(location.search).get('crash')
+  if (crashDemo)
+    setTimeout(
+      () =>
+        void Promise.all([import('./lib/demo'), import('./state/crash')]).then(([d, c]) => {
+          const info = d.demoCrashInfo(crashDemo)
+          if (info) c.useCrash.getState().show(info)
+        }),
+      900,
+    )
+
   // `&launch=installing|running` и `&screen=…` — состояния запуска (src/lib/demoLaunch.ts).
   const launchDemo = new URLSearchParams(location.search).get('launch')
   if (launchDemo) {
     const screen = new URLSearchParams(location.search).get('screen')
     setTimeout(() => void import('./lib/demoLaunch').then((m) => m.installLaunchDemo(launchDemo, screen)), 800)
   }
+
+  // `&toast=folder|undo` shows a toast with an action: «Открыть папку» after a save, «Откатить» after «Обновить всё».
+  const toastDemo = new URLSearchParams(location.search).get('toast')
+  if (toastDemo) setTimeout(() => void import('./lib/demoSnapshots').then((m) => m.showToastDemo(toastDemo)), 900)
 }
 
 // Тишина при разработке: VITE_NO_MUSIC=1 в .env.local выключает автозапуск

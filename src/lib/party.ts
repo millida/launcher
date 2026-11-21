@@ -341,3 +341,12 @@ export function lfgTagsOk(t: LfgTags): boolean {
     typeof t.voice === 'boolean'
   )
 }
+
+/**
+ * Отказ службы пати, который касается только голоса («голосовой чат работает
+ * только в публичной игре»): примечание, а не запрет на запуск (17.11.2026).
+ */
+export function voiceOnlyRefusal(e: unknown): boolean {
+  const raw = String((e as { message?: string } | null)?.message ?? e ?? '').trim()
+  return /голосов|voice/i.test(raw) && !/^http \d{3}$/i.test(raw)
+}

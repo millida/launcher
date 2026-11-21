@@ -220,8 +220,65 @@ pub(crate) fn profile_name_taken(n: &str) -> bool {
 }
 
 pub fn profile_dir(name: &str) -> PathBuf {
+    profile_dir_in(&game_root().join("profiles"), name)
+}
+
+/// Builds made before folder names became ASCII keep the folder they have;
+/// only a build without one gets the ASCII name.
+fn profile_dir_in(root: &std::path::Path, name: &str) -> PathBuf {
+    let legacy = root.join(legacy_dir_name(name));
+    if legacy.exists() {
+        return legacy;
+    }
+    root.join(ascii_dir_name(name))
+}
+
+fn legacy_dir_name(name: &str) -> String {
     let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c=='-' || *c=='_').collect();
-    game_root().join("profiles").join(if safe.is_empty() { "default".into() } else { safe })
+    if safe.is_empty() { "default".into() } else { safe }
+}
+
+/// Java reads the game folder through the ANSI code page, and a letter outside
+/// it becomes `?` and an InvalidPathException. Cyrillic is spelled in Latin;
+/// any other letter is dropped and a hash of the full name keeps such names
+/// apart.
+fn ascii_dir_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut dropped = false;
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            out.push(c);
+        } else if let Some(latin) = cyrillic_in_latin(c) {
+            out.push_str(&latin);
+        } else if c.is_alphanumeric() {
+            dropped = true;
+        }
+    }
+    if dropped {
+        use sha1::Digest;
+        let digest = sha1::Sha1::digest(name.as_bytes());
+        let tag: String = digest.iter().take(4).map(|b| format!("{:02x}", b)).collect();
+        return if out.is_empty() { tag } else { format!("{}-{}", out, tag) };
+    }
+    if out.is_empty() { "default".into() } else { out }
+}
+
+fn cyrillic_in_latin(c: char) -> Option<String> {
+    let lower = c.to_lowercase().next()?;
+    let latin = match lower {
+        'а' => "a", 'б' => "b", 'в' => "v", 'г' => "g", 'д' => "d", 'е' => "e", 'ё' => "e",
+        'ж' => "zh", 'з' => "z", 'и' => "i", 'й' => "y", 'к' => "k", 'л' => "l", 'м' => "m",
+        'н' => "n", 'о' => "o", 'п' => "p", 'р' => "r", 'с' => "s", 'т' => "t", 'у' => "u",
+        'ф' => "f", 'х' => "kh", 'ц' => "ts", 'ч' => "ch", 'ш' => "sh", 'щ' => "shch",
+        'ъ' => "", 'ы' => "y", 'ь' => "", 'э' => "e", 'ю' => "yu", 'я' => "ya",
+        'і' => "i", 'ї' => "yi", 'є' => "ye", 'ґ' => "g", 'ў' => "u",
+        _ => return None,
+    };
+    if lower == c {
+        return Some(latin.to_string());
+    }
+    let mut chars = latin.chars();
+    Some(chars.next().map(|first| first.to_ascii_uppercase().to_string() + chars.as_str()).unwrap_or_default())
 }
 
 /// Sidecar descriptor used to restore a profile moved or copied by hand.
@@ -505,7 +562,7 @@ pub(crate) struct PackEntry {
 
 /// Dot-named, so the build list never adopts it; beside the build, so moving a
 /// file out of it is a rename on one disk.
-fn pack_stage_dir(pdir: &std::path::Path) -> Result<PathBuf, String> {
+pub(crate) fn pack_stage_dir(pdir: &std::path::Path) -> Result<PathBuf, String> {
     let name = pdir.file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty());
     match (name, pdir.parent()) {
         (Some(name), Some(root)) => Ok(root.join(format!(".millida-pack-stage-{}", name))),
@@ -516,16 +573,22 @@ fn pack_stage_dir(pdir: &std::path::Path) -> Result<PathBuf, String> {
 /// Puts the fetched files of a pack into the build and only then drops what
 /// the previous version left in mods/. Nothing is removed before every new
 /// file is in place, so a failure here costs the player no mod they had.
-fn place_pack_files(
+pub(crate) fn place_pack_files(
     listed: &[String],
     stage: &std::path::Path,
     pdir: &std::path::Path,
     own_mods: &std::collections::HashSet<String>,
 ) -> Result<(), String> {
     let mut keep: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    let switched_off = pack_mods_switched_off(pdir, own_mods);
     for rel in listed {
         let from = safe_join(stage, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
-        let to = safe_join(pdir, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        let mut to = safe_join(pdir, rel).map_err(|e| format!("Сборка содержит небезопасный путь: {}", e))?;
+        if switched_off.covers(rel) {
+            let mut off = to.into_os_string();
+            off.push(".disabled");
+            to = PathBuf::from(off);
+        }
         let busy = |e: std::io::Error| {
             format!("Не удалось положить {} в сборку: {}. Закрой игру и папку сборки, затем обнови ещё раз", rel, e)
         };
@@ -539,6 +602,56 @@ fn place_pack_files(
     }
     prune_mods_outside(pdir, &keep, own_mods);
     Ok(())
+}
+
+/// Pack mods the player switched off (`mods/<name>.disabled`, not one of their own mods). An update
+/// puts the new file of such a mod switched off too: before, the old `.disabled` was pruned and the
+/// new version came in on, so the update quietly turned back on what the player had turned off.
+struct SwitchedOff {
+    names: std::collections::HashSet<String>,
+    stems: std::collections::HashSet<String>,
+}
+
+impl SwitchedOff {
+    /// `rel` is a mod straight in mods/ whose file, or whose name without the version, was switched off.
+    fn covers(&self, rel: &str) -> bool {
+        let Some(name) = rel.strip_prefix("mods/").filter(|n| !n.contains(['/', '\\'])) else { return false };
+        if name.ends_with(".disabled") {
+            return false;
+        }
+        self.names.contains(&name.to_lowercase()) || mod_stem(name).is_some_and(|s| self.stems.contains(&s))
+    }
+}
+
+fn pack_mods_switched_off(pdir: &std::path::Path, own_mods: &std::collections::HashSet<String>) -> SwitchedOff {
+    let mut out = SwitchedOff { names: Default::default(), stems: Default::default() };
+    let Ok(rd) = std::fs::read_dir(pdir.join("mods")) else { return out };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(base) = name.strip_suffix(".disabled") else { continue };
+        if base.is_empty() || own_mods.contains(base) || !e.path().is_file() {
+            continue;
+        }
+        if let Some(stem) = mod_stem(base) {
+            out.stems.insert(stem);
+        }
+        out.names.insert(base.to_lowercase());
+    }
+    out
+}
+
+/// A mod file name without its version: «jei-1.20.1-forge-15.2.0.27.jar» → «jei»,
+/// «Xaeros_Minimap_24.0_Forge.jar» → «xaeros-minimap». The words before the first one that
+/// starts with a digit (or «v1», «mc1.20»). None when the name starts with the version.
+fn mod_stem(name: &str) -> Option<String> {
+    let lower = name.to_lowercase();
+    let base = lower.strip_suffix(".jar").unwrap_or(&lower);
+    let versioned = |w: &str| {
+        let w = w.strip_prefix("mc").or_else(|| w.strip_prefix('v')).unwrap_or(w);
+        w.starts_with(|c: char| c.is_ascii_digit())
+    };
+    let words: Vec<&str> = base.split(['-', '_', '+', ' ']).take_while(|w| !versioned(w)).filter(|w| !w.is_empty()).collect();
+    (!words.is_empty()).then(|| words.join("-"))
 }
 
 /// The pack owns mods/: what its previous version left there would duplicate
@@ -826,6 +939,44 @@ mod tests {
         assert_ne!(profile_dir("Sky Factory 4"), profile_dir("Sky Factory 4 (2)"));
     }
 
+    #[test]
+    fn new_build_folders_are_plain_ascii() {
+        let cases: [(&str, &str, &str); 5] = [
+            ("Sky Factory 4", "SkyFactory4", "ASCII names keep the folder they always had"),
+            ("Моя сборка", "Moyasborka", "Cyrillic is spelled in Latin"),
+            ("Щука Ёж", "ShchukaEzh", "a capital keeps only its first Latin letter capital"),
+            ("!!!", "default", "a name without letters still gets a folder"),
+            ("Подъезд", "Podezd", "the hard sign has no Latin letter"),
+        ];
+        for (name, want, why) in cases {
+            assert_eq!(ascii_dir_name(name), want, "{name}: {why}");
+        }
+    }
+
+    #[test]
+    fn letters_java_cannot_read_never_reach_the_folder_name() {
+        let exotic = ["Ꙭ Mystic Realms", "Ωmega", "李的世界", "Café"];
+        for name in exotic {
+            let dir = ascii_dir_name(name);
+            assert!(dir.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'), "{name} -> {dir}");
+        }
+        assert_ne!(ascii_dir_name("Ωmega"), ascii_dir_name("Ψmega"), "names that differ only in a dropped letter keep apart");
+        assert_ne!(ascii_dir_name("Ωmega"), ascii_dir_name("mega"), "a dropped letter never lands on a plain name's folder");
+        assert_eq!(ascii_dir_name("Ωmega"), ascii_dir_name("Ωmega"), "the same name always finds its folder again");
+    }
+
+    #[test]
+    fn an_existing_build_keeps_its_folder() {
+        let root = std::env::temp_dir().join(format!("millida-profile-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("Моясборка")).unwrap();
+        std::fs::create_dir_all(root.join("Ωmega")).unwrap();
+        assert_eq!(profile_dir_in(&root, "Моя сборка"), root.join("Моясборка"), "a build made before keeps its Cyrillic folder");
+        assert_eq!(profile_dir_in(&root, "Ωmega"), root.join("Ωmega"), "folders are never renamed");
+        assert_eq!(profile_dir_in(&root, "Новая сборка"), root.join("Novayasborka"), "a new build gets the ASCII folder");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// An update of a Modrinth pack used to empty mods/ before the first byte
     /// of the next version was fetched, the player's own mods included.
     #[test]
@@ -869,6 +1020,63 @@ mod tests {
             assert_eq!(std::fs::read_to_string(pdir.join(rel)).ok().as_deref(), want, "«{rel}»: {why}");
         }
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A pack mod the player switched off stays off through an update, under its old name or a new version.
+    #[test]
+    fn a_pack_update_keeps_the_mods_the_player_switched_off() {
+        let base = std::env::temp_dir().join(format!("millida-pack-off-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (stage, pdir) = (base.join("stage"), base.join("build"));
+        let put = |root: &std::path::Path, rel: &str, body: &str| {
+            let p = root.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        };
+        for (rel, body) in [
+            ("mods/same.jar.disabled", "v1"),
+            ("mods/jei-1.20.1-forge-15.2.0.27.jar.disabled", "v1"),
+            ("mods/sodium-0.5.8.jar", "v1"),
+        ] {
+            put(&pdir, rel, body);
+        }
+        let listed = vec![
+            "mods/same.jar".to_string(),
+            "mods/jei-1.20.1-forge-15.3.0.4.jar".to_string(),
+            "mods/sodium-0.5.9.jar".to_string(),
+        ];
+        for rel in &listed {
+            put(&stage, rel, "v2");
+        }
+        place_pack_files(&listed, &stage, &pdir, &Default::default()).expect("новая версия раскладывается");
+        let cases: [(&str, Option<&str>, &str); 7] = [
+            ("mods/same.jar.disabled", Some("v2"), "мод с тем же именем обновлён и остался выключенным"),
+            ("mods/same.jar", None, "и не включился"),
+            ("mods/jei-1.20.1-forge-15.3.0.4.jar.disabled", Some("v2"), "новая версия выключенного мода приходит выключенной"),
+            ("mods/jei-1.20.1-forge-15.3.0.4.jar", None, "а не включённой"),
+            ("mods/jei-1.20.1-forge-15.2.0.27.jar.disabled", None, "старая версия убрана"),
+            ("mods/sodium-0.5.9.jar", Some("v2"), "включённый мод приходит включённым"),
+            ("mods/sodium-0.5.8.jar", None, "его старая версия убрана"),
+        ];
+        for (rel, want, why) in cases {
+            assert_eq!(std::fs::read_to_string(pdir.join(rel)).ok().as_deref(), want, "«{rel}»: {why}");
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_mod_name_without_its_version() {
+        let cases: [(&str, Option<&str>); 6] = [
+            ("jei-1.20.1-forge-15.2.0.27.jar", Some("jei")),
+            ("Xaeros_Minimap_24.0_Forge.jar", Some("xaeros-minimap")),
+            ("sodium-fabric-0.5.8+mc1.20.1.jar", Some("sodium-fabric")),
+            ("create-mc1.20.1-0.5.1.jar", Some("create")),
+            ("appleskin-forge-v2.5.1.jar", Some("appleskin-forge")),
+            ("1.20.1-something.jar", None),
+        ];
+        for (name, want) in cases {
+            assert_eq!(mod_stem(name).as_deref(), want, "{name}");
+        }
     }
 
     /// вход (запись индекса) -> вердикт. Индекс проверяется целиком до первой

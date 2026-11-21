@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::engine::*;
 use super::launch::SYSTEM_MEMORY_REASON;
-use super::crashcause::{is_platform_id, loader_findings, LoaderFinding, ModRef};
+use super::crashcause::{frame_culprits, is_platform_id, loader_findings, FrameCulprit, LoaderFinding, ModRef};
 
 /// One button under the crash message. `kind` is a closed set the core knows
 /// how to perform; `arg` is its only parameter and is re-checked when applied.
@@ -448,22 +448,7 @@ fn finding_actions(findings: &[LoaderFinding], file_of: FileOf, has_source: HasS
                     LoaderFinding::Suspected { .. } => "Отчёт о вылете указывает на этот мод",
                     _ => "Мод не подошёл к игре или соседним модам",
                 };
-                let off = CrashAction::new("disable-mod", format!("Отключить «{}»", by.name), file.clone(), why);
-                if has_source(file.as_str()) {
-                    add_action(
-                        &mut out,
-                        CrashAction::new(
-                            "set-mod-version",
-                            format!("Обновить «{}»", by.name),
-                            format!("{}|*", file),
-                            "Поставим его последнюю версию под эту сборку",
-                        ),
-                        Some(file.clone()),
-                    );
-                    add_action(&mut out, off.alternative(), Some(file));
-                } else {
-                    add_action(&mut out, off, Some(file));
-                }
+                blame_actions(&mut out, &by.name, file, why, has_source);
             }
             LoaderFinding::WrongLoader { file, loader } => {
                 let why = format!("Это мод для {}", loader);
@@ -492,7 +477,8 @@ fn finding_actions(findings: &[LoaderFinding], file_of: FileOf, has_source: HasS
                 }
             }
             LoaderFinding::Duplicate { id, files } => {
-                let Some(kept) = file_of(id.as_str()).filter(|k| files.contains(k)).or_else(|| files.last().cloned()) else { continue };
+                // `settle_duplicates` puts the newest copy last: that one stays.
+                let Some(kept) = files.last().cloned() else { continue };
                 for extra in files.iter().filter(|f| **f != kept) {
                     add_action(
                         &mut out,
@@ -508,6 +494,148 @@ fn finding_actions(findings: &[LoaderFinding], file_of: FileOf, has_source: HasS
             }
         }
     }
+    out
+}
+
+/// A mod named as the one that broke: its newest version when the build knows
+/// where it came from, switching it off as the alternative; only switching it
+/// off for a hand-dropped jar.
+fn blame_actions(out: &mut Vec<(CrashAction, Option<String>)>, name: &str, file: String, why: &str, has_source: HasSource) {
+    let off = CrashAction::new("disable-mod", format!("Отключить «{}»", name), file.clone(), why);
+    if has_source(file.as_str()) {
+        add_action(
+            out,
+            CrashAction::new(
+                "set-mod-version",
+                format!("Обновить «{}»", name),
+                format!("{}|*", file),
+                "Поставим его последнюю версию под эту сборку",
+            ),
+            Some(file.clone()),
+        );
+        add_action(out, off.alternative(), Some(file));
+    } else {
+        add_action(out, off, Some(file));
+    }
+}
+
+type JarsOf<'a> = &'a dyn Fn(&str) -> Vec<String>;
+type VersionOf<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+/// Every duplicate gets its files from the build when the loader did not list
+/// them (Quilt, Fabric), and the files go oldest first, so the newest version
+/// is the one kept. A copy whose version cannot be read counts as the oldest.
+fn settle_duplicates(findings: Vec<LoaderFinding>, jars_of: JarsOf, version_of: VersionOf) -> Vec<LoaderFinding> {
+    findings
+        .into_iter()
+        .filter_map(|f| match f {
+            LoaderFinding::Duplicate { id, files } => {
+                let mut files = if files.len() < 2 { jars_of(id.as_str()) } else { files };
+                if files.len() < 2 {
+                    return None;
+                }
+                files.sort_by(|a, b| match (version_of(a), version_of(b)) {
+                    (Some(x), Some(y)) => cmp_version(&x, &y),
+                    (None, Some(_)) => std::cmp::Ordering::Less,
+                    (Some(_), None) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
+                });
+                Some(LoaderFinding::Duplicate { id, files })
+            }
+            other => Some(other),
+        })
+        .collect()
+}
+
+/// Enabled jars of the build that register `id`.
+fn enabled_jars_with_id(profile: &str, metas: &std::collections::HashMap<String, LocalMeta>, id: &str) -> Vec<String> {
+    let mods = profile_dir(profile).join(content_dir("mod"));
+    let mut out: Vec<String> = metas
+        .values()
+        .filter(|m| m.mod_id.eq_ignore_ascii_case(id) && mods.join(&m.file_name).is_file())
+        .map(|m| m.file_name.clone())
+        .collect();
+    out.sort();
+    out
+}
+
+/// `com/foo/bar/Baz` -> `com/foo/bar/`. Two levels are too generic to name a
+/// mod (`com/example/`), so a package needs at least three.
+fn class_package(class: &str) -> Option<String> {
+    let (pkg, _) = class.rsplit_once('/')?;
+    (pkg.matches('/').count() >= 2).then(|| format!("{}/", pkg))
+}
+
+/// For each class, the enabled jar that carries it, or failing that a jar with
+/// classes in its package. Each jar is opened once for all of them.
+fn jars_owning(profile: &str, classes: &[String]) -> Vec<Option<String>> {
+    let mut exact: Vec<Option<String>> = vec![None; classes.len()];
+    let mut near: Vec<Option<String>> = vec![None; classes.len()];
+    let packages: Vec<Option<String>> = classes.iter().map(|c| class_package(c.as_str())).collect();
+    let Ok(dir) = std::fs::read_dir(profile_dir(profile).join(content_dir("mod"))) else { return exact };
+    for e in dir.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.to_ascii_lowercase().ends_with(".jar") {
+            continue;
+        }
+        let Ok(file) = std::fs::File::open(e.path()) else { continue };
+        let Ok(mut jar) = zip::ZipArchive::new(file) else { continue };
+        for (i, class) in classes.iter().enumerate() {
+            if exact[i].is_none() && jar.by_name(&format!("{}.class", class)).is_ok() {
+                exact[i] = Some(name.clone());
+            }
+        }
+        let open: Vec<usize> = (0..classes.len()).filter(|&i| exact[i].is_none() && near[i].is_none() && packages[i].is_some()).collect();
+        if open.is_empty() {
+            continue;
+        }
+        for entry in jar.file_names() {
+            for &i in &open {
+                if near[i].is_none() && packages[i].as_deref().is_some_and(|p| entry.starts_with(p)) {
+                    near[i] = Some(name.clone());
+                }
+            }
+        }
+    }
+    exact.into_iter().zip(near).map(|(e, n)| e.or(n)).collect()
+}
+
+/// How many links of the exception chain are matched against jars: past the
+/// first few the frames are the game calling the mod, not the mod failing.
+const FRAME_CANDIDATES: usize = 4;
+
+/// The mod whose code the fatal exception came out of, as a button, when the
+/// loader itself named nobody.
+fn frame_actions(profile: &str, log_text: &str, has_source: HasSource) -> Vec<(CrashAction, Option<String>)> {
+    let hints: Vec<FrameCulprit> = frame_culprits(log_text).into_iter().take(FRAME_CANDIDATES).collect();
+    if hints.is_empty() {
+        return vec![];
+    }
+    let classes: Vec<String> = hints
+        .iter()
+        .filter_map(|h| match h {
+            FrameCulprit::Class(c) => Some(c.clone()),
+            FrameCulprit::Mixin(_) => None,
+        })
+        .collect();
+    let owners = if classes.is_empty() { vec![] } else { jars_owning(profile, &classes) };
+    let file = hints.iter().find_map(|h| match h {
+        FrameCulprit::Mixin(id) => file_for_mod(profile, id),
+        FrameCulprit::Class(c) => classes.iter().position(|x| x == c).and_then(|i| owners.get(i).cloned().flatten()),
+    });
+    let Some(file) = file else { return vec![] };
+    let metas = local_meta_map(profile, "mod");
+    let meta = metas.get(&file);
+    let id = meta.map(|m| m.mod_id.to_lowercase()).unwrap_or_default();
+    let name = meta
+        .map(|m| if m.title.is_empty() { m.mod_id.clone() } else { m.title.clone() })
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| file.clone());
+    if is_own(&ModRef { name: name.clone(), id }) {
+        return vec![];
+    }
+    let mut out = vec![];
+    blame_actions(&mut out, &name, file, "Вылет случился в коде этого мода", has_source);
     out
 }
 
@@ -536,9 +664,24 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
     let mut culprits: Vec<String> = vec![];
 
     let sourced = sourced_files(profile);
-    let found = finding_actions(&loader_findings(log_text), &|name: &str| file_for_mod(profile, name), &|file: &str| {
-        sourced.iter().any(|f| f == file)
-    });
+    let has_source = |file: &str| sourced.iter().any(|f| f == file);
+    let metas = local_meta_map(profile, "mod");
+    let findings = settle_duplicates(
+        loader_findings(log_text),
+        &|id: &str| enabled_jars_with_id(profile, &metas, id),
+        &|file: &str| metas.get(file).map(|m| m.version.clone()).filter(|v| !v.is_empty()),
+    );
+    let mut found = finding_actions(&findings, &|name: &str| file_for_mod(profile, name), &has_source);
+    let java_verdict = low.contains("java") && (low.contains("верси") || low.contains("нужна"));
+    let elsewhere = low.contains("оператив")
+        || low.contains("памяти")
+        || low.contains("драйвер")
+        || java_verdict
+        || driver_link(reason).is_some()
+        || renderer_missing(&log_text.to_lowercase());
+    if found.is_empty() && !elsewhere {
+        found = frame_actions(profile, log_text, &has_source);
+    }
     for (action, culprit) in found {
         if let Some(file) = culprit {
             if !culprits.contains(&file) {
@@ -590,7 +733,7 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
         }
     }
 
-    if low.contains("java") && (low.contains("верси") || low.contains("нужна")) {
+    if java_verdict {
         let major = java_major_for(&profile_version(profile));
         match newer_class(log_text) {
             // A jar built for a newer Java than the game version runs on. The game's
@@ -628,6 +771,17 @@ pub fn diagnose(profile: &str, reason: &str, tail: &str, log_text: &str) -> Cras
             String::new(),
             "Добавь её в исключения антивируса",
         ));
+    }
+
+    // Nothing named a cause, but the build started fine before these mods came in.
+    if actions.is_empty() && !elsewhere {
+        if let Some(added) = super::goodrun::mods_added_since_good_run(profile) {
+            if let Ok(arg) = serde_json::to_string(&added) {
+                let mut off = CrashAction::new("disable-added", format!("Выключить новые моды ({})", added.len()), arg, "Без них сборка запускалась");
+                off.steps = added;
+                actions.push(off);
+            }
+        }
     }
 
     // Repair is the fallback, not the first idea: it re-downloads the client and
@@ -732,6 +886,19 @@ async fn apply_step(app: tauri::AppHandle, profile: String, kind: String, arg: S
             let file = safe_file_name(&arg)?;
             toggle_content(&profile, "mod", &file, false)?;
             Ok(format!("Мод «{}» отключён", file))
+        }
+        "disable-added" => {
+            let asked: Vec<String> = serde_json::from_str(&arg).map_err(|_| "Некорректный список модов".to_string())?;
+            // Only what the core itself still counts as added since the good launch.
+            let added = super::goodrun::mods_added_since_good_run(&profile).unwrap_or_default();
+            let files: Vec<String> = asked.into_iter().filter(|f| added.contains(f)).collect();
+            if files.is_empty() {
+                return Err("Новые моды уже выключены или удалены — запусти игру ещё раз".into());
+            }
+            for f in &files {
+                toggle_content(&profile, "mod", &safe_file_name(f)?, false)?;
+            }
+            Ok(format!("Выключено новых модов: {}. Запусти игру ещё раз.", files.len()))
         }
         "update-loader" => {
             let (id, range) = dep_arg(&arg)?;
@@ -1091,5 +1258,67 @@ mod tests {
         let diag = diagnose("Test", "Игра упала внутри драйвера видеокарты NVIDIA — сама игра тут ни при чём.", "", "");
         let link = diag.actions.iter().find(|a| a.kind == "open-url").map(|a| a.arg.clone());
         assert_eq!(link.as_deref(), Some("https://www.nvidia.com/Download/index.aspx"));
+    }
+
+    /// duplicate as the loader printed it x versions in the build -> which copy
+    /// goes off. The newest copy stays: switching it off would undo the update
+    /// the player most likely just made.
+    #[test]
+    fn a_duplicate_keeps_its_newest_copy() {
+        let versions = |file: &str| -> Option<String> {
+            match file {
+                "sodium-0.5.3.jar" => Some("0.5.3+mc1.20.1".into()),
+                "sodium-0.5.8.jar" => Some("0.5.8+mc1.20.1".into()),
+                "jei-old.jar" => Some("15.2.0.27".into()),
+                "jei-new.jar" => Some("15.3.0.4".into()),
+                _ => None,
+            }
+        };
+        let jars = |id: &str| -> Vec<String> {
+            match id {
+                "sodium" => vec!["sodium-0.5.8.jar".into(), "sodium-0.5.3.jar".into()],
+                _ => vec![],
+            }
+        };
+        let none = |_: &str| -> Option<String> { None };
+        let sourced = |_: &str| false;
+        let dup = |id: &str, files: &[&str]| LoaderFinding::Duplicate { id: id.into(), files: files.iter().map(|f| f.to_string()).collect() };
+        let cases: Vec<(&str, LoaderFinding, Vec<&str>)> = vec![
+            ("Quilt/Fabric не назвали файлы — берутся из сборки, выключается старший по возрасту", dup("sodium", &[]), vec!["sodium-0.5.3.jar"]),
+            ("загрузчик перечислил новую копию первой — порядок не решает", dup("jei", &["jei-new.jar", "jei-old.jar"]), vec!["jei-old.jar"]),
+            ("версия одной копии не прочлась — она и уходит", dup("jei", &["jei-new.jar", "mystery.jar"]), vec!["mystery.jar"]),
+            ("в сборке одна копия — выключать нечего", dup("create", &[]), vec![]),
+        ];
+        for (why, finding, want) in cases {
+            let settled = settle_duplicates(vec![finding], &jars, &versions);
+            let off: Vec<String> = finding_actions(&settled, &none, &sourced)
+                .into_iter()
+                .filter(|(a, _)| a.kind == "disable-mod")
+                .map(|(a, _)| a.arg)
+                .collect();
+            assert_eq!(off, want.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{why}");
+        }
+    }
+
+    /// class -> package that may name its jar. Two levels are shared by
+    /// unrelated mods of one author or one host, three are a mod's own.
+    #[test]
+    fn only_a_deep_package_names_a_jar() {
+        let cases: [(&str, Option<&str>, &str); 3] = [
+            ("com/simibubi/create/Create", Some("com/simibubi/create/"), "пакет мода"),
+            ("com/example/Foo", None, "слишком общий пакет"),
+            ("Foo", None, "класс без пакета"),
+        ];
+        for (class, want, why) in cases {
+            assert_eq!(class_package(class).as_deref(), want, "{class}: {why}");
+        }
+    }
+
+    /// A crash nothing explains, in a build that never ran with this kind of
+    /// state recorded, gets no «switch off new mods» guess.
+    #[test]
+    fn no_good_launch_on_record_means_no_new_mods_offer() {
+        let diag = diagnose("Test-no-such-profile", "Игра вылетела. Загляни в лог — там причина.", "", "");
+        assert!(!diag.actions.iter().any(|a| a.kind == "disable-added"), "без записи об удачном запуске гадать нечего");
     }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
-import { openImage } from '../ImageLightbox'
+import { openImage } from '../lightboxStore'
 import { mirrorAsset } from '../../lib/api'
 import { fmtN } from '../../lib/format'
 import { untilText } from '../../lib/premium'

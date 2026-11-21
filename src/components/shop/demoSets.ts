@@ -54,6 +54,11 @@ const SET_DEFS: SetDef[] = [
   { id: 'rain', title: 'Дождливый день', theme: 'cozy', items: ['RAIN_JACKET', 'RAIN_BOOTS', 'RAIN_PARTICLES'] },
   { id: 'basketball', title: 'Баскетболист', theme: 'cozy', items: ['BASKETBALL_JERSEY', 'BASKETBALL_SHORTS', 'BASKETBALL_SNEAKERS'] },
   { id: 'anime', title: 'Аниме-самурай', theme: 'cozy', items: ['ANIME_BUNS', 'ANIME_DRESS', 'DOUBLE_KATANA'] },
+  { id: 'street_heist', title: 'Ограбление', theme: 'street', items: ['MILLIDA_ROBBER_BALACLAVA', 'MILLIDA_CASH_DUFFEL', 'MILLIDA_WANTED_STARS', 'MILLIDA_BIKER_JACKET', 'MILLIDA_BIKER_PANTS'] },
+  { id: 'street_miami', title: 'Майами', theme: 'street', items: ['MILLIDA_FLORIDA_SHIRT', 'MILLIDA_NEON_AVIATORS', 'MILLIDA_BANDANA_BRAID', 'MILLIDA_FLAMINGO_PET'] },
+  { id: 'street_gator', title: 'Аллигатор', theme: 'street', items: ['MILLIDA_GATOR_HOOD', 'MILLIDA_GATOR_TOP', 'MILLIDA_GATOR_PANTS', 'MILLIDA_GATOR_PET'] },
+  { id: 'street_jail', title: 'За решёткой', theme: 'street', items: ['MILLIDA_PRISON_SHIRT', 'MILLIDA_PRISON_PANTS', 'MILLIDA_WANTED_STARS'] },
+  { id: 'street_patrol', title: 'Патруль', theme: 'street', items: ['MILLIDA_POLICE_CAR_COSTUME', 'MILLIDA_POLICE_SIREN_HAT', 'MILLIDA_NEON_AVIATORS'] },
 ]
 
 const SET_DISCOUNT_PCT = 20

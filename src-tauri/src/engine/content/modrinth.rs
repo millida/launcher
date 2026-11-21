@@ -37,7 +37,9 @@ pub struct ContentEntry {
     #[serde(default)] pub file_size: u64,
 }
 
-pub(crate) fn content_manifest_path(profile: &str) -> PathBuf { profile_dir(profile).join("millida-content.json") }
+pub(crate) const CONTENT_MANIFEST: &str = "millida-content.json";
+
+pub(crate) fn content_manifest_path(profile: &str) -> PathBuf { profile_dir(profile).join(CONTENT_MANIFEST) }
 
 pub fn load_content_manifest(profile: &str) -> Vec<ContentEntry> {
     std::fs::read(content_manifest_path(profile)).ok()
@@ -53,6 +55,12 @@ pub fn save_content_manifest(profile: &str, v: &[ContentEntry]) {
 /// (50 модов ставились по одному полминуты, 10.10.2026): без замка две параллельные
 /// записи теряли друг друга.
 static MANIFEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The same lock for writers outside this module: a snapshot restore swaps a
+/// part of the manifest and must not interleave with an install.
+pub(crate) fn manifest_guard() -> std::sync::MutexGuard<'static, ()> {
+    MANIFEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 pub(crate) fn manifest_upsert(profile: &str, entry: ContentEntry) {
     let _guard = MANIFEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());

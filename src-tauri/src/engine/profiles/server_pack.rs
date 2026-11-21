@@ -65,6 +65,21 @@ pub(crate) fn server_mod_path(file_name: &str) -> Result<String, String> {
     super::share::shared_entry_path("mod", &format!("mods/{}", file_name)).map_err(|why| format!("Мод сервера не принят: {}", why))
 }
 
+/// A file of the same name already in the build: the very file the server ships is there already
+/// (`true`); anything else is the player's own mod and is never overwritten (review of PR #346).
+fn server_mod_already_there(dest: &std::path::Path, want: &str, file_name: &str) -> Result<bool, String> {
+    if !dest.exists() {
+        return Ok(false);
+    }
+    if dest.is_file() && super::share::file_sha512(dest).as_deref() == Some(want) {
+        return Ok(true);
+    }
+    Err(format!(
+        "В сборке уже есть другой мод с именем {}. Переименуй или убери его, затем зайди на сервер ещё раз",
+        file_name
+    ))
+}
+
 /// One of the owner's own mods, which the player approved after seeing it
 /// listed. The address is built here and can only point at the Millida API;
 /// the file is kept only when its sha512 and size match what the player saw.
@@ -87,6 +102,9 @@ pub async fn install_server_mod_file(profile: String, server_id: String, sha512:
     }
     let dest = safe_join(&profile_dir(&profile), &rel).map_err(|e| format!("Небезопасный путь мода: {}", e))?;
     let want = sha512.to_ascii_lowercase();
+    if server_mod_already_there(&dest, &want, &file_name)? {
+        return Ok(file_name);
+    }
     let url = format!("{}/hosting/client/mods/{}/file/{}?t={}", MILLIDA_API, server_id, want, ticket);
     let tmp = data_dir().join("tmp").join(format!("{}.jar", hashed_name(&["srvmod", &server_id, &want])));
     if let Some(dir) = tmp.parent() {
@@ -126,6 +144,23 @@ mod tests {
         assert!(sha512_hex_ok(&"ab".repeat(64)), "a full sha512");
         assert!(!sha512_hex_ok(&"ab".repeat(20)), "a sha1-length digest is not enough");
         assert!(!sha512_hex_ok(&"zz".repeat(64)), "not hex");
+    }
+
+    /// A mod of the same name in the build: the server's own file is kept as is, the player's is never overwritten.
+    #[test]
+    fn a_server_mod_never_overwrites_the_players_file() {
+        let dir = std::env::temp_dir().join(format!("millida-srvmod-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("map.jar");
+        assert_eq!(server_mod_already_there(&dest, "x", "map.jar"), Ok(false), "no file: the mod is fetched");
+        std::fs::write(&dest, b"server").unwrap();
+        let same = super::super::share::file_sha512(&dest).unwrap();
+        assert_eq!(server_mod_already_there(&dest, &same, "map.jar"), Ok(true), "the same file: nothing to fetch");
+        std::fs::write(&dest, b"player").unwrap();
+        assert!(server_mod_already_there(&dest, &same, "map.jar").is_err(), "the player's own file is not replaced");
+        assert_eq!(std::fs::read(&dest).unwrap(), b"player");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Passes come from the API and land in a URL query: anything beyond digits and base64url is refused.

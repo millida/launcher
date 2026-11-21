@@ -91,3 +91,9 @@
 .mdl-fl { display: inline-flex; align-items: center; gap: 8px; font: 700 13px/1 var(--m-font); cursor: pointer; }
 .mdl-bar .nav-count { margin-left: 4px; }
 .mdl-rv-deps { margin-right: auto; }
+
+.mdl-row .mdl-chk { flex: none; cursor: pointer; }
+.mdl-row .mdl-chk[aria-busy="true"] { opacity: .5; cursor: progress; }
+.mdl-chk-gap { width: 18px; flex: none; }
+.mdl-count { flex: none; align-self: center; font: 700 12px/1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; }
+.mdl-bar .mdl-all { flex: none; white-space: nowrap; }

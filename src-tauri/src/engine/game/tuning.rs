@@ -57,6 +57,110 @@ const LARGE_MACHINE_KEEP_MB: u64 = 10240;
 const MIN_HEAP_MB: u32 = 2048;
 const MAX_HEAP_MB: u32 = 12288;
 
+/// An integrated GPU has no memory of its own: textures, the framebuffer and
+/// the driver's buffers come out of the same RAM as the heap. Machines above
+/// 16 GB have that room anyway.
+const IGPU_RESERVE_MB: u32 = 1024;
+const IGPU_MACHINE_MAX_MB: u64 = 16 * 1024;
+
+/// Mods whose memory has nothing to do with their share of the mod count:
+/// world generation keeps far more chunks and biome data in flight, the big
+/// content mods register thousands of blocks, recipes and models, shader
+/// loaders hold extra render targets. Recognised by mod id or by the name of
+/// the jar, locally. Distant Horizons keeps its own level of detail for the
+/// whole view distance, which is the single heaviest thing a build can add.
+pub(crate) struct HeavyMod {
+    pub title: &'static str,
+    /// Mod ids and jar name stems (`create-1.20.1-0.5.1.jar` -> `create`).
+    pub keys: &'static [&'static str],
+    pub extra_mb: u32,
+}
+
+pub(crate) const HEAVY_MODS: &[HeavyMod] = &[
+    HeavyMod { title: "Distant Horizons", keys: &["distanthorizons"], extra_mb: 2048 },
+    HeavyMod { title: "GregTech", keys: &["gtceu", "gregtech"], extra_mb: 1024 },
+    HeavyMod { title: "Create", keys: &["create"], extra_mb: 768 },
+    HeavyMod { title: "Mekanism", keys: &["mekanism"], extra_mb: 512 },
+    HeavyMod { title: "Applied Energistics 2", keys: &["ae2", "appliedenergistics2"], extra_mb: 512 },
+    HeavyMod { title: "Twilight Forest", keys: &["twilightforest"], extra_mb: 512 },
+    HeavyMod { title: "Alex's Mobs", keys: &["alexsmobs"], extra_mb: 512 },
+    HeavyMod { title: "Terralith", keys: &["terralith"], extra_mb: 512 },
+    HeavyMod { title: "Tectonic", keys: &["tectonic"], extra_mb: 512 },
+    HeavyMod { title: "Biomes O' Plenty", keys: &["biomesoplenty"], extra_mb: 512 },
+    HeavyMod { title: "Oh The Biomes", keys: &["byg", "biomeswevegone", "ohthebiomesyoullgo", "ohthebiomesweregone", "ohthebiomeswevegone"], extra_mb: 512 },
+    HeavyMod { title: "Iris", keys: &["iris"], extra_mb: 512 },
+    HeavyMod { title: "Oculus", keys: &["oculus"], extra_mb: 512 },
+];
+
+/// However many heavy mods a build has, the heap they add stops here: past it
+/// the pack-size steps already describe the build.
+const HEAVY_MAX_MB: u32 = 4096;
+
+const LOADER_WORDS: [&str; 5] = ["fabric", "forge", "neoforge", "quilt", "mc"];
+
+/// The name part of a jar: `Oh_The_Biomes_Youll_Go-1.20.1-3.0.jar` ->
+/// `ohthebiomesyoullgo`, `tectonic-fabric-2.4.jar` -> `tectonic`.
+fn jar_stem(file: &str) -> String {
+    let low = file.to_lowercase();
+    let base = low.strip_suffix(".jar").unwrap_or(&low);
+    let mut stem = String::new();
+    for tok in base.split(['-', '_', '+', ' ']) {
+        let versioned = tok.starts_with(|c: char| c.is_ascii_digit())
+            || (tok.starts_with('v') && tok[1..].starts_with(|c: char| c.is_ascii_digit()))
+            || (tok.starts_with("mc") && tok[2..].starts_with(|c: char| c.is_ascii_digit()));
+        if versioned || LOADER_WORDS.contains(&tok) {
+            break;
+        }
+        stem.extend(tok.chars().filter(|c| c.is_ascii_alphanumeric()));
+    }
+    stem
+}
+
+/// The heavy mods among a build's enabled jars and the heap they add, capped.
+pub(crate) fn heavy_pick(ids: &[String], files: &[String]) -> (Vec<&'static str>, u32) {
+    let stems: Vec<String> = files.iter().map(|f| jar_stem(f.as_str())).collect();
+    let hits: Vec<&HeavyMod> = HEAVY_MODS
+        .iter()
+        .filter(|h| h.keys.iter().any(|k| ids.iter().any(|id| id == k) || stems.iter().any(|s| s == k)))
+        .collect();
+    let extra = hits.iter().map(|h| h.extra_mb).sum::<u32>().min(HEAVY_MAX_MB);
+    (hits.iter().map(|h| h.title).collect(), extra)
+}
+
+fn enabled_jars(profile: &str) -> Vec<String> {
+    let dir = profile_dir(profile).join(content_dir("mod"));
+    std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.path().is_file())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.to_ascii_lowercase().ends_with(".jar"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Heavy mods of a build, read from its folder and the cached jar metadata.
+fn heavy_mods_of(profile: &str) -> (Vec<&'static str>, u32) {
+    let files = enabled_jars(profile);
+    if files.is_empty() {
+        return (vec![], 0);
+    }
+    let metas = crate::engine::local_meta_map(profile, "mod");
+    let ids: Vec<String> = files.iter().filter_map(|f| metas.get(f)).map(|m| m.mod_id.to_lowercase()).filter(|id| !id.is_empty()).collect();
+    heavy_pick(&ids, &files)
+}
+
+/// Gigabytes for a reason line: whole, or with one decimal after a comma.
+fn gb_text(mb: u32) -> String {
+    let tenths = (mb * 10 + 512) / 1024;
+    if tenths.is_multiple_of(10) {
+        (tenths / 10).to_string()
+    } else {
+        format!("{},{}", tenths / 10, tenths % 10)
+    }
+}
+
 #[derive(Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Tuning {
@@ -149,15 +253,19 @@ fn fit_to_machine(want: u32, total_mb: u64) -> (u32, Option<String>) {
     fit_to_machine_with(want, total_mb, available_ram_mb())
 }
 
+fn machine_ceiling_mb(total_mb: u64, available_mb: u64) -> u32 {
+    total_mb
+        .saturating_sub(reserved_mb(total_mb))
+        .min(safe_ceiling_mb(total_mb, available_mb))
+        .max(1024) as u32
+}
+
 fn fit_to_machine_with(want: u32, total_mb: u64, available_mb: u64) -> (u32, Option<String>) {
     if total_mb == 0 {
         return (want.clamp(MIN_HEAP_MB, 4096), None);
     }
     let reserve = reserved_mb(total_mb);
-    let ceiling = total_mb
-        .saturating_sub(reserve)
-        .min(safe_ceiling_mb(total_mb, available_mb))
-        .max(1024) as u32;
+    let ceiling = machine_ceiling_mb(total_mb, available_mb);
     if want > ceiling {
         let capped = ceiling.clamp(1024, MAX_HEAP_MB);
         return (
@@ -197,12 +305,26 @@ fn manual_ram_mb(profile: &str) -> u32 {
     s["ramMb"].as_u64().unwrap_or(0) as u32
 }
 
+/// The heap an integrated GPU leaves for the game: the machine's ceiling minus
+/// what the GPU takes from the same RAM, never below the heap the game needs to
+/// start, and never more than the heap was before.
+fn igpu_cut(heap: u32, machine: &Machine) -> u32 {
+    if !machine.shared_gpu || machine.total_mb == 0 || machine.total_mb > IGPU_MACHINE_MAX_MB {
+        return heap;
+    }
+    let cap = machine_ceiling_mb(machine.total_mb, machine.available_mb).saturating_sub(IGPU_RESERVE_MB).max(MIN_HEAP_MB);
+    heap.min(cap)
+}
+
 pub fn tune_profile(profile: &str) -> Tuning {
     let mods = count_files(profile, "mod");
     let shaders = count_files(profile, "shader") > 0;
     let total = total_ram_mb();
     let want = wanted_mb(mods, shaders);
-    let (ram_mb, capped) = fit_to_machine(want, total);
+    let (heavy, heavy_mb) = heavy_mods_of(profile);
+    let (fitted, capped) = fit_to_machine(want + heavy_mb, total);
+    let machine = Machine::now();
+    let ram_mb = igpu_cut(fitted, &machine);
 
     let mut reasons = vec![match mods {
         0 => "Ваниль без модов — игре хватает небольшой кучи".to_string(),
@@ -211,11 +333,17 @@ pub fn tune_profile(profile: &str) -> Tuning {
     if shaders {
         reasons.push("Установлены шейдеры — им нужен ещё гигабайт".into());
     }
+    if heavy_mb > 0 {
+        reasons.push(format!("Учтены тяжёлые моды: {} (+{} ГБ)", heavy.join(", "), gb_text(heavy_mb)));
+    }
     if total > 0 {
         reasons.push(format!("В системе {} ГБ ОЗУ", total / 1024));
     }
     if let Some(note) = capped {
         reasons.push(note);
+    }
+    if ram_mb < fitted {
+        reasons.push(format!("Встроенная видеокарта: оставили системе +{} ГБ", gb_text(fitted - ram_mb)));
     }
     reasons.push("Профиль сборщика мусора G1 подобран под короткие паузы — без него на больших сборках заметны рывки".into());
 
@@ -530,7 +658,7 @@ pub fn ram_check(profile: &str, requested: u32) -> RamCheck {
     let pack = crate::engine::trusted_pack_launch_spec(profile);
     RamCheck {
         heap_mb: launch_heap_of(profile, requested),
-        need_mb: wanted_mb(mods, shaders),
+        need_mb: wanted_mb(mods, shaders) + heavy_mods_of(profile).1,
         fit_mb: tuning.ram_mb,
         total_mb: tuning.total_ram_mb,
         available_mb: available_ram_mb(),
@@ -557,6 +685,8 @@ pub(crate) struct HeapAsk {
     pub auto_tune: bool,
     pub mods: u32,
     pub shaders: bool,
+    /// Heap the build's heavy mods add on top of the pack-size step.
+    pub heavy_mb: u32,
 }
 
 /// The memory of the machine at the moment of the launch, in MB.
@@ -564,11 +694,13 @@ pub(crate) struct HeapAsk {
 pub(crate) struct Machine {
     pub total_mb: u64,
     pub available_mb: u64,
+    /// The only video card shares the system RAM.
+    pub shared_gpu: bool,
 }
 
 impl Machine {
     pub(crate) fn now() -> Machine {
-        Machine { total_mb: total_ram_mb(), available_mb: available_ram_mb() }
+        Machine { total_mb: total_ram_mb(), available_mb: available_ram_mb(), shared_gpu: super::gpu::igpu_only(&super::gpu::adapter_names()) }
     }
 }
 
@@ -581,6 +713,7 @@ impl HeapAsk {
             auto_tune: auto_tune_on(profile),
             mods: count_files(profile, "mod"),
             shaders: count_files(profile, "shader") > 0,
+            heavy_mb: heavy_mods_of(profile).1,
         }
     }
 }
@@ -598,7 +731,8 @@ pub(crate) fn heap_for(ask: &HeapAsk, machine: &Machine) -> u32 {
     if !ask.auto_tune {
         return half_ram_of(machine.total_mb);
     }
-    fit_to_machine_with(wanted_mb(ask.mods, ask.shaders), machine.total_mb, machine.available_mb).0
+    let fitted = fit_to_machine_with(wanted_mb(ask.mods, ask.shaders) + ask.heavy_mb, machine.total_mb, machine.available_mb).0;
+    igpu_cut(fitted, machine)
 }
 
 /// Heap to offer after the game ran out of the `used_mb` it had. The tuned value
@@ -933,6 +1067,78 @@ mod tests {
                 got.iter().filter(|f| f.starts_with("-XX:ReservedCodeCacheSize")).count() <= 1,
                 "the JVM keeps the last of two sizes, a duplicate would silently replace the player's: {got:?}",
             );
+        }
+    }
+
+    /// enabled jars (mod id, file) -> heavy mods and the heap they add. Matching
+    /// is exact on the id or on the jar's name stem: an addon is not its base mod.
+    #[test]
+    fn heavy_mods_are_recognised_by_id_or_jar_name() {
+        let s = |list: &[&str]| list.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        type Case<'a> = (&'a [&'a str], &'a [&'a str], &'a [&'a str], u32, &'a str);
+        let cases: [Case; 7] = [
+            (&["distanthorizons"], &["DistantHorizons-2.1.2-a-1.20.1-fabric-forge.jar"], &["Distant Horizons"], 2048, "Distant Horizons — самый тяжёлый"),
+            (&[], &["create-1.20.1-0.5.1.f.jar", "createaddition-1.20.1-1.2.4.jar"], &["Create"], 768, "без метаданных — по имени jar; аддон Create не считается вторым Create"),
+            (&[], &["Oh_The_Biomes_Youll_Go-1.20.1-3.0.0.jar", "Terralith_1.20.x_v2.5.4.jar", "tectonic-fabric-1.20.1-2.4.1.jar"], &["Terralith", "Tectonic", "Oh The Biomes"], 1536, "генерация мира складывается"),
+            (&["iris", "sodium"], &["iris-mc1.20.1-1.7.0.jar", "sodium-fabric-0.5.8.jar"], &["Iris"], 512, "шейдерный загрузчик"),
+            (
+                &["distanthorizons", "gtceu", "create", "mekanism", "ae2", "twilightforest"],
+                &[],
+                &["Distant Horizons", "GregTech", "Create", "Mekanism", "Applied Energistics 2", "Twilight Forest"],
+                4096,
+                "прибавка ограничена: дальше сборку описывает число модов",
+            ),
+            (&["creativecore"], &["CreativeCore_FABRIC_v2.11.30_mc1.20.1.jar"], &[], 0, "похожее имя — не Create"),
+            (&[], &[], &[], 0, "ваниль"),
+        ];
+        for (ids, files, want, mb, why) in cases {
+            let (names, extra) = heavy_pick(&s(ids), &s(files));
+            assert_eq!(names, want.to_vec(), "{why}");
+            assert_eq!(extra, mb, "{why}");
+        }
+    }
+
+    /// (machine, integrated GPU) -> heap for a big pack. The GPU takes its memory
+    /// from the same RAM, so a laptop without a card of its own keeps more for the
+    /// system; the heap never drops under the minimum the game starts with.
+    #[test]
+    fn integrated_graphics_leave_the_system_more_memory() {
+        let ask = HeapAsk { auto_tune: true, mods: 200, ..HeapAsk::default() };
+        let cases: [(u64, bool, u32, &str); 6] = [
+            (16384, false, 6144, "дискретная карта — как раньше"),
+            (16384, true, 5120, "встройка на 16 ГБ: гигабайт системе"),
+            (8192, true, 3072, "встройка на 8 ГБ"),
+            (4096, true, 2048, "4 ГБ: не ниже минимума кучи"),
+            (32768, true, 8192, "на 32 ГБ места хватает и встройке"),
+            (0, true, 4096, "размер памяти неизвестен — не режем"),
+        ];
+        for (total, shared, want, why) in cases {
+            let machine = Machine { total_mb: total, available_mb: 0, shared_gpu: shared };
+            assert_eq!(heap_for(&ask, &machine), want, "{total} МБ, встройка {shared}: {why}");
+        }
+        let manual = HeapAsk { manual: 6144, auto_tune: true, mods: 200, heavy_mb: 2048, ..HeapAsk::default() };
+        let laptop = Machine { total_mb: 16384, available_mb: 0, shared_gpu: true };
+        assert_eq!(heap_for(&manual, &laptop), 6144, "ручную память игрока не трогают ни тяжёлые моды, ни встройка");
+        let off = HeapAsk { auto_tune: false, mods: 200, heavy_mb: 2048, ..HeapAsk::default() };
+        assert_eq!(heap_for(&off, &laptop), half_ram_of(16384), "автонастройка выключена — половина ОЗУ, как раньше");
+    }
+
+    /// Heavy mods raise the heap of a mid-size pack, still inside the machine.
+    #[test]
+    fn heavy_mods_raise_the_heap_within_the_machine() {
+        let machine = Machine { total_mb: 32768, available_mb: 0, shared_gpu: false };
+        let plain = HeapAsk { auto_tune: true, mods: 40, ..HeapAsk::default() };
+        let heavy = HeapAsk { heavy_mb: 2048, ..plain };
+        assert_eq!(heap_for(&plain, &machine), 4096);
+        assert_eq!(heap_for(&heavy, &machine), 6144, "Distant Horizons даёт свои 2 ГБ");
+        let small = Machine { total_mb: 8192, available_mb: 0, shared_gpu: false };
+        assert_eq!(heap_for(&heavy, &small), 4096, "на 8 ГБ прибавка упирается в потолок машины");
+    }
+
+    #[test]
+    fn gigabytes_read_as_a_person_writes_them() {
+        for (mb, want) in [(1024, "1"), (1536, "1,5"), (2048, "2"), (768, "0,8"), (4096, "4")] {
+            assert_eq!(gb_text(mb), want, "{mb} МБ");
         }
     }
 

@@ -7,6 +7,7 @@ import { isRealtimeLive, onRealtime } from '../lib/realtime'
 import { partyPollEveryMs, staleParty } from '../lib/realtimePace'
 import {
   normalizePartyCode,
+  voiceOnlyRefusal,
   type AgeBracket,
   type Party,
   type PartyHave,
@@ -124,6 +125,27 @@ async function attempt<T>(run: () => Promise<T>, fallback: string): Promise<T | 
   }
 }
 
+/**
+ * Отказ службы, который касается только голоса пати («голосовой чат работает только
+ * в публичной игре»). Это примечание, а не запрет: 17.11.2026 он обрывал запуск сборки
+ * в пати. Игроку говорим как есть, а игра запускается.
+ */
+export const VOICE_ONLY = Symbol('party-voice-only')
+
+/** Как `attempt`, но отказ про голос не останавливает запуск: вместо null приходит VOICE_ONLY. */
+async function attemptGo<T>(run: () => Promise<T>, fallback: string): Promise<T | typeof VOICE_ONLY | null> {
+  try {
+    return await run()
+  } catch (e) {
+    if (voiceOnlyRefusal(e)) {
+      showToast(apiErrorText(e, fallback))
+      return VOICE_ONLY
+    }
+    showToast(apiErrorText(e, fallback), 'error')
+    return null
+  }
+}
+
 export const isLeader = (p: Party | null, me: string): boolean => !!p && !!me && p.leaderId === me
 
 export const partyWithOthers = (p: Party | null): boolean => !!p && p.members.length > 1
@@ -160,7 +182,7 @@ export const setPartyCapacity = (capacity: number) =>
   attempt(() => partyCall('/capacity', { capacity }), t('Не удалось изменить размер пати'))
 
 export const setPartyTarget = (target: PartyTarget) =>
-  attempt(() => partyCall('/target', { target }), t('Не удалось выбрать режим для пати'))
+  attemptGo(() => partyCall('/target', { target }), t('Не удалось выбрать режим для пати'))
 
 export const setPartyReady = (ready: boolean, have: PartyHave | null) =>
   attempt(() => partyCall('/ready', have ? { ready, have } : { ready }), t('Не удалось отметить готовность'))
@@ -189,7 +211,7 @@ export const joinRoom = (id: string) =>
   attempt(() => partyCall('/rooms/' + encodeURIComponent(id) + '/join'), t('Не удалось войти в комнату'))
 
 export const startPartyLaunch = (addr: string | null) =>
-  attempt(() => partyCall('/launch', addr ? { addr } : {}), t('Не удалось запустить пати'))
+  attemptGo(() => partyCall('/launch', addr ? { addr } : {}), t('Не удалось запустить пати'))
 
 export async function inviteToParty(userId: string): Promise<boolean> {
   if (!st().party && !(await createParty())) return false

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
-import { openImage } from '../ImageLightbox'
+import { openImage } from '../lightboxStore'
 import { useT } from '../../i18n'
 import { liveInterval } from '../../lib/liveInterval'
 

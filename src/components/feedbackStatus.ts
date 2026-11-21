@@ -10,6 +10,9 @@ import '../styles/pixel/feedback.css'
 
 /** Награда за отзыв — раз в неделю, чтобы отзывы не писали ради осколков. */
 export const FEEDBACK_SHARDS = 50
+
+/** Осколки начислены (отзыв): открытый магазин перечитывает баланс, а не ждёт нового захода. */
+export const SHARDS_CHANGED = 'm-shards-changed'
 const LAST_KEY = 'm-feedback-at'
 const WEEK = FEEDBACK_WEEK_MS
 const RETRY_AFTER_FAILURE = 5 * 60_000

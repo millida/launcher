@@ -16,7 +16,7 @@ import {
   installVersion,
 } from '../ipc/commands'
 import type { CatalogInstallReq, ContentInstall, Profile } from '../ipc/commands'
-import { MODRINTH_API, hasMillidaAccount, openExt } from './api'
+import { MODRINTH_API, hasMillidaAccount, openExt, sharedFetch } from './api'
 import {
   KIND_OF_SECTION,
   catalog,
@@ -68,6 +68,9 @@ const ruKind = (): Record<string, string> => ({
   world: t('карту'),
   modpack: t('сборку'),
 })
+
+/** Надетое из каталога — сразу в копию для игры (lib/localLook): без скин-сервера игра читает её. */
+const syncLookForGame = () => void import('./localLook').then((m) => m.syncLocalLookFromAccount()).catch((e) => console.warn('[catalog] look sync', e))
 
 export interface CatalogInstallOpts {
   /// Из ссылки сайта: версии игры и загрузчики, под которые человек выбирал.
@@ -136,7 +139,7 @@ async function chooseBuild(
 async function mrVersionBySha1(sha1: string | null): Promise<string | null> {
   if (!sha1) return null
   try {
-    const r = await fetch(MODRINTH_API + '/v2/version_file/' + encodeURIComponent(sha1) + '?algorithm=sha1')
+    const r = await sharedFetch(MODRINTH_API + '/v2/version_file/' + encodeURIComponent(sha1) + '?algorithm=sha1')
     if (!r.ok) return null
     const v = await r.json()
     return typeof v.id === 'string' ? v.id : null
@@ -469,6 +472,7 @@ async function applySkin(slug: string, opts: CatalogInstallOpts): Promise<boolea
     const slim = opts.slim ?? (await detectSlimFromUrl('data:image/png;base64,' + png).catch(() => false))
     const item = await addToWardrobe({ kind: 'skin', name, pngBase64: png, source: 'catalog', ...(slim ? { slim: true } : {}) })
     await applyWardrobeItem(item.id)
+    syncLookForGame()
     showToast(t('Скин надет — виден в игре после перезахода'), 'ok', 'install')
     return true
   } catch (e) {
@@ -508,6 +512,7 @@ async function applyCape(slug: string): Promise<boolean> {
   }
   try {
     await applyCatalogCape(cape.id)
+    syncLookForGame()
     showToast(t('Плащ «{name}» надет', { name: cape.name }), 'ok', 'install')
     return true
   } catch (e) {

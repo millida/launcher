@@ -11,6 +11,7 @@ import { word } from '../shop/rarity'
 import { DAILY_CONFIG } from './config'
 import { t } from '../../i18n'
 import { plural } from '../../lib/format'
+import { adventCols, isAdvent } from './advent'
 
 export type CycleDay = DailyStatus['cycle'][number]
 
@@ -260,6 +261,8 @@ export function seasonOf(status: DailyView): DailySeason {
 /** Лента с состояниями клеток. `own` — есть подписка PLUS. */
 export function passCols(status: DailyView | null, own: boolean): PassCol[] {
   if (!status) return []
+  // Декабрь: новогодний календарь, свои правила (advent.ts).
+  if (isAdvent(status)) return adventCols(status, own)
   const open = seasonOf(status).day
   const legacy = !seasonal(status)
   const guess = (n: number): CellState => {

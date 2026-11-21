@@ -1,6 +1,7 @@
 import { tauri, hasTauri } from '../ipc/tauri'
 import { clearCache, takeCliAction, type CliAction } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
+import { useLobby } from '../state/lobbyMode'
 import { setScreen, showToast } from '../state/ui'
 import { realLaunch } from './launch'
 import { runRepair } from './repair'
@@ -31,7 +32,10 @@ export async function runCliAction(a: CliAction): Promise<void> {
     setScreen('builds')
     return
   }
-  if (a.action === 'launch') realLaunch(build)
+  if (a.action === 'launch') {
+    useLobby.getState().pick({ kind: 'build', name: build })
+    realLaunch(build)
+  }
   else if (a.action === 'repair') await runRepair(build)
 }
 

@@ -18,6 +18,7 @@ export type ErrorKind =
   | 'network_other'
   | 'http_5xx'
   | 'http_4xx'
+  | 'rate_limited'
   | 'other'
 
 // Порядок важен: сначала то, что игрок чинит сам (место, права), потом
@@ -35,6 +36,8 @@ const RULES: Array<[ErrorKind, RegExp]> = [
   ['network_dns', /os error (?:11001|11004|-2|8)\b|хост неизвестен|dns error|failed to lookup address|no such host|name or service not known|nodename nor servname|getaddrinfo|не удается разрешить/i],
   ['network_timeout', /timed? ?out|время ожидания|os error (?:10060|60|110)\b|deadline has elapsed|не ответил вовремя/i],
   ['network_reset', /connection reset|os error (?:10054|10053|10061|54|104|111)\b|разорвал|connection (?:refused|closed|aborted)|broken pipe|unexpected eof|обрыв загрузки|error decoding response body|ответ оборвался|\bssl\b|\btls\b|certificate|сертификат/i],
+  // Limit by address (CurseForge, the mirror): lifts by itself, apart from real 4xx (13.11.2026).
+  ['rate_limited', /too many requests|\b429\b|ограничил скорость|retry-after/i],
   ['http_5xx', /\b5\d\d (?:bad gateway|service unavailable|internal server error|gateway time-?out)|(?:http|status|статус|код ответа|ответ)\D{0,4}5\d\d\b/i],
   ['http_4xx', /\b4\d\d (?:not found|forbidden|unauthorized|bad request|too many requests|gone)|(?:http|status|статус|код ответа|ответ)\D{0,4}4\d\d\b/i],
   ['network_other', /нет связи|error sending request|не дошли до|network|сеть недоступна|os error 10051|unreachable/i],
