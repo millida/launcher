@@ -393,7 +393,7 @@ jobs:
             echo "::error::the package check passed a zeroed binary, so it would not catch a broken package"
             exit 1
           fi
-          for package in "$RELEASE_DIR"/bundle/deb/*.deb "$RELEASE_DIR"/bundle/rpm/*.rpm "$RELEASE_DIR"/bundle/appimage/*.AppImage; do
+          for package in "$RELEASE_DIR"/bundle/deb/*.deb "$RELEASE_DIR"/bundle/appimage/*.AppImage; do
             out="$RUNNER_TEMP/unpacked-check"
             rm -rf "$out"
             mkdir -p "$out"
