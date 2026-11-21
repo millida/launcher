@@ -226,6 +226,10 @@ where
     }
 }
 
+pub(crate) async fn lookup(host: &str) -> Result<Vec<IpAddr>, String> {
+    resolve_with(host, system_lookup, doh_race, PATIENCE).await
+}
+
 /// Plugged into the HTTP client as its name resolver.
 pub(crate) struct FallbackDns;
 
@@ -233,9 +237,14 @@ impl reqwest::dns::Resolve for FallbackDns {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let host = name.as_str().to_string();
         Box::pin(async move {
-            let ips = resolve_with(&host, system_lookup, doh_race, PATIENCE)
-                .await
-                .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error + Send + Sync>)?;
+            let pinned = super::edges::order(&host).await;
+            let ips = if pinned.is_empty() {
+                lookup(&host)
+                    .await
+                    .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error + Send + Sync>)?
+            } else {
+                pinned
+            };
             let addrs: reqwest::dns::Addrs = Box::new(ips.into_iter().map(|ip| SocketAddr::new(ip, 0)));
             Ok(addrs)
         })

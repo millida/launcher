@@ -50,6 +50,9 @@ pub(crate) fn mark_exiting() {
     EXITING.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
+/// Second start while this copy was shutting down: the copy that ends starts a fresh one on its way out.
+static RELAUNCH_ON_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
     match event {
         // The last window went away because the launcher unloaded it into the
@@ -57,7 +60,15 @@ fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
         tauri::RunEvent::ExitRequested { code: None, api, .. } if background::unloaded() && !exiting() => {
             api.prevent_exit();
         }
-        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => mark_exiting(),
+        tauri::RunEvent::ExitRequested { .. } => mark_exiting(),
+        tauri::RunEvent::Exit => {
+            mark_exiting();
+            // An update installing on the way out restarts the launcher itself if asked; a copy of ours
+            // would hold the old exe and break the install.
+            if RELAUNCH_ON_EXIT.swap(false, std::sync::atomic::Ordering::SeqCst) && !engine::update_takes_over() {
+                engine::relaunch_after_exit();
+            }
+        }
         // macOS never starts a second copy on a Dock or Finder click: it only
         // tells the running one to reopen. has_visible_windows is not checked
         // because the overlay counts as visible while the launcher is in the tray.
@@ -231,6 +242,13 @@ fn avoid_colrv1_fonts_on_appimage() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // `millida-launcher --version`: answers and exits before any window or webview. Release CI runs it on
+    // the binary unpacked from every Linux package, so a package whose binary the loader cannot even map
+    // (2.2.0–2.7.0: zeros behind a valid ELF header, SIGSEGV in ld.so) fails the build instead of shipping.
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("{}", env!("MILLIDA_VERSION"));
+        return;
+    }
     if engine::uninstall_report_requested() {
         engine::report_uninstall();
         return;
@@ -252,6 +270,11 @@ pub fn run() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // This copy is closing and will not show a window again: the click must not vanish.
+            if exiting() {
+                RELAUNCH_ON_EXIT.store(true, std::sync::atomic::Ordering::SeqCst);
+                return;
+            }
             cli::forward_second_start(app, &argv);
             tray::show_main(app);
         }))
@@ -304,6 +327,7 @@ pub fn run() {
             }
             uiwatch::watch(app.handle());
             overlay::rebind_hotkey(app.handle());
+            engine::world_backups_on_start(app.handle());
             // Автотест — только в отладочной сборке (аудит 24.09.2026, S-04).
             #[cfg(debug_assertions)]
             if let Ok(mode) = std::env::var("MILLIDA_AUTOTEST") {
@@ -405,6 +429,8 @@ pub fn run() {
             commands::profiles::set_screenshot_note,
             commands::profiles::crop_screenshot,
             commands::system::pick_wallpaper,
+            commands::system::publish_wallpaper,
+            commands::system::save_library_wallpaper,
             commands::system::pick_texture,
             commands::system::copy_picture,
             commands::system::save_picture_as,
@@ -440,6 +466,13 @@ pub fn run() {
             commands::content::scan_content_local,
             commands::content::scan_content,
             commands::content::toggle_content,
+            commands::content::mod_dependents,
+            commands::content::keep_mods_off,
+            commands::content::bisect_status,
+            commands::content::bisect_start,
+            commands::content::bisect_answer,
+            commands::content::bisect_verify,
+            commands::content::bisect_finish,
             commands::content::delete_content,
             commands::launch::list_logs,
             commands::launch::read_log,
@@ -538,6 +571,7 @@ pub fn run() {
             commands::profiles::dismiss_embedded_jars,
             commands::profiles::list_build_files,
             commands::profiles::reveal_build_file,
+            commands::profiles::reveal_saved_file,
             commands::profiles::delete_build_file,
             commands::content::add_local_file,
             commands::content::pick_content_files,
@@ -551,6 +585,8 @@ pub fn run() {
             commands::content::quarantine_packs,
             commands::content::ftb_search,
             commands::content::ftb_install,
+            commands::content::ftb_check_update,
+            commands::content::ftb_update,
             commands::content::hosting_send_build,
             commands::content::install_version,
             commands::content::cf_search,
@@ -610,6 +646,8 @@ pub fn run() {
             commands::launch::repair_profile,
             commands::system::cache_size,
             commands::system::clear_cache,
+            commands::system::disk_usage,
+            commands::system::clean_old_logs,
             commands::system::is_flatpak,
             commands::system::update_fallback_check,
             commands::system::update_notes,
@@ -685,6 +723,13 @@ pub fn run() {
             commands::profiles::cloud_push,
             commands::profiles::cloud_pull,
             commands::profiles::cloud_forget,
+            commands::world_backups::world_autobackup,
+            commands::world_backups::set_world_autobackup,
+            commands::world_backups::cloud_backups_status,
+            commands::world_backups::cloud_backup_upload,
+            commands::world_backups::cloud_backup_restore,
+            commands::world_backups::cloud_backup_delete,
+            commands::world_backups::cloud_backup_cancel,
             commands::party_voice::party_voice_join,
             commands::party_voice::party_voice_leave,
             commands::party_voice::party_voice_transmit,

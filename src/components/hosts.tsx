@@ -5,10 +5,13 @@ import { usePackKey } from '../state/packKey'
 import { usePackCode } from '../state/packCode'
 import { useDepPlan } from '../state/depPlan'
 import { useCrash } from '../state/crash'
+import { useBisect } from '../state/bisect'
 import { useServerDetail } from '../state/serverDetail'
 import { useCall } from '../state/call'
 import { useLiveLog } from './liveLogStore'
 import { useMcNews } from './mcNewsStore'
+import { useWallpaperLibrary } from './wallpaperLibStore'
+import { useLightbox } from './lightboxStore'
 import { useRooms } from '../state/rooms'
 import { usePaid } from './catalog/paidStore'
 import { useReward } from './reward/rewardBus'
@@ -38,9 +41,12 @@ export const PackCodeHost = lazyHost(() => import('./PackCodeHost').then((m) => 
 export const DepPlanModal = lazyHost(() => import('./DepPlanModal').then((m) => ({ default: m.DepPlanModal })), () => useDepPlan((s) => s.open))
 export const ServerModsModal = lazyHost(() => import('./ServerModsModal').then((m) => ({ default: m.ServerModsModal })), modalOpen('smModal'))
 export const CrashModal = lazyHost(() => import('./CrashModal').then((m) => ({ default: m.CrashModal })), () => useCrash((s) => !!s.info))
+export const BisectWizard = lazyHost(() => import('../modals/BisectWizard').then((m) => ({ default: m.BisectWizard })), () => useBisect((s) => !!s.profile))
 export const ServerDetail = lazyHost(() => import('./ServerDetail').then((m) => ({ default: m.ServerDetail })), () => useServerDetail((s) => !!s.sv))
 export const LiveLog = lazyHost(() => import('./LiveLog').then((m) => ({ default: m.LiveLog })), () => useLiveLog((s) => s.open))
 export const McNewsModal = lazyHost(() => import('./McNews').then((m) => ({ default: m.McNewsModal })), () => useMcNews((s) => s.open))
+export const WallpaperLibrary = lazyHost(() => import('./WallpaperLibrary').then((m) => ({ default: m.WallpaperLibrary })), () => useWallpaperLibrary((s) => s.open))
+export const ImageLightbox = lazyHost(() => import('./ImageLightbox').then((m) => ({ default: m.ImageLightbox })), () => useLightbox((s) => !!s.src))
 export const CallPanel = lazyHost(() => import('./CallPanel').then((m) => ({ default: m.CallPanel })), () => useCall((s) => s.status !== 'idle'))
 export const RoomModals = lazyHost(() => import('./RoomManage').then((m) => ({ default: m.RoomModals })), () => useRooms((s) => !!s.manageId || s.createOpen))
 

@@ -290,6 +290,11 @@
   display: grid;
   place-items: center;
 }
+/* A single big card: the rarity word sits centred under the art instead of over its corner. */
+.rw:not(.many) .rw-card-art .rar-chip {
+  position: static;
+  margin-top: 10px;
+}
 .rw.many .rw-card-art .rw-art-img {
   width: calc(var(--rw-c) * 0.66);
   height: calc(var(--rw-c) * 0.66);

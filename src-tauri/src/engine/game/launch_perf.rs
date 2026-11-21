@@ -344,32 +344,54 @@ pub(crate) fn window_event(prep_ms: u64, core_ms: u64, after_spawn_ms: u64, via:
 }
 
 const WINDOW_POLL: Duration = Duration::from_millis(250);
-const WINDOW_GIVE_UP: Duration = Duration::from_secs(180);
+/// No game window this long after the start while the process lives: the launcher, hidden for the game,
+/// comes back and asks. A heavy modded pack opens in one to three minutes.
+const STUCK_AFTER: Duration = Duration::from_secs(240);
+/// The watch ends here even with no window: the player has been asked by then.
+const WINDOW_GIVE_UP: Duration = Duration::from_secs(15 * 60);
+/// The game showed its window: the launcher may hide now (it waited instead of hiding 1.2 s after the
+/// start, which left players with no launcher and no game for minutes, reports 13.11.2026).
+pub const GAME_WINDOW_EVENT: &str = "game-window";
+/// The game has shown no window for STUCK_AFTER; the payload is the build.
+pub const GAME_STUCK_EVENT: &str = "game-stuck";
 
 fn still_running(pid: u32) -> bool {
     super::launch::RUNNING.lock().map(|v| v.iter().any(|(_, id)| *id == pid)).unwrap_or(false)
 }
 
-/// After the game process starts: waits for its window and reports how long that took. Gives up
-/// after three minutes. Statistics off: the wait is not even started.
-pub(crate) fn watch_window(app: tauri::AppHandle, pid: u32, probe: Arc<WindowProbe>, perf: &LaunchPerf) {
-    if !crate::engine::game_telemetry_enabled() {
-        return;
-    }
+/// After the game process starts: waits for its window, by the OS or by the game's own log line, and
+/// tells the window when it is up. Without a window for STUCK_AFTER the launcher comes back and asks.
+/// The time it took goes to statistics only when they are on.
+pub(crate) fn watch_window(app: tauri::AppHandle, profile: String, pid: u32, probe: Arc<WindowProbe>, perf: &LaunchPerf) {
+    let telemetry = crate::engine::game_telemetry_enabled();
     let (prep, core) = (perf.prep_ms(), perf.core_ms());
     tauri::async_runtime::spawn(async move {
+        use tauri::Emitter;
         let t0 = Instant::now();
+        let mut stuck = false;
         loop {
             tokio::time::sleep(WINDOW_POLL).await;
             let os_ms = super::gamewin::has_window(pid).then(|| t0.elapsed().as_millis() as u64);
             if let Some((ms, via)) = pick_window(os_ms, probe.log_ms()) {
-                crate::background::send_perf(&app, vec![window_event(prep, core, ms, via)]);
+                let _ = app.emit(GAME_WINDOW_EVENT, &profile);
+                if telemetry {
+                    crate::background::send_perf(&app, vec![window_event(prep, core, ms, via)]);
+                }
                 return;
             }
             if !still_running(pid) {
-                let ms = t0.elapsed().as_millis() as u64;
-                crate::background::send_perf(&app, vec![window_event(prep, core, ms, Via::Exit)]);
+                if telemetry {
+                    let ms = t0.elapsed().as_millis() as u64;
+                    crate::background::send_perf(&app, vec![window_event(prep, core, ms, Via::Exit)]);
+                }
                 return;
+            }
+            if !stuck && t0.elapsed() > STUCK_AFTER {
+                stuck = true;
+                crate::background::emit_main(&app, GAME_STUCK_EVENT, profile.clone());
+                if !crate::background::unloaded() {
+                    crate::tray::show_main(&app);
+                }
             }
             if t0.elapsed() > WINDOW_GIVE_UP {
                 return;

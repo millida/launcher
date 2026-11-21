@@ -42,6 +42,14 @@ pub fn running_games() -> Vec<String> {
     RUNNING.lock().map(|v| v.iter().map(|(p, _)| p.clone()).collect()).unwrap_or_default()
 }
 
+/// Gives the foreground back to the game started last. The in-game chat (Alt+M) takes focus to be
+/// typed in; closed without handing it back, a fullscreen game stayed without focus and with its
+/// cursor hidden («в полноэкранном режиме пропадает курсор», 17.11.2026).
+pub fn focus_running_game() -> bool {
+    let pid = RUNNING.lock().ok().and_then(|v| v.last().map(|(_, pid)| *pid));
+    pid.is_some_and(super::gamewin::bring_to_front)
+}
+
 fn forget_running(pid: u32) {
     if let Ok(mut v) = RUNNING.lock() {
         v.retain(|(_, id)| *id != pid);
@@ -288,6 +296,53 @@ pub fn bring_running_forward(profile: &str, look_beyond_memory: bool) -> Option<
     let pid = known.or_else(|| look_beyond_memory.then(|| game_pid_elsewhere(&profile_dir(profile))).flatten())?;
     let raised = super::gamewin::bring_to_front(pid);
     Some(if raised { OUTCOME_FOCUSED } else { OUTCOME_RUNNING }.to_string())
+}
+
+/// Play on a build whose game is already up: raises its window. A game found only by its command line
+/// (started before the launcher restarted) joins RUNNING on the way, so Stop can end it and its exit
+/// clears the Stop button (reports 13.11.2026: a red Stop for a game the core could neither stop nor
+/// see end).
+pub(crate) fn bring_forward_or_adopt(app: &AppHandle, profile: &str) -> Option<String> {
+    let known = RUNNING.lock().ok().and_then(|v| running_pid(&v, profile));
+    let pid = match known {
+        Some(pid) => pid,
+        None => {
+            let pid = game_pid_elsewhere(&profile_dir(profile))?;
+            adopt_running(app, profile, pid);
+            pid
+        }
+    };
+    let raised = super::gamewin::bring_to_front(pid);
+    Some(if raised { OUTCOME_FOCUSED } else { OUTCOME_RUNNING }.to_string())
+}
+
+/// How often an adopted game is looked for in the process list.
+const ADOPTED_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+
+fn adopt_running(app: &AppHandle, profile: &str, pid: u32) {
+    if let Ok(mut v) = RUNNING.lock() {
+        if v.iter().any(|(_, id)| *id == pid) {
+            return;
+        }
+        v.push((profile.to_string(), pid));
+    }
+    let (app, profile) = (app.clone(), profile.to_string());
+    std::thread::spawn(move || loop {
+        std::thread::sleep(ADOPTED_POLL);
+        if !pid_alive(pid) {
+            forget_running(pid);
+            crate::background::emit_main(&app, "game-exit", profile);
+            return;
+        }
+    });
+}
+
+fn pid_alive(pid: u32) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+    let mut sys = System::new();
+    let id = Pid::from_u32(pid);
+    sys.refresh_processes_specifics(ProcessesToUpdate::Some(&[id]), true, ProcessRefreshKind::nothing());
+    sys.process(id).is_some()
 }
 
 /// RUNNING lives in memory, so a game started before the launcher restarted is
@@ -898,8 +953,9 @@ pub(super) fn spawn_log_reader_probed(
             std::thread::sleep(std::time::Duration::from_millis(LOG_FLUSH_MS));
             let lines = b.lock().map(|mut v| std::mem::take(&mut *v)).unwrap_or_default();
             if !lines.is_empty() {
-                super::livelog::publish_live_log(&a, &lines);
-                let _ = a.emit("game-log", lines);
+                // The screen gets only masked lines; the file on disk was written raw.
+                let shown = super::livelog::publish_live_log(&a, &lines);
+                let _ = a.emit("game-log", shown);
             }
             if d.load(Ordering::Relaxed) {
                 break;
@@ -1450,6 +1506,7 @@ pub(super) fn watch_session<T>(
     }
     // Без окна (выгружено на время игры) событие ждёт новую страницу.
     crate::background::emit_main(app, "game-exit", pname.to_string());
+    crate::engine::world_backups_after_exit(app, pname, elapsed);
     let waker = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(1500));
@@ -1662,7 +1719,7 @@ pub(crate) async fn start_game(app: AppHandle, spec: StartSpec, perf: &super::la
             let _ = child.kill();
             return Err("Запуск отменён".into());
         }
-        super::livelog::reset_live_log(&profile);
+        super::livelog::reset_live_log(&profile, &nick);
         let _ = app.emit("game-log-start", &profile);
         let log_file = Arc::new(Mutex::new(log_file));
         let server_now: ServerSlot = Arc::new(Mutex::new(quick_server.as_deref().map(canon_addr)));
@@ -1747,7 +1804,7 @@ fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
     if let Ok(mut v) = RUNNING.lock() {
         v.push((profile.clone(), pid));
     }
-    super::launch_perf::watch_window(app.clone(), pid, window_probe, perf);
+    super::launch_perf::watch_window(app.clone(), profile.clone(), pid, window_probe, perf);
     if let Some(slug) = pack_watch {
         tauri::async_runtime::spawn(watch_pack_access(app.clone(), profile.clone(), slug, pid));
     }
@@ -1760,6 +1817,7 @@ fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
         let _media = media;
         let _rewind = rewind;
         let _agent = agent;
+        let mods_at_start = super::goodrun::enabled_mod_files(&pname);
         let (status, evidence, elapsed) = watch_session(&mut child, start, pid, &pname, &server_now, &app2, |status| {
             if status.is_ok() {
                 wait_log_readers(&readers, LOG_DRAIN_WAIT);
@@ -1781,6 +1839,9 @@ fn watch_game(w: Watch, perf: &super::launch_perf::LaunchPerf) {
             Err(_) => false,
         };
         let review_ok = (status.is_ok() && !crashed) || elapsed >= LAUNCH_CHECK_ALIVE;
+        if review_ok && !crashed && elapsed >= EARLY_EXIT_SECS {
+            super::goodrun::record_good_run(&pname, &mods_at_start);
+        }
         if review_ok {
             let checked = pname.clone();
             tauri::async_runtime::spawn(async move {

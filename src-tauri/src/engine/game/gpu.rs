@@ -67,6 +67,37 @@ pub fn adapter_names() -> Vec<String> {
     Vec::new()
 }
 
+/// A card built into the processor, judged by the name Windows gives it. Intel
+/// Arc is discrete only with a model number (A770, B580); «Intel Arc Graphics»
+/// is the integrated one of Meteor Lake. AMD APUs read «Radeon … Graphics»
+/// without an RX or Pro model. Unknown names count as discrete, so a machine
+/// is never short-changed by a guess.
+pub fn is_integrated_gpu(name: &str) -> bool {
+    let low = name.to_lowercase();
+    if low.contains("adreno") {
+        return true;
+    }
+    if low.contains("intel") {
+        let after_arc = low.split_once("arc").map(|(_, rest)| rest.trim_start_matches("(tm)").trim_start());
+        let arc_model = after_arc.is_some_and(|rest| {
+            let mut chars = rest.chars();
+            matches!(chars.next(), Some('a') | Some('b')) && chars.next().is_some_and(|c| c.is_ascii_digit())
+        });
+        return !arc_model && !low.contains("iris xe max");
+    }
+    if low.contains("radeon") {
+        let discrete = ["rx ", "rx-", " pro ", "firepro", " r9 ", " r7 ", " hd "].iter().any(|m| low.contains(m));
+        return low.contains("graphics") && !discrete;
+    }
+    false
+}
+
+/// Every video card of the machine is integrated: the game's textures and
+/// buffers come out of the system RAM. No list (macOS, Linux) means no claim.
+pub fn igpu_only(names: &[String]) -> bool {
+    !names.is_empty() && names.iter().all(|n| is_integrated_gpu(n.as_str()))
+}
+
 /// A video card and its driver as Windows reports them: PCI vendor id and the
 /// user-mode driver version, the four numbers Device Manager shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -259,6 +290,32 @@ fn win_registry(java: &Path, pref: GpuPref) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// card name as DXGI reports it -> integrated. A wrong «yes» takes a
+    /// gigabyte from a gaming laptop's heap for nothing.
+    #[test]
+    fn integrated_cards_are_told_from_discrete_ones() {
+        let cases: [(&str, bool, &str); 11] = [
+            ("Intel(R) UHD Graphics 620", true, "обычная встройка Intel"),
+            ("Intel(R) Iris(R) Xe Graphics", true, "Iris Xe в ноутбуках"),
+            ("Intel(R) Arc(TM) Graphics", true, "встройка Meteor Lake называется Arc без модели"),
+            ("Intel(R) Arc(TM) A770 Graphics", false, "дискретная Arc с номером модели"),
+            ("AMD Radeon(TM) Graphics", true, "APU Ryzen"),
+            ("AMD Radeon(TM) Vega 8 Graphics", true, "старые APU"),
+            ("AMD Radeon 780M Graphics", true, "новые APU"),
+            ("AMD Radeon RX 6600", false, "дискретная AMD"),
+            ("NVIDIA GeForce RTX 3060 Laptop GPU", false, "дискретная NVIDIA"),
+            ("Qualcomm(R) Adreno(TM) X1-85 GPU", true, "Windows на ARM"),
+            ("Some Unknown Adapter", false, "неизвестное — не встройка"),
+        ];
+        for (name, want, why) in cases {
+            assert_eq!(is_integrated_gpu(name), want, "{name}: {why}");
+        }
+        let s = |l: &[&str]| l.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(igpu_only(&s(&["Intel(R) UHD Graphics 620"])), "одна встройка");
+        assert!(!igpu_only(&s(&["Intel(R) UHD Graphics 620", "NVIDIA GeForce RTX 3060 Laptop GPU"])), "игра идёт на дискретной");
+        assert!(!igpu_only(&[]), "список карт неизвестен");
+    }
 
     /// (card, driver) -> a known bad driver. NVIDIA below 536.23 does not start
     /// Sodium; Intel Gen7 below 10.18.10.5161 crashes on start (Sodium wiki).

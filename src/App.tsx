@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react'
+import { bisectTakesCrash } from './state/bisect'
 import { SvgSprite } from './components/SvgSprite'
 import { Titlebar } from './components/Titlebar'
 import { HubTopTabs, Sidebar } from './components/Sidebar'
@@ -37,7 +38,6 @@ const ProjectModal = lazy(() => import('./modals/Project').then((m) => ({ defaul
 const NewBuildModal = lazy(() => import('./modals/NewBuild').then((m) => ({ default: m.NewBuildModal })))
 const OnboardingModal = lazy(() => import('./modals/Onboarding').then((m) => ({ default: m.OnboardingModal })))
 import { gameStepPending, hasGameAccount, useFirstRun } from './state/firstRun'
-import { ImageLightbox } from './components/ImageLightbox'
 import { UpdateBanner } from './components/UpdateBanner'
 import { PartyHost } from './components/party/PartyHost'
 import { ChatNotify } from './components/ChatNotify'
@@ -49,6 +49,8 @@ import {
   CommandPalette,
   ConfirmModal,
   CrashModal,
+  BisectWizard,
+  ImageLightbox,
   DepPlanModal,
   ServerModsModal,
   ImportModal,
@@ -69,6 +71,7 @@ import {
   Tour,
   LobbyKeeper,
   McNewsModal,
+  WallpaperLibrary,
 } from './components/hosts'
 import { Installs } from './components/Installs'
 import { PackDrop } from './components/PackDrop'
@@ -251,7 +254,7 @@ import { useMods } from './state/mods'
 import { refreshMsAccounts } from './state/msLogin'
 import { enterApp, showLogin } from './lib/session'
 import { initSecrets, refreshSessionState, type SessionCheck } from './lib/secure'
-import { listenGameCrash, listenGameExit, listenGameServer, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
+import { listenEarlyWindow, listenGameCrash, listenGameExit, listenGameServer, listenGameStuck, listenGameWindow, listenLaunchWarning, listenPackAccessLost, listenTrayExit } from './ipc/events'
 import { useCrash } from './state/crash'
 import { fixMark, forgetCrash, rememberCrash } from './lib/repair'
 import { tryAutoHeal } from './lib/autoHeal'
@@ -306,7 +309,7 @@ import { pickReplies, replyText } from './lib/bugReplies'
 import { BootUpdate } from './components/BootUpdate'
 import { Welcome } from './components/Welcome'
 import { useSlidingSegs } from './lib/slidingSegs'
-import { adoptRunningGame, beatAfterReconnect, gameSession, heartbeat, launchInProgress, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
+import { adoptRunningGame, beatAfterReconnect, gameSession, gameWindowNever, gameWindowShown, heartbeat, launchInProgress, ramMbFor, reconcileGameSession, setGameSession, updateSessionServer } from './lib/launch'
 import { POLL_BASE_MS, pollIntervalFrom } from './lib/pollPace'
 import { friendsPollDelayMs, friendsPollWait, pokeGate, safetyRefresh } from './lib/realtimePace'
 import {
@@ -461,6 +464,14 @@ export function App() {
     const stopPromo = watchPromo()
     const stopArcania2 = watchArcania2(warmArcaniaCover)
     const stopStreakReminder = initStreakReminder()
+    // Its own chunk: the startup set is at its size budget (scripts/check-startup-budget.mjs).
+    let stopPlusReminder: (() => void) | null = null
+    let plusReminderOff = false
+    void import('./lib/plusReminder')
+      .then((m) => {
+        if (!plusReminderOff) stopPlusReminder = m.initPlusReminder()
+      })
+      .catch(() => {})
     const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
     // The update never holds the start: screens warm up at once, the check runs next to them,
@@ -573,6 +584,8 @@ export function App() {
       stopPromo()
       stopArcania2()
       stopStreakReminder()
+      plusReminderOff = true
+      stopPlusReminder?.()
       stopStreakActivity()
       stopPromoServers()
       releaseRealtime()
@@ -658,6 +671,17 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    let unlisten: UnlistenFn | null = null
+    // The window lives in its own chunk: it is shown to a handful of builds, never at startup.
+    void listenEarlyWindow((n) => void import('./lib/earlyWindow').then((m) => m.explainEarlyWindow(n))).then((u) => {
+      unlisten = u
+    })
+    return () => {
+      if (unlisten) unlisten()
+    }
+  }, [])
+
+  useEffect(() => {
     const screen = safetyRefresh({
       load: () => Promise.all([loadFriends(), loadRooms()]),
       allowed: () => !document.hidden && useUi.getState().screen === 'friends',
@@ -723,9 +747,13 @@ export function App() {
     // запущенной сборкой время не появлялось вовсе.
     watchPlaytimeWhileRunning(() => useGame.getState().list.length > 0)
     startLagHelp()
+    void import('./lib/worldAutoBackupToast').then((m) => m.watchWorldAutoBackups())
     startLiveLog()
     const stopJoinClaims = watchJoinClaims()
+    void listenGameWindow(gameWindowShown)
+    void listenGameStuck((profile) => void import('./lib/gameStuck').then((m) => m.gameStuck(profile)))
     void listenGameExit((profile) => {
+      gameWindowNever(profile)
       // Отыграл спокойно 3+ минуты — план вылета, случившегося до этого запуска, больше не нужен,
       // а починка перед ним засчитывается.
       const calm = !!gameStartedAt && Date.now() - gameStartedAt > 180_000
@@ -768,6 +796,7 @@ export function App() {
       // ошибка, а не угадывало по последнему запуску на устройстве; mc и
       // загрузчик — чтобы не склеивать их с запусками задним числом.
       const crashed = info && info.profile ? info.profile : ''
+      if (crashed) gameWindowNever(crashed)
       const prof = crashed ? findProfile(crashed) : null
       void (crashed ? loadProfileSettings(crashed).catch(() => null) : Promise.resolve(null)).then((s) => {
         const fixed = crashed ? fixMark(crashed, true) : undefined
@@ -776,6 +805,8 @@ export function App() {
         })
       })
       // Отказ загрузчика на старте с точным планом чиним сами и запускаем снова; окно — для остального.
+      // Вылет на проверке поиска виновника — ответ мастеру, а не окно вылета и не авто-починка.
+      if (bisectTakesCrash(info?.profile ?? '')) return
       if (!tryAutoHeal(info, lastGameStartAt)) useCrash.getState().show(info)
       if (info && info.profile) {
         rememberCrash(info)
@@ -1169,6 +1200,7 @@ export function App() {
         <PackCodeHost />
         <PartyHost />
         <CrashModal />
+        <BisectWizard />
         <LagCard />
         <LiveLog />
         <ServerDetail />
@@ -1178,6 +1210,7 @@ export function App() {
         {/* Mounted last: it asks on top of any other modal, and DOM order breaks
             ties between equal z-index values. */}
         <McNewsModal />
+        <WallpaperLibrary />
         <CommandPalette />
         <ConfirmModal />
         <ImageLightbox />

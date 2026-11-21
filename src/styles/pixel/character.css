@@ -71,7 +71,16 @@
 .ch-set-head small { font-size: 12px; color: var(--m-fg-faint) }
 .ch-set-head .btn { margin-inline-start: auto }
 .ch-set-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin }
-.ch-set-item { flex: none; display: grid; justify-items: center; gap: 4px; width: 60px }
+.ch-set-item { flex: none; position: relative; display: grid; justify-items: center; gap: 4px; width: 60px }
+.ch-set-art::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, black 50%, transparent); opacity: 0; transition: opacity var(--m-t-fast, 120ms); pointer-events: none }
+.ch-set-art { position: relative }
+.ch-set-item:hover .ch-set-art::after { opacity: 1 }
+.ch-set-off {
+  position: absolute; left: 50%; top: 30px; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px;
+  transform: translate(-50%, -50%); color: var(--m-fg); background: var(--m-danger); opacity: 0; transition: opacity var(--m-t-fast, 120ms);
+}
+.ch-set-off svg { width: 14px; height: 14px }
+.ch-set-item:hover .ch-set-off, .ch-set-off:focus-visible { opacity: 1 }
 .ch-set-art { width: 60px; height: 60px; display: grid; place-items: center; background: var(--m-inset); overflow: hidden }
 .ch-set-art img { max-width: 54px; max-height: 54px }
 .ch-set-art .cosmetic-sign { transform: scale(0.6) }
@@ -303,6 +312,9 @@
 .ch-tile-art img,
 .ch-tile-art canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated }
 .ch-tile-art .skin-body3d-slot { max-height: 100% }
+.ch-shot { position: relative; display: grid; place-items: center; width: 100%; height: 100% }
+.ch-shot > img { width: 100%; height: 100%; object-fit: contain }
+.ch-shot .sv-loop > img { max-width: none; max-height: none }
 .ch-tile-name {
   font-size: 13px;
   font-weight: 700;
@@ -515,7 +527,8 @@
 :root:root .ch-tile-lock,
 :root:root .ch-tile-mark,
 :root:root .ch-tile-del,
-:root:root .ch-worn-off { --px-n: 4px; clip-path: var(--px-4) }
+:root:root .ch-worn-off,
+:root:root .ch-set-off { --px-n: 4px; clip-path: var(--px-4) }
 
 :root:root .ch-stage,
 :root:root .ch-fit,

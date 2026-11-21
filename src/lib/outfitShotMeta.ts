@@ -15,6 +15,8 @@ const SLOT_FOCUS: Record<string, ShotFocus> = {
   BACK: 'back', WINGS: 'back', CAPE: 'back',
   SHOES: 'legs', FEET: 'legs', PANTS: 'legs', SKIRT: 'legs',
   PET: 'full',
+  // Частицы эффекта и ауры идут вокруг всей фигуры: крупный план тела резал их краем плитки (13.11.2026).
+  EFFECT: 'full', AURA: 'full',
   ARMS: 'upper', HAND: 'upper', SHOULDERS: 'upper', SHOULDER: 'upper', ACCESSORY: 'upper',
 }
 export const focusOf = (slot: string): ShotFocus => SLOT_FOCUS[slot] ?? 'body'

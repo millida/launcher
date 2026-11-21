@@ -99,13 +99,18 @@ static ETAG_CACHE: std::sync::Mutex<std::collections::BTreeMap<String, Tagged>> 
 /// must never be replayed to the next one signed in on the same launcher.
 /// The market is part of it too: the same rating address answers with another
 /// catalogue for another market.
-fn etag_key(token: Option<&String>, url: &str, market: Option<&str>, lang: Option<&str>) -> String {
+/// The time zone is part of it as well: it picks the price region, so a ruble or dollar answer
+/// cached before must never stand in for a rupee one.
+fn etag_key(token: Option<&String>, url: &str, market: Option<&str>, lang: Option<&str>, tz: Option<&str>) -> String {
     let mut key = token.map(|t| sha256_hex(t.as_bytes())).unwrap_or_default();
     if let Some(m) = market {
         key = format!("{}\n{}", key, m);
     }
     if let Some(l) = lang {
         key = format!("{}\nlang={}", key, l);
+    }
+    if let Some(z) = tz {
+        key = format!("{}\ntz={}", key, z);
     }
     format!("{}\n{}", key, url)
 }
@@ -134,6 +139,23 @@ pub fn lang_header(raw: Option<&str>) -> Result<Option<&'static str>, String> {
         "" => Ok(None),
         code => LANGS.iter().copied().find(|l| *l == code).map(Some).ok_or_else(|| "bad lang".to_string()),
     }
+}
+
+/// The server tells a South Asian buyer by the clock of their device, never by the address alone.
+const TZ_HEADER: &str = "X-Tz";
+
+/// Same shape the site accepts: an IANA zone such as `Asia/Kolkata`. Anything else is dropped
+/// rather than refused, since a request without a zone is simply priced as before.
+pub fn tz_header(raw: Option<&str>) -> Option<&str> {
+    let zone = raw.map(str::trim).filter(|z| !z.is_empty() && z.len() <= 64)?;
+    let mut parts = zone.split('/');
+    let area = parts.next()?;
+    if area.is_empty() || !area.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    let rest: Vec<&str> = parts.collect();
+    let named = |p: &&str| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '-'));
+    ((1..=2).contains(&rest.len()) && rest.iter().all(named)).then_some(zone)
 }
 
 fn remembered(key: &str) -> Option<Tagged> {
@@ -212,6 +234,10 @@ fn idempotent_post(route: &str) -> bool {
     IDEMPOTENT_POSTS.contains(&route) || (route.starts_with("/rubies/chests/") && route.ends_with("/open"))
 }
 
+fn shared_answer(method: &str, path: &str) -> bool {
+    method == "GET" && SHARED_ANSWER_ROUTES.iter().any(|prefix| path.starts_with(prefix))
+}
+
 fn repeatable(method: &str, path: &str) -> bool {
     let route = path.split('?').next().unwrap_or(path);
     method == "GET"
@@ -225,7 +251,7 @@ pub async fn millida_api(
     body: Option<Value>,
     token: Option<String>,
 ) -> Result<Value, String> {
-    millida_api_in(path, method, body, token, None, None).await
+    millida_api_in(path, method, body, token, None, None, None).await
 }
 
 pub async fn millida_api_in(
@@ -235,6 +261,7 @@ pub async fn millida_api_in(
     token: Option<String>,
     market: Option<&'static str>,
     lang: Option<&'static str>,
+    tz: Option<&str>,
 ) -> Result<Value, String> {
     let resolved = api_url(&path)?;
     let url = resolved.as_str();
@@ -242,8 +269,9 @@ pub async fn millida_api_in(
     if !matches!(m.as_str(), "GET" | "POST" | "PATCH" | "PUT" | "DELETE") {
         return Err("bad method".into());
     }
-    let token = token.filter(|t| !t.is_empty());
-    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url, market, lang));
+    let shared = shared_answer(&m, &path);
+    let token = token.filter(|t| !t.is_empty() && !shared);
+    let conditional = (m == "GET").then(|| etag_key(token.as_ref(), url, market, lang, tz));
     let known = conditional.as_deref().and_then(remembered);
     let build_on = |c: reqwest::Client| {
         let mut req = match m.as_str() {
@@ -263,11 +291,16 @@ pub async fn millida_api_in(
         if let Some(l) = lang {
             req = req.header(reqwest::header::ACCEPT_LANGUAGE, l).header(LANG_HEADER, l);
         }
+        if let Some(z) = tz {
+            req = req.header(TZ_HEADER, z);
+        }
         if let Some(b) = body.as_ref() {
             req = req.json(b);
         }
-        if let Some(k) = known.as_ref() {
-            req = req.header(reqwest::header::IF_NONE_MATCH, k.etag.as_str());
+        match known.as_ref() {
+            Some(k) => req = req.header(reqwest::header::IF_NONE_MATCH, k.etag.as_str()),
+            None if shared => req = req.header(reqwest::header::IF_MODIFIED_SINCE, SHARED_SINCE),
+            None => {}
         }
         req
     };
@@ -607,7 +640,7 @@ pub(crate) async fn refresh_millida_if_expiring(window: std::time::Duration) {
 /// The only way the launcher talks to the Millida API as the signed-in user:
 /// the token is read from the vault here and never leaves the core.
 pub async fn millida_api_auth(path: String, method: String, body: Option<Value>) -> Result<Value, String> {
-    millida_api_auth_in(path, method, body, None, None).await
+    millida_api_auth_in(path, method, body, None, None, None).await
 }
 
 pub async fn millida_api_auth_in(
@@ -616,15 +649,16 @@ pub async fn millida_api_auth_in(
     body: Option<Value>,
     market: Option<&'static str>,
     lang: Option<&'static str>,
+    tz: Option<&str>,
 ) -> Result<Value, String> {
     let token = millida_token();
-    let first = millida_api_in(path.clone(), method.clone(), body.clone(), token.clone(), market, lang).await;
+    let first = millida_api_in(path.clone(), method.clone(), body.clone(), token.clone(), market, lang, tz).await;
     let Err(e) = first else { return first };
     if e != "http 401" {
         return Err(e);
     }
     match refresh_session(token).await {
-        Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market, lang).await,
+        Refreshed::Token(fresh) => millida_api_in(path, method, body, Some(fresh), market, lang, tz).await,
         Refreshed::Dead => Err(UNAUTHORIZED.into()),
         Refreshed::SignedOut | Refreshed::Unavailable => Err(e),
     }
@@ -1040,7 +1074,7 @@ mod tests {
     }
 
     use super::{
-        api_url, etag_key, insufficient_funds_detail, lang_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
+        api_url, etag_key, insufficient_funds_detail, lang_header, tz_header, login_poll_answer, market_header, refresh_on_cooldown, remember_in, repeatable, webview_path_allowed, set_refresh_cooldown,
         upload_route_allowed, verdict_for, without_refresh_token, mod_token_of, ModToken, RefreshVerdict, Refreshed, Tagged, ETAG_CACHE_BUDGET, MILLIDA_API, UNAUTHORIZED,
     };
     use std::collections::BTreeMap;
@@ -1097,7 +1131,7 @@ mod tests {
         let alice = "token-alice".to_string();
         let bob = "token-bob".to_string();
         let mut cache: BTreeMap<String, Tagged> = BTreeMap::new();
-        remember_in(&mut cache, etag_key(Some(&alice), url, None, None), "\"v1\"".into(), "{\"items\":[]}".into());
+        remember_in(&mut cache, etag_key(Some(&alice), url, None, None, None), "\"v1\"".into(), "{\"items\":[]}".into());
         // (account, address, expected etag, why this case is pinned)
         let cases: [(Option<&String>, &str, Option<&str>, &str); 4] = [
             (Some(&alice), url, Some("\"v1\""), "the same session asks again and gets a 304 instead of 1.4 MB"),
@@ -1106,16 +1140,20 @@ mod tests {
             (Some(&alice), "https://api.millida.net/v2/cosmetics/owned", None, "one address never answers for another"),
         ];
         for (account, address, expected, why) in cases {
-            let got = cache.get(&etag_key(account, address, None, None)).map(|t| t.etag.as_str());
+            let got = cache.get(&etag_key(account, address, None, None, None)).map(|t| t.etag.as_str());
             assert_eq!(got, expected, "{}", why);
         }
         assert!(
-            !cache.contains_key(&etag_key(Some(&alice), url, Some("EN"), None)),
+            !cache.contains_key(&etag_key(Some(&alice), url, Some("EN"), None, None)),
             "a rating cached for the Russian market must never answer for the English one",
         );
         assert!(
-            !cache.contains_key(&etag_key(Some(&alice), url, None, Some("en"))),
+            !cache.contains_key(&etag_key(Some(&alice), url, None, Some("en"), None)),
             "names cached in one interface language must never be replayed after switching to another",
+        );
+        assert!(
+            !cache.contains_key(&etag_key(Some(&alice), url, None, None, Some("Asia/Kolkata"))),
+            "prices cached for a ruble or dollar buyer must never be replayed to a rupee one",
         );
     }
 
@@ -1148,6 +1186,26 @@ mod tests {
         ];
         for (input, want, why) in cases {
             assert_eq!(lang_header(input).map_err(|_| ()), want, "{:?}: {}", input, why);
+        }
+    }
+
+    #[test]
+    fn only_iana_time_zones_reach_the_header() {
+        let long = format!("Asia/{}", "a".repeat(64));
+        type Case<'a> = (Option<&'a str>, Option<&'a str>, &'a str);
+        let cases: [Case; 9] = [
+            (None, None, "a request without a zone stays exactly as before"),
+            (Some("Asia/Kolkata"), Some("Asia/Kolkata"), "an Indian clock is sent as the webview names it"),
+            (Some(" Asia/Dhaka "), Some("Asia/Dhaka"), "surrounding spaces are not part of the zone"),
+            (Some("America/Argentina/Buenos_Aires"), Some("America/Argentina/Buenos_Aires"), "a three-part zone is a real IANA name"),
+            (Some("Etc/GMT+5"), Some("Etc/GMT+5"), "offset zones keep their sign"),
+            (Some("UTC"), None, "a bare name carries no region"),
+            (Some("Asia/Kolkata\r\nX-Evil: 1"), None, "a webview value must never become a header of its own"),
+            (Some("Asia/Kol kata"), None, "a space is never part of a zone"),
+            (Some(long.as_str()), None, "an overlong value is dropped"),
+        ];
+        for (input, want, why) in cases {
+            assert_eq!(tz_header(input), want, "{:?}: {}", input, why);
         }
     }
 

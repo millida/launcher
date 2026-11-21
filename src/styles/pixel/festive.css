@@ -8,9 +8,12 @@
    грани и картинки — через --px-* общего слоя рамки (12-pixel.css),
    без border и box-shadow у срезанных элементов. Цвет кнопок игрока
    (--m-accent) не трогаем: красный живёт в своих токенах и уходит с темой.
+   .fx-scope — та же тема внутри одного блока (новогодний календарь пропуска),
+   когда во всём окне она выключена.
    ============================================================ */
 
-html[data-festive] {
+html[data-festive],
+.fx-scope {
   --fx-red: #c8323a;
   --fx-on-red: #ffffff;
   --fx-snow: #f4f9ff;
@@ -47,7 +50,8 @@ html[data-festive] {
 /* ---------- Кнопки: красная со снежной шапкой ----------
    Верхняя грань — снег (4px), под ней картинка с подтёками; фактура точек остаётся.
    Нажатие (12-pixel.css) по-прежнему меняет грани местами — у него вес выше. */
-:root:root[data-festive] :is(.btn.primary, .tb-back) {
+:root:root[data-festive] :is(.btn.primary, .tb-back),
+:root:root .fx-scope .btn.primary {
   background-color: var(--fx-red);
   color: var(--fx-on-red);
   --px-ft: var(--fx-snow); --px-ft-w: 4px;
@@ -57,13 +61,15 @@ html[data-festive] {
   --px-img-repeat: repeat-x, var(--px-dots-repeat);
   --px-img-origin: padding-box, var(--px-dots-origin);
 }
-:root:root[data-festive] :is(.btn.primary, .tb-back) svg { color: var(--fx-on-red); }
+:root:root[data-festive] :is(.btn.primary, .tb-back) svg,
+:root:root .fx-scope .btn.primary svg { color: var(--fx-on-red); }
 /* «Играть» в лобби: часы и полоса под надписью — светлые на красном (были тёмно-зелёные под акцент). */
 :root:root[data-festive] .lobby-row #playBtn .play-hours { color: rgba(255, 255, 255, 0.88); }
 :root:root[data-festive] .play-hours-bar { background: rgba(255, 255, 255, 0.22); }
 :root:root[data-festive] .play-hours-bar > span { background: rgba(255, 255, 255, 0.85); }
 /* Вторичная — только снег сверху. */
-:root:root[data-festive] .btn.secondary {
+:root:root[data-festive] .btn.secondary,
+:root:root .fx-scope .btn.secondary {
   --px-ft: var(--fx-snow); --px-ft-w: 3px;
   --px-img: var(--fx-snowcap); --px-img-size: 24px 8px; --px-img-pos: 0 0; --px-img-repeat: repeat-x; --px-img-origin: padding-box;
 }
