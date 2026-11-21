@@ -34,6 +34,11 @@ struct ContentPrefs {
     /// not silently put these mods back into a custom instance.
     #[serde(default)]
     removed_mod_ids: BTreeSet<String>,
+    /// Loader ids of mods the player switched off although enabled mods need
+    /// them («Выключить только этот»). Launch repair must not put a copy back
+    /// until the player switches the mod on again.
+    #[serde(default)]
+    kept_off_mod_ids: BTreeSet<String>,
 }
 
 static PREFS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -69,6 +74,27 @@ pub(crate) fn removed_mod_ids(profile: &str) -> BTreeSet<String> {
 pub(crate) fn remember_removed_mod_ids(profile: &str, ids: &[String]) -> Result<(), String> {
     edit(profile, |p| {
         p.removed_mod_ids.extend(ids.iter().filter(|id| !id.is_empty()).map(|id| id.to_ascii_lowercase()));
+    })
+}
+
+pub(crate) fn kept_off_mod_ids(profile: &str) -> BTreeSet<String> {
+    load(profile).kept_off_mod_ids
+}
+
+/// Marks (`on`) or clears the ids as switched off on purpose.
+pub(crate) fn set_kept_off_mod_ids(profile: &str, ids: &[String], on: bool) -> Result<(), String> {
+    let ids: Vec<String> = ids.iter().map(|id| id.trim().to_ascii_lowercase()).filter(|id| !id.is_empty()).collect();
+    if ids.is_empty() {
+        return Ok(());
+    }
+    edit(profile, |p| {
+        for id in ids {
+            if on {
+                p.kept_off_mod_ids.insert(id);
+            } else {
+                p.kept_off_mod_ids.remove(&id);
+            }
+        }
     })
 }
 
@@ -198,6 +224,46 @@ pub(crate) fn record_pack_origin_at(pdir: &Path) {
     let _ = edit_at(pdir, |p| p.pack_origin = Some(keys));
 }
 
+/// Files (names without `.disabled`) of the build's `kind` folder that the pack did
+/// not ship: put there by hand or from the catalogue. None when the build has no
+/// record of what the pack shipped.
+pub(crate) fn not_from_pack(profile: &str, kind: &str) -> Option<BTreeSet<String>> {
+    let pdir = profile_dir(profile);
+    let origin = load_at(&pdir).pack_origin?;
+    let manifest = load_content_manifest(profile);
+    let pid = |f: &str| manifest.iter().find(|e| e.kind == kind && e.file_name == f).map(|e| e.project_id.clone()).unwrap_or_default();
+    Some(content_files(&pdir, kind).into_iter().filter(|f| !origin.contains(&content_key(kind, &pid(f), f))).collect())
+}
+
+/// After an update the pack's files are the ones its new version lists (paths
+/// relative to the build), not everything that lies in the folders: what the
+/// player added stays theirs.
+pub(crate) fn record_pack_origin_listed(profile: &str, listed: &[String]) {
+    let pdir = profile_dir(profile);
+    let manifest = load_content_manifest(profile);
+    let mut keys: BTreeSet<String> = BTreeSet::new();
+    for kind in ["mod", "resourcepack", "shader", "datapack"] {
+        let dir = content_dir(kind);
+        for rel in listed {
+            let Some(name) = rel.strip_prefix(dir).and_then(|r| r.strip_prefix('/')) else { continue };
+            if name.contains('/') || !is_content_file_name(name) {
+                continue;
+            }
+            let pid = manifest
+                .iter()
+                .find(|e| e.kind == kind && e.file_name == name)
+                .map(|e| e.project_id.clone())
+                .unwrap_or_default();
+            keys.insert(content_key(kind, &pid, name));
+        }
+    }
+    let _ = edit_at(&pdir, |p| p.pack_origin = Some(keys));
+}
+
+fn is_content_file_name(name: &str) -> bool {
+    [".jar", ".zip", ".litemod"].iter().any(|x| name.to_ascii_lowercase().ends_with(x))
+}
+
 fn content_files(pdir: &Path, kind: &str) -> Vec<String> {
     let dir = pdir.join(content_dir(kind));
     let Ok(rd) = std::fs::read_dir(&dir) else { return vec![] };
@@ -205,7 +271,7 @@ fn content_files(pdir: &Path, kind: &str) -> Vec<String> {
         .filter(|e| e.path().is_file())
         .map(|e| e.file_name().to_string_lossy().to_string())
         .map(|n| n.strip_suffix(".disabled").map(str::to_string).unwrap_or(n))
-        .filter(|n| [".jar", ".zip", ".litemod"].iter().any(|x| n.to_ascii_lowercase().ends_with(x)))
+        .filter(|n| is_content_file_name(n))
         .collect()
 }
 

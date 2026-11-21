@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
-import type { ModFile, PlanItem, Profile } from '../../ipc/commands'
+import type { CfFileInfo, ModFile, PlanItem, Profile } from '../../ipc/commands'
 import { cfFiles, cfInstall, cfSearch, installDepItems } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { LOADER_NAME, loaderId } from '../../lib/format'
@@ -116,6 +116,8 @@ async function mrVersions(id: string, kind: string, build: Profile, fit: Fit): P
   }))
 }
 
+const cfVer = (f: CfFileInfo): Ver => ({ id: String(f.id), name: f.name || f.file_name, file: f.file_name, deps: [], date: f.date, type: f.release === 1 ? 'release' : f.release === 2 ? 'beta' : 'alpha' })
+
 const SECTION: Record<string, SiteSlug> = { mod: 'mods', resourcepack: 'texture-packs', shader: 'shaders', datapack: 'data-packs' }
 const CAT_SORT: Record<string, 'recommended' | 'popular' | 'new'> = { relevance: 'recommended', downloads: 'popular', follows: 'popular', newest: 'new', updated: 'new' }
 
@@ -213,6 +215,7 @@ export function ModDownloader({
   const [queue, setQueue] = useState<Map<string, Queued>>(new Map())
   const [review, setReview] = useState<Dep[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [picking, setPicking] = useState<Set<string>>(new Set())
   const seq = useRef(0)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -285,7 +288,7 @@ export function ModDownloader({
       void cfFiles(Number(cur.id), fit.ver ? build.version : '')
         .then((files) => {
           if (!live) return
-          const v = files.map((f) => ({ id: String(f.id), name: f.name || f.file_name, file: f.file_name, deps: [], date: f.date, type: f.release === 1 ? 'release' : f.release === 2 ? 'beta' : 'alpha' }))
+          const v = files.map(cfVer)
           setVers(v)
           setVerId(queue.get(qkey(cur))?.ver.id || v[0]?.id || '')
         })
@@ -312,6 +315,56 @@ export function ModDownloader({
     }
     setQueue(next)
   }
+
+  /* Ticking a row picks the same version the details pane marks as recommended. */
+  const bestVer = async (src: Source, h: Hit): Promise<Ver | null> => {
+    if (src === 'millida') return (await catVersions(h.slug, kind, build, fit)).vers[0] ?? null
+    if (src === 'modrinth') return (await mrVersions(h.id, kind, build, fit))[0] ?? null
+    const files = await cfFiles(Number(h.id), fit.ver ? build.version : '')
+    const first = files[0]
+    return first ? cfVer(first) : null
+  }
+
+  const pickMany = async (src: Source, list: Hit[]) => {
+    const keys = list.map((h) => src + ':' + h.id)
+    setPicking((p) => new Set([...p, ...keys]))
+    const vers = await inBatches(list, 6, (h) => bestVer(src, h).catch(() => null))
+    setPicking((p) => {
+      const next = new Set(p)
+      for (const k of keys) next.delete(k)
+      return next
+    })
+    const found = list.flatMap((h, i) => {
+      const ver = vers[i]
+      return ver ? [{ h, ver }] : []
+    })
+    const missing = list.filter((_, i) => !vers[i]).map((h) => h.title)
+    setQueue((q) => {
+      const next = new Map(q)
+      for (const { h, ver } of found) {
+        for (const [key, x] of next) if (norm(x.title) === norm(h.title)) next.delete(key)
+        next.set(src + ':' + h.id, { source: src, id: h.id, slug: h.slug, title: h.title, icon: h.icon, ver })
+      }
+      return next
+    })
+    if (missing.length) showToast(t('Нет версии под {version}: {list}', { version: build.version, list: missing.join(', ') }), 'error')
+  }
+
+  const quickToggle = (h: Hit) => {
+    const k = qkey(h)
+    if (picking.has(k)) return
+    if (queue.has(k)) {
+      setQueue((q) => {
+        const next = new Map(q)
+        next.delete(k)
+        return next
+      })
+      return
+    }
+    void pickMany(source, [h])
+  }
+
+  const pageable = (hits ?? []).filter((h) => !inBuild(h) && !queue.has(qkey(h)) && !picking.has(qkey(h)))
 
   /* «Проверить и подтвердить»: зависимости Modrinth, которых нет ни в сборке, ни в очереди. */
   const openReview = async () => {
@@ -473,6 +526,9 @@ export function ModDownloader({
                 {t('Фильтр')}
                 {(fit.ver ? 1 : 0) + (fit.loader && kind === 'mod' ? 1 : 0) + (hideHave ? 1 : 0) ? <span className="nav-count">{(fit.ver ? 1 : 0) + (fit.loader && kind === 'mod' ? 1 : 0) + (hideHave ? 1 : 0)}</span> : null}
               </button>
+              <button type="button" className="btn sm secondary mdl-all" disabled={!pageable.length} onClick={() => void pickMany(source, pageable)}>
+                {t('Выбрать все на странице')}
+              </button>
             </div>
             {filters ? (
               <div className="mdl-filters">
@@ -506,6 +562,7 @@ export function ModDownloader({
                 hits.filter((h) => !(hideHave && inBuild(h))).map((h) => {
                   const inQ = queue.has(qkey(h))
                   const inB = inBuild(h)
+                  const pk = picking.has(qkey(h))
                   return (
                     <button
                       key={h.id}
@@ -513,6 +570,21 @@ export function ModDownloader({
                       className={'mdl-row' + (cur?.id === h.id ? ' cur' : '') + (inQ ? ' queued' : '') + (inB ? ' have' : '')}
                       onClick={() => setCur(h)}
                     >
+                      {inB ? (
+                        <span className="mdl-chk-gap" aria-hidden="true" />
+                      ) : (
+                        <span
+                          className={'chk mdl-chk' + (inQ ? ' on' : '')}
+                          role="checkbox"
+                          aria-checked={inQ}
+                          aria-busy={pk}
+                          aria-label={t('Выбрать «{title}»', { title: h.title })}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            quickToggle(h)
+                          }}
+                        />
+                      )}
                       <span className="mdl-ic">{h.icon ? <img src={h.icon} alt="" loading="lazy" /> : <PxIcon name="box" size={24} />}</span>
                       <span className="mdl-txt">
                         <b>
@@ -585,6 +657,7 @@ export function ModDownloader({
 
         <div className="mdl-foot">
           <span className="mdl-queue">
+            {queue.size ? <span className="mdl-count">{t('Выбрано: {n}', { n: queue.size })}</span> : null}
             {[...queue.values()].slice(0, 8).map((x) => (
               <span key={x.source + x.id} className="mdl-chip" title={x.title}>
                 {x.icon ? <img src={x.icon} alt="" /> : null}
@@ -593,6 +666,11 @@ export function ModDownloader({
             ))}
             {queue.size > 8 ? <span className="mdl-chip">+{queue.size - 8}</span> : null}
           </span>
+          {queue.size ? (
+            <button type="button" className="btn md ghost" disabled={busy} onClick={() => setQueue(new Map())}>
+              {t('Сбросить')}
+            </button>
+          ) : null}
           <button type="button" className="btn md secondary" onClick={onClose}>
             {t('Отмена')}
           </button>

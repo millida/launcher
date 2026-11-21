@@ -2,11 +2,19 @@ import { ModDownloader } from '../components/build/ModDownloader'
 import { UpdateAllModal } from '../components/build/UpdateAllModal'
 import { TagEditor } from '../components/build/TagEditor'
 import { FilesTab } from '../components/build/FilesTab'
+import { SnapshotsTab } from '../components/build/SnapshotsTab'
+import { WorldBackupSchedule } from '../components/build/WorldBackupSchedule'
+import { CloudWorldBackups } from '../components/build/CloudWorldBackups'
+import { deleteSnapshot, rollbackAction, snapshotCovers, takeSnapshot } from '../lib/buildSnapshots'
+import type { MilliSnap } from '../lib/buildSnapshots'
+import { askDependents } from '../lib/modDependents'
+import { openFolderAction } from '../lib/savedFile'
 import { normalizeGroup } from '../lib/buildGroups'
 import { ExportModal } from '../components/build/ExportModal'
 import { LinuxToolsRows } from '../components/build/LinuxToolsRows'
 import { HorizonBuildRow } from '../components/build/HorizonBeta'
 import { PackwizRow } from '../components/build/PackwizRow'
+import { FtbUpdateRow } from '../components/build/FtbUpdateRow'
 import { DEMO_MODS } from '../lib/demoMods'
 import { DEMO_USER } from '../lib/demo'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -113,6 +121,12 @@ import { RAM_MAX_GB, maxRamGb } from '../lib/ram'
 import { randomIcon } from '../lib/buildIcon'
 import { BUILD_NAME_MAX, GROUP_NAME_MAX, LOADER_NAME, fmtPlaytime, fmtSize, loaderId, plural, whenText } from '../lib/format'
 import { isLibraryMod } from '../lib/modRole'
+import { copyModList } from '../lib/copyModList'
+import { disableMods } from '../lib/modsOff'
+import { BISECT_MODS_EVENT, openBisect, useBisect } from '../state/bisect'
+import type { BisectView } from '../ipc/commands'
+import { bisectStatus } from '../ipc/modTools'
+import { prettyFile } from '../lib/modList'
 import '../styles/pixel/build-page.css'
 import { AUTO_LOADER_VERSION, hasLoaderVersions, useLoaderBuilds } from '../lib/loaderBuilds'
 import { loaderPinFollowsGame, useCoreUpdate } from '../lib/coreUpdate'
@@ -121,6 +135,7 @@ import { fixItems, issueInstall } from '../lib/deps'
 import { installExtras } from '../lib/install'
 import { ensureMcVersionList, useMcVersionList, versionOptions } from '../state/mcVersionList'
 import { useGuarded, useProfiles } from '../state/profiles'
+import { useLobby } from '../state/lobbyMode'
 import { catalogPackSlug } from '../lib/packUpdate'
 import { useInstance } from '../state/instance'
 import { closeModal, setScreen, showToast, useUi, openModal } from '../state/ui'
@@ -255,14 +270,6 @@ const fabricOnly = (m: ModFile) => {
 const isConnector = (m: ModFile) => /(^|[^a-z])connector/i.test(m.name) || /sinytra connector|^connector$/i.test(m.title || '')
 /** Tags are cleaned of control characters in the core, so this value never collides with one. */
 const MANUAL_FILTER = '\u0000manual'
-
-/** Имя неопознанного файла по-человечески: «dungeons-and-taverns-3.0.3.f.jar» → «Dungeons and taverns». */
-function prettyFile(name: string): string {
-  const bare = name.replace(/\.(jar|zip|litemod)$/i, '')
-  const base = bare.replace(/[-_+ ]v?(mc)?\d+(\.\d+)+.*$/i, '') || bare
-  const words = base.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name
-}
 
 /** Значок мода: картинка, а нет её или она битая — значок раздела. Не оба сразу (прозрачные значки просвечивали). */
 function ModArt({ src, icon, sm }: { src?: string; icon: string; sm?: boolean }) {
@@ -507,6 +514,20 @@ export function InstancePage() {
     return () => document.removeEventListener('keydown', onKey, true)
   }, [modal.open, tab])
 
+  // Незавершённый поиск виновника (ядро хранит его в папке сборки): предложить продолжить.
+  const [pendingBisect, setPendingBisect] = useState<BisectView | null>(null)
+  const bisectOpen = useBisect((s) => !!profile && s.profile === profile)
+  useEffect(() => {
+    if (!profile || !hasTauri() || bisectOpen) return
+    let live = true
+    void bisectStatus(profile)
+      .then((v) => live && setPendingBisect(v))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [profile, bisectOpen])
+
   const loadMods = useCallback(
     (k?: string) => {
       const kk = k || kindRef.current
@@ -566,6 +587,17 @@ export function InstancePage() {
     },
     [profile],
   )
+
+  // Поиск виновника переключил моды этой сборки — список и плашка «Продолжить» обновляются.
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== profile) return
+      if (kindRef.current === 'mod') loadMods()
+      if (hasTauri() && profile) void bisectStatus(profile).then(setPendingBisect).catch(() => {})
+    }
+    window.addEventListener(BISECT_MODS_EVENT, on)
+    return () => window.removeEventListener(BISECT_MODS_EVENT, on)
+  }, [profile, loadMods])
 
   // A dependency the launcher knows how to close is not a question worth asking:
   // the build is broken until it is installed, and the answer is always yes.
@@ -980,6 +1012,7 @@ export function InstancePage() {
         (blocked.length ? t(' Нет сборки под {version}: {list} — останутся как есть и могут не запуститься.', { version: target, list: listed(blocked) }) : '') +
         (unchecked.length ? t(' Не проверить, добавлены вручную: {list}.', { list: listed(unchecked) }) : '')
       if (!(await uiConfirm(text, { confirmLabel: t('Обновить') }))) return
+      if (refit.length) await takeSnapshot(profile, t('Перед обновлением Minecraft до {version}', { version: target }), true)
       await setProfileLoader(profile, target, loader, lver)
       const failed: string[] = []
       for (const i of refit) {
@@ -1168,7 +1201,7 @@ export function InstancePage() {
     }
     showToast(t('Собираем .mrpack…'))
     exportMrpack(profile!, profile!, '1.0.0', pr ? LOADER_NAME(pr) + ' ' + pr.version : '')
-      .then((p) => showToast(t('Экспортировано: {file}', { file: ('' + p).split('/').pop() ?? '' })))
+      .then((p) => showToast(t('Экспортировано: {file}', { file: ('' + p).split('/').pop() ?? '' }), undefined, undefined, openFolderAction('' + p)))
       .catch((e) => showToast('' + e))
   }
 
@@ -1257,9 +1290,10 @@ export function InstancePage() {
   const freshAll = items.filter((i) => !!i.added && nowSec - i.added < FRESH_SEC)
   const freshNames = new Set(freshAll.length && freshAll.length <= Math.max(3, items.length * 0.25) ? freshAll.map((i) => i.name) : [])
 
+  // Выключение мода, нужного другим, сначала спрашивает (lib/modsOff); включение и остальные разделы — как было.
   const toggleOne = (md: ModFile) =>
-    toggleContent(profile!, kind, md.name, !md.enabled)
-      .then(() => loadMods())
+    (kind === 'mod' && md.enabled ? disableMods(profile!, [md.name]) : toggleContent(profile!, kind, md.name, !md.enabled).then(() => true))
+      .then((changed) => changed && loadMods())
       .catch((e) => showToast(apiErrorText(e, t('Не удалось выполнить действие')), 'error'))
 
   const row = (md: ModFile) => {
@@ -1375,9 +1409,12 @@ export function InstancePage() {
               aria-label={t('Удалить')}
               title={t('Удалить (Shift — без вопроса)')}
               onClick={async (e) => {
+                const quick = e.shiftKey
+                const deps = kind === 'mod' ? await askDependents(profile!, [md.name], 'delete') : null
+                if (deps === false) return
                 if (kind === 'mod' && isOwnModFile(md.name)) {
                   if (!(await askOwnModRemoval())) return
-                } else if (!e.shiftKey && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
+                } else if (deps === null && !quick && !(await uiConfirm(t('Удалить «{name}» из сборки?', { name: title }), { confirmLabel: t('Удалить') }))) return
                 deleteContent(profile!, kind, md.name)
                   .then(() => loadMods())
                   .catch((er) => showToast(apiErrorText(er, t('Не удалось выполнить действие')), 'error'))
@@ -1512,6 +1549,8 @@ export function InstancePage() {
                   id="bsPlay"
                   onClick={() => {
                     close()
+                    // Запуск со страницы сборки — тоже выбор: «Играть» на главной вернёт в неё (как BuildCard).
+                    useLobby.getState().pick({ kind: 'build', name: profile! })
                     if (hasTauri()) realLaunch(profile!)
                     else startPrelaunch(profile!)
                   }}
@@ -1562,6 +1601,7 @@ export function InstancePage() {
               ['shots', 'i-image', t('Скриншоты')],
               ['logs', 'i-list', t('Логи')],
               ['files', 'i-folder', t('Файлы')],
+              ['snaps', 'i-clock', t('Снимки')],
               ['opts', 'i-settings', t('Параметры')],
             ].map(([id, ic, label]) => (
               <button
@@ -1594,6 +1634,7 @@ export function InstancePage() {
                   onClose={() => setDlOpen(false)}
                   onDone={(demo) => (demo ? setItems((l) => [...demo, ...l.filter((m) => !demo.some((d) => d.name === m.name))]) : loadMods())}
                   onRemove={async (file) => {
+                    if (kind === 'mod' && (await askDependents(profile!, [file], 'delete')) === false) return
                     if (kind === 'mod' && isOwnModFile(file) && !(await askOwnModRemoval())) return
                     if (!hasTauri()) {
                       setItems((l) => l.filter((m) => m.name !== file))
@@ -1892,15 +1933,35 @@ export function InstancePage() {
                           const it = items.find((i) => i.name === file)
                           return it ? titleOf(it) : prettyFile(file)
                         }}
+                        snapshotNote={snapshotCovers(kind)}
                         onClose={() => setUpdAsk(false)}
-                        onConfirm={() => {
+                        onConfirm={async () => {
+                          const p = profile!
+                          const k = kind
                           setUpdAsk(false)
                           setUpdateAllLabel(t('Обновляем…'))
-                          updateAll(profile!, kind)
+                          let snap: MilliSnap | null = null
+                          if (snapshotCovers(k) && updCount > 0) {
+                            try {
+                              snap = await takeSnapshot(p, t('Перед «Обновить всё»'), true)
+                            } catch (e) {
+                              setUpdateAllLabel(t('Обновить всё'))
+                              showToast(t('Обновление не запущено: не удалось сохранить снимок сборки. {error}', { error: tx(e) }), 'error')
+                              return
+                            }
+                          }
+                          const before = snap
+                          updateAll(p, k)
                             .then((n) => {
                               setUpdateAllLabel(t('Обновить всё'))
                               loadMods()
-                              showToast(n ? t('Обновлено: {n}', { n }) : t('Всё актуально'))
+                              if (!n && before) void deleteSnapshot(p, before.id).catch(() => {})
+                              showToast(
+                                n ? t('Обновлено: {n}', { n }) : t('Всё актуально'),
+                                undefined,
+                                undefined,
+                                n && before ? rollbackAction(p, before, () => loadMods()) : undefined,
+                              )
                             })
                             .catch((e) => {
                               setUpdateAllLabel(t('Обновить всё'))
@@ -1951,6 +2012,10 @@ export function InstancePage() {
                       kind === 'mod' && items.length ? { id: 'safety', label: t('Проверить безопасность'), icon: 'i-shield', onPick: () => setSafetyOpen(true) } : null,
                       kind !== 'mod' ? { id: 'safety-packs', label: t('Проверить паки и карты'), icon: 'i-shield', onPick: () => setPackSafetyOpen(true) } : null,
                       kind === 'mod' && hasTauri() ? { id: 'safety-files', label: t('Проверить любой файл на вирусы'), icon: 'i-shield', onPick: () => setFileSafetyOpen(true) } : null,
+                      kind === 'mod' && items.length > 1
+                        ? { id: 'bisect', label: t('Найти мод, из-за которого вылет'), icon: 'i-search', onPick: () => openBisect(profile!) }
+                        : null,
+                      pr ? { id: 'copy-mods', label: t('Скопировать список модов'), icon: 'i-copy', onPick: () => void copyModList(pr, kind === 'mod' ? items : null) } : null,
                       { id: 'export', label: t('Экспорт в .mrpack'), icon: 'i-download', onPick: runExport },
                       { id: 'export-other', label: t('Экспорт для других лаунчеров'), icon: 'i-download', onPick: () => setExportOpen(true) },
                       { id: 'template', label: t('Сохранить как шаблон'), icon: 'i-copy', onPick: saveTemplate },
@@ -1960,6 +2025,14 @@ export function InstancePage() {
                 />
               ) : null}
 
+              {pendingBisect && kind === 'mod' && !bisectOpen ? (
+                <div className="faint-note bx-running" data-bisect-resume>
+                  {t('Идёт поиск мода-виновника: часть модов выключена на время проверки.')}{' '}
+                  <button className="btn sm secondary" onClick={() => useBisect.getState().open(profile!, pendingBisect)}>
+                    {t('Продолжить')}
+                  </button>
+                </div>
+              ) : null}
               {thisRunning && items.length ? <p className="faint-note bx-running">{t('Игра запущена — изменения вступят после перезапуска')}</p> : null}
               <div className="bpg-list mod-list-wrap" id="bsMods">
                 {dropActive ? (
@@ -2049,7 +2122,19 @@ export function InstancePage() {
                   <button className="btn sm secondary" data-bulk="enable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, true))}>
                     <Icon id="i-check" /> {t('Включить')}
                   </button>
-                  <button className="btn sm secondary" data-bulk="disable" onClick={() => void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))}>
+                  <button className="btn sm secondary" data-bulk="disable"
+                    onClick={() =>
+                      kind === 'mod'
+                        ? void disableMods(profile!, [...sel])
+                            .then((changed) => {
+                              if (!changed) return
+                              setSel(new Set())
+                              loadMods()
+                            })
+                            .catch((e) => showToast(apiErrorText(e, t('Не удалось выполнить действие')), 'error'))
+                        : void bulk([...sel], (n) => toggleContent(profile!, kind, n, false))
+                    }
+                  >
                     <Icon id="i-ban" /> {t('Выключить')}
                   </button>
                   {[...sel].some((n) => upd[n]) ? (
@@ -2066,7 +2151,9 @@ export function InstancePage() {
                     data-bulk="delete"
                     onClick={async () => {
                       const names = [...sel]
-                      if (!(await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))) return
+                      const deps = kind === 'mod' ? await askDependents(profile!, names, 'delete') : null
+                      if (deps === false) return
+                      if (deps === null && !(await uiConfirm(t('Удалить из сборки: {n}?', { n: names.length }), { confirmLabel: t('Удалить') }))) return
                       const go = kind === 'mod' ? await keepAfterOwnModConfirm(names, askOwnModRemoval) : names
                       void bulk(go, (n) => deleteContent(profile!, kind, n))
                     }}
@@ -2181,6 +2268,22 @@ export function InstancePage() {
                     }}
                   />
                 </section>
+              ) : null}
+
+              {tab === 'worlds' && profile && wFilter !== 'server' ? (
+                <section className="bpg-sec">
+                  <WorldBackupSchedule profile={profile} />
+                </section>
+              ) : null}
+              {tab === 'worlds' && profile && wFilter !== 'server' ? (
+                <CloudWorldBackups
+                  profile={profile}
+                  onRestored={() => setWorldsReload((n) => n + 1)}
+                  onOpenPlus={() => {
+                    close()
+                    setScreen('plus')
+                  }}
+                />
               ) : null}
 
               {wFilter !== 'single' ? (
@@ -2298,6 +2401,7 @@ export function InstancePage() {
             ) : null}
 
             {tab === 'files' && profile ? <FilesTab profile={profile} active /> : null}
+            {tab === 'snaps' && profile ? <SnapshotsTab profile={profile} active running={thisRunning} onRestored={() => loadMods()} /> : null}
             <div id="bsTabLogs" style={{ display: tab === 'logs' ? '' : 'none' }}>
               <div className="segs" style={{ marginBottom: '10px', width: 'auto' }}>
                 <button
@@ -2651,6 +2755,7 @@ export function InstancePage() {
               ) : null}
               {profile ? <PackAutoUpdateRow profile={profile} revision={contentRev} /> : null}
               {profile ? <PackwizRow profile={profile} running={thisRunning} onUpdated={() => loadMods()} /> : null}
+              {profile ? <FtbUpdateRow profile={profile} running={thisRunning} onUpdated={() => loadMods()} /> : null}
               <div className="bx-opts-cap">{t('Игра')}</div>
               {profile ? <LinuxToolsRows profile={profile} /> : null}
               <div className="set-row">
@@ -3138,6 +3243,7 @@ export function InstancePage() {
                         .then(() => {
                           close()
                           useProfiles.getState().setSelected(null)
+                          useLobby.getState().forgetBuild(profile!)
                           void useProfiles.getState().refresh()
                           showToast(t('Сборка удалена'), 'ok', 'delete')
                         })

@@ -3,9 +3,10 @@ import { Icon } from './Icon'
 import { agoText, fmtSize } from '../lib/format'
 import { hasTauri, tauri } from '../ipc/tauri'
 import { copyText } from '../lib/clipboard'
-import { openImage } from './ImageLightbox'
+import { openImage } from './lightboxStore'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
+import { openFolderAction } from '../lib/savedFile'
 import {
   deleteScreenshot,
   openScreenshots,
@@ -228,7 +229,7 @@ export function ScreenshotGallery({ profile }: Props) {
                   aria-label={t('Сохранить как…')}
                   onClick={() =>
                     saveScreenshotAs(shot.profile, shot.name)
-                      .then((p) => p && showToast(t('Сохранено'), 'ok'))
+                      .then((p) => p && showToast(t('Сохранено'), 'ok', undefined, openFolderAction(p)))
                       .catch((e) => showToast('' + e, 'error'))
                   }
                 >

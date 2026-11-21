@@ -336,6 +336,9 @@ function resolve(catalog: CosmeticItem[], code: string): { item: CosmeticItem; v
   return { item, variant }
 }
 
+/** Слоты, чья вещь — частицы вокруг фигуры. */
+const GLOW_SLOTS = new Set(['EFFECT', 'AURA'])
+
 /** Loop length: 8 frames per second, 12-16 frames. More cannot be seen on a tile. */
 const LOOP_MIN = 12
 const LOOP_MAX = 16
@@ -454,15 +457,20 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     const full = sequence ? sequence.main.length : clipSeconds > 0 ? clipSeconds : atlas > 1 ? atlas / ATLAS_FPS : 0
     const seconds = Math.min(full, LOOP_WINDOW)
     const moving = seconds > 0.2
+    // Частицы эффекта и ауры в начале клипа только разгораются: окно петли берём из середины
+    // длинного клипа, где их уже полно (13.11.2026: на плитке эффект был почти не виден).
+    const glow = !playing && wear.some((r) => GLOW_SLOTS.has(r.item.slot))
+    const lead = glow ? Math.max(0, (full - seconds) / 2) : 0
     const at = (t: number) => {
       if (playing) playing.progress = intro + t
-      cosmeticClock.now = () => t
+      cosmeticClock.now = () => lead + t
     }
     try {
       if (!moving || mode === 'first') {
         at(0)
         e.fitPlayerToFrame({ fillY: frame.fillY, offsetY: frame.offsetY })
-        if (moving) at(seconds / 2)
+        // A worn item's clip starts in its authored rest pose; mid-clip, flapping wings can be folded behind the body.
+        if (playing) at(seconds / 2)
         e.renderFrame()
         // No await inside try: cosmeticClock is global and must be reset before yielding.
         return canvasBlob(e.canvas, 'image/png').then((blob) => (blob ? { blob, dressed, partial, moving } : null))

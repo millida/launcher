@@ -472,9 +472,10 @@ pub fn lwjgl_library_path_arg(dirs: &[PathBuf]) -> Option<String> {
 /// The token rides along when there is one: a partner's tester also sees the
 /// draft packs they check. The service ignores a stale token instead of
 /// refusing, so the public list never breaks on it.
-pub async fn catalog_packs() -> Result<Value, String> {
+pub async fn catalog_packs(lang: Option<&'static str>) -> Result<Value, String> {
     // Request for the modpack list to the Millida API. The Millida account token (not Microsoft) is attached if the user is logged in.
-    millida_api("/catalog/packs".into(), "GET".into(), None, millida_token()).await
+    // The language makes the service answer titles and summaries in the interface language.
+    millida_api_in("/catalog/packs".into(), "GET".into(), None, millida_token(), None, lang, None).await
 }
 
 /// Маркер «сборка закрыта доступом» для окна ввода ключа.
@@ -509,20 +510,35 @@ pub async fn redeem_pack_key(slug: &str, code: &str) -> Result<Value, String> {
 /// launcher asks for it on every start and passes it straight into the command
 /// line, so revoking access on our side takes effect the next time the player
 /// presses «Играть».
-pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
+pub async fn pack_launch_token(slug: &str, installed: Option<Value>) -> Result<Vec<String>, String> {
     // Asks the Millida API for the launch key of a paid modpack with the Millida account token. The key goes into the game arguments. A copy is written to disk only as a spare (see below).
-    let res = match millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), None).await {
-        Ok(v) => v,
-        // Сбой сервера или сети — не отказ в доступе. 11.10.2026 база API десять
-        // минут не принимала записи, и платные сборки не запускались ни у кого.
-        // Ключ, выданный этому ПК за последние дни, пускает в игру и сейчас.
-        Err(e) if transient_failure(&e) => return cached_launch_token(slug, now_secs()).ok_or(e),
-        Err(e) => {
-            return Err(match e.as_str() {
-                "unauthorized" => "Войди в аккаунт Millida — эта сборка запускается по доступу".to_string(),
-                other if other.contains("403") => "У этого аккаунта нет доступа к сборке".to_string(),
-                other => other.to_string(),
-            })
+    let mut tries = 0u32;
+    let res = loop {
+        match millida_api_auth(format!("/catalog/packs/{}/launch-token", slug), "POST".into(), installed.clone()).await {
+            Ok(v) => break v,
+            // Сбой сервера или сети — не отказ в доступе. 11.10.2026 база API десять
+            // минут не принимала записи, и платные сборки не запускались ни у кого.
+            // Ключ, выданный этому ПК за последние дни, пускает в игру и сейчас.
+            Err(e) if transient_failure(&e) => {
+                if let Some(spare) = cached_launch_token(slug, now_secs()) {
+                    return Ok(spare);
+                }
+                // Одноразовый ключ (Arcania) в запас не кладётся: без повтора одна
+                // потерянная секунда сети заканчивала запуск словами «нет связи»
+                // (жалоба 17.11.2026 «на проверке файлов говорит, что нет интернета»).
+                tries += 1;
+                if tries >= LAUNCH_KEY_TRIES {
+                    return Err(format!("Не удалось получить ключ запуска сборки: {}", e));
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(LAUNCH_KEY_PAUSE_MS * u64::from(tries))).await;
+            }
+            Err(e) => {
+                return Err(match e.as_str() {
+                    "unauthorized" => "Войди в аккаунт Millida — эта сборка запускается по доступу".to_string(),
+                    other if other.contains("403") => "У этого аккаунта нет доступа к сборке".to_string(),
+                    other => other.to_string(),
+                })
+            }
         }
     };
     let args: Vec<String> = res["jvmArgs"]
@@ -535,10 +551,69 @@ pub async fn pack_launch_token(slug: &str) -> Result<Vec<String>, String> {
     }
     if keeps_launch_spare(&res) {
         remember_launch_token(slug, &kept, now_secs());
+        note_one_shot(slug, None);
     } else {
         forget_launch_token(slug);
+        note_one_shot(slug, Some(std::time::Instant::now()));
     }
     Ok(kept)
+}
+
+/// Попыток получить ключ, когда запасного нет, и шаг паузы между ними (1 с, 2 с).
+const LAUNCH_KEY_TRIES: u32 = 3;
+const LAUNCH_KEY_PAUSE_MS: u64 = 1000;
+
+/// Когда выдан одноразовый ключ каждой сборки. Ключ просят при нажатии «Играть»,
+/// а игра стартует после Java, файлов и ассетов: на первой установке это минуты,
+/// и билет продавца успевает истечь — мод защиты пишет «сервер лицензий
+/// недоступен» (жалоба 17.11.2026, Абонент). Перед стартом такой ключ берётся заново.
+static ONE_SHOT_ISSUED: std::sync::Mutex<Vec<(String, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
+
+/// Одноразовый ключ старше этого перед запуском запрашивается заново.
+const ONE_SHOT_FRESH: std::time::Duration = std::time::Duration::from_secs(45);
+
+fn note_one_shot(slug: &str, at: Option<std::time::Instant>) {
+    let mut list = ONE_SHOT_ISSUED.lock().unwrap_or_else(|e| e.into_inner());
+    list.retain(|(s, _)| s != slug);
+    if let Some(at) = at {
+        list.push((slug.to_string(), at));
+    }
+}
+
+fn one_shot_age(slug: &str) -> Option<std::time::Duration> {
+    let list = ONE_SHOT_ISSUED.lock().unwrap_or_else(|e| e.into_inner());
+    list.iter().find(|(s, _)| s == slug).map(|(_, at)| at.elapsed())
+}
+
+/// Старый одноразовый ключ меняется на свежий прямо перед стартом игры. Не вышло —
+/// идёт прежний: хуже он уже не станет, а запуск не обрывается.
+pub(crate) async fn fresh_launch_token(slug: &str, issued: Vec<String>, installed: Option<Value>) -> Vec<String> {
+    match one_shot_age(slug) {
+        Some(age) if age > ONE_SHOT_FRESH => {}
+        _ => return issued,
+    }
+    match pack_launch_token(slug, installed).await {
+        Ok(fresh) => fresh,
+        Err(e) => {
+            eprintln!("[pack] fresh launch key for {}: {}", slug, e);
+            issued
+        }
+    }
+}
+
+/// The published version this build was installed as, for a pack whose author
+/// lets only the latest one start. A reviewer's candidate and a build of
+/// another card say nothing: their version is not the card's to judge.
+pub fn installed_pack_body(settings: &Value, slug: &str) -> Option<Value> {
+    if launch_gate_slug(settings).as_deref() != Some(slug) {
+        return None;
+    }
+    if settings["catalogPackReviewFile"].as_str().is_some_and(|f| !f.trim().is_empty()) {
+        return None;
+    }
+    let version = settings["catalogPackVersion"].as_str().map(str::trim).filter(|v| !v.is_empty())?;
+    let sha512 = settings["catalogPackSha512"].as_str().map(str::trim).unwrap_or("");
+    Some(json!({ "version": version, "sha512": sha512 }))
 }
 
 /// A seller ticket is burnt on its first use: replayed after an outage it only
@@ -568,6 +643,10 @@ pub(crate) fn transient_failure(e: &str) -> bool {
         || low.contains("timed out")
         || low.contains("error sending request")
         || low.contains("connection")
+        // Ограничитель частоты и щит отвечают 429 — это «подожди», а не «нет доступа».
+        || low.starts_with("http 429")
+        || low.contains("too many requests")
+        || low.contains("throttlerexception")
 }
 
 fn allowed_pack_args(args: Vec<String>) -> Vec<String> {
@@ -749,6 +828,7 @@ pub async fn pack_millida_mod(profile: &str, slug: &str) -> (bool, bool) {
     }
     if let Some(view) = &view {
         remember_protected(&mut patch, view);
+        remember_always_update(&mut patch, view);
     }
     if !patch.is_empty() {
         merge_settings(profile, patch);
@@ -903,6 +983,8 @@ mod tests {
             ("Нет доступа к сборке", false, "ответ сервера про доступ — не сбой"),
             ("http 403", false, "отказ без текста"),
             ("Сборка не найдена", false, "сборку сняли"),
+            ("http 429", true, "ограничитель частоты — не отказ в доступе"),
+            ("ThrottlerException: Too Many Requests", true, "Nest-ограничитель"),
         ];
         for (e, want, why) in cases {
             assert_eq!(transient_failure(e), want, "{}", why);
@@ -923,6 +1005,32 @@ mod tests {
         ];
         for (settings, want, why) in cases {
             assert_eq!(launch_gate_slug(&settings).as_deref(), want, "{}", why);
+        }
+    }
+
+    /// (build settings, launch slug) -> what the launch key request says was installed.
+    #[test]
+    fn the_launch_key_request_names_the_installed_published_version() {
+        let sha = "a".repeat(128);
+        let cases: [(Value, &str, Option<Value>, &str); 5] = [
+            (
+                json!({ "catalogPackSlug": "arcania", "catalogPackVersion": "1.4.3", "catalogPackSha512": sha }),
+                "arcania",
+                Some(json!({ "version": "1.4.3", "sha512": sha })),
+                "the server compares it with the published version",
+            ),
+            (
+                json!({ "catalogPackSlug": "arcania", "catalogPackVersion": "1.4.3", "catalogPackReviewFile": "f1" }),
+                "arcania",
+                None,
+                "a reviewer's candidate must not be refused for being newer than the card",
+            ),
+            (json!({ "catalogPackSlug": "arcania", "catalogPackVersion": "1.4.3" }), "arcania-2", None, "a build of another card says nothing about this one"),
+            (json!({ "catalogPackSlug": "arcania", "catalogPackVersion": " " }), "arcania", None, "no version, nothing to compare"),
+            (json!({}), "arcania", None, "a build outside the catalogue says nothing"),
+        ];
+        for (settings, slug, want, why) in cases {
+            assert_eq!(installed_pack_body(&settings, slug), want, "{}", why);
         }
     }
 

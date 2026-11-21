@@ -371,6 +371,19 @@ pub fn restore_backup(profile: &str, file: &str) -> Result<WorldInfo, String> {
     import_world_zip(profile, &path)
 }
 
+/// Restores a downloaded archive as a NEW world and names it by `label(original name)`,
+/// for the same reason as `restore_backup`: an existing world is never overwritten.
+pub(crate) fn restore_archive_as(profile: &str, archive: &Path, label: impl FnOnce(&str) -> String) -> Result<WorldInfo, String> {
+    assert_world_idle(profile)?;
+    let restored = import_world_zip(profile, archive)?;
+    if restored.unreadable {
+        return Ok(restored);
+    }
+    let name = label(&restored.name);
+    let folder = restored.folder.clone();
+    Ok(rename_world(profile, &folder, &name).unwrap_or(restored))
+}
+
 pub fn delete_backup(profile: &str, file: &str) -> Result<(), String> {
     let name = safe_file_name(file)?;
     if !name.ends_with(".zip") {

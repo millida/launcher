@@ -44,6 +44,8 @@ export interface PackView {
   accessRequired?: boolean
   /** Своя сборка студии с закрытыми файлами (Arcania): страница-история вместо обычной. */
   protectedContent?: boolean
+  /** The author lets the build start only on the published version. */
+  alwaysUpdate?: boolean
   /** Где купить доступ — сайт сборки. */
   accessBuyUrl?: string | null
   partner?: PackPartner | null

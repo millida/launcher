@@ -533,6 +533,12 @@ fn player_made(rel: &str) -> bool {
     ALWAYS_KEEP.contains(&rel) && !PER_ENTRY.contains(&rel)
 }
 
+/// A path inside the build (`options.txt`, `saves/World/level.dat`) that belongs to
+/// the player, not the pack: an update never writes over it once it exists.
+pub(crate) fn player_made_path(rel: &str) -> bool {
+    rel.split('/').next().is_some_and(player_made)
+}
+
 /// Takes out of a pack's unpacked overrides whatever the player already has of
 /// their own in the build, so copying the rest over the build leaves their
 /// settings, server list and worlds as they were.

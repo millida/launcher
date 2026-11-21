@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { CHEST_DROPS, CHEST_ODDS, demoOpen, fragmentCap, fragmentOff, fragmentTopUp, FRAGMENTS_NEED, ODDS_TOTAL, RARITY_ORDER, TIER_ORDER, viewOf } from './chestDrops'
+import { CHEST_DROPS, CHEST_ODDS, demoOpen, fragmentCap, fragmentOff, fragmentPrice, fragmentTopUp, FRAGMENTS_NEED, ODDS_TOTAL, RARITY_ORDER, TIER_ORDER, viewOf } from './chestDrops'
+import { showcasePrice, subPrice } from '../shop/showcasePrice'
 import type { ChestOpenResult } from '../../lib/rubies'
 
 const legacy: ChestOpenResult = {
@@ -61,8 +62,37 @@ describe('таблица сундуков', () => {
       expect(FRAGMENTS_NEED[r]).toBeGreaterThan(prev)
       prev = FRAGMENTS_NEED[r]
     }
-    expect(fragmentOff(900, 7, 20)).toBe(150)
-    expect(fragmentOff(900, 40, 20)).toBe(450)
+    // Осталось 13 из 20: платишь 13/20 цены (585 → 590), скидка 310.
+    expect(fragmentOff(900, 7, 20)).toBe(310)
+    expect(fragmentOff(0, 7, 20)).toBe(0)
+  })
+  // Таблица «ранг × фрагменты → цена дособрать» — та же в economy.spec.ts службы.
+  test.each([
+    ['COMMON', 0, 150],
+    ['COMMON', 5, 100],
+    ['COMMON', 10, 50],
+    ['COMMON', 14, 10],
+    ['UNCOMMON', 10, 210],
+    ['RARE', 15, 440],
+    ['EPIC', 1, 1380],
+    ['LEGENDARY', 30, 2100],
+    ['MYTHIC', 1, 5580],
+  ] as const)('цена дособрать %s при %i фрагментах = %i, на витрине без скидок то же число', (r, have, price) => {
+    expect(fragmentTopUp(r, have)).toBe(price)
+    expect(showcasePrice(fragmentTopUp(r, 0), 0, have, FRAGMENTS_NEED[r])).toBe(price)
+  })
+  test('осталось 5 из 15 — треть цены, потолка 50 % нет', () => {
+    expect(FRAGMENTS_NEED.COMMON).toBe(15)
+    expect(fragmentTopUp('COMMON', 10)).toBe(50)
+    expect(fragmentPrice(1500, 14, 15)).toBe(100)
+    expect(fragmentPrice(1500, 14, 15)).toBeLessThan(1500 * 0.5)
+  })
+  test('порядок скидок: день → фрагменты → подписка', () => {
+    // 1000, день −20 % → 800; 10 из 15 → 800 × 5/15 = 266,7 → 270; PLUS −10 % → 243 → 240.
+    expect(showcasePrice(1000, 20, 10, 15, 10)).toBe(240)
+    // Подписка без фрагментов и дня: 1000 → 900; меньше 10 не бывает.
+    expect(showcasePrice(1000, 0, 0, 15, 10)).toBe(900)
+    expect(subPrice(10, 15)).toBe(10)
   })
   test('удары 3–5, уровень выше — не меньше вещей и осколков', () => {
     let prev = CHEST_DROPS.COMMON

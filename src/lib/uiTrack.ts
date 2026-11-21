@@ -17,6 +17,7 @@ import type { TrackNode } from './uiClick'
  * - `data-src="hub_card"` — источник действия: запоминается и уходит в
  *   game_launch / server_join / catalog_install как `source`.
  * - `data-mode="BEDWARS"` — режим, внутри которого кликнули (у предка).
+ * - `data-badge="popular"` — плашка на карточке (у предка): «Берут чаще всего», «выгодно».
  * - `data-private` — внутри такого блока текст кнопок не собирается (ники,
  *   названия чатов); `data-notrack` — клик не пишется вовсе.
  *
@@ -169,6 +170,7 @@ function onClick(e: MouseEvent) {
   if (info.pos !== undefined) data.pos = info.pos
   if (info.src) data.src = info.src
   if (info.mode) data.mode = info.mode
+  if (info.badge) data.badge = info.badge
   track('ui_click', data)
 }
 

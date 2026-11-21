@@ -427,6 +427,8 @@ const RULES: &[Rule] = &[
     Rule { event: "game-crash", cap: 16, keep_newest: false, repeat: Repeat::Keep, stamp: false, max_age_ms: 0 },
     Rule { event: "overlay-open", cap: 16, keep_newest: false, repeat: Repeat::Keep, stamp: false, max_age_ms: 0 },
     Rule { event: "pack-access-lost", cap: 8, keep_newest: false, repeat: Repeat::Keep, stamp: false, max_age_ms: 0 },
+    // The game showed no window for minutes while the launcher was unloaded for it: the rebuilt page asks.
+    Rule { event: "game-stuck", cap: 8, keep_newest: false, repeat: Repeat::Keep, stamp: false, max_age_ms: HOUR_MS },
     Rule { event: "session-kicked", cap: 8, keep_newest: true, repeat: Repeat::SkipAny, stamp: false, max_age_ms: 0 },
     Rule { event: "game-server", cap: 16, keep_newest: true, repeat: Repeat::SkipLast, stamp: false, max_age_ms: 12 * HOUR_MS },
     // The mod reports every 5 s: an hour of play is 720 reports.
@@ -531,7 +533,7 @@ pub fn emit_main<S: Serialize + Clone>(app: &AppHandle, event: &str, payload: S)
             };
             // A crash wants the «Починить» screen (a card click has shown it already);
             // a lost paid pack was deleted under the player, who has to be told.
-            if kept && (event == "game-crash" || event == "pack-access-lost") {
+            if kept && (event == "game-crash" || event == "pack-access-lost" || event == "game-stuck") {
                 crate::tray::show_main(app);
             }
             return;
@@ -670,7 +672,7 @@ fn beat_body(mut body: serde_json::Value) -> serde_json::Value {
 async fn send_beat() {
     let Some((path, body)) = lock(&BEAT).clone() else { return };
     let body = beat_body(body);
-    let _ = crate::engine::millida_api_auth_in(path, "POST".into(), Some(body), None, None).await;
+    let _ = crate::engine::millida_api_auth_in(path, "POST".into(), Some(body), None, None, None).await;
 }
 
 /// A launcher in the tray is online and idle: what the game was doing does not outlive the game.
@@ -692,7 +694,7 @@ async fn send_live_beat(playing: bool) {
     }
     let Some(body) = lock(&LIVE_BEAT).clone() else { return };
     let body = live_beat_body(body, playing);
-    let _ = crate::engine::millida_api_auth_in(LIVE_BEAT_PATH.into(), "POST".into(), Some(body), None, None).await;
+    let _ = crate::engine::millida_api_auth_in(LIVE_BEAT_PATH.into(), "POST".into(), Some(body), None, None, None).await;
 }
 
 static ASLEEP_BEATS: AtomicBool = AtomicBool::new(false);
@@ -1054,7 +1056,7 @@ pub fn send_perf(app: &AppHandle, items: Vec<serde_json::Value>) {
     tauri::async_runtime::spawn(async move {
         let body = perf_body(&version, &install_id, items, now_ms());
         // Telemetry endpoint of our own API; the batch holds numbers and stage names only.
-        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None).await;
+        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None, None).await;
     });
 }
 
@@ -1098,7 +1100,7 @@ fn send_sample(app: &AppHandle, state: &'static str, why: &'static str, measured
             None => tauri::async_runtime::spawn_blocking(proc_stats).await.unwrap_or_default(),
         };
         let body = sample_event(&version, &install_id, state, why, &stats, up_minutes());
-        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None).await;
+        let _ = crate::engine::millida_api_auth_in("/launcher/telemetry".into(), "POST".into(), Some(body), None, None, None).await;
     });
 }
 

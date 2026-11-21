@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
-import { openImage } from '../ImageLightbox'
+import { openImage } from '../lightboxStore'
 import { openExt } from '../../lib/api'
 import { PremiumHero } from './PremiumHero'
 import { intlTag, t, useT } from '../../i18n'
