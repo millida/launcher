@@ -397,10 +397,11 @@ jobs:
             out="$RUNNER_TEMP/unpacked-check"
             rm -rf "$out"
             mkdir -p "$out"
+            package=$(realpath "$package")
             case "$package" in
               *.deb) dpkg-deb -x "$package" "$out"; bin="$out/usr/bin/millida-launcher"; exact=1 ;;
-              *.rpm) (cd "$out" && rpm2cpio "$(realpath "$package")" | cpio -idm --quiet); bin="$out/usr/bin/millida-launcher"; exact=1 ;;
-              *.AppImage) (cd "$out" && env -u APPIMAGE_EXTRACT_AND_RUN "$(realpath "$package")" --appimage-extract > /dev/null); bin="$out/squashfs-root/usr/bin/millida-launcher"; exact= ;;
+              *.rpm) (cd "$out" && rpm2cpio "$package" | cpio -idm --quiet); bin="$out/usr/bin/millida-launcher"; exact=1 ;;
+              *.AppImage) (cd "$out" && env -u APPIMAGE_EXTRACT_AND_RUN "$package" --appimage-extract > /dev/null); bin="$out/squashfs-root/usr/bin/millida-launcher"; exact= ;;
             esac
             check_binary "$bin" "$(basename "$package")" "$exact" || exit 1
             rm -rf "$out"
