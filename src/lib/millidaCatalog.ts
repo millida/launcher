@@ -1,5 +1,5 @@
 // Millida catalog (mods, texture packs, modpacks): requests to api.millida.net/v2/launcher/*. No direct calls to Modrinth and CurseForge, they go through our API.
-import { LAUNCHER_API } from './api'
+import { LAUNCHER_API, sharedFetch } from './api'
 import type { ModHit } from '../state/mods'
 import type { DepNode, DepPlan, Profile } from '../ipc/commands'
 import { clipWords, loaderId } from './format'
@@ -406,7 +406,7 @@ export async function cfProjectId(ref: CfSourceRef): Promise<number | null> {
   const path = 'v1/mods/search?' + q.toString()
   if (cfProxyBackoff.skipped(path)) return null
   return cachedCatalog('cf:' + path, async () => {
-    const r = await fetch(LAUNCHER_API + '/launcher/cf/' + path).catch(() => null)
+    const r = await sharedFetch(LAUNCHER_API + '/launcher/cf/' + path).catch(() => null)
     cfProxyBackoff.note(path, proxyVerdict(r ? r.status : null, r ? r.headers.get('retry-after') : null))
     if (!r || !r.ok) throw new CfProxyFailed(String(r ? r.status : 'network'))
     const body = (await r.json().catch(() => null)) as { data?: { id?: unknown; slug?: unknown }[] } | null

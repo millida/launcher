@@ -210,7 +210,8 @@ export function loadMojangCapes(): Promise<{ items: MojangCape[] }> {
 /// Плащ каталога надевается по идентификатору карточки: PNG подставляет сервер,
 /// клиент его не отправляет вовсе — плащ выдаёт сервер, а не файл на диске.
 export function applyCatalogCape(id: string): Promise<AppliedTexture> {
-  return api<AppliedTexture>('/launcher/wardrobe/capes/' + encodeURIComponent(id) + '/apply', { method: 'POST' })
+  // Как и прочие смены текстуры: лобби надевает ответ сразу, а не держит старый плащ из подсказки.
+  return texturePut(api<AppliedTexture>('/launcher/wardrobe/capes/' + encodeURIComponent(id) + '/apply', { method: 'POST' }))
 }
 
 /// Вещь мода: то, что игрок носит в самой игре, а не в профиле. Картинку рисует
@@ -243,6 +244,7 @@ export interface CosmeticItem {
   rarity?: string
   /// Метки подборок каталога: `TREND` — эмоции из трендов (чип гардероба и раздел магазина).
   tags?: string[]
+  priceRise?: { at: string; pct: number }
   /// v3.1: код исходной вещи у вещи-расцветки («ANGEL_WINGS» у «ANGEL_WINGS~red»).
   baseId?: string
   /// v3.1: цвет своей расцветки и базовой — превью перекрашивается из второго в первый.
@@ -491,6 +493,7 @@ export interface PlusStatus {
   tier?: 'PLUS' | 'DIAMOND' | null
   checkout?: 'gateway' | 'dollar-wallet'
   checkoutOptions?: ('gateway' | 'dollar-wallet' | 'stripe')[]
+  autoRenew?: boolean
   quote?: Quote
 }
 
@@ -499,7 +502,7 @@ export function loadPlus(): Promise<PlusStatus> {
 }
 
 /// A month of PLUS from the wallet in the buyer's own currency (dollars abroad), no renewal.
-export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' }> {
+export function buyPlusMonth(tier: PlusTier, requestId: string): Promise<{ paidUntil: string; priceKopecks: number; currency?: 'RUB' | 'USD' | 'INR' }> {
   return api('/launcher/plus/wallet/buy', { method: 'POST', body: JSON.stringify({ tier, requestId }) })
 }
 

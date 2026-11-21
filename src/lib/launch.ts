@@ -16,7 +16,7 @@ import { uiChoice, uiConfirm } from '../state/confirm'
 import { useProfiles } from '../state/profiles'
 import { setVerifiedSeconds } from '../state/playStats'
 import { showToast, useUi } from '../state/ui'
-import { useGame } from '../state/game'
+import { stopRunningGame, useGame } from '../state/game'
 import { applyLaunchWindowMode } from './window'
 import { setLaunchBusy, surfaceLaunchFailure } from './launchHold'
 import { liveBeat, liveBeatPayload, rememberLiveBeat, trackFailure, trackTimed } from './telemetry'
@@ -41,9 +41,17 @@ import { t, tx } from '../i18n'
 import { CORE_LAUNCH_CANCELLED, coreErrorText, mentionsCancel } from './coreErrors'
 import { horizonReason } from './horizonError'
 
+import { PL_STAGES } from './launchView'
 export { PL_STAGES, REPAIR_STAGES } from './launchView'
 
-const STAGE_IDX: Record<string, number> = { files: 0, assets: 2, java: 1, launch: 3, mod: 0, content: 3 }
+const STAGE_IDX: Record<string, number> = { files: 0, assets: 2, java: 1, launch: 3, mod: 0, content: 3, pack: 0 }
+
+/**
+ * Этап `pack` — ключ запуска платной сборки и её файлы. Под общей подписью
+ * «Проверка файлов» сбой ключа выглядел как «нет интернета на проверке файлов»
+ * (жалоба 17.11.2026, Arcania 2.0).
+ */
+const stageLabel = (stage: string | undefined): string | null => (stage === 'pack' ? t('Ключ запуска сборки') : null)
 
 let session: { profile: string; server: string | null; serverName: string | null } | null = null
 let sessionAt = 0
@@ -361,10 +369,10 @@ async function freshenPack(profile: string, epoch: number, openCard: boolean): P
   })
   if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
   useUi.getState().setPrelaunch(openCard ? { open: false, label: null } : { label: null, pct: 2, msg: t('Готовимся…') })
-  const next = afterPackUpdate(u, outcome)
+  const next = afterPackUpdate(u, outcome, step.required)
   if (next.toast) showToast(next.toast, 'error')
   if (!next.launch) {
-    showToast(t('Обновление сборки отменено — игра не запускалась'))
+    if (outcome.kind === 'cancelled') showToast(t('Обновление сборки отменено — игра не запускалась'))
     throw new Error(CANCELLED_TEXT)
   }
 }
@@ -469,7 +477,7 @@ function doJoin(profile: string, world: string | null, server: string | null, se
       }
       useGame.getState().addRunning(profile)
       rememberTrayBuild(profile)
-      applyLaunchWindowMode()
+      awaitGameWindow(profile, false)
       rememberPlay(profile, world, server, serverName)
       return res
     })
@@ -527,6 +535,69 @@ export function pinHostServer(profile: string) {
     if (addr) void pinServerDat(profile, name || t('Мой сервер'), addr).catch(() => {})
   } catch {}
 }
+
+/*
+ * Окно лаунчера после старта игры. Раньше оно пряталось (выгружалось) через 1,2 с после запуска JVM:
+ * сборка с модами открывается минутами, и игрок оставался без лаунчера и без игры, а зависшая игра
+ * держала кнопку «Остановить» (обращения 13.11.2026). Теперь лаунчер ждёт окно игры (ядро шлёт
+ * game-window), карточка запуска показывает ожидание и «Остановить», а через 4 минуты без окна ядро
+ * возвращает лаунчер и спрашивает (game-stuck).
+ */
+let waitingWindow = ''
+/** Окно, показанное раньше, чем ответ на запуск дошёл до страницы: такие сборки не ждём. */
+const shownEarly = new Map<string, number>()
+const EARLY_WINDOW_MS = 10_000
+
+const closeWaitingCard = (profile: string) => {
+  const ui = useUi.getState()
+  if (ui.prelaunch.waiting === profile) ui.setPrelaunch({ open: false, waiting: '' })
+}
+
+/** Запуск прошёл: ждать окно игры, затем применить режим окна лаунчера. `card` — показывать ожидание в карточке запуска. */
+export function awaitGameWindow(profile: string, card: boolean) {
+  const early = shownEarly.get(profile)
+  shownEarly.delete(profile)
+  if (early && Date.now() - early < EARLY_WINDOW_MS) {
+    useUi.getState().setPrelaunch({ open: false, waiting: '' })
+    applyLaunchWindowMode()
+    return
+  }
+  waitingWindow = profile
+  if (card) {
+    useUi.getState().setPrelaunch({
+      open: true,
+      stage: PL_STAGES.length - 1,
+      pct: 100,
+      msg: t('Ждём окно игры: сборка с модами открывается до пары минут'),
+      waiting: profile,
+    })
+  }
+}
+
+/** Ядро: игра показала окно. */
+export function gameWindowShown(profile: string) {
+  if (waitingWindow !== profile) {
+    shownEarly.set(profile, Date.now())
+    return
+  }
+  waitingWindow = ''
+  closeWaitingCard(profile)
+  applyLaunchWindowMode()
+}
+
+/** Игра закончилась (вылет, выход, остановка) раньше, чем показала окно: ждать нечего. */
+export function gameWindowNever(profile: string) {
+  shownEarly.delete(profile)
+  if (waitingWindow === profile) waitingWindow = ''
+  closeWaitingCard(profile)
+}
+
+/** Кнопка карточки во время ожидания окна. */
+export function stopWaitingGame(profile: string) {
+  gameWindowNever(profile)
+  stopRunningGame(profile)
+}
+
 
 export function realLaunch(name: string) {
   if (launching) {
@@ -598,7 +669,7 @@ function doLaunch(name: string) {
   let lastStage = 'prepare'
   listenLaunchProgress((p) => {
     if (p.stage) lastStage = String(p.stage).slice(0, 24)
-    setPrelaunch({ stage: STAGE_IDX[p.stage] ?? 0, pct: p.pct, msg: p.msg })
+    setPrelaunch({ stage: STAGE_IDX[p.stage] ?? 0, pct: p.pct, msg: p.msg, ...(p.stage ? { label: stageLabel(p.stage) } : {}) })
   }).then((u) => {
     if (!u) return
     if (finished) u()
@@ -609,7 +680,7 @@ function doLaunch(name: string) {
   // Sign-in runs next to the build's update and care instead of after them (launchPlan.ts).
   const inv = prepareLaunch({
     freshen: () => (prof ? freshenPack(prof, epoch, false) : Promise.resolve()),
-    care: () => (prof ? import('./prelaunchCare').then((m) => m.prelaunchCare(prof)) : Promise.resolve()),
+    care: () => import('./prelaunchCare').then((m) => m.prelaunchCareAndLook(prof || null)),
     auth: () => resolveAuth(prof || null),
   }).then((a) => {
     if (epoch !== cancelEpoch) throw new Error(CANCELLED_TEXT)
@@ -662,12 +733,10 @@ function doLaunch(name: string) {
       useGame.getState().addRunning(prof || 'default')
       if (prof) rememberTrayBuild(prof)
       window.dispatchEvent(new Event('millida-game-started'))
-      setTimeout(() => {
-        setPrelaunch({ open: false })
-        showToast(t('Игра запущена'))
-        applyLaunchWindowMode()
-      }, 1200)
       stopProgress()
+      showToast(t('Игра запущена'))
+      // The launcher hides when the game shows its window, not 1.2 s after the start (reports 13.11.2026).
+      awaitGameWindow(prof || 'default', true)
     })
     .catch((err) => {
       stopProgress()
@@ -743,7 +812,7 @@ export async function withLaunchPrep<T>(sub: string, work: (wanted: () => boolea
   }
   // A server join has no window of its own: when it runs inside the work, its progress shows here.
   listenLaunchProgress((p) => {
-    if (wanted()) setPrelaunch({ stage: STAGE_IDX[p.stage] ?? 0, pct: p.pct, msg: p.msg })
+    if (wanted()) setPrelaunch({ stage: STAGE_IDX[p.stage] ?? 0, pct: p.pct, msg: p.msg, ...(p.stage ? { label: stageLabel(p.stage) } : {}) })
   }).then((u) => {
     if (!u) return
     if (finished) u()

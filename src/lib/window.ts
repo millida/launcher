@@ -68,9 +68,13 @@ function minimizeWindow() {
 /// The cross takes the window off the screen first, at once; sending the queues (up to 1.5 s) and the unload come
 /// after. Before, they came first and the window hung on the screen for up to a second and a half after the click
 /// (R9 of the first review, still open in the second).
+/** Страница вот-вот выгрузится (в трей или под игру): отложенные действия выполняются сейчас. */
+export const UNLOAD_EVENT = 'm-before-unload'
+
 async function unloadLauncher(reason: 'tray' | 'game') {
   stopWatch?.()
   stopWatch = null
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(UNLOAD_EVENT))
   const hold = currentHold()
   const hidden = await hideAtOnce()
   // The queue survives in localStorage, but sending now saves a late batch.

@@ -30,6 +30,8 @@ import { headLook } from '../lib/headLook'
 import type { Mine3dModule } from '../lib/mine3d'
 import type { SkinAnimation, SkinViewEngine } from '../vendor/mine3d'
 import { textureSource } from '../lib/textureSource'
+import { forgetLocalLook, markLocalLook, syncLocalLook, toPngBase64 } from '../lib/localLook'
+import { UNLOAD_EVENT } from '../lib/window'
 import { detectSlim, detectSlimFromUrl, loadImg } from '../lib/skinArms'
 import { warnHdSkinWithoutPlus } from '../lib/skinLock'
 import { capeById, contentFingerprint, dedupeCapes, textureHash } from '../lib/capes'
@@ -90,7 +92,7 @@ import { loadShowcase, showcaseSkinUrl, type ShowcaseCard, type ShowcaseKind } f
 import { ShopFeed, ShopOverlays, useShop } from '../components/shop/ShopKit'
 import '../styles/pixel/shop2.css'
 import '../styles/pixel/sets.css'
-import { buyCosmetic, buySet, loadBalance, loadEconomyProgress, loadSets, tierPct, type SetColorwayView, type SetView } from '../lib/rubies'
+import { buyCosmetic, buySet, quoteWardrobe, loadBalance, loadEconomyProgress, loadInventory, loadSets, tierPct, type SetColorwayView, type SetView } from '../lib/rubies'
 import { achievementNote, achievementSources } from '../lib/achievementSource'
 import { usePlus } from '../state/plus'
 import { onRealtime } from '../lib/realtime'
@@ -105,6 +107,7 @@ import { ItemGrid, ItemTile } from '../components/character/ItemTile'
 import { FittingBar } from '../components/character/FittingBar'
 import { nametagSpot } from '../components/character/Nametag'
 import { Outfits } from '../components/character/Outfits'
+import { WearShot } from '../components/character/WearShot'
 import { SetLooks } from '../components/character/SetLooks'
 import {
   addOutfit,
@@ -138,7 +141,7 @@ import { duoClipName, duoScene } from '../lib/duoEmotes'
 import { DUO_PARTNER_NICK, duoStage, soloSequence } from '../lib/duoStage'
 import '../styles/pixel/character.css'
 import { showReward } from '../components/reward/RewardReveal'
-import { rarityOfPrice } from '../components/shop/rarity'
+import { normRarity, rarityOfPrice } from '../components/shop/rarity'
 import { openPaymentUrl } from '../lib/openPayment'
 import { drawFront, skinCanvas } from '../lib/skinFlat'
 import { noteContextCreated, noteContextLost } from '../lib/gpuLite'
@@ -165,6 +168,15 @@ const EARNED_BY = (): Record<string, string> => ({
 })
 
 const onSale = (c: CosmeticItem) => c.access === 'PURCHASE' && (c.priceRubies ?? 0) > 0
+
+/**
+ * Цена на плитке и в итоге «Сета»: подписчику со скидкой. Только для показа — покупка берёт
+ * цену у службы (quoteWardrobe), потому что фрагменты и купленные расцветки здесь не видны.
+ */
+const priceFor = (c: CosmeticItem, pct: number) => {
+  const base = c.priceRubies ?? 0
+  return base > 0 && pct ? Math.max(10, Math.round((base * (100 - pct)) / 100 / 10) * 10) : base
+}
 
 const earnedNote = (c: CosmeticItem, sources?: Map<string, string>) =>
   c.access === 'PURCHASE' && !onSale(c)
@@ -423,6 +435,39 @@ const SKIN_ARMS = (): [SkinArms, string][] => [
 /** Сколько живёт «Отменить» после удаления скина: столько же, сколько тост с действием. */
 const SKIN_UNDO_MS = 7000
 
+/**
+ * Удаления скинов, ждущие «Отменить». Очередь живёт вне экрана: тост с «Отменить» остаётся и после
+ * ухода со скинов, и отмена должна сработать. Раньше времени удаления выполняются только при
+ * выгрузке окна (лаунчер прячется под игру), чтобы удалённое не вернулось.
+ */
+const pendingSkinDeletes = new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>()
+let skinDeletesOnUnload = false
+function laterSkinDelete(key: string, run: () => void): () => void {
+  if (!skinDeletesOnUnload) {
+    skinDeletesOnUnload = true
+    window.addEventListener(UNLOAD_EVENT, () => {
+      for (const [k, p] of pendingSkinDeletes) {
+        clearTimeout(p.timer)
+        pendingSkinDeletes.delete(k)
+        p.run()
+      }
+    })
+  }
+  // Та же вещь уже ждёт удаления: удаление одно, отсчёт заново.
+  const was = pendingSkinDeletes.get(key)
+  if (was) clearTimeout(was.timer)
+  const timer = setTimeout(() => {
+    pendingSkinDeletes.delete(key)
+    run()
+  }, SKIN_UNDO_MS)
+  pendingSkinDeletes.set(key, { timer, run })
+  return () => {
+    if (pendingSkinDeletes.get(key)?.timer !== timer) return
+    clearTimeout(timer)
+    pendingSkinDeletes.delete(key)
+  }
+}
+
 const rewardProgress = (r: { unit: string; progress: number; goal: number }) =>
   r.unit === 'seconds'
     ? t('{n} из {goal} ч', { n: Math.floor(r.progress / 3600), goal: Math.floor(r.goal / 3600) })
@@ -635,28 +680,8 @@ async function headDataUrl(url: string, size = 64): Promise<string> {
   return c.toDataURL('image/png')
 }
 
-/// Remote textures are CORS-restricted, so re-encode through canvas.
-const PNG_DATA_PREFIX = 'data:image/png;base64,'
-
 const localSkinHash = (file: string) => /-([0-9a-f]{8})\.png$/i.exec(file)?.[1]?.toLowerCase() ?? null
 const wardrobeSkinHash = (url: string) => /-([0-9a-f]{32})\.png(?:[?#].*)?$/i.exec(url)?.[1]?.slice(0, 8).toLowerCase() ?? null
-
-async function toPngBase64(url: string): Promise<string> {
-  if (url.startsWith('data:')) return url.replace(/^data:image\/png;base64,/, '')
-  // Байты уходят на сервер как есть: пережатие через canvas меняет их, а каталог
-  // аккаунта схлопывает повторы по хешу PNG — с новым хешем та же текстура
-  // ложится в него ещё одной записью.
-  const src = await textureSource(url)
-  if (src.startsWith(PNG_DATA_PREFIX)) return src.slice(PNG_DATA_PREFIX.length)
-  const img = await loadImg(url)
-  const canvas = document.createElement('canvas')
-  canvas.width = img.naturalWidth
-  canvas.height = img.naturalHeight
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error(t('canvas недоступен'))
-  ctx.drawImage(img, 0, 0)
-  return canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '')
-}
 
 /**
  * Повтор запроса при обрыве связи. Наш путь до сервера идёт через щит, и он
@@ -676,7 +701,6 @@ async function withRetry<T>(run: () => Promise<T>, tries = 3): Promise<T> {
   throw last
 }
 
-const localMark = (url: string, slim: boolean) => url + '|' + (slim ? 'slim' : 'classic')
 
 // Cape back face: UV (1,1) sized 10x16 on the standard 64x32 cape texture.
 function CapePreview({ url, h: askedH = 64 }: { url: string; h?: number }) {
@@ -817,6 +841,21 @@ export function Skins({ on }: { on: boolean }) {
   // адресом, каким его видят другие игроки.
   const [cosmetics, setCosmetics] = useState<CosmeticItem[]>([])
   const [cosmeticOwned, setCosmeticOwned] = useState<string[]>([])
+  const [giftLabels, setGiftLabels] = useState<Record<string, string>>({})
+  const refreshGiftLabels = () => {
+    if (!hasMillidaAccount()) return
+    void loadInventory()
+      .then((inv) => {
+        const labels: Record<string, string> = {}
+        for (const it of inv.items) if (it.gift?.label) labels[it.code] = it.gift.label
+        setGiftLabels(labels)
+      })
+      .catch(() => undefined)
+  }
+  useEffect(() => {
+    if (on) refreshGiftLabels()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, activeId])
   /** Каталог, права и надетое доехали (счётчик загрузок) — можно выполнить «Надеть» извне. */
   const [cosReady, setCosReady] = useState(0)
   const wearRefs = useWearIntent((s) => s.refs)
@@ -916,23 +955,16 @@ export function Skins({ on }: { on: boolean }) {
   // делает лаунчер, поэтому скин, надетый на сайте или пришедший из заказа,
   // оставлял в игре текстуру с прошлого «Применить»: другие игроки видели новую,
   // сам игрок — старую.
-  const localSkinRef = useRef('')
-  const syncLocalSkin = async (url: string | null, slim: boolean) => {
-    if (!hasTauri() || !url) return
-    const mark = localMark(url, slim)
-    if (localSkinRef.current === mark) return
-    // Плащ не трогаем: null оставляет его как есть, а на этом компьютере может
-    // быть надет плащ, которого на аккаунте нет.
-    await setLocalSkin(await toPngBase64(url), null, slim)
-    localSkinRef.current = mark
-  }
+  // Скин и плащ аккаунта — в копию для игры (lib/localLook). Плащ передаётся, когда он известен:
+  // раньше копия жила без плаща, и плащ из лаунчера в игре не появлялся.
+  const syncLocalSkin = (url: string | null, slim: boolean, cape?: string | null) => syncLocalLook(url, cape, slim)
 
   /// Удалённый скин нельзя ни скопировать, ни оставить в сборке: копия на диске
   /// стирается вместе с ним, иначе в игре остаётся текстура, которой у игрока
   /// больше нет, а попытка её обновить падает на пропавшем файле.
   const dropLocalSkin = async () => {
     if (!hasTauri()) return
-    localSkinRef.current = ''
+    forgetLocalLook()
     await setLocalSkin('', null, variant === 'slim').catch(() => {})
   }
 
@@ -955,7 +987,7 @@ export function Skins({ on }: { on: boolean }) {
         setActiveWardrobe(cur ? cur.id : null)
         if (w.active.skinUrl) setSkinSrc(w.active.skinUrl)
       }
-      await syncLocalSkin(w.active.skinUrl, w.active.model === 'slim').catch((e) =>
+      await syncLocalSkin(w.active.skinUrl, w.active.model === 'slim', w.active.capeUrl).catch((e) =>
         showToast(t('На этом компьютере скин не обновился — в сборках останется прежний: {error}', { error: tx(e) }), 'error'),
       )
       if (!wardrobeVariantRef.current) {
@@ -1134,6 +1166,11 @@ export function Skins({ on }: { on: boolean }) {
 
   /** Надеть вещь на фигуру в окне или снять её оттуда. Покупка тут ни при чём. */
   const tryOn = (item: CosmeticItem) => {
+    // В слоте одна вещь: вторые уши вытесняют первые из сета. Раньше молча — игрок
+    // думал, что покупает обе пары, а приходила одна (обращение 14.11.2026).
+    const pushed = fitting.find((c) => c.slot === item.slot && c.id !== item.id)
+    if (pushed && !fitting.some((c) => c.id === item.id) && cosmeticLocked(pushed))
+      showToast(t('«{old}» убрано из сета: в этом слоте одна вещь. Купить обе — по очереди', { old: pushed.name }))
     setFitting((now) =>
       now.some((c) => c.id === item.id)
         ? now.filter((c) => c.id !== item.id)
@@ -1172,9 +1209,19 @@ export function Skins({ on }: { on: boolean }) {
     } catch {}
   }, [fitting, fitKey])
 
+  // The catalog first comes from disk and then fresh from the server: tried-on items must follow it,
+  // or the bill and the reward keep the stale price and rarity.
+  useEffect(() => {
+    if (!cosmetics.length) return
+    setFitting((now) => {
+      const next = now.map((c) => cosmetics.find((x) => x.id === c.id) ?? c)
+      return next.every((c, i) => c === now[i]) ? now : next
+    })
+  }, [cosmetics])
+
   /** Что из примеренного придётся купить и сколько это стоит. */
   const fittingBill = fitting.filter((c) => cosmeticLocked(c) && onSale(c))
-  const fittingTotal = fittingBill.reduce((sum, c) => sum + (c.priceRubies ?? 0), 0)
+  const fittingTotal = fittingBill.reduce((sum, c) => sum + priceFor(c, tierPct(shopTier)), 0)
 
   /**
    * Купить весь сет разом — и сразу надеть. Покупаем по одной вещи: сервер
@@ -1186,14 +1233,30 @@ export function Skins({ on }: { on: boolean }) {
    * молча ничего не делало (владелец 24.09.2026).
    */
   const buyFitting = async () => {
-    const bill = fittingBill
-    if (!bill.length || cosmeticBusy) return
-    const total = bill.reduce((sum, c) => sum + (c.priceRubies ?? 0), 0)
+    const wanted = fittingBill
+    if (!wanted.length || cosmeticBusy) return
+    // Цена каждой вещи — от службы (shop/quote): ровно её она примет в expect. Скидки PLUS,
+    // фрагменты и уже купленную расцветку считает она; формула priceFor здесь разошлась бы.
+    setCosmeticBusy('fitting')
+    const quoted = await quoteWardrobe(wanted.map((c) => c.id)).catch(() => null)
+    setCosmeticBusy('')
+    if (!quoted) {
+      showToast(t('Не удалось узнать цену, попробуй ещё раз'), 'error')
+      return
+    }
+    const bill = wanted.filter((c) => quoted.get(c.id) != null)
+    const priceOf = (c: CosmeticItem) => quoted.get(c.id) ?? 0
+    if (bill.length < wanted.length) {
+      const gone = wanted.filter((c) => !bill.includes(c)).map((c) => '«' + c.name + '»').join(', ')
+      showToast(t('Уже твои или сняты с продажи: {items}', { items: gone }), 'error')
+      if (!bill.length) return
+    }
+    const total = bill.reduce((sum, c) => sum + priceOf(c), 0)
     // Воронка покупки сета в гардеробе: id — вещь или число вещей сета.
     const result = purchaseFlow('item', bill.length > 1 ? 'set:' + bill.length : bill[0].id, total, 'rubies')
     const ok = await uiConfirm(
       bill.length > 1
-        ? t('Сет из {n} вещей за {price}. Купить и надеть?', { n: bill.length, price: rubyCount(total) })
+        ? t('{items} за {price}. Купить и надеть?', { items: bill.map((c) => '«' + c.name + '»').join(', '), price: rubyCount(total) })
         : t('«{name}» за {price}. Купить и надеть?', { name: bill[0].name, price: rubyCount(total) }),
       { title: t('Покупка'), confirmLabel: t('Купить'), cancelLabel: t('Не сейчас'), danger: false },
     )
@@ -1203,7 +1266,8 @@ export function Skins({ on }: { on: boolean }) {
     const bought: CosmeticItem[] = []
     for (const item of bill) {
       try {
-        await buyCosmetic(item.id)
+        // Цена, что была в подтверждении: изменилась — служба откажет, а не спишет другую сумму.
+        await buyCosmetic(item.id, priceOf(item))
         bought.push(item)
       } catch (e) {
         failed.push(item.name + (e ? ' (' + apiErrorText(e, t('отказ')) + ')' : ''))
@@ -1236,7 +1300,8 @@ export function Skins({ on }: { on: boolean }) {
       setCosmeticBusy('')
     }
     showReward({
-      items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: rarityOfPrice(c.priceRubies || 0) })),
+      // Same rarity the wardrobe card shows: the price is discounted and cannot tell the rank.
+      items: bought.map((c) => ({ name: c.name, preview: c.preview, rarity: normRarity(c.rarity) ?? normRarity(variantOf(c)?.rarity) ?? rarityOfPrice(c.priceRubies || 0) })),
       kicker: bought.length > 1 ? (bought.length < 5 ? t('{n} вещи', { n: bought.length }) : t('{n} вещей', { n: bought.length })) : t('Твоя вещь'),
       title: bought.length > 1 ? t('Сет собран') : undefined,
       sub: wore ? t('Уже на тебе') : undefined,
@@ -1437,6 +1502,7 @@ export function Skins({ on }: { on: boolean }) {
         void loadCosmeticOwned()
           .then((owned) => setCosmeticOwned(owned.items || []))
           .catch(() => undefined)
+        refreshGiftLabels()
       }),
     [],
   )
@@ -2541,20 +2607,38 @@ export function Skins({ on }: { on: boolean }) {
    * сразу, а сам файл или запись на сервере стираются, только когда тост
    * ушёл: окно подтверждения на каждую карточку раздражало (владелец 23.09.2026).
    */
+  /**
+   * Удалённое не должно вернуться (обращения 13.11.2026). Удаление ждёт «Отменить» SKIN_UNDO_MS, но
+   * таймер умирал вместе со страницей, когда лаунчер прятался под игру: запись на сервере оставалась
+   * и снова появлялась. Отложенные удаления выполняются сразу только при выгрузке окна (window.ts, UNLOAD_EVENT);
+   * уход с экрана скинов их не торопит, иначе «Отменить» в тосте молча не срабатывал (laterSkinDelete).
+   * Надетый скин, который удаляют, снимается и с аккаунта: иначе он оставался в игре и в лобби.
+   */
+  const later = laterSkinDelete
+  /** Снять с аккаунта скин, которого больше нет у игрока: на аккаунте и в копии для игры — стандартный. */
+  const takeOffAccountSkin = () =>
+    uploadTexture('skin', null)
+      .then(() => dropLocalSkin())
+      .then(() => refreshWardrobe())
+      .catch((e) => showToast(apiErrorText(e, t('Скин удалён, но на аккаунте остался — надень другой')), 'error'))
+
   const removeWardrobeSkin = (item: WardrobeItem) => {
     const at = wardrobe.findIndex((i) => i.id === item.id)
+    const worn = !!millidaTex?.skin && millidaTex.skin === item.url
     setWardrobe((cur) => cur.filter((i) => i.id !== item.id))
     if (activeWardrobe === item.id) setActiveWardrobe(null)
-    const commit = setTimeout(() => {
-      void removeWardrobeItem(item.id).catch((e) => {
-        showToast(apiErrorText(e, t('Скин не удалился')), 'error')
-        void refreshWardrobe()
-      })
-    }, SKIN_UNDO_MS)
+    const undo = later('w:' + item.id, () => {
+      void removeWardrobeItem(item.id)
+        .then(() => (worn ? takeOffAccountSkin() : undefined))
+        .catch((e) => {
+          showToast(apiErrorText(e, t('Скин не удалился')), 'error')
+          void refreshWardrobe()
+        })
+    })
     showToast(t('Скин «{name}» удалён', { name: item.name }), undefined, undefined, {
       label: t('Отменить'),
       run: () => {
-        clearTimeout(commit)
+        undo()
         setWardrobe((cur) => (cur.some((i) => i.id === item.id) ? cur : [...cur.slice(0, at), item, ...cur.slice(at)]))
       },
     })
@@ -2563,26 +2647,31 @@ export function Skins({ on }: { on: boolean }) {
   const removeMySkin = (i: number) => {
     const target = mySkins[i]
     if (!target) return
-    const wasActive = activeMy === target.file
+    // «Применить» заливает свой скин и на аккаунт: там он живёт отдельной карточкой и надетым скином.
+    // Отметка activeMy на странице не хранится, поэтому надетый узнаётся и по хешу текстуры.
+    const hash = localSkinHash(target.file)
+    const onAccount = hash ? wardrobe.filter((w) => w.kind === 'skin' && wardrobeSkinHash(w.url) === hash) : []
+    const worn = activeMy === target.file || (!!hash && !!millidaTex?.skin && wardrobeSkinHash(millidaTex.skin) === hash)
     setMySkins((cur) => cur.filter((s) => s.file !== target.file))
-    if (wasActive) {
+    if (worn) {
       setActiveMy(null)
       setSkinSrc('')
     }
-    const commit = setTimeout(() => {
-      if (wasActive) void dropLocalSkin()
+    const undo = later('m:' + target.file, () => {
+      void Promise.allSettled(onAccount.map((w) => removeWardrobeItem(w.id))).then(() => (worn ? (hasMillidaAccount() ? takeOffAccountSkin() : dropLocalSkin()) : undefined))
       void deleteTexture('skins', target.file)
         .then(setMySkins)
         .catch((e) => showToast(t('Не удалось удалить: {error}', { error: tx(e) }), 'error'))
-    }, SKIN_UNDO_MS)
+    })
     showToast(t('Скин «{name}» удалён', { name: target.name }), undefined, undefined, {
       label: t('Отменить'),
       run: () => {
-        clearTimeout(commit)
+        undo()
         setMySkins((cur) => (cur.some((s) => s.file === target.file) ? cur : [...cur.slice(0, i), target, ...cur.slice(i)]))
       },
     })
   }
+
   const removeMyCape = (i: number) => {
     const target = myCapes[i]
     if (!target) return
@@ -2815,7 +2904,7 @@ export function Skins({ on }: { on: boolean }) {
         if (stale()) return
         // Локальная копия только что записана этими же байтами: помечаем её,
         // чтобы обновление каталога не качало тот же скин ещё раз.
-        if (hasTauri()) localSkinRef.current = localMark(applied.skinUrl, slimArms)
+        if (hasTauri()) markLocalLook(applied.skinUrl, currentCape?.url ?? null, slimArms)
         // Плащ из каталога аккаунта надевается по id: повторная заливка того же
         // PNG заводит в каталоге вторую карточку той же текстуры.
         // Плащ на аккаунт ставится только по идентификатору: из каталога
@@ -3227,19 +3316,18 @@ export function Skins({ on }: { on: boolean }) {
     const locked = cosmeticLocked(c)
     // Магазин v2: подписчику — цена со скидкой и старая зачёркнутая, остальным — полная цена (строка «С PLUS N» снята).
     const base = locked && onSale(c) ? c.priceRubies! : undefined
-    const pct = tierPct(shopTier)
-    const shown = base && pct ? Math.max(10, Math.round((base * (100 - pct)) / 100 / 10) * 10) : base
+    const shown = base ? priceFor(c, tierPct(shopTier)) : base
     return (
       <ItemTile
         key={c.id}
-        art={<CosmeticArt item={c} height={128} />}
+        art={<WearShot code={c.id} slot={c.slot} fallback={<CosmeticArt item={c} height={128} />} />}
         name={c.name}
         rarity={(c as CosmeticItem & { rarity?: string }).rarity}
         locked={locked}
         plus={locked && c.access === 'PLUS'}
         priceRubies={shown}
-        priceWas={pct ? base : undefined}
-        note={locked ? earnedNote(c, achSources) : undefined}
+        priceWas={base && shown !== base ? base : undefined}
+        note={locked ? earnedNote(c, achSources) : giftLabels[c.id] ?? (c.baseId ? giftLabels[c.baseId] : undefined)}
         on={worn.some((w) => w.id === c.id)}
         trying={fitting.some((f) => f.id === c.id)}
         loading={fitLoading.includes(c.id) || cosmeticBusy === c.id}
@@ -3668,6 +3756,7 @@ export function Skins({ on }: { on: boolean }) {
               setChipBy((now) => ({ ...now, [sec.key]: chip.key }))
               pickSection(sec.key)
             }}
+            onRemove={(id) => setFitting((now) => now.filter((c) => c.id !== id))}
             onTone={(id, tone) => setVariantById((now) => ({ ...now, [id]: tone }))}
             onClear={() => setFitting([])}
             onBuy={() => (!hasMillidaAccount() ? showLogin() : void buyFitting())}
@@ -3714,7 +3803,7 @@ export function Skins({ on }: { on: boolean }) {
             )}
             {/* Одна раскладка во всех разделах (владелец 24.09.2026, 19:34): чипы
                 слева, справа «Снять» (если в разделе что-то надето) и «Все/Мои».
-                Поиска по вещам нет; Remove all is in the top bar, next to Import. */}
+                Remove all is in the top bar, next to Import. */}
             {(() => {
               const off = sectionTakeOff(
                 section,
@@ -3753,6 +3842,10 @@ export function Skins({ on }: { on: boolean }) {
                   selectCatalog({ key: '', nick: catQuery.trim(), label: catQuery.trim() })
               })}
             </div>
+          ) : null}
+
+          {section !== 'shop' && section !== 'skin' && section !== 'looks' ? (
+            <div className="ch-bar">{searchBox(t('Поиск'), cosmeticQuery, setCosmeticQuery)}</div>
           ) : null}
 
           {plusJoy ? <PlusCelebration items={plus?.items ?? 100} onDone={endPlusJoy} /> : null}

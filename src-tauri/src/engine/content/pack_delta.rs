@@ -440,6 +440,9 @@ async fn fetch_span_once(target: &SpanTarget<'_>, url: &str, group: &Group, have
     if !content_range_ok(range.as_deref(), from, group.to, target.archive_size) {
         return Err(format!("хранилище прислало не тот кусок ({})", range.unwrap_or_default()));
     }
+    if shield_would_cache_whole(&resp, target.archive_size) {
+        return Err(SHIELD_CACHE_MISS.into());
+    }
     let dest = target.file;
     let want = group.to - from;
     let mut file = std::fs::OpenOptions::new().append(true).open(dest).map_err(|e| io_fail("Обновление", dest, &e))?;
@@ -490,7 +493,7 @@ async fn fetch_span(target: &SpanTarget<'_>, group: &Group, job: &Job, on: &(dyn
                 target.link.renew(&url).await?;
                 continue;
             }
-            Err(e) if e.contains("вместо куска") || e.contains("не тот кусок") || e.contains("чужой адрес") => return Err(e),
+            Err(e) if e == SHIELD_CACHE_MISS || e.contains("вместо куска") || e.contains("не тот кусок") || e.contains("чужой адрес") => return Err(e),
             Err(e) => e,
         };
         tries = if span_bytes_on_disk(target.file)? > have { 1 } else { tries + 1 };

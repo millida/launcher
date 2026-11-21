@@ -49,6 +49,8 @@ const DURABLE = [
   'm-lag-off',
   'm-lag-pending',
   'm-live-log',
+  // Ядро читает при запуске игры (engine/game/livelog.rs, HIDE_NICK_PREF): ник в живом логе → Player.
+  'm-log-hide-nick',
   'm-gfx-preset',
   // Новогодняя тема (lib/festive): выключенная игроком не возвращается после выхода через трей.
   'm-festive',

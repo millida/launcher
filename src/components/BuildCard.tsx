@@ -51,6 +51,7 @@ export function BuildCard({
       deleteProfile(p.name)
         .then(() => {
           if (useProfiles.getState().selected === p.name) setSelected(null)
+          useLobby.getState().forgetBuild(p.name)
           void refresh()
           showToast(t('Сборка удалена'), 'ok', 'delete')
         })

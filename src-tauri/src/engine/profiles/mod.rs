@@ -4,7 +4,9 @@ mod mods;
 mod groups;
 mod logs;
 mod sharelog;
+mod diskusage;
 mod backups;
+mod world_schedule;
 mod screenshots;
 mod imports;
 mod moves;
@@ -27,7 +29,12 @@ pub use mods::*;
 pub use groups::*;
 pub use logs::*;
 pub use sharelog::*;
+pub use diskusage::{clean_old_logs, disk_usage, BuildUsage, DiskUsage, OLD_LOG_DAYS};
 pub use backups::*;
+pub use world_schedule::{
+    run_world_autobackups, set_world_autobackup, world_autobackup, world_backups_after_exit, world_backups_on_start,
+    AutoBackupMode, AutoBackupReport, WorldAutoBackup,
+};
 pub use screenshots::*;
 pub use imports::*;
 pub use moves::*;

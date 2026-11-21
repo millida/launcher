@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 import { PxIcon } from '../components/PxIcon'
 import { PauseInstall } from '../components/PauseInstall'
-import { openImage, useLightbox } from '../components/ImageLightbox'
+import { openImage, useLightbox } from '../components/lightboxStore'
 import { hasTauri } from '../ipc/tauri'
 import {
   cfInstall,

@@ -5,7 +5,7 @@ import { useT } from '../i18n'
 
 export function ConfirmModal() {
   const t = useT()
-  const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, typeToConfirm, close } =
+  const { open, title, message, confirmLabel, cancelLabel, danger, rememberKey, rememberLabel, typeToConfirm, altLabel, close } =
     useConfirm()
   const [remember, setRemember] = useState(false)
   const [typed, setTyped] = useState('')
@@ -76,10 +76,15 @@ export function ConfirmModal() {
             {rememberLabel}
           </label>
         ) : null}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
           <button className="btn md secondary" onClick={() => close('no')}>
             {cancelLabel}
           </button>
+          {altLabel ? (
+            <button className="btn md secondary" onClick={() => close('alt')}>
+              {altLabel}
+            </button>
+          ) : null}
           <button
             className={'btn md ' + (danger ? 'danger' : 'primary')}
             data-nosound

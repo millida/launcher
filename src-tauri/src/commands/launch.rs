@@ -100,7 +100,11 @@ pub fn label_server(addr: String, name: String) { engine::label_server(&addr, &n
 pub async fn share_log(profile: String, name: String) -> Result<String, String> { engine::share_log(profile, name).await }
 
 #[tauri::command(async)]
-pub fn backup_world(profile: String, folder: String) -> Result<String, String> { engine::backup_world(profile, folder) }
+pub fn backup_world(profile: String, folder: String) -> Result<String, String> {
+    let path = engine::backup_world(profile, folder)?;
+    engine::remember_saved_file(&path);
+    Ok(path)
+}
 
 #[tauri::command(async)]
 pub fn list_backups(profile: String) -> Vec<String> { engine::list_backups(&profile) }

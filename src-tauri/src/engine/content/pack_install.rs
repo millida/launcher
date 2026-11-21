@@ -312,6 +312,7 @@ async fn fetch_range(ctx: &Ctx<'_>, members: &[&Member]) -> Step {
         Err(_) => return Step::Fatal(GroupErr::Cancelled),
         Ok(Err(_)) => {
             pressure();
+            edge_failure(&url);
             return Step::Retry("storage does not answer".into());
         }
         Ok(Ok(Err(e))) => {
@@ -339,6 +340,9 @@ async fn fetch_range(ctx: &Ctx<'_>, members: &[&Member]) -> Step {
     if !pack_delta::content_range_ok(range.as_deref(), from, to, ctx.archive_size) {
         return Step::Fatal(GroupErr::Data(format!("storage sent another range ({})", range.unwrap_or_default())));
     }
+    if shield_would_cache_whole(&resp, ctx.archive_size) {
+        return Step::Fatal(GroupErr::Data(SHIELD_CACHE_MISS.into()));
+    }
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(CHUNKS_IN_FLIGHT);
     let specs: Vec<Spec> = members.iter().map(|m| m.spec.clone()).collect();
@@ -365,6 +369,7 @@ async fn fetch_range(ctx: &Ctx<'_>, members: &[&Member]) -> Step {
                 break;
             }
             Ok(Err(_)) => {
+                edge_failure(&url);
                 cut = Some(Cut::Network("connection to storage went quiet".into()));
                 break;
             }

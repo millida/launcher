@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Icon } from '../Icon'
+import { PxIcon } from '../PxIcon'
 import { Ruby } from '../Ruby'
 import { Rays } from '../reward/RewardReveal'
 import { useDaily } from '../../state/daily'
@@ -55,8 +56,11 @@ export function FreeDaily() {
 
   const r = view.reward
   const amount = r && 'amount' in r && typeof r.amount === 'number' ? r.amount : 0
-  const art =
-    !r || r.kind === 'SHARDS' || r.kind === 'FRAGMENTS' || r.kind === 'MYSTERY' ? (
+  // Календарь прячет содержимое клетки до забора: вместо награды — подарок.
+  const art = !r ? (
+    <PxIcon name="gift" size={84} />
+  ) :
+    r.kind === 'SHARDS' || r.kind === 'FRAGMENTS' || r.kind === 'MYSTERY' ? (
       <Shard size={84} />
     ) : r.kind === 'RUBIES' ? (
       <Ruby size={78} />
