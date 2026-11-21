@@ -479,8 +479,9 @@ pub async fn redeem_pack_key(slug: String, code: String) -> Result<serde_json::V
 
 /// Наши готовые сборки — тот же список, что на сайте.
 #[tauri::command]
-pub async fn millida_packs() -> Result<serde_json::Value, String> {
-    engine::catalog_packs().await
+pub async fn millida_packs(lang: Option<String>) -> Result<serde_json::Value, String> {
+    let lang = engine::lang_header(lang.as_deref())?;
+    engine::catalog_packs(lang).await
 }
 
 /// Ready-made pack from the Millida catalogue. The webview names only the
@@ -671,6 +672,13 @@ pub fn list_build_files(profile: String, rel: String) -> Result<Vec<engine::Buil
 #[tauri::command(async)]
 pub fn reveal_build_file(profile: String, rel: String) -> Result<(), String> {
     engine::reveal_build_file(&profile, &rel)
+}
+
+/// Shows a file the core itself saved for the player, selected in the system
+/// file manager. Paths it never handed out are refused.
+#[tauri::command(async)]
+pub fn reveal_saved_file(path: String) -> Result<(), String> {
+    engine::reveal_saved_file(&path)
 }
 
 #[tauri::command(async)]

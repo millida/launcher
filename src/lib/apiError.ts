@@ -45,6 +45,12 @@ const OFFLINE =
 
 const TIMEOUT = /operation timed out|timed out|deadline has elapsed/i
 
+/** Подсказка ядра из «нет связи (причина — подсказка)», см. `net_err` в core/http.rs. */
+export function coreNetHint(raw: string): string | null {
+  const m = /нет связи \((?:.*?) — ([^()]+)\)/i.exec(raw)
+  return m ? m[1]!.trim() : null
+}
+
 function statusOf(raw: string): number {
   const match = /\bhttp (\d{3})\b/i.exec(raw)
   return match ? Number(match[1]) : 0
@@ -80,7 +86,12 @@ export function apiErrorText(e: unknown, fallback: string): string {
   const short = moneyShortfall(e)
   if (short) return shortfallText(short)
 
-  if (OFFLINE.test(raw)) return t('Нет связи с Millida — проверь интернет и повтори')
+  if (OFFLINE.test(raw)) {
+    // Ядро уже назвало причину («неверные дата и время», «антивирус подменяет HTTPS», «проверь DNS»):
+    // общий «проверь интернет» её стирал, и игрок с рабочим интернетом не понимал, что чинить.
+    const hint = coreNetHint(raw)
+    return hint ? t('Нет связи с Millida: {hint}', { hint: tx(hint) }) : t('Нет связи с Millida — проверь интернет и повтори')
+  }
   if (TIMEOUT.test(raw)) return t('Millida не ответила вовремя — повтори попытку')
   if (isCodeFault(e, raw)) return fallback
 

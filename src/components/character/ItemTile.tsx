@@ -1,7 +1,7 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import { loadWorkshop } from '../../lib/rubies'
+import { FRAGMENTS_CHANGED, loadWorkshop } from '../../lib/rubies'
 import { normRarity, rarityOfPrice, RARITY_TONE } from '../shop/rarity'
 import { FragBar, RarityChip, RarityFx } from '../shop/rarityUi'
 import { isDuoEmote } from '../../lib/duoEmotes'
@@ -30,17 +30,23 @@ type Frags = Map<string, { have: number; need: number }>
 let frags: Frags = new Map()
 let fragsAsked = false
 const fragsSubs = new Set<() => void>()
+function askFrags() {
+  fragsAsked = true
+  void loadWorkshop()
+    .then((w) => {
+      frags = new Map((w.fragments || []).map((f) => [f.item.code, { have: f.have, need: f.need }]))
+      fragsSubs.forEach((l) => l())
+    })
+    // Сбой не запоминается навсегда: следующая подписка спросит снова.
+    .catch(() => {
+      fragsAsked = false
+    })
+}
+// Обмен осколков и докупка меняют прогресс: плитки перечитывают его сразу, без перезапуска.
+if (typeof window !== 'undefined') window.addEventListener(FRAGMENTS_CHANGED, () => fragsSubs.size && askFrags())
 function subscribeFrags(fn: () => void) {
   fragsSubs.add(fn)
-  if (!fragsAsked) {
-    fragsAsked = true
-    void loadWorkshop()
-      .then((w) => {
-        frags = new Map((w.fragments || []).map((f) => [f.item.code, { have: f.have, need: f.need }]))
-        fragsSubs.forEach((l) => l())
-      })
-      .catch(() => undefined)
-  }
+  if (!fragsAsked) askFrags()
   return () => fragsSubs.delete(fn)
 }
 const useFrags = () => useSyncExternalStore(subscribeFrags, () => frags)

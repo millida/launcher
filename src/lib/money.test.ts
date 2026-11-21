@@ -4,11 +4,15 @@ import {
   canAfford,
   formatMoney,
   goodsQuote,
+  isMoneyView,
+  isPriceList,
+  isQuote,
   moneyLangFor,
   moneyShortfall,
   plusCheckout,
   quoteText,
   shortfallOf,
+  topupFor,
   topupUrl,
   type MoneyCurrency,
   type MoneyView,
@@ -27,6 +31,7 @@ const account = (currency: MoneyCurrency, kopecks: number): MoneyView => ({
 
 const PLUS_RUB: Quote = { displayCurrency: 'RUB', priceMinor: 29900, chargeKopecks: 29900 }
 const PLUS_USD: Quote = { displayCurrency: 'USD', priceMinor: 500, chargeKopecks: 500 * RATE }
+const PLUS_INR: Quote = { displayCurrency: 'INR', priceMinor: 19900, chargeKopecks: 21000 }
 
 const spaced = (s: string | null) => (s ?? '').replace(/\s/g, ' ')
 
@@ -89,6 +94,24 @@ const BUYERS: BuyerCase[] = [
     affords: true,
     topup: null,
   },
+  {
+    why: 'an Indian buyer is quoted rupees as the server sent them; the dollar account tops up in dollars, raised to the $1 minimum',
+    locale: 'en',
+    view: account('USD', 15000),
+    quote: PLUS_INR,
+    shown: '₹199',
+    affords: false,
+    topup: { currency: 'USD', amountMinor: 100 },
+  },
+  {
+    why: 'a rupee price is the same in Hindi: the currency, not the language, picks the Indian grouping',
+    locale: 'hi',
+    view: account('USD', 30000),
+    quote: PLUS_INR,
+    shown: '₹199',
+    affords: true,
+    topup: null,
+  },
 ]
 
 for (const c of BUYERS) {
@@ -105,6 +128,7 @@ const GOODS: Array<[why: string, currency: MoneyCurrency | null, rub: number, li
   ['a dollar account pays the PLUS-ratio dollar list, charged from rubles at the rate', 'USD', 30000, undefined, { displayCurrency: 'USD', priceMinor: 499, chargeKopecks: 499 * RATE }],
   ['a subscription keeps its ruble line for a dollar account: the gateway bills rubles', 'USD', 25900, 'RUB', { displayCurrency: 'RUB', priceMinor: 25900, chargeKopecks: 25900 }],
   ['no account currency yet means no price rather than a guess', null, 30000, undefined, null],
+  ['a rupee buyer holds a dollar account, so a ruble-only good is charged at the dollar list, never converted to rupees', 'INR', 30000, undefined, { displayCurrency: 'USD', priceMinor: 499, chargeKopecks: 499 * RATE }],
 ]
 
 for (const [why, currency, rub, line, want] of GOODS) {
@@ -191,6 +215,8 @@ const CHECKOUTS: Array<[why: string, current: Quote | null, statusQuote: Quote |
   ['the price list follows the interface language, so it outranks an older PLUS status', PLUS_USD, PLUS_RUB, 'balance'],
   ['without a price list the status quote decides', null, PLUS_USD, 'balance'],
   ['nothing known yet falls back to the gateway', null, undefined, 'gateway'],
+  ['a rupee quote is paid from the balance: the ruble gateway cannot bill it', PLUS_INR, undefined, 'balance'],
+  ['a rupee PLUS status without a price list goes to the balance too', null, PLUS_INR, 'balance'],
 ]
 
 for (const [why, current, statusQuote, want] of CHECKOUTS) {
@@ -210,3 +236,34 @@ for (const [why, locale] of LOCALES) {
     expect(moneyLangFor('/pricing', locale), 'the server prices by exactly this language').toBe(locale)
   })
 }
+
+const RUPEES: Array<[why: string, minor: number, want: string]> = [
+  ['whole rupees drop the paise', 19900, '₹199'],
+  ['thousands are grouped', 209900, '₹2,099'],
+  ['a lakh is grouped the Indian way', 10000000, '₹1,00,000'],
+  ['a fractional sum keeps two digits', 19950, '₹199.50'],
+]
+
+for (const [why, minor, want] of RUPEES) {
+  test('rupees: ' + why, () => {
+    for (const locale of ['en', 'ru', 'hi'] as Locale[]) expect(spaced(formatMoney(minor, 'INR', locale)), locale).toBe(want)
+  })
+}
+
+test('a rupee quote and price list pass the shape checks, so the prices are not dropped', () => {
+  expect(isQuote(PLUS_INR)).toBe(true)
+  expect(isQuote({ ...PLUS_INR, displayCurrency: 'EUR' }), 'an unknown currency is still refused').toBe(false)
+  expect(isPriceList({ displayCurrency: 'INR', rubPerUsd: RATE, plus: [{ tier: 'PLUS', quote: PLUS_INR }], hosting: [], rubies: [] })).toBe(true)
+})
+
+test('the money view still needs both the ruble and the dollar top-up', () => {
+  const view = account('USD', 1000)
+  expect(isMoneyView(view)).toBe(true)
+  expect(isMoneyView({ ...view, topup: { RUB: view.topup.RUB } })).toBe(false)
+})
+
+test('a rupee view tops up in dollars: the account holds rubles or dollars only', () => {
+  const view: MoneyView = { ...account('USD', 0), displayCurrency: 'INR' }
+  expect(topupFor(45000, view)).toEqual({ currency: 'USD', amountMinor: 500 })
+  expect(shortfallOf(PLUS_INR, view)).toEqual({ displayCurrency: 'USD', missingMinor: 234, missingKopecks: 21000, topup: { currency: 'USD', amountMinor: 234 } })
+})

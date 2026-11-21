@@ -82,9 +82,98 @@ pub(crate) fn redact_log(content: &str, home: Option<&str>) -> String {
             out = out.replace(&v, "~");
         }
     }
-    let out = hide_flag_value(&out, "--accessToken");
+    let mut out = hide_flag_value(&out, "--accessToken");
+    for key in SECRET_KEYS {
+        if out.contains(key) {
+            out = hide_after(&out, key);
+        }
+    }
     let out = mask_user_dirs(&out);
     mask_ip_addresses(&out)
+}
+
+/// Lines a legacy game prints with the session in them: 1.8.9 and 1.7.10 write
+/// «(Session ID is token:<access>:<uuid>)». Cut in every log that leaves the process:
+/// the public page and the live log on screen both go through `redact_log`.
+const SECRET_KEYS: [&str; 3] = ["Session ID is ", "accessToken=", "access_token="];
+
+/// The nick never replaces a fragment shorter than this: «Al» would eat half the log.
+const NICK_MIN_CHARS: usize = 3;
+
+/// A line of the live log before it reaches the screen. Players send screenshots of it to
+/// support and streamers keep it open on air, so the account token, the session id and the
+/// home folder are always cut; the nick only when the player asks (`nick`). The log file on
+/// disk keeps everything: it is what a crash is read from.
+pub(crate) fn redact_live_line(line: &str, home: Option<&str>, nick: Option<&str>) -> String {
+    let mut out = redact_log(line, home);
+    if let Some(n) = nick.map(str::trim).filter(|n| n.chars().count() >= NICK_MIN_CHARS) {
+        out = replace_ci(&out, n, "Player");
+    }
+    out
+}
+
+/// Case-insensitive replacement of every `needle` (a nick: «Steve», «steve», «STEVE»).
+///
+/// Matches char by char on the original text: lowercasing a whole line changes the
+/// byte length of some chars (`Ⱥ` 2→3, the ohm sign U+2126 3→2), and offsets taken from
+/// the lowered copy cut the original mid-char (panic, the live log froze).
+pub(crate) fn replace_ci(text: &str, needle: &str, with: &str) -> String {
+    let want: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
+    if want.is_empty() {
+        return text.to_string();
+    }
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    let mut i = 0;
+    while i < chars.len() {
+        match ci_match_len(&chars[i..], &want) {
+            Some(n) => {
+                out.push_str(&text[last..chars[i].0]);
+                out.push_str(with);
+                i += n;
+                last = chars.get(i).map_or(text.len(), |c| c.0);
+            }
+            None => i += 1,
+        }
+    }
+    out.push_str(&text[last..]);
+    out
+}
+
+/// How many chars at the start of `from` lowercase exactly into `want`.
+fn ci_match_len(from: &[(usize, char)], want: &[char]) -> Option<usize> {
+    let mut k = 0;
+    for (n, &(_, c)) in from.iter().enumerate() {
+        for l in c.to_lowercase() {
+            if want.get(k) != Some(&l) {
+                return None;
+            }
+            k += 1;
+        }
+        if k == want.len() {
+            return Some(n + 1);
+        }
+    }
+    None
+}
+
+/// The value right after `key` (up to a space, quote or bracket) becomes «<hidden>».
+pub(crate) fn hide_after(text: &str, key: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find(key) {
+        let after = i + key.len();
+        out.push_str(&rest[..after]);
+        let tail = &rest[after..];
+        let end = tail.find([' ', ',', '&', '"', '\'', ']', ')', '\n', '\r', '\t']).unwrap_or(tail.len());
+        if end > 0 {
+            out.push_str("<hidden>");
+        }
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 const USER_DIR_MARKERS: [&str; 4] = ["\\Users\\", "/Users/", "/home/", "\\Documents and Settings\\"];
@@ -202,7 +291,7 @@ fn hide_flag_value(text: &str, flag: &str) -> String {
 
 #[cfg(test)]
 mod redact_tests {
-    use super::{redact_log, rejection_message, share_url, EMPTY_LOG};
+    use super::{redact_live_line, redact_log, rejection_message, replace_ci, share_url, EMPTY_LOG};
     use serde_json::json;
 
     #[test]
@@ -231,6 +320,25 @@ mod redact_tests {
         ];
         for (body, want, why) in cases {
             assert_eq!(rejection_message(&body).as_deref(), want, "{why}");
+        }
+    }
+
+    #[test]
+    fn hiding_the_nick_survives_chars_whose_lowercase_has_another_length() {
+        // «Ⱥ» grows by a byte when lowered and the ohm sign U+2126 shrinks by one: the line
+        // keeps its length, but every offset after them moved (a panic froze the live log).
+        let cases: [(&str, &str, &str); 7] = [
+            // The old code cut the line inside «Ж» here and panicked.
+            ("Ⱥ steveЖ \u{2126}", "Steve", "Ⱥ PlayerЖ \u{2126}"),
+            ("[CHAT] Ⱥ \u{2126} <Steve> hi", "Steve", "[CHAT] Ⱥ \u{2126} <Player> hi"),
+            ("ȺȺȺ steve \u{2126}\u{2126}\u{2126} STEVE", "Steve", "ȺȺȺ Player \u{2126}\u{2126}\u{2126} Player"),
+            ("\u{2126}steve", "STEVE", "\u{2126}Player"),
+            ("<ȺLEX> ok", "ⱥlex", "<Player> ok"),
+            ("İstanbul Steve", "steve", "İstanbul Player"),
+            ("no nick here Ⱥ", "Steve", "no nick here Ⱥ"),
+        ];
+        for (line, nick, want) in cases {
+            assert_eq!(replace_ci(line, nick, "Player"), want, "{line}");
         }
     }
 
@@ -268,5 +376,43 @@ mod redact_tests {
         for (input, want, why) in cases {
             assert_eq!(redact_log(input, None), want, "{why}");
         }
+    }
+
+    #[test]
+    fn a_live_line_loses_the_session_and_keeps_the_rest() {
+        let cases: [(&str, Option<&str>, &str, &str); 7] = [
+            ("[12:00:01] [Client thread/INFO]: (Session ID is token:eyJ0.abc.def:8667ba71b85a4004af54457a9734eed7)", None, "[12:00:01] [Client thread/INFO]: (Session ID is <hidden>)", "1.8.9 prints the access token in the session line"),
+            ("[main/INFO]: Setting user: Steve", None, "[main/INFO]: Setting user: Steve", "the nick stays when the player did not ask to hide it"),
+            ("[main/INFO]: Setting user: Steve", Some("Steve"), "[main/INFO]: Setting user: Player", "with the switch on the nick becomes Player"),
+            ("<STEVE> hi, steve here", Some("Steve"), "<Player> hi, Player here", "every case of the nick is hidden"),
+            ("[main/INFO]: Setting user: Al", Some("Al"), "[main/INFO]: Setting user: Al", "a two-letter nick would eat half the log, so it is left"),
+            ("--username Steve --accessToken eyJ0.abc.def --version 1.21.1", None, "--username Steve --accessToken <hidden> --version 1.21.1", "a loader echoing the command line"),
+            ("url?accessToken=eyJ0.abc&x=1 access_token=zzz", None, "url?accessToken=<hidden>&x=1 access_token=<hidden>", "query-string forms of the token"),
+        ];
+        for (line, nick, want, why) in cases {
+            assert_eq!(redact_live_line(line, None, nick), want, "{why}");
+        }
+        assert_eq!(redact_live_line("Unexpected token: '}' at 3", None, None), "Unexpected token: '}' at 3", "a parse error is not a secret and must stay readable");
+    }
+
+    #[test]
+    fn the_shared_log_and_the_live_log_hide_the_same_secrets() {
+        let lines = [
+            "[12:00:01] [Client thread/INFO]: (Session ID is token:eyJ0.abc.def:8667ba71b85a4004af54457a9734eed7)",
+            "2026-11-20 12:00:01 [INFO] (Session ID is token:eyJ7.ten.ten:0123456789abcdef0123456789abcdef)",
+            "--username Steve --accessToken eyJ0.sec.ret --version 1.21.1",
+            "url?accessToken=eyJ0.qs.sec&x=1 access_token=eyJ0.snake",
+        ];
+        for line in lines {
+            let shared = redact_log(line, None);
+            let live = redact_live_line(line, None, None);
+            assert!(!shared.contains("eyJ"), "the public log leaks a token: {shared}");
+            assert!(!live.contains("eyJ"), "the live log leaks a token: {live}");
+            assert_eq!(shared, live, "both paths must cut the same: {line}");
+        }
+        let whole = lines.join("\n");
+        let shared = redact_log(&whole, None);
+        assert!(!shared.contains("eyJ"), "a whole file must not leak either: {shared}");
+        assert_eq!(shared.lines().count(), lines.len(), "cutting must not eat line breaks");
     }
 }

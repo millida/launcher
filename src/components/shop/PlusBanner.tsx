@@ -2,6 +2,7 @@ import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import { ChestArt } from '../daily/ChestArt'
 import { PLUS_PASS } from '../daily/chestDrops'
+import { usePlusPass } from '../daily/passTotals'
 import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type PlusEconomy, type ShopTier } from '../../lib/rubies'
 import type { PlusTier } from '../../lib/gameProfile'
 import { Shard } from './parts'
@@ -10,16 +11,16 @@ import { PlusMark } from '../premium/PlusMark'
 import '../../styles/pixel/plus-chip.css'
 import { formatNumber, intlTag, useT } from '../../i18n'
 
-export const PLUS_CHESTS = Object.values(PLUS_PASS.chests).reduce((a, b) => a + (b || 0), 0)
 
 
 /** Три факта значками: сундуки, скидка, осколки. Без слов-объяснений. */
 export function PlusFacts({ tier = 'PLUS' }: { tier?: PlusTier }) {
+  const pass = usePlusPass()
   return (
     <span className="pl-facts">
       <span className="pl-fact">
         <ChestArt ready={false} tier="EPIC" size={30} />
-        <b>×{PLUS_CHESTS}</b>
+        <b>×{pass.count}</b>
       </span>
       <span className="pl-fact">
         <b>−{tier === 'DIAMOND' ? DIAMOND_ITEM_PCT : PLUS_ITEM_PCT}%</b>
@@ -98,6 +99,7 @@ export function PlanCard({ tier }: { tier: PlusTier }) {
  */
 export function PlusChips({ tier = 'PLUS' }: { tier?: PlusTier }) {
   const t = useT()
+  const pass = usePlusPass()
   const parts = [
     <>
       <Ruby size={20} />
@@ -105,7 +107,7 @@ export function PlusChips({ tier = 'PLUS' }: { tier?: PlusTier }) {
     </>,
     <>
       <ChestArt ready={false} tier="EPIC" size={22} />
-      <b>{PLUS_CHESTS}</b> {t('сундуков')}
+      <b>{pass.count}</b> {t('сундуков')}
     </>,
     <>
       <Shard size={18} />

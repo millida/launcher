@@ -8,6 +8,7 @@ import { Shard } from '../shop/parts'
 import { ChestLive } from './ChestLive'
 import { CHEST_NAME } from './rewards'
 import { rowTotals, type TrackCol } from './track'
+import { seasonTotals } from './advent'
 import { intlTag, useT } from '../../i18n'
 import { plusPrice, useMoney } from '../../lib/useMoney'
 
@@ -52,7 +53,9 @@ export function PlusCard({ cols }: { cols: TrackCol[] }) {
 
   if (!open) return null
   const price = info && info.priceKopecks > 0 ? info.priceKopecks : 0
-  const totals = rowTotals(cols, 'plus')
+  // Календарь прячет клетки — итоги строки PLUS присылает служба.
+  const sent = seasonTotals(useDaily.getState().status?.season, 'plus')
+  const totals = sent ? { shards: sent.shards, rubies: sent.rubies, chests: { COMMON: 0, RARE: 0, EPIC: 0, LEGEND: 0, ...sent.chests } } : rowTotals(cols, 'plus')
   const waiting = !!pay && Date.now() - pay.at < PAY_TTL
 
   return createPortal(

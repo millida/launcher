@@ -598,8 +598,8 @@ mod tests {
     /// The system keeps its share whatever asked for more: the player's slider, a pack's own minimum.
     #[test]
     fn the_heap_never_takes_the_systems_share() {
-        let pc4 = Machine { total_mb: 4096, available_mb: 1500 };
-        let pc16 = Machine { total_mb: 16384, available_mb: 9000 };
+        let pc4 = Machine { total_mb: 4096, available_mb: 1500, shared_gpu: false };
+        let pc16 = Machine { total_mb: 16384, available_mb: 9000, shared_gpu: false };
         let manual = |mb| HeapAsk { manual: mb, ..HeapAsk::default() };
         assert_eq!(launch_heap(&manual(6144), &pc4, None), 2048, "6 GB asked on a 4 GB PC: the swap instead of a game");
         assert_eq!(launch_heap(&manual(6144), &pc16, None), 6144);

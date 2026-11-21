@@ -589,7 +589,7 @@ async fn start_client(app: AppHandle, profile: String, nick: String, auth: Auth,
     check_cancel()?;
     let start = Instant::now();
     let mut child = cmd.spawn().map_err(|e| failure(format!("Не удалось запустить Horizon: {}", e)))?;
-    super::livelog::reset_live_log(&profile);
+    super::livelog::reset_live_log(&profile, &nick);
     let _ = app.emit("game-log-start", &profile);
     let log_file = Arc::new(Mutex::new(log_file));
     let server_now: ServerSlot = Arc::new(Mutex::new(None));

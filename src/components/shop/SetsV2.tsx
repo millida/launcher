@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import type { SetColorwayView, SetView } from '../../lib/rubies'
+import type { ItemRef, SetColorwayView, SetView } from '../../lib/rubies'
+import { payablePrice } from '../../lib/rubies'
 import { Dots, PxThumb, THEME_TONE, defaultWay } from './Sets'
 import { SetShot, ShopStage } from './ShopStage'
 import { warmOutfitShots } from '../../lib/outfitShotLazy'
 import { Countdown, Head } from './parts'
+import { PriceRiseTag, setPriceRise } from './priceRise'
 import { intlTag, useT } from '../../i18n'
 
 /**
@@ -25,10 +27,31 @@ export interface SetActs {
   onWear: (set: SetView, way: SetColorwayView) => void
   /** Подписчик: рядом с ценой зачёркнута цена без скидок. */
   sub?: boolean
+  onBuyItem?: (item: ItemRef, price: number) => void
 }
 
 const items = (way: SetColorwayView) => way.items.map((x) => x.item)
 const full = (way: SetColorwayView) => way.have >= way.items.length
+const shownOf = (way: SetColorwayView, off: readonly string[]) => items(way).filter((it) => !off.includes(it.code))
+
+type WayItem = SetColorwayView['items'][number]
+
+function ItemToggle({ x, off, last, onToggle }: { x: WayItem; off: boolean; last: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={'sv-ci' + (x.owned ? ' own' : '') + (off ? ' is-off' : '')}
+      aria-pressed={!off}
+      aria-label={x.item.name}
+      title={x.item.name}
+      disabled={last}
+      data-track="set_item_toggle"
+      onClick={onToggle}
+    >
+      <PxThumb item={x.item} />
+    </button>
+  )
+}
 
 /** Стрелки ленты видны, только когда туда есть что листать. */
 export function useRailEdges(rail: React.RefObject<HTMLDivElement | null>, dep: unknown) {
@@ -81,6 +104,13 @@ function PriceBtn({ set, way, acts, size = 'md' }: { set: SetView; way: SetColor
         {t('Надеть')}
       </button>
     )
+  // Не весь набор свой, а цена 0: сбой данных службы, не бесплатный набор — продавать нечего.
+  if (!payablePrice(way.price))
+    return (
+      <button className={'btn ' + size + ' secondary sv-pbtn'} disabled data-track="set_noprice">
+        {t('Цена уточняется')}
+      </button>
+    )
   return (
     <button
       className={'btn ' + size + ' primary sv-pbtn'}
@@ -105,6 +135,7 @@ function Stand({
   on,
   hero,
   acts,
+  shown,
 }: {
   set: SetView
   way: SetColorwayView
@@ -114,11 +145,12 @@ function Stand({
   on: boolean
   hero?: boolean
   acts: SetActs
+  shown?: ItemRef[]
 }) {
   const t = useT()
   return (
     <div className={'card sv-stand' + (hero ? ' is-hero' : '')} style={{ ['--sh-tone' as string]: THEME_TONE[set.theme] }} data-kind="set" data-id={set.id}>
-      <ShopStage on={on} items={items(way)} />
+      <ShopStage on={on} items={shown ?? items(way)} />
       <span className="sv-corner">
         {hero ? <span className="sv-daytag">{t('Набор дня')}</span> : null}
         {!full(way) ? <OffBadge pct={way.discountPct} /> : null}
@@ -143,8 +175,25 @@ export function HeroSet({ set, refreshAt, onEnd, on, acts }: { set: SetView; ref
 }
 
 /** Карточка ленты: снимок «ты в наборе», имя, кнопка цены. Клик — стенд переодевается. */
-function SetCard({ set, way, picked, onPick, acts }: { set: SetView; way: SetColorwayView; picked: boolean; onPick: () => void; acts: SetActs }) {
+function SetCard({
+  set,
+  way,
+  picked,
+  onPick,
+  acts,
+  off,
+  onToggle,
+}: {
+  set: SetView
+  way: SetColorwayView
+  picked: boolean
+  onPick: () => void
+  acts: SetActs
+  off: readonly string[]
+  onToggle: (code: string) => void
+}) {
   const t = useT()
+  const shown = shownOf(way, off)
   return (
     <div
       role="listitem"
@@ -154,7 +203,7 @@ function SetCard({ set, way, picked, onPick, acts }: { set: SetView; way: SetCol
       data-id={set.id}
     >
       <button className="sv-card-pick" aria-pressed={picked} aria-label={set.title} data-track="set_open" onClick={onPick}>
-        <SetShot items={items(way)} />
+        <SetShot items={shown} />
         <span className="sv-corner">{!full(way) ? <OffBadge pct={way.discountPct} /> : null}</span>
         <span className="sv-card-look">
           <Icon id="i-eye" />
@@ -163,12 +212,12 @@ function SetCard({ set, way, picked, onPick, acts }: { set: SetView; way: SetCol
       <b className="sv-card-name">{set.title}</b>
       {/* Что даёт набор — вещи значками (07.10.2026: «сразу видно, что в нём»). */}
       <span className="sv-card-items" aria-label={t('Вещей: {n}', { n: way.items.length })}>
-        {way.items.slice(0, 5).map((x) => (
-          <span key={x.item.code} className={'sv-ci' + (x.owned ? ' own' : '')} title={x.item.name}>
-            <PxThumb item={x.item} />
-          </span>
-        ))}
+        {way.items.slice(0, 5).map((x) => {
+          const hidden = off.includes(x.item.code)
+          return <ItemToggle key={x.item.code} x={x} off={hidden} last={!hidden && shown.length === 1} onToggle={() => onToggle(x.item.code)} />
+        })}
       </span>
+      {!full(way) ? <PriceRiseTag rise={setPriceRise(way.priceRise, way.price)} then={way.priceRise?.price} /> : null}
       <PriceBtn set={set} way={way} acts={acts} />
     </div>
   )
@@ -183,6 +232,13 @@ export function SetsSection({ sets, refreshAt, onEnd, on, acts }: { sets: SetVie
   const t = useT()
   const [openId, setOpenId] = useState<string | null>(null)
   const [pick, setPick] = useState<Record<string, string>>({})
+  const [off, setOff] = useState<Record<string, string[]>>({})
+  const offOf = (set: SetView) => off[set.id] ?? []
+  const toggle = (set: SetView, code: string) =>
+    setOff((was) => {
+      const list = was[set.id] ?? []
+      return { ...was, [set.id]: list.includes(code) ? list.filter((c) => c !== code) : [...list, code] }
+    })
   const rail = useRef<HTMLDivElement>(null)
   const wayOf = (set: SetView) => set.colorways.find((c) => c.name === pick[set.id]) ?? defaultWay(set)
   const open = sets?.find((s) => s.id === openId) ?? null
@@ -209,7 +265,16 @@ export function SetsSection({ sets, refreshAt, onEnd, on, acts }: { sets: SetVie
         <div className="sv-rail-wrap sv-rail-only">
           <div className="sv-rail" ref={rail} role="list" aria-label={t('Наборы')}>
             {sets.map((set) => (
-              <SetCard key={set.id} set={set} way={wayOf(set)} picked={set.id === openId} onPick={() => setOpenId(set.id)} acts={acts} />
+              <SetCard
+                key={set.id}
+                set={set}
+                way={wayOf(set)}
+                picked={set.id === openId}
+                onPick={() => setOpenId(set.id)}
+                acts={acts}
+                off={offOf(set)}
+                onToggle={(code) => toggle(set, code)}
+              />
             ))}
           </div>
           {edge.l ? (
@@ -231,17 +296,31 @@ export function SetsSection({ sets, refreshAt, onEnd, on, acts }: { sets: SetVie
                 <button className="sv-try-x" aria-label={t('Закрыть')} onClick={() => setOpenId(null)}>
                   <Icon id="i-x" />
                 </button>
-                <Stand set={open} way={wayOf(open)} onPick={(name) => setPick((p) => ({ ...p, [open.id]: name }))} refreshAt={refreshAt} onEnd={onEnd} on={on} acts={acts} />
+                <Stand set={open} way={wayOf(open)} onPick={(name) => setPick((p) => ({ ...p, [open.id]: name }))} refreshAt={refreshAt} onEnd={onEnd} on={on} acts={acts} shown={shownOf(wayOf(open), offOf(open))} />
                 <ul className="sv-try-items">
-                  {wayOf(open).items.map((x) => (
-                    <li key={x.item.code} className={x.owned ? 'own' : ''}>
-                      <span className="sv-ci">
-                        <PxThumb item={x.item} />
-                      </span>
-                      <b>{x.item.name}</b>
-                      {x.owned ? <Icon id="i-check" /> : null}
-                    </li>
-                  ))}
+                  {wayOf(open).items.map((x) => {
+                    const hidden = offOf(open).includes(x.item.code)
+                    const last = !hidden && shownOf(wayOf(open), offOf(open)).length === 1
+                    return (
+                      <li key={x.item.code} className={x.owned ? 'own' : ''}>
+                        <ItemToggle x={x} off={hidden} last={last} onToggle={() => toggle(open, x.item.code)} />
+                        <b>{x.item.name}</b>
+                        {x.owned ? (
+                          <Icon id="i-check" />
+                        ) : acts.onBuyItem && x.price > 0 ? (
+                          <button
+                            className="btn sm secondary sv-pbtn"
+                            disabled={acts.busy === x.item.code}
+                            data-track="set_buy_item"
+                            onClick={() => (setOpenId(null), acts.onBuyItem?.(x.item, x.price))}
+                          >
+                            <Ruby size={14} />
+                            {x.price.toLocaleString(intlTag())}
+                          </button>
+                        ) : null}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             </div>,

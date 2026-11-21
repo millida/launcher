@@ -19,6 +19,9 @@ pub struct PackAutoUpdate {
     pub on: bool,
     pub modified: bool,
     pub chosen: Option<bool>,
+    /// The author lets the build start only on the published version: the
+    /// update always runs, whatever the player chose or changed.
+    pub forced: bool,
     /// Files shipped by the current version which are no longer in the build.
     pub removed_mods: Vec<String>,
     /// Player-added files in mods/ that the next catalogue version will drop.
@@ -119,20 +122,29 @@ pub(crate) fn mods_modified(pdir: &Path) -> bool {
     }
 }
 
-pub fn auto_update_on(chosen: Option<bool>, modified: bool) -> bool {
-    chosen.unwrap_or(!modified)
+pub fn auto_update_on(chosen: Option<bool>, modified: bool, forced: bool) -> bool {
+    forced || chosen.unwrap_or(!modified)
 }
 
 fn catalog_build(settings: &serde_json::Value) -> bool {
     settings["catalogPackSlug"].as_str().map(str::trim).is_some_and(catalog_slug_ok)
 }
 
+/// A reviewer's candidate install is meant to differ from the published version.
+fn update_forced(settings: &serde_json::Value) -> bool {
+    let review = settings["catalogPackReviewFile"].as_str().is_some_and(|f| !f.trim().is_empty());
+    catalog_build(settings) && !review && settings[PACK_ALWAYS_UPDATE_KEY].as_bool() == Some(true)
+}
+
+pub const FORCED_UPDATE_REFUSAL: &str = "Автор разрешает играть только на последней версии";
+
 pub fn pack_auto_update(profile: &str) -> PackAutoUpdate {
     let settings = profile_settings(profile);
     if !catalog_build(&settings) {
-        return PackAutoUpdate { catalog: false, on: false, modified: false, chosen: None, removed_mods: vec![], added_mods: vec![] };
+        return PackAutoUpdate { catalog: false, on: false, modified: false, chosen: None, forced: false, removed_mods: vec![], added_mods: vec![] };
     }
     let chosen = settings[PACK_AUTO_UPDATE_KEY].as_bool();
+    let forced = update_forced(&settings);
     // A pinned file is the player's choice too: a pack update replaces the whole mods folder.
     let modified = mods_modified(&profile_dir(profile)) || has_locked_content(profile);
     let removed_mods = removed_shipped_mods(&profile_dir(profile)).unwrap_or_else(|| {
@@ -148,15 +160,19 @@ pub fn pack_auto_update(profile: &str) -> PackAutoUpdate {
         removed.difference(&present).cloned().collect()
     });
     let added_mods = added_mods(&profile_dir(profile)).unwrap_or_default();
-    PackAutoUpdate { catalog: true, on: auto_update_on(chosen, modified), modified, chosen, removed_mods, added_mods }
+    PackAutoUpdate { catalog: true, on: auto_update_on(chosen, modified, forced), modified, chosen, forced, removed_mods, added_mods }
 }
 
 pub fn set_pack_auto_update(profile: &str, on: bool) -> Result<PackAutoUpdate, String> {
     if !load_profiles().iter().any(|p| p.name == profile) {
         return Err("Сборка не найдена — открой список сборок заново".into());
     }
-    if !catalog_build(&profile_settings(profile)) {
+    let settings = profile_settings(profile);
+    if !catalog_build(&settings) {
         return Err("Эта сборка поставлена не из каталога Millida — обновлять её неоткуда".into());
+    }
+    if !on && update_forced(&settings) {
+        return Err(FORCED_UPDATE_REFUSAL.into());
     }
     let mut patch = serde_json::Map::new();
     patch.insert(PACK_AUTO_UPDATE_KEY.into(), serde_json::Value::Bool(on));
@@ -251,17 +267,40 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// (player's choice, build edited) -> the build updates by itself.
+    /// (player's choice, build edited, author forces the latest) -> the build updates by itself.
     #[test]
     fn the_players_choice_wins_over_the_default() {
-        let cases: [(Option<bool>, bool, bool, &str); 4] = [
-            (None, false, true, "an untouched catalogue build follows the published version"),
-            (None, true, false, "an edited build is never overwritten behind the player's back"),
-            (Some(true), true, true, "the player asked for updates knowing the mods folder is replaced"),
-            (Some(false), false, false, "the player turned updates off for an untouched build"),
+        let cases: [(Option<bool>, bool, bool, bool, &str); 7] = [
+            (None, false, false, true, "an untouched catalogue build follows the published version"),
+            (None, true, false, false, "an edited build is never overwritten behind the player's back"),
+            (Some(true), true, false, true, "the player asked for updates knowing the mods folder is replaced"),
+            (Some(false), false, false, false, "the player turned updates off for an untouched build"),
+            (Some(false), false, true, true, "a switch turned off before the author forced updates does not keep the old version"),
+            (None, true, true, true, "added mods do not keep a forced build on the old version"),
+            (Some(false), true, true, true, "nothing the player did keeps a forced build on the old version"),
         ];
-        for (chosen, modified, want, why) in cases {
-            assert_eq!(auto_update_on(chosen, modified), want, "{}", why);
+        for (chosen, modified, forced, want, why) in cases {
+            assert_eq!(auto_update_on(chosen, modified, forced), want, "{}", why);
+        }
+    }
+
+    /// (build settings) -> does the author's «latest only» apply.
+    #[test]
+    fn only_a_published_catalogue_install_is_forced() {
+        let cases: [(serde_json::Value, bool, &str); 6] = [
+            (serde_json::json!({ "catalogPackSlug": "arcania", PACK_ALWAYS_UPDATE_KEY: true }), true, "the card asked for the latest version only"),
+            (serde_json::json!({ "catalogPackSlug": "arcania", PACK_ALWAYS_UPDATE_KEY: false }), false, "a withdrawn opt-in gives the switch back"),
+            (serde_json::json!({ "catalogPackSlug": "arcania" }), false, "a card without the field forces nothing"),
+            (serde_json::json!({ "catalogPackSlug": "arcania", PACK_ALWAYS_UPDATE_KEY: "true" }), false, "only a real boolean counts"),
+            (serde_json::json!({ PACK_ALWAYS_UPDATE_KEY: true }), false, "the flag outside a catalogue build means nothing"),
+            (
+                serde_json::json!({ "catalogPackSlug": "arcania", "catalogPackReviewFile": "f1", PACK_ALWAYS_UPDATE_KEY: true }),
+                false,
+                "a reviewer's candidate is not replaced by the published version",
+            ),
+        ];
+        for (settings, want, why) in cases {
+            assert_eq!(update_forced(&settings), want, "{}", why);
         }
     }
 }

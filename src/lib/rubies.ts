@@ -65,15 +65,37 @@ export interface DailyStatus {
 
 export interface DailySeason {
   id: string
-  /** Сколько клеток открыто (дней входа в сезоне). */
+  /** Сколько клеток открыто (дней входа в сезоне). У календаря — день декабря по МСК. */
   day: number
   endsAt: string
   /** Когда откроется следующая клетка. */
   nextUnlockAt: string
+  /**
+   * Вид сезона. `advent` — новогодний календарь (01.12–31.12 по МСК): клетка дня
+   * открывается в свой день и забирается только в этот день, содержимое
+   * незабранных клеток служба не шлёт. Нет поля — обычный пропуск.
+   */
+  kind?: 'pass' | 'advent'
+  /** Начало сезона (ISO). Календарь по нему считает даты клеток. */
+  startsAt?: string
+  /**
+   * Что даёт строка за весь сезон. Календарь прячет содержимое клеток, поэтому
+   * итоги для карточки и плитки PLUS приходят отдельно.
+   */
+  totals?: { free?: SeasonRowTotals; plus?: SeasonRowTotals } | null
 }
 
-/** Состояние клетки трека: забрана, можно забрать, PLUS без подписки, ещё закрыта. */
-export type DailyCellState = 'claimed' | 'ready' | 'locked' | 'future'
+export interface SeasonRowTotals {
+  shards: number
+  rubies: number
+  chests: Partial<Record<ChestTier, number>>
+}
+
+/**
+ * Состояние клетки трека: забрана, можно забрать, PLUS без подписки, ещё закрыта;
+ * `missed` — только календарь: день прошёл, клетка сгорела (или 31-я без всех 30).
+ */
+export type DailyCellState = 'claimed' | 'ready' | 'locked' | 'future' | 'missed'
 
 /** Вещь из каталога косметики так, как её показывает награда. */
 export interface RewardItem {
@@ -299,6 +321,7 @@ export interface Inventory {
     previewUrl: string | null
     source: string
     since: string
+    gift?: { fromUserId: string; from: string; label: string } | null
   }[]
   count: number
   catalogCount: number
@@ -389,10 +412,10 @@ export function openChest(id: string, clientSeed: string) {
  * дня (без источника отвечала «Этой вещи сейчас нет на витрине»). Служба до
  * этой правки источник не знает («Неизвестная витрина») — тогда прежний запрос.
  */
-export const buyCosmetic = (code: string) =>
+export const buyCosmetic = (code: string, expect?: number) =>
   api<{ balance: number; granted?: ItemRef[] }>('/rubies/shop/buy', {
     method: 'POST',
-    body: JSON.stringify({ code, source: 'wardrobe' }),
+    body: JSON.stringify(expect && expect > 0 ? { code, source: 'wardrobe', expect } : { code, source: 'wardrobe' }),
   }).catch((e) => {
     if (!/неизвестная витрина/i.test(String((e as { message?: string } | null)?.message ?? e))) throw e
     return api<{ balance: number; granted?: ItemRef[] }>('/rubies/shop/buy', { method: 'POST', body: JSON.stringify({ code }) })
@@ -448,6 +471,12 @@ export interface ItemRef {
   color?: string
   /** v3.1: цвет базовой расцветки — превью перекрашивается из него в color. */
   tintFrom?: string
+  priceRise?: PriceRise
+}
+
+export interface PriceRise {
+  at: string
+  pct: number
 }
 
 export type Channel = 'FREE' | 'QUEST' | 'ACHIEVEMENT' | 'HOURS' | 'SEASON' | 'SHOP' | 'PLUS_MONTH' | 'WELCOME' | 'LEGACY'
@@ -496,15 +525,41 @@ export interface MonthOffer {
   kopecks: number
   oneTime?: boolean
   endsAt: string
+  /** Значок выгоды «+N%»: служба считает его сама, иначе клиент — от самого дешёвого пакета. */
+  badgePct?: number
+}
+
+/**
+ * Разовый оффер «Второй шаг» (первые 72 ч после первой оплаты): покупается тем
+ * же путём, что пакет (POST /rubies/packs/buy, pack:'second'). `null` — оффер
+ * недоступен. Зачёркнутой цены у него нет, только значок выгоды и таймер.
+ */
+export interface SecondOffer {
+  code: 'second'
+  title: string
+  rubies: number
+  kopecks: number
+  oneTime?: boolean
+  endsAt: string
+  badgePct?: number
 }
 
 export interface ShopPack {
   code: string
   title: string
+  /** Итоговое число рубинов — бонус уже внутри. Показываем крупно именно его. */
   rubies: number
   kopecks: number
+  /** Рубинов сверх точки отсчёта. Строкой «+N бонусом» не показываем — только для значка. */
+  bonus?: number
+  /** Значок выгоды «+N%»: 0 у самого маленького пакета, растёт с размером. */
+  badgePct?: number
+  /** Самый выгодный пакет (Казна): «Выгоднее всего». */
+  best?: boolean
   /** Разовый пакет («Стартовый набор», code 'starter'): служба отдаёт его первым, пока не было оплат. */
   oneTime?: boolean
+  /** Самый покупаемый обычный пакет за 30 дней — решает служба по оплатам, у одного пакета. */
+  popular?: boolean
 }
 
 /**
@@ -531,6 +586,8 @@ export interface ShopDay {
   packs: ShopPack[]
   /** Предложение месяца (служба 7e81279a7): разовый пакет до конца месяца МСК; null — куплено или нет. */
   monthOffer?: MonthOffer | null
+  /** Разовый оффер «Второй шаг» первых 72 ч после первой оплаты; null — недоступен. */
+  secondOffer?: SecondOffer | null
   wishlist: string[]
   /** Старая служба поля не шлёт — плитки подарка тогда нет. */
   gift?: ShopGift | null
@@ -627,13 +684,61 @@ const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.strin
 
 /** Магазин дня. Тот же адрес, что у старой витрины, но новая форма ответа. */
 export const loadShopDay = () => api<ShopDay>('/rubies/shop')
-export const buyShopCard = (code: string, source: ShopSource, bundleId?: string) =>
-  api<{ balance: number; granted: ItemRef[] }>('/rubies/shop/buy', post({ code, source, bundleId }))
+/**
+ * `expect` — цена, которую видел игрок (как у `buySet`): служба, что его знает,
+ * откажет при расхождении вместо того, чтобы молча списать другую сумму
+ * (17.11.2026: на кнопке «◆0», списано 300–500).
+ */
+export const buyShopCard = (code: string, source: ShopSource, bundleId?: string, expect?: number) =>
+  api<{ balance: number; granted: ItemRef[] }>('/rubies/shop/buy', post({ code, source, bundleId, ...(expect && expect > 0 ? { expect } : {}) }))
+
+/** Сколько кодов служба оценивает за один запрос `shop/quote`. */
+const QUOTE_BATCH = 40
+
+/**
+ * Цена покупки из гардероба — ровно то число, которое `shop/buy` с source=wardrobe примет
+ * в `expect` (служба считает скидки PLUS, фрагменты и уже купленную расцветку сама).
+ * Своей формулы у лаунчера нет: она расходилась со службой, и игрок с PLUS или фрагментами
+ * получал «Цена изменилась» без выхода. null — вещь не продаётся или уже куплена.
+ */
+export async function quoteWardrobe(codes: string[]): Promise<Map<string, number | null>> {
+  const unique = [...new Set(codes.filter(Boolean))]
+  const out = new Map<string, number | null>()
+  for (let i = 0; i < unique.length; i += QUOTE_BATCH) {
+    const part = unique.slice(i, i + QUOTE_BATCH)
+    const res = await api<{ prices: Record<string, number | null> }>(
+      '/rubies/shop/quote?source=wardrobe&codes=' + part.map(encodeURIComponent).join(','),
+    )
+    for (const code of part) {
+      const v = res?.prices?.[code]
+      out.set(code, payablePrice(v) ? v : null)
+    }
+  }
+  return out
+}
+
+/** Цену меньше единицы рубина за платную вещь не показываем и не продаём: это сбой данных, а не подарок. */
+export const payablePrice = (price: number | null | undefined): price is number =>
+  typeof price === 'number' && Number.isFinite(price) && price > 0
+export interface GiftQuote {
+  price: number
+  basePrice: number
+  discountPct: number
+}
+export const giftQuote = (code: string) => api<GiftQuote>('/rubies/shop/gift/quote?code=' + encodeURIComponent(code))
+export const giftShopItem = (code: string, to: string, source: ShopSource, requestId: string) =>
+  api<GiftQuote & { balance: number; to: { userId: string; nickname: string }; granted: ItemRef[] }>(
+    '/rubies/shop/gift',
+    post({ code, to, source, requestId }),
+  )
 export const claimShopGift = () =>
   api<{ balance: number; shards: number; granted: ShopGift }>('/rubies/shop/gift/claim', { method: 'POST' })
 export const wishItem = (code: string, on: boolean) => api<{ wishlist: string[] }>('/rubies/shop/wish', post({ code, on }))
 export const buyXray = (id: string) =>
   api<{ balance: number; item: ItemRef; chestId: string }>('/rubies/xray/buy', post({ id }))
+/** Прогресс фрагментов изменился (обмен осколков, докупка): гардероб перечитывает его. */
+export const FRAGMENTS_CHANGED = 'm-fragments-changed'
+
 export const loadWorkshop = () => api<Workshop>('/rubies/shards')
 export const craftItem = (code: string) =>
   api<{ shards: number; item: ItemRef; fragments?: FragmentProgress & { amount: number } }>('/rubies/shards/craft', post({ code }))
@@ -641,8 +746,9 @@ export const loadWeekly = () => api<WeeklyParcel>('/rubies/weekly')
 export const claimWeekly = (code: string) =>
   api<{ item: ItemRef; fragments?: FragmentProgress & { amount: number } }>('/rubies/weekly/claim', post({ code }))
 /** «Докупить фрагменты»: единственный путь собрать начатую вещь. Код - вещь-расцветка. */
-export const completeFragments = (code: string) =>
-  api<{ balance: number; price: number; granted: ItemRef[] }>('/rubies/fragments/complete', post({ code }))
+/** `expect` — цена «Докупить», которую видел игрок: служба, что его знает, откажет при расхождении. */
+export const completeFragments = (code: string, expect?: number) =>
+  api<{ balance: number; price: number; granted: ItemRef[] }>('/rubies/fragments/complete', post({ code, ...(expect && expect > 0 ? { expect } : {}) }))
 export const loadEconomyProgress = () => api<EconomyProgress>('/rubies/progress')
 export const loadPlusEconomy = () => api<PlusEconomy>('/launcher/plus')
 
@@ -713,7 +819,7 @@ export const claimWelcome = () => api<WelcomeGift>('/rubies/welcome/claim', { me
 // которой у игрока ещё нет, шансы открыты, раз в `pity` открытий — эпическая+.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SetTheme = 'flame' | 'dark' | 'future' | 'cozy'
+export type SetTheme = 'flame' | 'dark' | 'future' | 'cozy' | 'street'
 
 export interface SetColorwayView {
   /** '' — у набора одна расцветка. */
@@ -729,6 +835,7 @@ export interface SetColorwayView {
   have: number
   /** Цена с PLUS — только тому, у кого подписки нет. */
   plusPrice?: number
+  priceRise?: { at: string; price: number }
 }
 
 export interface SetView {

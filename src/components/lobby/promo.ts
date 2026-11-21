@@ -5,7 +5,7 @@ import { RECS_UID_KEY, dayIndex, hashStr } from '../../lib/recsMix'
  * в минуту меняется»): чат игроков в Discord, подписка на Telegram, наша анархия, Аркания, PrisonRPG и
  * сервер PvP-тиров. Порядок — как сказал владелец.
  */
-export type PromoSlide = 'abonent' | 'discord' | 'telegram' | 'anarchy' | 'arcania' | 'prisonrpg' | 'smp' | 'invite'
+export type PromoSlide = 'collection' | 'abonent' | 'discord' | 'telegram' | 'anarchy' | 'arcania' | 'prisonrpg' | 'smp' | 'invite'
 
 export const PROMO_ORDER: PromoSlide[] = ['discord', 'telegram', 'anarchy', 'arcania', 'prisonrpg', 'smp', 'invite']
 /** Слайд держится 7 секунд (владелец 11.10.2026: «минута — слишком долго»); наведение держит. */
@@ -15,17 +15,20 @@ export const PROMO_ROTATE_MS = 7_000
 export const DISCORD_INVITE = 'https://discord.gg/ec8xAhDSH7'
 /** Канал Millida в Telegram: баннер зовёт подписаться. */
 export const TELEGRAM_CHAT = 'https://t.me/millida'
+/** The English channel: outside the Russian market the slide leads here, and the shop reward stays with the Russian one. */
+export const TELEGRAM_CHAT_EN = 'https://t.me/+jIWFeqVflbdiNjUy'
+
+export const telegramChat = (ruContent: boolean) => (ruContent ? TELEGRAM_CHAT : TELEGRAM_CHAT_EN)
 export { ARCANIA_SLUG } from '../../lib/arcaniaRelease'
 
 /** Слайды, которые сейчас можно показать: сборка без карточки в каталоге выпадает. */
 /** A fresh release of a partner pack opens the carousel (Abonent, 10.11.2026), ahead of the owner-ordered slides. */
-export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invite: boolean; partners: boolean; ruContent: boolean; abonent?: boolean }): PromoSlide[] {
-  const release: PromoSlide[] = ready.abonent && ready.partners ? ['abonent'] : []
+export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invite: boolean; partners: boolean; ruContent: boolean; abonent?: boolean; collection?: boolean }): PromoSlide[] {
+  const release: PromoSlide[] = [...(ready.collection ? (['collection'] as const) : []), ...(ready.abonent && ready.partners ? (['abonent'] as const) : [])]
   return release.concat(PROMO_ORDER.filter((s) =>
     s === 'arcania' ? ready.arcania
     : s === 'prisonrpg' ? ready.prisonrpg && ready.partners
     : s === 'anarchy' ? ready.partners
-    : s === 'telegram' ? ready.ruContent
     : s === 'invite' ? ready.invite
     : true,
   ))

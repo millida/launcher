@@ -166,6 +166,21 @@ async fn channel_manifest(channel: &Channel, source: ManifestSource) -> Result<V
     }
 }
 
+/// Our mod is on neither Modrinth nor CurseForge, so the mod check vouches for it by the
+/// same signed lists the install trusts: a file merely named like ours proves nothing.
+pub(crate) async fn official_jar_sha256s() -> std::collections::HashSet<String> {
+    let stable = channel_manifest(&STABLE, ManifestSource::Launch).await.ok();
+    let beta = if data_dir().join(BETA.copy).exists() { channel_manifest(&BETA, ManifestSource::Launch).await.ok() } else { None };
+    signed_jar_sha256s([stable, beta].into_iter().flatten())
+}
+
+fn signed_jar_sha256s(manifests: impl Iterator<Item = Value>) -> std::collections::HashSet<String> {
+    manifests
+        .flat_map(|m| m["variants"].as_array().cloned().unwrap_or_default())
+        .filter_map(|v| v["sha256"].as_str().filter(|s| s.len() == 64).map(str::to_ascii_lowercase))
+        .collect()
+}
+
 /// Открытая часть ключа, которым CI мода (millida-mod, scripts/manifest_canonical.py)
 /// подписывает список вариантов: сервер или CDN без закрытой части не может
 /// подсунуть в игру другой jar — его sha256 стоит в подписанной строке.
@@ -518,7 +533,9 @@ fn write_settings(dir: &Path, licensed: bool) -> Result<(), String> {
     cfg.insert("allowNameLookup".into(), Value::Bool(false));
     let hosts = cfg.entry("textureHosts".to_string()).or_insert_with(|| Value::Array(vec![]));
     if let Some(list) = hosts.as_array_mut() {
-        for host in ["millida.net", "cdn.millida.net", "cdn.millida.trade", "textures.minecraft.net"] {
+        // The same hosts the launcher shows textures from: head and skin renders and the CustomSkinAPI
+        // redirect live on api.millida.net, wardrobe uploads on millida.trade (skins/library.rs TEXTURE_HOSTS).
+        for host in ["millida.net", "cdn.millida.net", "api.millida.net", "cdn.millida.trade", "millida.trade", "textures.minecraft.net"] {
             if !list.iter().any(|h| h.as_str() == Some(host)) {
                 list.push(Value::String(host.into()));
             }
@@ -827,7 +844,13 @@ pub fn lift_millida_mod_quarantine(profile: &str) -> Result<(), String> {
 fn drop_launcher_csl(mods: &Path) -> bool {
     // Deletes only the file named exactly CustomSkinLoader.jar (the launcher names it so). Copies the player downloaded with a version in the name are not touched.
     let jar = mods.join("CustomSkinLoader.jar");
-    jar.exists() && std::fs::remove_file(&jar).is_ok()
+    let removed = jar.exists() && std::fs::remove_file(&jar).is_ok();
+    if removed {
+        if let Some(build) = mods.parent() {
+            crate::engine::note_csl_replaced(build);
+        }
+    }
+    removed
 }
 
 /// Готовит мод к запуску сборки: ставит нужный вариант, пишет настройки,
@@ -1618,6 +1641,15 @@ mod tests {
         let mut cosmetic = signed.clone();
         cosmetic["comment"] = json!("пробелы и новые поля подпись не ломают");
         assert_eq!(manifest_signature(&cosmetic, MOD_MANIFEST_PUBKEY), ManifestSignature::Valid);
+    }
+
+    #[test]
+    fn the_mod_check_takes_every_full_hash_from_both_lists() {
+        let stable = json!({ "variants": [{ "sha256": "AB".repeat(32) }, { "sha256": "00" }, { "artifact": "no-hash.jar" }] });
+        let beta = json!({ "variants": [{ "sha256": "cd".repeat(32) }] });
+        let got = signed_jar_sha256s([stable, beta].into_iter());
+        let want: std::collections::HashSet<String> = ["ab".repeat(32), "cd".repeat(32)].into_iter().collect();
+        assert_eq!(got, want, "hashes are compared lowercase, a short or missing one vouches for nothing, the beta list counts too");
     }
 
     /// The jar reaches the build only as a whole file: a copy that fails half

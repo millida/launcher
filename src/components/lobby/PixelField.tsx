@@ -3,6 +3,7 @@ import { ACCENT_EVENT, accentBase, shade } from '../../lib/accent'
 import { currentDeviceTier, currentSceneFpsCap, maxCanvasPixelRatio } from '../../lib/deviceTier'
 import { onRenderGate, renderLive } from '../../lib/renderGate'
 import { gpuLite } from '../../lib/gpuLite'
+import { liteOn, onLiteChange } from '../../lib/liteMode'
 import { showToast } from '../../state/ui'
 import { VIEW_PREFS_EVENT, bgAnimOn } from '../../state/viewPrefs'
 import { backdropOf, useWallpaper } from '../../state/wallpaper'
@@ -272,7 +273,7 @@ export function PixelField({ on }: { on: boolean }) {
     if (!ctx) return
     // Лёгкая графика после сбоя видеокарты — один статичный кадр без искр.
     const lite = gpuLite()
-    const still = () => lite || matchMedia('(prefers-reduced-motion: reduce)').matches || !bgAnimOn()
+    const still = () => lite || liteOn() || matchMedia('(prefers-reduced-motion: reduce)').matches || !bgAnimOn()
     let scene: Scene | null = null
     let raf = 0
     const fx = fxRef.current
@@ -354,6 +355,7 @@ export function PixelField({ on }: { on: boolean }) {
     document.addEventListener('visibilitychange', run)
     window.addEventListener(VIEW_PREFS_EVENT, run)
     const offGate = onRenderGate(run)
+    const offLite = onLiteChange(run)
     // Цвет кнопок сменили в Настройках — сцена перекрашивается целиком. Пока
     // тянут ползунок, событие летит десятки раз в секунду: перерисовка — через
     // 150 мс после последнего.
@@ -371,6 +373,7 @@ export function PixelField({ on }: { on: boolean }) {
       document.removeEventListener('visibilitychange', run)
       window.removeEventListener(VIEW_PREFS_EVENT, run)
       offGate()
+      offLite()
       window.removeEventListener(ACCENT_EVENT, onAccent)
     }
   }, [on, backdrop])
