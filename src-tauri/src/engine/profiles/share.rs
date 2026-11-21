@@ -956,7 +956,7 @@ async fn vouch_files(files: &[PackFile]) -> Result<Vec<Vouched>, String> {
     Ok(vouched)
 }
 
-fn file_sha512(path: &Path) -> Option<String> {
+pub(crate) fn file_sha512(path: &Path) -> Option<String> {
     use sha2::Digest as _;
     let mut file = std::fs::File::open(path).ok()?;
     let mut h = sha2::Sha512::new();

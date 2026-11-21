@@ -9,7 +9,7 @@ use tauri::AppHandle;
 /// Dotted-numeric precedence, ignoring `+build.metadata` — enough to tell
 /// `0.155.2+26.1.2` is newer than `0.144.3+26.1` the way Fabric mod authors mean
 /// it, without pulling in a full semver crate for four comparison operators.
-fn cmp_version(a: &str, b: &str) -> Ordering {
+pub(crate) fn cmp_version(a: &str, b: &str) -> Ordering {
     let (core_a, pre_a) = pre_release_split(a);
     let (core_b, pre_b) = pre_release_split(b);
     cmp_numeric(core_a, core_b).then_with(|| match (pre_a, pre_b) {
@@ -1120,7 +1120,7 @@ async fn enabled_mods_except(profile: &str, file_name: &str) -> Vec<LocalMeta> {
     scan_mods(profile).await.into_iter().filter(|m| m.file_name != file_name && enabled.contains(&m.file_name)).collect()
 }
 
-fn build_runs(ctx: &Ctx) -> Vec<String> {
+pub(crate) fn build_runs(ctx: &Ctx) -> Vec<String> {
     std::iter::once(ctx.loader_id.clone()).chain(ctx.bridge.iter().cloned()).collect()
 }
 
@@ -1170,6 +1170,64 @@ pub(crate) async fn unmet_dependents(profile: &str, file_name: &str) -> Vec<Stri
         .filter_map(|o| unmet_demand(o, &target, &runs))
         .map(|c| c.by)
         .collect()
+}
+
+/// An enabled mod of the build, as the player sees it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependentMod {
+    pub name: String,
+    pub title: String,
+}
+
+/// A mod about to be switched off and the enabled mods that need it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModDependents {
+    pub name: String,
+    pub title: String,
+    pub by: Vec<DependentMod>,
+}
+
+fn ids_of(m: &LocalMeta) -> impl Iterator<Item = &str> {
+    std::iter::once(m.mod_id.as_str()).chain(m.provides.iter().map(String::as_str)).filter(|id| !id.is_empty())
+}
+
+fn shown_title(m: &LocalMeta) -> String {
+    if m.title.is_empty() { m.file_name.clone() } else { m.title.clone() }
+}
+
+/// For each of `leaving` (files about to be switched off together), the enabled
+/// mods staying on that declare it a hard dependency. An id another staying mod
+/// also answers for is not lost, so it names nobody. Read from the jars alone.
+pub(crate) fn dependents_in(locals: &[LocalMeta], enabled: &HashSet<String>, runs: &[String], leaving: &[String]) -> Vec<ModDependents> {
+    let leaving: HashSet<&str> = leaving.iter().map(String::as_str).collect();
+    let staying: Vec<&LocalMeta> = locals.iter().filter(|m| enabled.contains(&m.file_name) && !leaving.contains(m.file_name.as_str())).collect();
+    let still_answered: HashSet<&str> = staying.iter().copied().flat_map(ids_of).collect();
+    let mut out = vec![];
+    for target in locals.iter().filter(|m| leaving.contains(m.file_name.as_str())) {
+        let lost: Vec<&str> = ids_of(target).filter(|id| !still_answered.contains(id)).collect();
+        if lost.is_empty() {
+            continue;
+        }
+        let by: Vec<DependentMod> = staying
+            .iter()
+            .filter(|m| relations_on(m, runs).is_some_and(|(requires, _)| requires.iter().any(|r| lost.contains(&r.as_str()))))
+            .map(|m| DependentMod { name: m.file_name.clone(), title: shown_title(m) })
+            .collect();
+        if !by.is_empty() {
+            out.push(ModDependents { name: target.file_name.clone(), title: shown_title(target), by });
+        }
+    }
+    out
+}
+
+/// Asked before mods are switched off: which of them enabled mods still need.
+pub async fn mod_dependents(profile: String, names: Vec<String>) -> Result<Vec<ModDependents>, String> {
+    let runs = build_runs(&ctx_of(&profile, "mod"));
+    let locals = scan_mods(&profile).await;
+    let enabled = enabled_mod_files(&profile);
+    Ok(dependents_in(&locals, &enabled, &runs, &names))
 }
 
 /// The loader a build is pinned to. An unpinned build gets the newest stable
@@ -1438,7 +1496,7 @@ fn removed_requirements(missing: Vec<(String, String)>, removed: &std::collectio
 }
 
 /// The enabled mods of the build: their files without `.disabled`.
-fn enabled_mod_files(profile: &str) -> HashSet<String> {
+pub(crate) fn enabled_mod_files(profile: &str) -> HashSet<String> {
     let dir = profile_dir(profile).join(content_dir("mod"));
     std::fs::read_dir(dir)
         .map(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| !n.to_ascii_lowercase().ends_with(".disabled")).collect())
@@ -1547,6 +1605,9 @@ pub(crate) async fn settle_launch_deps(app: &AppHandle, profile: &str) -> Launch
         }
     }
     let Some((ctx, missing)) = launch_requirements(profile).await else { return out };
+    // Switched off on purpose while other mods need it: the player chose that, a copy must not come back.
+    let kept_off = kept_off_mod_ids(profile);
+    let missing: Vec<(String, String)> = missing.into_iter().filter(|(id, _)| !kept_off.contains(&id.to_ascii_lowercase())).collect();
     if missing.is_empty() {
         mark_complete(profile, key);
         return out;
@@ -1636,7 +1697,7 @@ fn push_missing(audit: &mut DepAudit, needed_by: String, missing: String, fix: O
 
 #[cfg(test)]
 mod tests {
-    use super::{jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, removed_requirements, retry_dep, BreakRule, DepNode, LocalMeta};
+    use super::{dependents_in, jar_blockers, known_misses, launch_missing, modrinth_version_ids, other_loader_dep, removed_requirements, retry_dep, BreakRule, DepNode, LocalMeta};
 
     #[test]
     fn a_player_removed_dependency_is_not_restored_at_launch() {
@@ -1648,6 +1709,49 @@ mod tests {
         let create = LocalMeta { mod_id: "create".into(), ..Default::default() };
         let addon = LocalMeta { mod_id: "createaddition".into(), requires: vec!["create".into()], ..Default::default() };
         assert!(removed_requirements(launch_missing(&[addon, create], &runs, "forge", None), &removed).is_empty());
+    }
+
+    /// Switching a library off: who loses it. Fabric API needed by Sodium Extra and Indium;
+    /// a second jar providing the same id keeps it answered; switching the pair off together
+    /// asks about nobody but the mods that stay.
+    #[test]
+    fn switching_a_library_off_names_the_mods_that_need_it() {
+        let meta = |file: &str, id: &str, requires: &[&str], provides: &[&str]| LocalMeta {
+            file_name: file.into(),
+            title: id.into(),
+            mod_id: id.into(),
+            requires: requires.iter().map(|s| s.to_string()).collect(),
+            provides: provides.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        let api = meta("fabric-api.jar", "fabric-api", &[], &["fabric-api-base"]);
+        let extra = meta("sodium-extra.jar", "sodium-extra", &["fabric-api", "sodium"], &[]);
+        let sodium = meta("sodium.jar", "sodium", &[], &[]);
+        let indium = meta("indium.jar", "indium", &["fabric-api-base"], &[]);
+        let old_off = meta("iris.jar", "iris", &["fabric-api"], &[]);
+        let locals = vec![api, extra, sodium, indium, old_off];
+        let enabled: std::collections::HashSet<String> =
+            ["fabric-api.jar", "sodium-extra.jar", "sodium.jar", "indium.jar"].iter().map(|s| s.to_string()).collect();
+        let runs = ["fabric".to_string()];
+        fn names(r: &super::ModDependents) -> Vec<&str> {
+            r.by.iter().map(|b| b.name.as_str()).collect()
+        }
+
+        let api_off = dependents_in(&locals, &enabled, &runs, &["fabric-api.jar".into()]);
+        assert_eq!(api_off.len(), 1);
+        assert_eq!(names(&api_off[0]), vec!["sodium-extra.jar", "indium.jar"], "both the id and a provided id count; a switched-off mod is not asked");
+
+        let leaf = dependents_in(&locals, &enabled, &runs, &["sodium-extra.jar".into()]);
+        assert!(leaf.is_empty(), "a mod nobody needs is switched off without a question");
+
+        let together = dependents_in(&locals, &enabled, &runs, &["fabric-api.jar".into(), "sodium-extra.jar".into()]);
+        assert_eq!(names(&together[0]), vec!["indium.jar"], "a mod switched off in the same batch is not a dependent");
+
+        let mut twin = locals.clone();
+        twin.push(meta("fabric-api-copy.jar", "fabric-api", &[], &["fabric-api-base"]));
+        let mut with_twin = enabled.clone();
+        with_twin.insert("fabric-api-copy.jar".into());
+        assert!(dependents_in(&twin, &with_twin, &runs, &["fabric-api.jar".into()]).is_empty(), "another jar still answers for the id");
     }
 
     /// Required dependency of a Modrinth version -> whether the audit drops it as another loader's.
@@ -1853,6 +1957,50 @@ mod tests {
         let (id, by) = launch_missing(&[culling], &runs, "fabric", None).remove(0);
         assert_eq!((id.as_str(), by.as_str()), ("cloth-config", "moreculling"), "the player hears which mod asked for it");
         assert!(missing(&[api], None).is_empty(), "a complete build costs no lookup at all");
+    }
+
+    /// (files leaving the build, who must be named, why). A removal warns only about mods that
+    /// lose the last jar answering for something they require.
+    #[test]
+    fn removing_a_mod_names_exactly_the_mods_left_without_it() {
+        let runs = ["fabric".to_string()];
+        let mut api = declared_jar("fabric-api.jar", "fabric-api", "0.92", &[], &[]);
+        api.provides = vec!["fabric-rendering-v1".into()];
+        let cloth = declared_jar("cloth.jar", "cloth-config", "15", &["fabric-api"], &[]);
+        let culling = declared_jar("culling.jar", "moreculling", "1.0", &["cloth-config", "fabric-api"], &[]);
+        let module_user = declared_jar("x.jar", "x", "1", &["fabric-rendering-v1"], &[]);
+        let lonely = declared_jar("lonely.jar", "lonely", "1", &[], &[]);
+        let cloth_copy = declared_jar("cloth-copy.jar", "cloth-config", "15", &["fabric-api"], &[]);
+        let mut forge_only = declared_jar("forge-only.jar", "fo", "1", &["cloth-config"], &[]);
+        forge_only.loader = "forge".into();
+        let build = [api, cloth.clone(), culling, module_user, lonely];
+        // The titles the warning names: every mod left without something it requires, once.
+        let names = |locals: &[LocalMeta], leaving: &[&str]| -> Vec<String> {
+            let enabled: std::collections::HashSet<String> = locals.iter().map(|m| m.file_name.clone()).collect();
+            let leaving: Vec<String> = leaving.iter().map(|s| s.to_string()).collect();
+            let mut out: Vec<String> = vec![];
+            for b in dependents_in(locals, &enabled, &runs, &leaving).into_iter().flat_map(|d| d.by) {
+                if !out.contains(&b.title) {
+                    out.push(b.title);
+                }
+            }
+            out
+        };
+
+        let cases: [(&[&str], &[&str], &str); 5] = [
+            (&["fabric-api.jar"], &["cloth-config", "moreculling", "x"], "a module provided by the jar counts as the jar"),
+            (&["cloth.jar"], &["moreculling"], "only the mods that require it"),
+            (&["lonely.jar"], &[], "nobody needs it: no extra window"),
+            (&["cloth.jar", "culling.jar"], &[], "a dependent leaving in the same batch is not warned about"),
+            (&["missing.jar"], &[], "a file the build does not have changes nothing"),
+        ];
+        for (leaving, want, why) in cases {
+            assert_eq!(names(&build, leaving), want.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{leaving:?}: {why}");
+        }
+
+        let with_copy = [cloth.clone(), cloth_copy, declared_jar("culling.jar", "moreculling", "1.0", &["cloth-config"], &[])];
+        assert!(names(&with_copy, &["cloth.jar"]).is_empty(), "another jar with the same mod id still answers for it");
+        assert!(names(&[cloth, forge_only], &["cloth.jar"]).is_empty(), "a jar for another loader never loads, so it loses nothing");
     }
 
     #[test]

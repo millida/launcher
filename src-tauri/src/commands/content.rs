@@ -85,6 +85,46 @@ pub fn toggle_content(profile: String, kind: String, name: String, enable: bool)
     engine::toggle_content(&profile, &kind, &name, enable)
 }
 
+/// Before switching mods off: which of them enabled mods still need.
+#[tauri::command]
+pub async fn mod_dependents(profile: String, names: Vec<String>) -> Result<Vec<engine::ModDependents>, String> {
+    engine::mod_dependents(profile, names).await
+}
+
+/// «Найти мод, из-за которого вылет»: the search in progress for this build, if any.
+#[tauri::command(async)]
+pub fn bisect_status(profile: String) -> Option<engine::BisectView> {
+    engine::bisect_status(&profile)
+}
+
+#[tauri::command(async)]
+pub fn bisect_start(profile: String) -> Result<engine::BisectView, String> {
+    engine::bisect_start(&profile)
+}
+
+/// The player's answer about the launch under test (`step`, as the wizard showed it): it crashed or it started.
+#[tauri::command(async)]
+pub fn bisect_answer(profile: String, crashed: bool, step: Option<u32>) -> Result<engine::BisectView, String> {
+    engine::bisect_answer(&profile, crashed, step)
+}
+
+#[tauri::command(async)]
+pub fn bisect_verify(profile: String) -> Result<engine::BisectView, String> {
+    engine::bisect_verify(&profile)
+}
+
+/// Puts back every mod enabled when the search began; `disable` then switches the culprit off.
+#[tauri::command(async)]
+pub fn bisect_finish(profile: String, disable: Option<String>) -> Result<(), String> {
+    engine::bisect_finish(&profile, disable)
+}
+
+/// «Выключить только этот»: launch repair leaves these switched-off mods alone.
+#[tauri::command(async)]
+pub fn keep_mods_off(profile: String, names: Vec<String>) -> Result<(), String> {
+    engine::keep_mods_off(&profile, &names)
+}
+
 #[tauri::command(async)]
 pub fn delete_content(profile: String, kind: String, name: String) -> Result<(), String> {
     engine::delete_content_user(&profile, &kind, &name)
@@ -239,6 +279,7 @@ pub async fn export_mrpack(profile: String, name: String, version: String, descr
     let dst = out.to_string_lossy().to_string();
     let loader_build = engine::export_loader_build(&profile).await;
     let res = super::blocking(move || engine::export_mrpack(profile, dst, name, version, description, loader_build)).await??;
+    engine::remember_saved_file(&res);
     if let Some(p) = out.parent() {
         engine::open_path(&p.to_string_lossy());
     }
@@ -451,6 +492,7 @@ pub async fn export_pack(profile: String, format: String, ram_mb: Option<u32>, l
         _ => engine::export_multimc(profile.clone(), dst, profile, loader_build, author),
     })
     .await??;
+    engine::remember_saved_file(&res);
     if let Some(p) = out.parent() {
         engine::open_path(&p.to_string_lossy());
     }
@@ -498,4 +540,16 @@ pub async fn ftb_search(term: String) -> Result<Vec<engine::FtbPack>, String> {
 #[tauri::command]
 pub async fn ftb_install(app: tauri::AppHandle, id: u64) -> Result<engine::Profile, String> {
     engine::ftb_install(app, id).await
+}
+
+/// A newer FTB version for a build installed from FTB, or nothing.
+#[tauri::command]
+pub async fn ftb_check_update(profile: String) -> Result<Option<engine::FtbUpdate>, String> {
+    engine::ftb_check_update(profile).await
+}
+
+/// The newest FTB version into the same build; the pack id comes from the build's own settings.
+#[tauri::command]
+pub async fn ftb_update(app: tauri::AppHandle, profile: String) -> Result<engine::Profile, String> {
+    engine::ftb_update(app, profile).await
 }

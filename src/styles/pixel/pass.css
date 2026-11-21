@@ -1,5 +1,5 @@
-/* Пропуск сезона v4 (06.10.2026): сцена сезона на весь блок, герой в своей
-   колонне справа, лента: бесплатная строка скромная, PLUS — в полтора раза
+/* Пропуск сезона v4 (06.10.2026), без героя с 13.11.2026: сцена сезона на весь
+   блок, лента наград на всю ширину: бесплатная строка скромная, PLUS — в полтора раза
    крупнее, золото, блик. Компонент — src/components/daily/SeasonPass.tsx.
    Рамки карточек — общий слой «Слои рамки» из 12-pixel.css (.bp-card, .bp-day,
    .bp-arrow). */
@@ -13,10 +13,9 @@
 /* ---------- Сцена на весь блок ---------- */
 .bp-stage {
   --mx: 0; --my: 0;
-  position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr) var(--bp-side, 240px);
-  min-width: 0; padding: 20px 0 16px 20px;
+  position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr);
+  min-width: 0; padding: 20px 20px 16px;
 }
-.bp.compact .bp-stage { --bp-side: 220px; }
 .bp-scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: #140b2e; clip-path: var(--px-10); pointer-events: none; }
 .bp-l { position: absolute; left: -2%; width: 104%; image-rendering: pixelated; transition: transform 400ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .bp-l.sky { top: -2%; height: 104%; object-fit: cover; object-position: 50% 100%; transform: translate(calc(var(--mx) * -4px), calc(var(--my) * -2px)); }
@@ -24,10 +23,10 @@
 .bp-l.far { transform: translate(calc(var(--mx) * -8px), 0); }
 .bp-l.mid { transform: translate(calc(var(--mx) * -14px), 0); }
 .bp-l.near { transform: translate(calc(var(--mx) * -22px), 0); }
-/* Под карточками — сплошное затемнение полосами, сцена видна в зазорах. */
+/* Под карточками — ровное затемнение из токена фона, без градиента; сцена видна в зазорах. */
 .bp-scene::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, rgba(10, 5, 20, 0.42) 0 62%, rgba(10, 5, 20, 0.22) 62% 74%, transparent 74%);
+  background: color-mix(in srgb, var(--m-bg) 42%, transparent);
 }
 .bp-embers { position: absolute; inset: 0; transform: translate(calc(var(--mx) * -16px), 0); }
 .bp-embers > i { position: absolute; background: #ffc66b; box-shadow: 0 0 6px #ff9a3c; animation: bp-ember 6s steps(24, end) infinite; }
@@ -39,13 +38,6 @@
   100% { transform: translate(18px, -90px); opacity: 0; }
 }
 
-/* Герой сезона: колонна справа, стоит на земле, не двигается. */
-.bp-side { position: relative; grid-column: 2; grid-row: 1; pointer-events: none; }
-.bp-rig {
-  position: absolute; left: 10px; right: 6px; top: 10px; bottom: 0; width: calc(100% - 16px); height: calc(100% - 10px);
-  object-fit: contain; object-position: 50% 100%;
-  filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.4)) drop-shadow(0 0 22px rgba(255, 176, 72, 0.4));
-}
 .bp-main { grid-column: 1; grid-row: 1; display: grid; gap: 14px; min-width: 0; }
 
 /* ---------- Шапка сезона ---------- */
@@ -232,15 +224,11 @@
 
 /* ---------- Узко ---------- */
 @container shop (max-width: 900px) {
-  .bp-stage { grid-template-columns: minmax(0, 1fr); padding-right: 20px; }
-  .bp-side { display: none; }
   .bp-hero { flex-wrap: wrap; }
   .bp-hero-cta { margin-left: 0; width: 100%; }
   .bp-hero-cta > * { flex: 1 1 0; }
 }
 @media (max-width: 860px) {
-  .bp-stage { grid-template-columns: minmax(0, 1fr); padding-right: 20px; }
-  .bp-side { display: none; }
   .bp-hero { flex-wrap: wrap; }
   .bp-hero-cta { margin-left: 0; width: 100%; }
 }

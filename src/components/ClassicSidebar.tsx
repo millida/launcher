@@ -23,7 +23,7 @@ import { t, tx, useT } from '../i18n'
 /** hub: раздел «Во что играем» — false «Мои сборки» (сборки и рекомендации), true «Каталог». */
 const NAV: { id: ScreenId; icon: string; label: string; pill?: string; hub?: boolean }[] = [
   { id: 'play', icon: 'i-play', get label() { return t('Играть') } },
-  { id: 'hosting', icon: 'i-server-cog', get label() { return t('Мой сервер') } },
+  { id: 'hosting', icon: 'i-hosting', get label() { return t('Мой сервер') } },
   { id: 'playhub', icon: 'i-box2', get label() { return t('Мои сборки') }, hub: false },
   { id: 'playhub', icon: 'i-blocks', get label() { return t('Каталог') }, hub: true },
   { id: 'servers', icon: 'i-server', get label() { return t('Серверы') } },

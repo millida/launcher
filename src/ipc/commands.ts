@@ -2,7 +2,7 @@
 // Account tokens stay in the core. The UI gets only the result (millidaApi adds the token on the core side).
 import { showToast } from '../state/ui'
 import { tauri } from './tauri'
-import { t, tx } from '../i18n'
+import { getLocale, t, tx } from '../i18n'
 
 export interface Profile {
   name: string
@@ -206,7 +206,8 @@ export const onCoreFailure = (fn: CoreFailureReporter | null) => {
   coreFailureReporter = fn
 }
 
-const invoke = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+/** Общий вызов ядра: и для модулей команд вне этого файла (ipc/modTools.ts). */
+export const invoke = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
   const T = tauri()
   if (!T) return Promise.reject(new Error('no tauri'))
   return T.core.invoke<T>(cmd, args).catch((err: unknown) => {
@@ -606,6 +607,7 @@ export interface PackAutoUpdate {
   on: boolean
   modified: boolean
   chosen: boolean | null
+  forced: boolean
   removedMods: string[]
   addedMods: string[]
 }
@@ -674,7 +676,7 @@ export interface MillidaPack {
 }
 
 /** Наши сборки для списка «Контент» — рядом с Modrinth и CurseForge. */
-export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs')
+export const millidaPacks = () => invoke<MillidaPack[]>('millida_packs', { lang: getLocale() })
 
 /** Активация ключа доступа к платной сборке. */
 export const packBuyUrl = (slug: string) => invoke<string>('pack_buy_url', { slug })
@@ -939,8 +941,8 @@ export const chooseGfxPreset = (profile: string, preset: string | null) =>
 
 export type ApiMarket = 'RU' | 'EN'
 
-export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown, market?: ApiMarket, lang?: string) =>
-  invoke<T>('millida_api', { path, method, body: body === undefined ? null : body, market: market ?? null, lang: lang ?? null })
+export const millidaApi = <T = unknown>(path: string, method: string, body?: unknown, market?: ApiMarket, lang?: string, tz?: string) =>
+  invoke<T>('millida_api', { path, method, body: body === undefined ? null : body, market: market ?? null, lang: lang ?? null, tz: tz ?? null })
 
 /// Raw bytes to a hosting upload route; the token is added by the core. `id` ties the progress events
 /// (`remote-upload-progress`) to this call.
@@ -1042,6 +1044,15 @@ export interface CustomWallpaperFile {
   name: string
 }
 export const pickWallpaper = () => invoke<CustomWallpaperFile | null>('pick_wallpaper')
+export interface PublishedWallpaper {
+  id: string
+  name: string
+  status: 'PENDING' | 'ACTIVE' | 'REJECTED'
+  moderationNote: string | null
+}
+export const publishWallpaper = (path: string, name: string) =>
+  invoke<PublishedWallpaper>('publish_wallpaper', { path, name })
+export const saveLibraryWallpaper = (id: string) => invoke<CustomWallpaperFile>('save_library_wallpaper', { id })
 export interface PickedTextureFile {
   name: string
   data: string
@@ -1224,6 +1235,37 @@ export const pickJavaPath = () => invoke<JavaInfo | null>('pick_java_path')
 
 export const toggleContent = (profile: string, kind: string, name: string, enable: boolean) =>
   invoke<void>('toggle_content', { profile, kind, name, enable })
+
+export interface DependentMod {
+  name: string
+  title: string
+}
+
+/** Мод, который собираются выключить, и включённые моды, которым он нужен. */
+export interface ModDependents {
+  name: string
+  title: string
+  by: DependentMod[]
+}
+
+
+/** Ход поиска мода-виновника вылета (ядро: engine/content/bisect.rs). */
+export interface BisectView {
+  profile: string
+  phase: 'test' | 'found' | 'stuck' | 'notMods'
+  step: number
+  suspects: number
+  runsLeft: number
+  /** Сколько модов сейчас выключено на время проверки. */
+  off: number
+  culprit: DependentMod | null
+  /** Виновник подтверждён запуском без него одного. */
+  verified: boolean
+  /** Оставшиеся подозреваемые, когда дальше не сузить. */
+  left: DependentMod[]
+}
+
+
 
 export const updateAll = (profile: string, kind: string) => invoke<number>('update_all', { profile, kind })
 
@@ -1525,6 +1567,35 @@ export interface DedupReport {
   storeBytes: number
   note?: string
 }
+
+/** Место одной сборки по папкам, байты. Общие файлы хранилища — в `shared`, в `total` не входят. */
+export interface BuildUsage {
+  name: string
+  total: number
+  mods: number
+  saves: number
+  screenshots: number
+  logs: number
+  crashReports: number
+  resourcepacks: number
+  shaderpacks: number
+  other: number
+  shared: number
+  /** Столько освободит «Удалить старые логи» в этой сборке. */
+  oldLogs: number
+}
+
+export interface DiskUsage {
+  /** Самые тяжёлые первыми. */
+  builds: BuildUsage[]
+  /** Файлы общего хранилища, каждый один раз. */
+  shared: number
+  /** Сэкономлено общим хранилищем. */
+  saved: number
+  /** Версии, библиотеки, ресурсы игры и остальное вне сборок. */
+  game: number
+}
+
 
 export const dedupeScan = () => invoke<DedupReport>('dedupe_scan')
 export const dedupeRun = () => invoke<DedupReport>('dedupe_run')
@@ -1984,6 +2055,14 @@ export interface FtbPack {
 }
 export const ftbSearch = (term: string) => invoke<FtbPack[]>('ftb_search', { term })
 export const ftbInstall = (id: number) => invoke<Profile>('ftb_install', { id })
+/** Новая версия FTB для сборки, поставленной из FTB; null — свежая или сборка не из FTB. */
+export interface FtbUpdate {
+  current: string
+  version: string
+  mc: string
+}
+export const ftbCheckUpdate = (profile: string) => invoke<FtbUpdate | null>('ftb_check_update', { profile })
+export const ftbUpdate = (profile: string) => invoke<Profile>('ftb_update', { profile })
 
 export type PackVisibility = 'link' | 'friends' | 'private'
 export const setPackVisibility = (code: string, visibility: PackVisibility) => invoke<PackVisibility>('set_pack_visibility', { code, visibility })

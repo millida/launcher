@@ -3,9 +3,9 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
 import { Select } from '../Select'
-import { openImage } from '../ImageLightbox'
+import { openImage } from '../lightboxStore'
 import { renderMarkdown } from '../../lib/markdown'
-import { MODRINTH_API, mirrorAsset, openExt } from '../../lib/api'
+import { MODRINTH_API, mirrorAsset, openExt, sharedFetch } from '../../lib/api'
 import { blocksToMarkdown } from '../../lib/millidaCatalog'
 import { installFromCatalog } from '../../lib/catalogInstall'
 import { loaderId } from '../../lib/format'
@@ -550,7 +550,7 @@ function CardPage({ card, sec }: { card: SiteCard; sec: SiteSection }) {
       .then((h) => {
         if (!h || h.cfid !== undefined || !(h.pid || h.slug)) return null
         if (alive) setMrId(h.pid || h.slug!)
-        return fetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(h.pid || h.slug!)).then((r) => (r.ok ? r.json() : null))
+        return sharedFetch(MODRINTH_API + '/v2/project/' + encodeURIComponent(h.pid || h.slug!)).then((r) => (r.ok ? r.json() : null))
       })
       .then((p: { body?: string } | null) => {
         if (alive && p && p.body && p.body.length > 200) setFullBody(p.body)

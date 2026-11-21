@@ -6,6 +6,8 @@ import { agoText, fmtSize } from '../lib/format'
 import { hasTauri } from '../ipc/tauri'
 import { uiConfirm } from '../state/confirm'
 import { showToast } from '../state/ui'
+import { openFolderAction } from '../lib/savedFile'
+import { cloudUploadKey, uploadToCloud, useCloudBackups } from '../state/cloudBackups'
 import {
   backupWorld,
   deleteWorld,
@@ -75,6 +77,7 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState('')
   const [rename, setRename] = useState('')
+  const cloudTransfers = useCloudBackups((s) => s.transfers)
 
   const load = useCallback(() => {
     if (!hasTauri()) {
@@ -98,11 +101,11 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
 
   // The button that started the work stays disabled until it finishes, so a
   // second click cannot start a copy of a copy.
-  const run = (key: string, task: Promise<unknown>, done: string) => {
+  const run = (key: string, task: Promise<unknown>, done: string, savesFile = false) => {
     setBusy(key)
     task
       .then((r) => {
-        if (r !== null) showToast(done, 'ok')
+        if (r !== null) showToast(done, 'ok', undefined, savesFile && typeof r === 'string' ? openFolderAction(r) : undefined)
         load()
       })
       .catch((e) => showToast('' + e, 'error'))
@@ -208,14 +211,21 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                     <button
                       className="btn sm secondary"
                       disabled={busy === w.folder}
-                      onClick={() => run(w.folder, backupWorld(profile, w.folder), t('Бэкап готов'))}
+                      onClick={() => run(w.folder, backupWorld(profile, w.folder), t('Бэкап готов'), true)}
                     >
                       <Icon id="i-download" /> {t('Бэкап')}
                     </button>
                     <button
                       className="btn sm secondary"
+                      disabled={busy === w.folder || !!cloudTransfers[cloudUploadKey(profile, w.folder)]}
+                      onClick={() => void uploadToCloud(profile, w.folder, null).then(load)}
+                    >
+                      <Icon id="i-upload" /> {t('В облако')}
+                    </button>
+                    <button
+                      className="btn sm secondary"
                       disabled={busy === w.folder}
-                      onClick={() => run(w.folder, exportWorld(profile, w.folder), t('Мир сохранён в архив'))}
+                      onClick={() => run(w.folder, exportWorld(profile, w.folder), t('Мир сохранён в архив'), true)}
                     >
                       <Icon id="i-box2" /> {t('В архив')}
                     </button>
@@ -261,6 +271,13 @@ export function WorldManager({ profile, onPlay, reloadKey = 0, empty, hideImport
                             }
                           >
                             {t('Восстановить')}
+                          </button>
+                          <button
+                            className="btn sm ghost"
+                            disabled={busy === b || !!cloudTransfers[cloudUploadKey(profile, w.folder)]}
+                            onClick={() => void uploadToCloud(profile, w.folder, b)}
+                          >
+                            {t('В облако')}
                           </button>
                           <button
                             className="icon-btn del"

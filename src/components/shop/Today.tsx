@@ -3,13 +3,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
 import type { ItemRef, Rarity, ShopCard, ShopDay, ShopSource } from '../../lib/rubies'
+import { payablePrice } from '../../lib/rubies'
 import { loadCosmeticCatalog, loadCosmeticOwned, type CosmeticItem } from '../../lib/gameProfile'
 import { focusOf, outfitShot, shotAspect, type OutfitShot } from '../../lib/outfitShotLazy'
 import { shopCards } from './wish'
+import { openPackNeed } from './packNeed'
 import { ItemArt, toneStyle } from './parts'
-import { RarityChip } from './rarityUi'
+import { FragBar, RarityChip } from './rarityUi'
 import { DayClock, OffBadge, useRailEdges } from './SetsV2'
-import { SceneBack, usePlayerSkin } from './ShopStage'
+import { PriceRiseTag } from './priceRise'
+import { SceneBack, ShopStage, usePlayerSkin } from './ShopStage'
 import '../../styles/pixel/shop-motion.css'
 import { intlTag, useT } from '../../i18n'
 import { liveInterval } from '../../lib/liveInterval'
@@ -23,17 +26,24 @@ import { liveInterval } from '../../lib/liveInterval'
  */
 
 /** Вещи, которые на фигуре не видно целиком: им — плоское превью. Эмоции
- *  (06.10.2026) — на фигуре и в движении, петлёй кадров (LoopShot). Питомцы
- *  в кадр снимка не попадают (ворон улетал за край) — остаются превью. */
-const FLAT = new Set(['PET', 'SPRAY', 'BANNER', 'ICON'])
+ *  (06.10.2026) — на фигуре и в движении, петлёй кадров (LoopShot); питомцы — рядом с игроком. */
+const FLAT = new Set(['SPRAY', 'BANNER', 'ICON'])
+/** Эффекты и ауры: частицы вокруг всей фигуры, в движении (13.11.2026 — и в ящиках тоже). */
+const GLOW = new Set(['EFFECT', 'AURA'])
+/** Пауза перед повторным снимком эффекта, у которого не наделись частицы. */
+const RETRY_MS = 1500
+/** Где стоят ноги в кадре (доля высоты): пол сцены под ними. Крупным планам пол не нужен. */
+const FEET: Partial<Record<string, number>> = { body: 0.86, full: 0.82 }
 
 /** Вещь на игроке (снимок 3D), иначе плоское превью. */
-export function ItemShot({ item, big, flatEffects, chip = true }: { item: ItemRef; big?: boolean; /** Эффекты — плоским превью (содержимое ящика). */ flatEffects?: boolean; /** Слово редкости внизу слева. */ chip?: boolean }) {
+export function ItemShot({ item, big, chip = true }: { item: ItemRef; big?: boolean; /** Слово редкости внизу слева. */ chip?: boolean }) {
   const skin = usePlayerSkin()
   const ref = useRef<HTMLSpanElement>(null)
   const [near, setNear] = useState(false)
-  const flatSlot = FLAT.has(item.slot) || (!!flatEffects && item.slot === 'EFFECT')
+  const flatSlot = FLAT.has(item.slot)
   const [shot, setShot] = useState<OutfitShot | null | undefined>(flatSlot ? null : undefined)
+  // Эффект без надетых частиц (картинка частиц не успела прийти) снимается ещё раз, потом — превью.
+  const [retry, setRetry] = useState(0)
   useEffect(() => {
     const el = ref.current
     if (flatSlot || !el || typeof IntersectionObserver === 'undefined') return setNear(true)
@@ -51,15 +61,32 @@ export function ItemShot({ item, big, flatEffects, chip = true }: { item: ItemRe
     return () => {
       alive = false
     }
-  }, [skin?.url, skin?.slim, near, item.code, flatSlot])
-  const flat = shot === null || (shot && shot.dressed === 0)
+  }, [skin?.url, skin?.slim, near, item.code, flatSlot, retry])
+  const bare = !!shot && shot.dressed === 0
+  useEffect(() => {
+    if (!bare || retry || !GLOW.has(item.slot)) return
+    if (import.meta.env.DEV) console.warn('[shop] effect shot came back bare, retrying', item.code)
+    const t = setTimeout(() => setRetry(1), RETRY_MS)
+    return () => clearTimeout(t)
+  }, [bare, retry, item.slot, item.code])
+  const flat = shot === null || bare
   return (
     <span ref={ref} className={'sv-shot td-shot' + (flat ? ' is-flat' : '')} style={toneStyle(item)} aria-hidden="true">
       {/* Крупный план — без пола и подиума: они под ногами всего тела. */}
-      <SceneBack feet={focusOf(item.slot) === 'body' ? 0.86 : 1.2} />
+      <SceneBack feet={FEET[focusOf(item.slot)] ?? 1.2} />
       {shot === undefined || flat ? <ItemArt item={item} size={big ? 'lg' : 'md'} /> : <ShotImg shot={shot!} />}
       {chip ? <RarityChip rarity={item.rarity} /> : null}
     </span>
+  )
+}
+
+export function ItemStage({ item }: { item: ItemRef }) {
+  if (FLAT.has(item.slot)) return <ItemShot item={item} big />
+  return (
+    <>
+      <ShopStage on items={[item]} placeholder={<ItemShot item={item} big chip={false} />} />
+      <RarityChip rarity={item.rarity} />
+    </>
   )
 }
 
@@ -87,7 +114,7 @@ function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: Sh
       data-id={card.item.code}
       data-src={source}
     >
-      <button className="sv-card-pick" aria-label={card.item.name} disabled={card.owned || acts.busy === card.item.code} data-track={'shop_pick_' + source} onClick={buy}>
+      <button className="sv-card-pick" aria-label={card.item.name} disabled={acts.busy === card.item.code} data-track={'shop_pick_' + source} onClick={buy}>
         <ItemShot item={card.item} />
         <span className="sv-corner">{card.discountPct > 0 && !card.owned ? <OffBadge pct={card.discountPct} /> : null}</span>
         {timer && card.leavesAt && source !== 'forYou' ? (
@@ -98,16 +125,30 @@ function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: Sh
         {source === 'forYou' ? <span className="td-you">{t('для тебя')}</span> : null}
       </button>
       <b className="sv-card-name">{card.item.name}</b>
+      {/* Начатая вещь: сколько фрагментов собрано — отсюда и цена «дособрать» (полная зачёркнута на кнопке). */}
+      {!card.owned && card.fragments && card.fragments.have > 0 ? (
+        <span className="td-frag">
+          <FragBar have={card.fragments.have} need={card.fragments.need} rarity={card.item.rarity} />
+        </span>
+      ) : null}
+      {card.owned ? null : <PriceRiseTag rise={card.item.priceRise} />}
       {card.owned ? (
         <button className="btn md secondary sv-pbtn" data-track="shop_wear" onClick={() => acts.onWear(card.item)}>
           {t('Надеть')}
         </button>
       ) : (
-        <button className={'btn md ' + (card.price > acts.balance ? 'secondary' : 'primary') + ' sv-pbtn'} disabled={acts.busy === card.item.code} data-track={'shop_buy_' + source} onClick={buy}>
-          <Ruby size={16} />
-          {card.price.toLocaleString(intlTag())}
-          {card.basePrice > card.price ? <s className="sv-was">{card.basePrice.toLocaleString(intlTag())}</s> : null}
-        </button>
+        payablePrice(card.price) ? (
+          <button className={'btn md ' + (card.price > acts.balance ? 'secondary' : 'primary') + ' sv-pbtn'} disabled={acts.busy === card.item.code} data-track={'shop_buy_' + source} onClick={buy}>
+            <Ruby size={16} />
+            {card.price.toLocaleString(intlTag())}
+            {card.basePrice > card.price ? <s className="sv-was">{card.basePrice.toLocaleString(intlTag())}</s> : null}
+          </button>
+        ) : (
+          // Служба прислала цену 0 у платной вещи: «◆0» на кнопке обманывает, списано было бы по-настоящему.
+          <button className="btn md secondary sv-pbtn" disabled data-track={'shop_noprice_' + source}>
+            {t('Цена уточняется')}
+          </button>
+        )
       )}
     </div>
   )
@@ -116,7 +157,7 @@ function Tile({ card, source, acts, timer, i = 0 }: { card: ShopCard; source: Sh
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 /** Лента карточек как у наборов: один ряд, прокрутка вбок, стрелки по краям. */
-function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][]; acts: TodayActs; label: string; /** Сама листает по карточке раз в 4 с (пауза под мышью). */ auto?: boolean }) {
+export function CardRail({ cards, acts, label, auto }: { cards: [ShopCard, ShopSource][]; acts: TodayActs; label: string; /** Сама листает по карточке раз в 4 с (пауза под мышью). */ auto?: boolean }) {
   const t = useT()
   const rail = useRef<HTMLDivElement>(null)
   const hold = useRef(false)
@@ -176,6 +217,8 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
   const d = day.day
   const wished = new Set(day.wishlist)
   const wishes = shopCards(day).filter(([c]) => wished.has(c.item.code) && !c.owned)
+  const wishTotal = wishes.reduce((sum, [c]) => sum + (c.price ?? 0), 0)
+  const wishShort = wishTotal > day.balance
   const cards: [ShopCard, ShopSource][] = [
     ...(d.featured ? [[d.featured, 'featured'] as [ShopCard, ShopSource]] : []),
     ...(d.deal ? [[d.deal, 'deal'] as [ShopCard, ShopSource]] : []),
@@ -208,6 +251,15 @@ export function TodaySection({ day, acts, onEnd }: { day: ShopDay; acts: TodayAc
               <Icon id="i-heart" />
               {t('Хочу')}
             </h2>
+            {wishShort ? (
+              <button
+                className="btn sm primary"
+                data-track="wish_topup"
+                onClick={() => openPackNeed({ target: wishTotal, from: 'wish', title: t('на всё из «Хочу»') })}
+              >
+                {t('Пополнить')}
+              </button>
+            ) : null}
           </div>
           <CardRail cards={wishes} acts={acts} label={t('Хочу')} />
         </section>
@@ -226,11 +278,15 @@ export const TREND_TAG = 'TREND'
  * вещь магазина, а не только витрину дня.
  */
 export function tagCards(items: CosmeticItem[], tag: string, owned: ReadonlySet<string>): [ShopCard, ShopSource][] {
+  return catalogCards(items.filter((c) => c.tags?.includes(tag)), owned)
+}
+
+export function catalogCards(items: CosmeticItem[], owned: ReadonlySet<string>): [ShopCard, ShopSource][] {
   return items
-    .filter((c) => c.tags?.includes(tag) && (c.priceRubies ?? 0) > 0)
+    .filter((c) => (c.priceRubies ?? 0) > 0)
     .map((c) => [
       {
-        item: { code: c.id, name: c.name, slot: c.slot, rarity: (c.rarity as Rarity | undefined) ?? 'COMMON', preview: c.preview ?? null },
+        item: { code: c.id, name: c.name, slot: c.slot, rarity: (c.rarity as Rarity | undefined) ?? 'COMMON', preview: c.preview ?? null, ...(c.priceRise ? { priceRise: c.priceRise } : {}) },
         price: c.priceRubies!,
         basePrice: c.priceRubies!,
         discountPct: 0,

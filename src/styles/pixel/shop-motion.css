@@ -42,3 +42,16 @@
 :root .td-card, :root .td-shot > img, :root .td-rail.is-live .td-card .sv-shot > img, :root .td-rail.is-live .td-card .sv-shot .sh-art, 
 :root .td-rail.is-live .td-card .sv-card-pick::after, :root .bn-claim, :root .pb::after { animation: none !important; }
 }
+
+/* Фрагменты начатой вещи на плитке витрины (13.11.2026): полоса have/need над кнопкой цены. */
+.td-card .td-frag { display: block; width: 100%; margin: -2px 0 2px; }
+.td-card .td-frag .rar-fbar { font-size: 10px; gap: 4px; }
+
+/* «За осколки» (17.11.2026): обмен даёт половину фрагментов — карточка говорит это сама и показывает прогресс начатой вещи. */
+.sh-card .td-frag { display: block; width: 100%; margin: -2px 0 2px; }
+.sh-card .td-frag .rar-fbar { font-size: 10px; gap: 4px; }
+.sh-card .sd-half { display: block; margin: -2px 0 2px; font-size: 11px; color: var(--m-fg-muted); }
+/* Итог обмена, когда вещь ещё не собрана: прогресс и «Докупить» в том же окне. */
+.bs .sd-got { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.bs .sd-got > span { font-size: 12px; color: var(--m-fg-muted); max-width: 280px; }
+.bs .sd-got .rar-fbar { width: 220px; }

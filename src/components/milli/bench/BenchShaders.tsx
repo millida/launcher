@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { PxArt } from '../px'
-import { MODRINTH_API, mirrorAsset } from '../../../lib/api'
+import { MODRINTH_API, mirrorAsset, sharedFetch } from '../../../lib/api'
 import type { MilliItem, MilliLevel, MilliPack, MilliProfile, MilliTab } from '../../../lib/milli'
 import { milliPc } from '../../../lib/milli'
 import { benchOp, useBench } from '../../../state/milliBench'
@@ -130,7 +130,7 @@ function want(slugs: string[]) {
   if (!miss.length) return
   for (const s of miss) asked.add(s)
   const url = MODRINTH_API + '/v2/projects?ids=' + encodeURIComponent(JSON.stringify(miss))
-  fetch(url)
+  sharedFetch(url)
     .then((r) => (r.ok ? (r.json() as Promise<MrProject[]>) : []))
     .then((list) => {
       for (const p of Array.isArray(list) ? list : []) {
