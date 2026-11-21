@@ -362,6 +362,18 @@ fn build_report(profile: &Profile, root: &str) -> (Value, BuildFacts) {
     )
 }
 
+/// Which JSON came back, for the report: the game needs an object.
+fn json_kind(v: &Value) -> &'static str {
+    match v {
+        Value::Object(_) => "object",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Null => "null",
+        Value::Bool(_) => "bool",
+        Value::Number(_) => "number",
+    }
+}
+
 async fn texture_ok(url: &str) -> bool {
     // GET of the texture from the address the Millida skin server named: we check that a picture is served.
     let Ok(resp) = client().get(url).send().await else { return false };
@@ -381,6 +393,13 @@ async fn server_report(nick: &str, root: &str) -> Value {
             return json!({ "ok": false, "reason": format!("профиль скина не отдаётся: {}", e) });
         }
     };
+    // The game parses this with Gson: anything but an object fails there as «Expected BEGIN_OBJECT
+    // but was STRING», and the skin and cape are not shown (reports 13.11.2026).
+    if !profile.is_object() {
+        return json!({ "ok": false, "kind": json_kind(&profile), "reason": format!("профиль скина пришёл не объектом JSON ({}) — игра его не прочтёт", json_kind(&profile)) });
+    }
+    // CustomSkinLoader asks for the same profile with «.json» on the end; both routes must answer.
+    let json_route = get_json(&format!("{}.json", url)).await.map(|v| v.is_object()).unwrap_or(false);
     let skin = profile["skins"]["default"].as_str().or_else(|| profile["skins"]["slim"].as_str());
     let cape = profile["cape"].as_str().filter(|s| !s.is_empty());
     let texture_url = |id: &str| format!("{}textures/{}", root, id);
@@ -397,6 +416,7 @@ async fn server_report(nick: &str, root: &str) -> Value {
         "skin": skin.is_some(),
         "cape": cape.is_some(),
         "skinReadable": skin_ok,
+        "jsonRouteOk": json_route,
         "capeReadable": cape_ok,
     })
 }
@@ -898,5 +918,12 @@ mod tests {
             "выключенный вручную мод не нуждается в оправданиях"
         );
         assert_eq!(off_text(BuildSkin::Ok, Some("crash")), BuildSkin::Ok.text());
+    }
+
+    #[test]
+    fn the_report_names_what_came_instead_of_an_object() {
+        assert_eq!(super::json_kind(&json!({ "skins": {} })), "object");
+        assert_eq!(super::json_kind(&json!("Unauthorized")), "string", "a text body is what Gson calls STRING at $");
+        assert_eq!(super::json_kind(&Value::Null), "null");
     }
 }

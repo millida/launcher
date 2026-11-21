@@ -20,10 +20,24 @@ const HELP: &str = "Проверьте подключение к интерне�
 Если не помогает — скачайте полный установщик на странице millida.net/launcher.";
 
 #[cfg(windows)]
+const STUCK_COPY: &str = "Установщик Millida Launcher уже запущен, но не отвечает.\n\n\
+Закройте MillidaLauncherSetup.exe в диспетчере задач (Ctrl+Shift+Esc) или перезагрузите компьютер \
+и запустите установщик ещё раз.";
+
+#[cfg(windows)]
 fn main() {
+    // panic = "abort" and no console: without the hook a panic ended the process with nothing on screen
+    // (report of 14.11.2026, «the installer does absolutely nothing»). The hook still runs before the abort.
+    std::panic::set_hook(Box::new(|info| {
+        ui::fail(&format!("Установщик Millida Launcher остановился из-за ошибки.\n\n{}\n\n{}", info, HELP));
+    }));
     let lock = single_instance();
     if matches!(lock, Instance::AlreadyRunning) {
-        ui::raise_existing();
+        // The lock is held but no window answers: a copy that hung or is still starting. Saying so beats
+        // a click that does nothing at all.
+        if !ui::raise_existing() {
+            ui::fail(STUCK_COPY);
+        }
         return;
     }
     install::sweep_stale();

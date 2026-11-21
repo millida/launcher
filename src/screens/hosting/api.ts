@@ -190,7 +190,7 @@ export interface HostingSubscription {
   /** Сколько не хватает на балансе на следующее списание (считает бэкенд). */
   renewShortfallKopecks?: number
   /** Currency of the renew figures; absent from servers before the one-account model, which sent rubles. */
-  renewCurrency?: 'RUB' | 'USD' | null
+  renewCurrency?: 'RUB' | 'USD' | 'INR' | null
 }
 
 export const HOST_PERMISSIONS = (): [string, string][] => [

@@ -4,8 +4,11 @@ import { exportPack } from '../../ipc/commands'
 import type { ExportFormat } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { apiErrorText } from '../../lib/apiError'
+import { openFolderAction } from '../../lib/savedFile'
 import { backdropClose } from '../../lib/dismiss'
 import { showToast } from '../../state/ui'
+import { useProfiles } from '../../state/profiles'
+import { copyModList } from '../../lib/copyModList'
 import { Icon } from '../Icon'
 import { useT } from '../../i18n'
 import '../../styles/pixel/build-extras.css'
@@ -22,6 +25,7 @@ export function ExportModal({ profile, ramGb, onClose }: { profile: string; ramG
   const [withRam, setWithRam] = useState(ramGb > 0)
   const [lock, setLock] = useState(false)
   const [busy, setBusy] = useState(false)
+  const pr = useProfiles((s) => s.profiles.find((p) => p.name === profile) || null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +43,7 @@ export function ExportModal({ profile, ramGb, onClose }: { profile: string; ramG
     setBusy(true)
     exportPack(profile, format, withRam ? ramGb * 1024 : 0, lock)
       .then((p) => {
-        showToast(t('Экспортировано: {file}', { file: String(p).split(/[\\/]/).pop() ?? '' }), 'ok')
+        showToast(t('Экспортировано: {file}', { file: String(p).split(/[\\/]/).pop() ?? '' }), 'ok', undefined, openFolderAction(String(p)))
         onClose()
       })
       .catch((e) => showToast(apiErrorText(e, t('Не удалось экспортировать')), 'error'))
@@ -67,6 +71,11 @@ export function ExportModal({ profile, ramGb, onClose }: { profile: string; ramG
         {check(withRam, setWithRam, ramGb > 0 ? t('Память {n} ГБ для всех, кто поставит', { n: ramGb }) : t('Память — авто'), ramGb <= 0)}
         {check(lock, setLock, t('Запретить добавлять моды'))}
         <div className="bx-upd-acts">
+          {pr ? (
+            <button className="btn md secondary" disabled={busy} onClick={() => void copyModList(pr, null)} title={t('Название и версия каждого мода — для поддержки или друга')}>
+              <Icon id="i-copy" /> {t('Скопировать список модов')}
+            </button>
+          ) : null}
           <button className="btn md secondary" disabled={busy} onClick={onClose}>
             {t('Отмена')}
           </button>

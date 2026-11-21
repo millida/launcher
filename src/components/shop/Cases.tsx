@@ -413,7 +413,7 @@ function GroupTile({ g, big }: { g: Group; big?: boolean }) {
   return (
     <div className={'cs4-tile' + (big ? ' is-big' : '') + (all ? ' is-owned' : '')} style={toneStyle(way.item)} data-rar={way.item.rarity}>
       <span className="cs4-pic">
-        <ItemShot key={way.item.code} item={way.item} big={big} flatEffects />
+        <ItemShot key={way.item.code} item={way.item} big={big} />
       </span>
       <b className="cs4-name">{way.item.name}</b>
       {g.ways.length > 1 ? (

@@ -1196,6 +1196,10 @@ export class SkinViewEngine {
     return this.playerObject.rotation.y;
   }
 
+  get running(): boolean {
+    return this._running;
+  }
+
   get disposed(): boolean {
     return this._disposed;
   }

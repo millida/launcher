@@ -1,4 +1,4 @@
-import { api, apiHeaders, LAUNCHER_API, MODRINTH_API, mirrorAsset } from '../lib/api'
+import { api, apiHeaders, LAUNCHER_API, MODRINTH_API, mirrorAsset, sharedFetch } from '../lib/api'
 import { hasTauri } from '../ipc/tauri'
 import { tidyBody } from './projectView'
 import { t } from '../i18n'
@@ -541,7 +541,7 @@ export async function depProjects(ids: string[]): Promise<Map<string, DepProject
   if (want.length) {
     try {
       const url = MODRINTH_API + '/v2/projects?ids=' + encodeURIComponent(JSON.stringify(want.slice(0, 60)))
-      const list = (await fetch(url).then((r) => r.json())) as {
+      const list = (await sharedFetch(url).then((r) => r.json())) as {
         id: string
         slug: string
         title: string

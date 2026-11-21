@@ -12,13 +12,15 @@ interface ConfirmOpts {
   /// irreversible deletes: a focused «Удалить» plus a global Enter let a double
   /// click on the menu item or a stray Enter wipe a build with its worlds.
   typeToConfirm?: string
+  /// A third answer between cancel and confirm (resolves 'alt'), e.g. «Выключить только этот».
+  altLabel?: string
 }
 
 /// A dismissal is not the cancel button. Where the cancel button carries its own
 /// action ("Всё равно зайти", "Играть офлайн"), closing the window by the
 /// backdrop or Escape used to perform that action — the launcher did something
 /// the user only walked away from. 'dismiss' says "forget the whole question".
-export type ConfirmResult = 'yes' | 'no' | 'dismiss'
+export type ConfirmResult = 'yes' | 'no' | 'dismiss' | 'alt'
 
 interface ConfirmState {
   open: boolean
@@ -30,6 +32,7 @@ interface ConfirmState {
   rememberKey: string | null
   rememberLabel: string
   typeToConfirm: string | null
+  altLabel: string | null
   resolver: ((v: ConfirmResult) => void) | null
   close: (v: ConfirmResult, remember?: boolean) => void
 }
@@ -52,6 +55,7 @@ export const useConfirm = create<ConfirmState>((set, get) => ({
   rememberKey: null,
   rememberLabel: 'Больше не спрашивать',
   typeToConfirm: null,
+  altLabel: null,
   resolver: null,
   close: (v, remember) => {
     const { resolver, rememberKey } = get()
@@ -81,6 +85,7 @@ export function uiChoice(message: string, opts: ConfirmOpts = {}): Promise<Confi
       rememberKey: opts.rememberKey || null,
       rememberLabel: opts.rememberLabel || t('Больше не спрашивать'),
       typeToConfirm: opts.typeToConfirm?.trim() || null,
+      altLabel: opts.altLabel || null,
       resolver: resolve,
     })
   })

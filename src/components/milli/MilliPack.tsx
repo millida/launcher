@@ -28,7 +28,7 @@ import {
 import type { MilliCheck, MilliPack, MilliServerAnswer, MilliTab } from '../../lib/milli'
 import type { HostServer } from '../../screens/Hosting'
 import { useInstalls } from '../../state/installs'
-import { closeMilli, useMilli } from '../../state/milli'
+import { closeMilli, refreshMilliStatus, useMilli } from '../../state/milli'
 import { useBench } from '../../state/milliBench'
 import { setScreen, showToast } from '../../state/ui'
 import { MilliSafe } from './MilliStage'
@@ -59,13 +59,34 @@ import { t, tx, useT } from '../../i18n'
  * «Открыть эту версию». Тело монтируется только у раскрытой вкладки.
  */
 
+/** Текст отказа службы как есть, без «Error:» и служебного «http NNN код»; пусто — сказать нечего. */
+const serviceText = (e: unknown): string =>
+  String((e as { message?: string } | null)?.message ?? e ?? '')
+    .replace(/^Error:\s*/, '')
+    .replace(/^http \d{3}\s+\S+\s*/i, '')
+    .trim()
+    .slice(0, 200)
+
 type Phase = 'plan' | 'install' | 'done'
 
 const play = (name: string) => (hasTauri() ? realLaunch(name) : startPrelaunch(name))
 
+/** Предложение PLUS. Раньше вело на 'premium' — магазин платных сборок, где кнопки «Оформить»
+ *  читались как «нужна подписка» даже у подписчика PLUS (обращения 13.11.2026). */
 export function openPlus() {
   closeMilli()
-  setScreen('premium')
+  setScreen('plus')
+}
+
+/**
+ * «На сервер» — отдельная возможность Милли (флаг службы features.server), не PLUS. Флаг мог
+ * устареть: сначала статус перечитывается; выключена — игрок узнаёт это прямо, без витрины подписок.
+ */
+async function serverAllowed(): Promise<boolean> {
+  const fresh = await refreshMilliStatus().catch(() => null)
+  if (fresh?.features.server) return true
+  showToast(t('Ставить сборки Милли на свой сервер — отдельная возможность, на твоём аккаунте она пока не включена'), 'error')
+  return false
 }
 
 const chainOf = (p: Pick<MilliPack, 'chain' | 'buildId'>) => p.chain ?? p.buildId
@@ -92,8 +113,9 @@ function ServerPick({ pack, projectIds, onClose }: { pack: MilliPack; projectIds
       setDone(await milliToServer(pack.buildId, s.id, projectIds))
     } catch (e) {
       const m = milliError(e)
-      if (m.kind === 'plus') openPlus()
-      else showToast(m.kind === 'failed' ? t('Не встало на сервер — повтори') : m.text, 'error')
+      // Отказ службы показывается её словами: «Это в PLUS» у подписчика PLUS сбивал с толку.
+      const said = serviceText(e)
+      showToast(m.kind === 'failed' || m.kind === 'plus' ? said || t('Не встало на сервер — повтори') : m.text, 'error')
     } finally {
       setBusy('')
     }
@@ -762,7 +784,7 @@ function LiveCard({ pack }: { pack: MilliPack }) {
     else b.openBench(t)
   }, [])
   const ram = head.config?.ramMb
-  const toServer = () => (canServer ? setServer((v) => !v) : openPlus())
+  const toServer = () => (canServer ? setServer((v) => !v) : void serverAllowed().then((ok) => ok && setServer(true)))
   const toggleModder = () => useBench.getState().setUi({ modder: !useBench.getState().ui.modder })
 
   return (

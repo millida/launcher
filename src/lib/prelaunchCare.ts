@@ -180,3 +180,18 @@ export async function prelaunchCare(profile: string): Promise<void> {
   if (answer !== 'no') return
   remember(profile, skipKey)
 }
+
+/** Скин и плащ аккаунта — в копию для игры до запуска (lib/localLook): надетое на сайте или в
+ *  каталоге иначе попадало в игру, только если открыть экран «Скины» (обращения 13.11.2026).
+ *  Не дольше LOOK_SYNC_MS: запуск этим не задерживается. */
+const LOOK_SYNC_MS = 4000
+const syncLookForGame = (): Promise<void> =>
+  Promise.race([
+    import('./localLook').then((m) => m.syncLocalLookFromAccount()).catch((e) => console.warn('[launch] look sync', e)),
+    new Promise<void>((done) => setTimeout(done, LOOK_SYNC_MS)),
+  ])
+
+/** Подготовка к запуску вместе со сверкой вида: одно обращение к ленивому чанку из launch.ts. */
+export async function prelaunchCareAndLook(profile: string | null): Promise<void> {
+  await Promise.all([profile ? prelaunchCare(profile) : Promise.resolve(), syncLookForGame()])
+}

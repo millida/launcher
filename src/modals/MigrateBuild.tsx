@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { Select } from '../components/Select'
 import { migrateProfile } from '../ipc/commands'
 import { keyMigrate } from '../lib/installKeys'
+import { useLoaderBlocks, type LoaderId } from '../lib/loaderSupport'
 import { BUILD_NAME_MAX } from '../lib/format'
 import { backdropClose } from '../lib/dismiss'
 import { runInstall } from '../state/installs'
@@ -42,6 +43,9 @@ export function MigrateBuildModal() {
   const mcList = useMcVersionList((s) => s.list)
   const showSnapshots = useMcVersionList((s) => s.show)
   const verOpts = useMemo(() => versionOptions(mcList, showSnapshots, version), [mcList, showSnapshots, version])
+  const verKind = mcList.find((v) => v.id === version)?.kind || 'release'
+  const blocks = useLoaderBlocks(version, verKind, modal.open)
+  const blockOf = (k: string): string | null => blocks[k as LoaderId] ?? null
 
   useEffect(() => {
     if (!modal.open) return
@@ -60,7 +64,7 @@ export function MigrateBuildModal() {
   const target = name.trim() || (plan ? plan.suggested_name : '')
 
   const start = () => {
-    if (!plan || busy) return
+    if (!plan || busy || blockOf(loader)) return
     setBusy(true)
     const started = runInstall({
       key: keyMigrate(profile),
@@ -124,6 +128,8 @@ export function MigrateBuildModal() {
                 key={k}
                 className={'seg' + (loader === k ? ' on' : '')}
                 data-mgl={k}
+                disabled={!!blockOf(k)}
+                title={blockOf(k) || undefined}
                 onClick={() => set({ loader: k })}
               >
                 {label}
@@ -181,7 +187,7 @@ export function MigrateBuildModal() {
           <button className="btn md secondary" id="mgCancel" data-sound="close" onClick={close}>
             {t('Отмена')}
           </button>
-          <button className="btn md primary" id="mgGo" disabled={loading || busy || !plan} onClick={start}>
+          <button className="btn md primary" id="mgGo" disabled={loading || busy || !plan || !!blockOf(loader)} onClick={start}>
             {busy ? t('Переносим…') : t('Перенести')}
           </button>
         </div>

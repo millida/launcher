@@ -213,6 +213,31 @@ fn relaunch_args(restart: Restart) -> Vec<&'static str> {
     }
 }
 
+/// A second start that came while this copy was already shutting down: the single-instance guard handed it to us and
+/// it ended, so without this the click did nothing at all (report of 14.11.2026). The new copy waits for this process
+/// to end, like after a patch, and opens its window.
+pub fn relaunch_after_exit() {
+    let Some(exe) = relaunch_exe() else { return };
+    let mut cmd = std::process::Command::new(&exe);
+    cmd.env("MILLIDA_WAIT_PID", std::process::id().to_string());
+    super::proc::quiet(&mut cmd);
+    if let Err(e) = cmd.spawn() {
+        eprintln!("[relaunch] the new copy did not start: {e}");
+    }
+}
+
+/// What to start again. Inside an AppImage `current_exe` is the mounted image (/tmp/.mount_*), which goes away
+/// with this process: the file to run is the AppImage itself, as selfupdate::install_appimage does.
+fn relaunch_exe() -> Option<PathBuf> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Some(image) = std::env::var_os("APPIMAGE").map(PathBuf::from).filter(|p| p.is_file()) {
+            return Some(image);
+        }
+    }
+    std::env::current_exe().ok()
+}
+
 /// Swaps the running exe for the staged one and, when asked, starts it. `true` = the caller must end this process.
 #[cfg(windows)]
 pub(crate) fn install(staged: &Path, restart: Restart) -> Result<bool, String> {

@@ -222,11 +222,13 @@ pub async fn ensure_custom_skin_loader(
     let jar = mods.join(CSL_JAR);
     let other = skin_owning_mod(&mods);
     let present = jar.exists() || other.is_some();
+    // The launcher took its own jar out for the Millida mod: that is not the player removing it.
+    let replaced = take_csl_replaced(&dir);
     if !present {
         match absent_action(
             skin_mod_on(profile),
             mods.join(CSL_DISABLED).exists() || disabled_csl_in(&mods),
-            profile_settings(profile)["skinModInstalled"].as_bool().unwrap_or(false),
+            profile_settings(profile)["skinModInstalled"].as_bool().unwrap_or(false) && !replaced,
         ) {
             Absent::Install => {}
             Absent::Skip => return Ok(turned_off),
@@ -315,6 +317,23 @@ pub fn is_custom_skin_loader_jar(file: &str) -> bool {
 /// The player deleted a CustomSkinLoader that is not the launcher's copy: the
 /// launcher must not put its own in instead. The Millida mod is not touched;
 /// only removing the launcher's own jar says no to it (`note_skin_mod_removed`).
+/// Left in the build's CustomSkinLoader folder when the launcher itself removes its jar because the
+/// Millida mod answers for the skin. Without it a later launch where the Millida mod was not placed
+/// (offline, kill switch, no variant) read «installed before, now missing» as the player's refusal and
+/// left the build with no skin mod for good (reports 13.11.2026: no skin and no cape in game).
+const CSL_REPLACED: &str = ".millida-replaced";
+
+pub(crate) fn note_csl_replaced(profile_dir: &std::path::Path) {
+    let cfg = profile_dir.join("CustomSkinLoader");
+    let _ = std::fs::create_dir_all(&cfg);
+    let _ = std::fs::write(cfg.join(CSL_REPLACED), b"millida");
+}
+
+fn take_csl_replaced(profile_dir: &std::path::Path) -> bool {
+    let marker = profile_dir.join("CustomSkinLoader").join(CSL_REPLACED);
+    marker.exists() && std::fs::remove_file(&marker).is_ok()
+}
+
 pub fn note_csl_removed(profile: &str) {
     opt_out(profile, b"removed");
 }
@@ -724,6 +743,21 @@ mod tests {
             }
             assert_eq!(skin_mod_on_in(&dir), want, "{name}: {why}");
         }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_jar_the_launcher_replaced_is_not_the_players_refusal() {
+        let root = std::env::temp_dir().join(format!("millida-csl-replaced-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(!take_csl_replaced(&root), "no marker: nothing was replaced");
+        note_csl_replaced(&root);
+        assert!(take_csl_replaced(&root), "the launcher's own removal is remembered");
+        assert!(!take_csl_replaced(&root), "and read once");
+        // installed_before is read as «installed and not replaced by the launcher».
+        assert_eq!(absent_action(true, false, false), Absent::Install, "a replaced jar comes back when the Millida mod is not there");
+        assert_eq!(absent_action(true, false, true), Absent::OptOut, "a jar the player removed stays out");
         let _ = std::fs::remove_dir_all(&root);
     }
 

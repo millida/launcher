@@ -9,6 +9,7 @@ pub mod overlay;
 pub mod milli;
 pub mod party_voice;
 pub mod rewind;
+pub mod world_backups;
 
 /// Disk sweeps, archive work and process spawns must not run on the event loop
 /// thread: a synchronous command there freezes the window until it returns.

@@ -2,6 +2,13 @@ import { tauri } from './tauri'
 import type { UnlistenFn } from './tauri'
 import type { RewindState } from './commands'
 
+/** Подписка на событие ядра; без ядра (браузер) или при ошибке подписки — null. */
+function on<P>(name: string, handler: (payload: P) => void): Promise<UnlistenFn | null> {
+  const T = tauri()
+  if (!T) return Promise.resolve(null)
+  return T.event.listen<P>(name, (e) => handler(e.payload)).catch(() => null)
+}
+
 export interface LaunchProgress {
   stage: string
   pct: number
@@ -9,15 +16,22 @@ export interface LaunchProgress {
 }
 
 export function listenLaunchProgress(handler: (p: LaunchProgress) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<LaunchProgress>('launch-progress', (e) => handler(e.payload)).catch(() => null)
+  return on<LaunchProgress>('launch-progress', handler)
 }
 
 export function listenLaunchWarning(handler: (msg: string) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<string>('launch-warning', (e) => handler(e.payload)).catch(() => null)
+  return on<string>('launch-warning', handler)
+}
+
+/// The build has several mods with their own loading screen (or one the core could not name), and
+/// only one may be set in its fml.toml: the player has to choose. `mods` are jar file names.
+export interface EarlyWindowNotice {
+  profile: string
+  mods: string[]
+}
+
+export function listenEarlyWindow(handler: (n: EarlyWindowNotice) => void): Promise<UnlistenFn | null> {
+  return on<EarlyWindowNotice>('launch-early-window', handler)
 }
 
 export interface InstallProgress {
@@ -33,9 +47,7 @@ export interface InstallProgress {
 }
 
 export function listenInstallProgress(handler: (p: InstallProgress) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<InstallProgress>('install-progress', (e) => handler(e.payload)).catch(() => null)
+  return on<InstallProgress>('install-progress', handler)
 }
 
 export interface ShareProgress {
@@ -45,9 +57,7 @@ export interface ShareProgress {
 }
 
 export function listenShareProgress(handler: (p: ShareProgress) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<ShareProgress>('share-progress', (e) => handler(e.payload)).catch(() => null)
+  return on<ShareProgress>('share-progress', handler)
 }
 
 export interface DroppedPack {
@@ -56,34 +66,34 @@ export interface DroppedPack {
 }
 
 export function listenPackDrag(handler: (over: boolean) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<boolean>('pack-drag', (e) => handler(e.payload)).catch(() => null)
+  return on<boolean>('pack-drag', handler)
 }
 
 export function listenPackDrop(handler: (packs: DroppedPack[]) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<DroppedPack[]>('pack-drop', (e) => handler(e.payload || [])).catch(() => null)
+  return on<DroppedPack[]>('pack-drop', (p) => handler(p || []))
+}
+
+/** Игра показала окно (ядро: launch_perf GAME_WINDOW_EVENT): лаунчер может прятаться. */
+export function listenGameWindow(handler: (profile: string) => void): Promise<UnlistenFn | null> {
+  return on<string>('game-window', handler)
+}
+
+/** Игра живёт, а окна нет 4 минуты (ядро: GAME_STUCK_EVENT): лаунчер вернулся и спрашивает. */
+export function listenGameStuck(handler: (profile: string) => void): Promise<UnlistenFn | null> {
+  return on<string>('game-stuck', handler)
 }
 
 export function listenGameExit(handler: (profile: string) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<string>('game-exit', (e) => handler(e.payload)).catch(() => null)
+  return on<string>('game-exit', handler)
 }
 
 // The core gives the frontend ~1.5s to install a staged update before it exits.
 export function listenTrayExit(handler: () => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen('tray-exit', () => handler()).catch(() => null)
+  return on('tray-exit', () => handler())
 }
 
 export function listenWindowVisibility(handler: (visible: boolean) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<boolean>('window-visibility', (e) => handler(e.payload)).catch(() => null)
+  return on<boolean>('window-visibility', handler)
 }
 
 export function listenDragDrop(handler: (paths: string[]) => void): Promise<UnlistenFn | null> {
@@ -111,9 +121,7 @@ export function listenDragState(handler: (active: boolean) => void): Promise<Unl
 }
 
 export function listenHostConsole(handler: (line: string) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<string>('host-console', (e) => handler(e.payload)).catch(() => null)
+  return on<string>('host-console', handler)
 }
 
 export interface WorldDownloadProgress {
@@ -123,33 +131,23 @@ export interface WorldDownloadProgress {
 }
 
 export function listenHostWorldDownload(handler: (p: WorldDownloadProgress) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<WorldDownloadProgress>('host-world-download', (e) => handler(e.payload)).catch(() => null)
+  return on<WorldDownloadProgress>('host-world-download', handler)
 }
 
 /// End of the log the node replays on connect. What came before it is history
 /// the server had already written, what comes after is live.
 export function listenHostConsoleReplayEnd(handler: () => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen('host-console-replay-end', () => handler()).catch(() => null)
+  return on('host-console-replay-end', () => handler())
 }
 
 // The core batches lines; a bare string is still accepted for older core builds.
 export function listenGameLog(handler: (lines: string[]) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event
-    .listen<string | string[]>('game-log', (e) => handler(Array.isArray(e.payload) ? e.payload : [e.payload]))
-    .catch(() => null)
+  return on<string | string[]>('game-log', (p) => handler(Array.isArray(p) ? p : [p]))
 }
 
 // Адрес сервера, на котором игрок прямо сейчас; пустая строка — меню или одиночная игра.
 export function listenGameServer(handler: (addr: string) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<string>('game-server', (e) => handler(e.payload || '')).catch(() => null)
+  return on<string>('game-server', (p) => handler(p || ''))
 }
 
 /** Пачка строк лога с номером первой: по номеру читатель продолжает снимок без пропусков и повторов. */
@@ -159,15 +157,11 @@ export interface GameLogBatch {
 }
 
 export function listenGameLogSeq(handler: (b: GameLogBatch) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<GameLogBatch>('game-log-seq', (e) => handler(e.payload)).catch(() => null)
+  return on<GameLogBatch>('game-log-seq', handler)
 }
 
 export function listenGameLogStart(handler: (profile: string) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<string>('game-log-start', (e) => handler(e.payload)).catch(() => null)
+  return on<string>('game-log-start', handler)
 }
 
 /** Пять секунд игры глазами мода: кадры, память, окно впереди. */
@@ -185,9 +179,7 @@ export interface GamePerf {
 }
 
 export function listenGamePerf(handler: (p: GamePerf) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<GamePerf>('game-perf', (e) => handler(e.payload)).catch(() => null)
+  return on<GamePerf>('game-perf', handler)
 }
 
 export interface CrashAction {
@@ -220,20 +212,14 @@ export interface PackAccessLost {
   removed: boolean
 }
 export function listenPackAccessLost(handler: (info: PackAccessLost) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<PackAccessLost>('pack-access-lost', (e) => handler(e.payload)).catch(() => null)
+  return on<PackAccessLost>('pack-access-lost', handler)
 }
 export function listenGameCrash(handler: (info: CrashInfo) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<CrashInfo>('game-crash', (e) => handler(e.payload)).catch(() => null)
+  return on<CrashInfo>('game-crash', handler)
 }
 
 export function listenRealtimeRelay(handler: (payload: unknown) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<unknown>('realtime-relay', (e) => handler(e.payload)).catch(() => null)
+  return on<unknown>('realtime-relay', handler)
 }
 
 export interface PartyVoiceState {
@@ -248,21 +234,15 @@ export interface PartyVoiceLevels {
 }
 
 export function listenPartyVoiceState(handler: (s: PartyVoiceState) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<PartyVoiceState>('party-voice://state', (e) => handler(e.payload)).catch(() => null)
+  return on<PartyVoiceState>('party-voice://state', handler)
 }
 
 export function listenPartyVoiceLevels(handler: (l: PartyVoiceLevels) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<PartyVoiceLevels>('party-voice://levels', (e) => handler(e.payload)).catch(() => null)
+  return on<PartyVoiceLevels>('party-voice://levels', handler)
 }
 
 export function listenRewindState(handler: (s: RewindState) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<RewindState>('rewind-state', (e) => handler(e.payload)).catch(() => null)
+  return on<RewindState>('rewind-state', handler)
 }
 
 export interface ClipSaved {
@@ -272,7 +252,5 @@ export interface ClipSaved {
 }
 
 export function listenRewindClip(handler: (c: ClipSaved) => void): Promise<UnlistenFn | null> {
-  const T = tauri()
-  if (!T) return Promise.resolve(null)
-  return T.event.listen<ClipSaved>('rewind-clip', (e) => handler(e.payload)).catch(() => null)
+  return on<ClipSaved>('rewind-clip', handler)
 }
