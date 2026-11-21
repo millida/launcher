@@ -83,12 +83,19 @@ export const fragmentCap = (r: Rarity) => Math.max(0, FRAGMENTS_NEED[r] - 1)
 /** База цены докупки по рангу, рубинов (зеркало FRAGMENT_TOPUP_BASE службы). */
 const TOPUP_BASE: Record<Rarity, number> = { COMMON: 150, UNCOMMON: 350, RARE: 700, EPIC: 1400, LEGENDARY: 2800, MYTHIC: 5600, RELIC: 11200 }
 
-/** Докупить недостающие фрагменты: база × (need − have) / need, вверх до десятка, не меньше 10. */
-export const fragmentTopUp = (r: Rarity, have: number) => {
-  const need = FRAGMENTS_NEED[r]
-  const missing = need - Math.min(Math.max(0, have), fragmentCap(r))
-  return Math.max(10, Math.ceil((TOPUP_BASE[r] * missing) / need / 10) * 10)
+/**
+ * Цена дособрать вещь (зеркало службы): полная цена × недостающие / need, вверх до десятка,
+ * не меньше 10. Одна формула для витрины и докупки (замечания по магазину 13.11.2026: осталось
+ * 5 из 15 — платишь треть; потолка скидки в 50 % больше нет).
+ */
+export const fragmentPrice = (full: number, have: number, need: number) => {
+  if (full <= 0 || need <= 0) return Math.max(0, full)
+  const missing = need - Math.min(Math.max(0, have), need)
+  return Math.max(10, Math.ceil((full * missing) / need / 10) * 10)
 }
+
+/** Докупить недостающие фрагменты вещи ранга `r`: та же формула от базы ранга. */
+export const fragmentTopUp = (r: Rarity, have: number) => fragmentPrice(TOPUP_BASE[r], Math.min(Math.max(0, have), fragmentCap(r)), FRAGMENTS_NEED[r])
 
 /** Шанс в базисных пунктах → «4,5 %», «0,02 %». */
 export const pctOfBp = (bp: number) =>
@@ -120,10 +127,8 @@ export const PLUS_PASS = {
 /** Бесплатные рубины: до 500 в месяц (трек 290 + редкие горсти из сундуков). */
 export const FREE_RUBIES_MONTH_MAX = 500
 
-/** Фрагменты снижают цену вещи в магазине не больше чем наполовину. */
-export const FRAGMENT_PRICE_SHARE_MAX = 0.5
-export const fragmentOff = (price: number, have: number, need: number) =>
-  price <= 0 || need <= 0 || have <= 0 ? 0 : Math.floor((price * (Math.min(have, need) / need) * FRAGMENT_PRICE_SHARE_MAX) / 10) * 10
+/** На сколько фрагменты снижают цену вещи на витрине: до цены «дособрать» (fragmentPrice). */
+export const fragmentOff = (price: number, have: number, need: number) => (price <= 0 || need <= 0 || have <= 0 ? 0 : price - fragmentPrice(price, have, need))
 
 export const PITY_AFTER = CHEST_CONFIG.pityAfter
 export const PITY_LEGEND_AFTER = CHEST_CONFIG.pityLegendAfter

@@ -313,6 +313,83 @@
   position: absolute; z-index: 3; top: 14px; left: 14px; padding: 4px 9px; font-size: 13px; font-weight: 900;
   background: var(--m-accent); color: var(--px-on-accent); --px-n: 4px; clip-path: var(--px-4);
 }
+/* «Берут чаще всего» (служба: самый покупаемый за 30 дней): та же плашка, золотом редкости, чтобы не спорить с «выгодно». */
+.pk-best.pk-pop {
+  background: color-mix(in srgb, var(--m-rarity-legendary) 26%, var(--m-surface-2)); color: var(--m-rarity-legendary);
+  white-space: nowrap; max-width: calc(100% - 28px); overflow: hidden; text-overflow: ellipsis;
+}
+.pk-pct {
+  position: absolute; z-index: 3; top: 14px; left: 14px; padding: 3px 8px; font-size: 12px; font-weight: 900;
+  background: color-mix(in srgb, var(--m-accent) 26%, var(--m-surface-2)); color: var(--m-accent);
+  --px-n: 4px; clip-path: var(--px-4);
+}
+.pk-pct.is-inline { position: static; }
+.pk-grid .pk-pct { top: 8px; left: 8px; font-size: 11px; padding: 2px 6px; }
+.pk > .pk-buy { font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* Разовый «Второй шаг» первой карточкой ряда */
+.pk.is-second { background: color-mix(in srgb, var(--m-rarity-rare, var(--m-accent)) 16%, var(--m-surface-2)); }
+.pk-promo.is-now { background: var(--m-accent); color: var(--px-on-accent); }
+.pk-second-meta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Выбор друга для подарка ---------- */
+.gfp-bg { z-index: 925; }
+.gfp-search { width: 100%; }
+.gfp-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; overflow-y: auto; max-height: 360px; }
+.gfp-friend {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; text-align: left; color: inherit;
+  background: var(--m-surface-2); --px-n: 5px; clip-path: var(--px-5);
+}
+.gfp-friend:hover { background: var(--m-surface-3, var(--m-inset)); }
+.gfp-friend > b { font-size: 15px; font-weight: 800; }
+.gfp-face { flex: none; }
+.gfp-skel { display: block; height: 52px; }
+.gfp-none { margin: 4px 0; font-size: 14px; color: var(--m-fg-faint); text-align: center; }
+.gfp-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px; text-align: center; }
+.gfp-empty > svg.icon { width: 32px; height: 32px; color: var(--m-fg-faint); }
+.gfp-empty > span { font-size: 14px; color: var(--m-fg-faint); }
+
+/* ---------- Окно выбора пакета при нехватке ---------- */
+.pp-bg { position: fixed; z-index: 920; }
+:root:root .modal.pp {
+  display: flex; flex-direction: column; gap: 12px; width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
+  padding: 16px; background: var(--m-surface); transform: none; overflow: hidden;
+}
+.pp-head { position: relative; display: flex; flex-direction: column; gap: 4px; padding-right: 42px; }
+.pp-title { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }
+.pp-sub { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: color-mix(in srgb, var(--m-fg) 80%, transparent); }
+.pp-x { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 34px; height: 34px; background: var(--m-inset); color: inherit; --px-n: 5px; clip-path: var(--px-5); }
+.pp-x > svg.icon { width: 18px; height: 18px; }
+.pp-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.pp-opt {
+  position: relative; display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 12px; text-align: left; background: var(--m-surface-2); color: inherit; --px-n: 10px; clip-path: var(--px-10);
+}
+.pp-opt.is-rec { background: color-mix(in srgb, var(--m-accent) 18%, var(--m-surface-2)); }
+.pp-opt:disabled { opacity: 0.55; }
+.pp-rec-tag {
+  position: absolute; top: -9px; left: 12px; z-index: 2; padding: 2px 8px; font-size: 11px; font-weight: 900;
+  background: var(--m-accent); color: var(--px-on-accent); --px-n: 4px; clip-path: var(--px-4);
+}
+.pp-opt-art { position: relative; display: grid; place-items: center; }
+.pp-opt-art .pk-art img { width: 52px; height: 52px; }
+.pp-opt-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-opt-n { display: inline-flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.pp-left { font-size: 12px; font-weight: 700; color: color-mix(in srgb, var(--m-fg) 72%, transparent); }
+.pp-next { font-size: 12px; font-weight: 700; color: var(--m-danger); }
+.pp-opt-price { font-size: 17px; font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---------- Полоска «не хватает» над витриной ---------- */
+.sf-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
+  background: color-mix(in srgb, var(--m-accent) 14%, var(--m-surface-2)); --px-n: 10px; clip-path: var(--px-10);
+}
+.sf-text { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 750; }
+.sf-text b { font-variant-numeric: tabular-nums; }
+.sf-dot { opacity: 0.5; }
+.sf-acts { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sf-x { display: grid; place-items: center; width: 32px; height: 32px; background: var(--m-inset); color: inherit; --px-n: 5px; clip-path: var(--px-5); }
+.sf-x > svg.icon { width: 16px; height: 16px; }
 
 /* ---------- Два баннера внизу: «Стань автором» и «Поддержи автора» ---------- */
 .sv-banners { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
@@ -348,11 +425,18 @@
   position: relative; display: grid; place-items: center; height: 380px; overflow: hidden;
   background: color-mix(in srgb, var(--sh-tone, var(--m-accent)) 18%, var(--m-inset)); --px-n: 10px; clip-path: var(--px-10);
 }
-.bs-art > .sv-shot { position: relative; inset: auto; height: 100%; aspect-ratio: 3 / 4; }
+.bs-art > .sv-shot, .bs-art > .sv-stage { position: absolute; inset: 0; min-height: 0; }
+.bs[data-kind='sheet_item'] .sv-scene, .bs[data-kind='sheet_item_owned'] .sv-scene, .bs[data-kind='sheet_craft'] .sv-scene { --sh-tone: var(--m-rarity-common); }
 .bs-art > .sv-shot .sv-shot-skel { inset: 24px; }
 .bs-name { font-size: 24px; font-weight: 900; letter-spacing: -0.02em; text-align: center; }
 .bs-acts { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
 .bs.is-done .bs-acts { grid-template-columns: 1fr; }
+.bs-acts.has-gift { grid-template-columns: 1.6fr 56px 1fr; }
+.bs-tones { display: flex; justify-content: center; gap: 10px; margin-top: -4px; }
+.bs-tone { width: 30px; height: 30px; padding: 0; background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); }
+.bs-tone.on { box-shadow: inset 0 0 0 3px var(--m-fg), inset 0 0 0 5px var(--m-surface); }
+.bs-acts .bs-gift { padding: 0; }
+.bs-acts .bs-gift > svg.icon { width: 24px; height: 24px; }
 .bs-acts .btn { width: 100%; gap: 6px; justify-content: center; font-variant-numeric: tabular-nums; }
 :root:root .bs-acts .btn.lg { height: 56px; font-size: 19px; }
 .bs-spin { width: 20px; height: 20px; background: currentColor; animation: bs-spin 0.8s var(--m-ease-smooth) infinite; --px-n: 4px; clip-path: var(--px-4); }
@@ -406,6 +490,7 @@
   position: absolute; z-index: 4; top: 8px; right: 8px; padding: 3px 7px; font-size: 11px; font-weight: 900;
   background: var(--m-rarity-epic); color: #fff; --px-n: 4px; clip-path: var(--px-4);
 }
+.cl-sub { margin: -4px 0 10px; max-width: 640px; font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--m-fg-muted); }
 .td-row { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
 .td-row .sh-head h2 { font-size: 18px; font-weight: 900; }
 
@@ -486,7 +571,7 @@
   background: var(--m-rarity-rare); color: #031327; --px-n: 4px; clip-path: var(--px-4);
 }
 
-.bs-art .rar-chip { left: 12px; bottom: 12px; height: 26px; font-size: 14px; padding: 0 10px; }
+.bs-art .rar-chip { z-index: 2; left: 12px; bottom: 12px; height: 26px; font-size: 14px; padding: 0 10px; }
 
 .bs-art[hidden] { display: none; }
 
@@ -528,6 +613,11 @@
 .td-left { position: absolute; z-index: 4; top: 8px; right: 8px; pointer-events: none; }
 .td-left .sv-clock { height: 24px; padding: 0 7px; font-size: 12px; }
 .td-left .sv-clock > svg.icon { width: 13px; height: 13px; }
+.sv-rise { align-self: flex-start; height: 24px; padding: 0 7px; font-size: 12px; }
+.sv-rise > svg.icon { width: 13px; height: 13px; }
+.sv-rise-box { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.sv-rise-then { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
+.sv-try-items li > .btn { margin-inline-start: auto; flex: none; }
 .td-card { animation: td-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
 @keyframes td-in { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .td-card { animation: none; } }
@@ -697,6 +787,9 @@
 .sv-ci { width: 34px; height: 34px; flex: none; display: grid; place-items: center; background: var(--m-inset); --px-n: 4px; clip-path: var(--px-4); overflow: hidden; }
 .sv-ci img, .sv-ci canvas, .sv-ci > * { max-width: 28px; max-height: 28px; }
 .sv-ci.own { opacity: .45; }
+button.sv-ci { border: 0; padding: 0; color: inherit; cursor: pointer; }
+button.sv-ci:disabled { cursor: default; }
+.sv-ci.is-off > * { opacity: .3; filter: grayscale(1); }
 .sv-try-bg { display: grid; place-items: center; z-index: 950; }
 .sv-try { position: relative; width: min(860px, calc(100vw - 40px)); height: min(560px, calc(100vh - 60px)); display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 0; background: var(--m-surface); --px-n: 10px; clip-path: var(--px-10); }
 .sv-try > .sv-stand { height: 100%; }

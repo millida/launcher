@@ -35,6 +35,8 @@ export interface MilliSnap {
   files: number
   mods: number
   auto: boolean
+  /** Folders the snapshot replaces on restore; older cores omit it. */
+  dirs?: string[]
 }
 export interface WorldBackup {
   file: string

@@ -5,7 +5,7 @@ import { api } from '../../lib/api'
 import { hostingSendBuild } from '../../ipc/commands'
 import { hasTauri } from '../../ipc/tauri'
 import { apiErrorText } from '../../lib/apiError'
-import type { PartyRoom, PartyTargetKind } from '../../lib/party'
+import { AGE_BRACKETS, type PartyRoom, type PartyTargetKind } from '../../lib/party'
 import { planServer, targetForMode } from '../../lib/partyPlay'
 import { loadMyServers, serverTitle, type MyServer } from '../../state/playInvite'
 import { setScreen } from '../../state/ui'
@@ -122,7 +122,7 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
   const [failed, setFailed] = useState('')
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState(true)
-  const [tab, setTab] = useState<'join' | 'own' | 'friends'>(start)
+  const [tab, setTab] = useState<'join' | 'own' | 'friends' | 'age'>(start)
   const [cat, setCat] = useState<Place['cat']>('ours')
   const [q, setQ] = useState('')
   // Сборке и чистой версии нужен сервер, иначе каждый окажется в своём мире.
@@ -280,6 +280,13 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
             <Icon id="i-users" />
             {t('Позвать друга')}
           </button>
+          {age ? (
+            <button className={'prm-nav' + (tab === 'age' ? ' on' : '')} aria-pressed={tab === 'age'} data-track="party_age_open" onClick={() => setTab('age')}>
+              <Icon id="i-user" />
+              {t('Возраст')}
+              <span className="prm-n">{AGE_BRACKETS.find((b) => b.id === age)?.label}</span>
+            </button>
+          ) : null}
         </aside>
 
         <section className="prm-main">
@@ -290,6 +297,13 @@ export function PartyRoomsMenu({ start, close }: { start: 'join' | 'friends'; cl
             <>
               <h2 className="prm-h">{t('Позвать друга')}</h2>
               <PartyInviteList close={close} />
+            </>
+          ) : tab === 'age' ? (
+            <>
+              <h2 className="prm-h">{t('Возраст')}</h2>
+              <div className="prm-rooms">
+                <AgeGate />
+              </div>
             </>
           ) : tab === 'join' ? (
             <>

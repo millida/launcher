@@ -14,7 +14,7 @@ import { hardwareVideo } from './perfTier'
 import { GRAPHICS_PRESETS_PUBLIC } from './graphicsRelease'
 import type { Profile } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
-import { MODRINTH_API, api, mirrorAsset } from './api'
+import { MODRINTH_API, api, mirrorAsset, sharedFetch } from './api'
 
 /**
  * Сборка «Minecraft X» для полки версий «Во что играем» (приказ владельца
@@ -29,7 +29,7 @@ import { MODRINTH_API, api, mirrorAsset } from './api'
  * а переименовывает в .disabled: включить обратно — без скачивания.
  */
 
-/** Имя сборки под версию. То же, что в lib/lobbyPlay.ts. */
+/** Имя сборки под версию. То же, что в lib/lobbyPlay.ts и lib/buildPick.ts. */
 export const versionBuildName = (version: string) => 'Minecraft ' + version
 
 const FPS_KEY = 'm-ver-fps:'
@@ -101,7 +101,7 @@ export function fpsMods(version: string): Promise<FpsMod[] | null> {
     // The WebKit of the Intel build (Safari 13) has no AbortSignal.timeout.
     const stop = typeof AbortController === 'function' ? new AbortController() : null
     const timer = setTimeout(() => stop?.abort(), MODRINTH_WAIT_MS)
-    return fetch(MODRINTH_API + path, stop ? { signal: stop.signal } : undefined)
+    return sharedFetch(MODRINTH_API + path, stop ? { signal: stop.signal } : undefined)
       .then((r) => (r.ok ? (r.json() as Promise<T>) : Promise.reject(r.status)))
       .finally(() => clearTimeout(timer))
   }

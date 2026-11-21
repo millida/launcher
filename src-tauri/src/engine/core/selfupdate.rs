@@ -700,8 +700,26 @@ pub fn run_installer(file: &Path, restart: bool) -> Result<bool, String> {
     run_installer_as(file, if restart { Restart::Show } else { Restart::No })
 }
 
+/// An installer or a patch took over the launcher files: this process ends for it.
+static UPDATE_TAKES_OVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// True once an update was started on the way out. A second start that came while closing must not
+/// relaunch then: the new copy would hold the old exe, and NSIS fails to replace it (review of PR #346).
+/// The installer itself starts the launcher again when it was asked to.
+pub fn update_takes_over() -> bool {
+    UPDATE_TAKES_OVER.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Same, with the choice of what starts afterwards.
 pub fn run_installer_as(file: &Path, restart: Restart) -> Result<bool, String> {
+    let started = run_installer_inner(file, restart);
+    if matches!(started, Ok(true)) {
+        UPDATE_TAKES_OVER.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    started
+}
+
+fn run_installer_inner(file: &Path, restart: Restart) -> Result<bool, String> {
     if selfdelta::is_delta_file(file) {
         return selfdelta::install(file, restart);
     }

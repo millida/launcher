@@ -69,7 +69,9 @@ export const useProfiles = create<ProfilesState>((set, get) => ({
       // Unreadable means shown as before: the files are on the player's disk either way.
       guarded = await protectedBuilds().catch(() => [])
     }
-    const selected = get().selected || profiles[0].name
+    // Выбранную могли удалить: тогда первая из оставшихся, а не имя, которого больше нет.
+    const prev = get().selected
+    const selected = prev && profiles.some((p) => p.name === prev) ? prev : profiles[0].name
     set({ profiles, guarded, groups, selected })
   },
 }))

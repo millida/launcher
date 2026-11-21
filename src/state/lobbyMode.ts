@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { rememberLobbyOrigin } from '../lib/uiTrack'
 import { api } from '../lib/api'
 import { loadShowcase, packFacts } from '../lib/premium'
+import { pickGoneWith } from '../lib/buildPick'
 import type { PremiumPack } from '../lib/premium'
 import { DEFAULT_FILTERS, licenseRequired, toCard } from './servers'
 import type { RatingServer } from './servers'
@@ -104,6 +105,8 @@ interface LobbyState {
   /** `stay` — переход со страницы на страницу (Ещё от…): хаб не уходит из каталога. */
   hubTarget: { pack?: string; mode?: string; pvp?: boolean; stay?: boolean } | null
   pick: (m: LobbyMode) => void
+  /** Сборку удалили: снять выбор, если он вёл в неё (lib/buildPick.ts). */
+  forgetBuild: (name: string) => void
   /**
    * Слот OneBlock в лобби: второй вариант рядом с выбранным режимом, а не
    * замена ему (правка владельца 23:00: «чтобы точно понимал, во что играет»).
@@ -132,6 +135,13 @@ export const useLobby = create<LobbyState>((set, get) => ({
       localStorage.removeItem(OB_KEY)
     } catch {}
     set({ picked: m, oneBlock: false })
+  },
+  forgetBuild: (name) => {
+    if (!pickGoneWith(get().picked, name)) return
+    try {
+      localStorage.removeItem(KEY)
+    } catch {}
+    set({ picked: null })
   },
   oneBlock: readOb(),
   setOneBlock: (on) => {

@@ -25,7 +25,10 @@ export function TunePanel({ profile, manualGb }: Props) {
   const [showFlags, setShowFlags] = useState(false)
 
   const load = useCallback(() => {
-    if (!hasTauri()) return
+    if (!hasTauri()) {
+      if (import.meta.env.DEV) void import('../lib/demo').then((d) => setTuning(d.demoTuning()))
+      return
+    }
     void tuneProfile(profile).then(setTuning).catch(() => {})
     void loadProfileSettings(profile)
       .then((s) => setOn((s as { autoTune?: boolean }).autoTune !== false))

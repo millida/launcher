@@ -1,5 +1,5 @@
 import { Icon } from './Icon'
-import { PL_STAGES, REPAIR_STAGES, cancelPrelaunch } from '../lib/launch'
+import { PL_STAGES, REPAIR_STAGES, cancelPrelaunch, stopWaitingGame } from '../lib/launch'
 import { useUi } from '../state/ui'
 import { tx, useT } from '../i18n'
 
@@ -29,9 +29,15 @@ export function Prelaunch() {
       <div className="pl-bar">
         <i id="plBar" style={{ width: pl.pct + '%' }}></i>
       </div>
-      <button className="btn sm ghost" style={{ width: '100%' }} id="plCancel" onClick={cancelPrelaunch}>
-        {t('Отмена')}
-      </button>
+      {pl.waiting ? (
+        <button className="btn sm ghost" style={{ width: '100%' }} id="plCancel" data-track="stop_waiting_game" onClick={() => stopWaitingGame(pl.waiting!)}>
+          {t('Остановить')}
+        </button>
+      ) : (
+        <button className="btn sm ghost" style={{ width: '100%' }} id="plCancel" onClick={cancelPrelaunch}>
+          {t('Отмена')}
+        </button>
+      )}
     </div>
   )
 }
