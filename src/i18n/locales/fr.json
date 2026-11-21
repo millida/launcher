@@ -6909,5 +6909,14 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Mods lourds pris en compte : {0} (+{1} Go)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Carte graphique intégrée : +{0} Go laissés au système",
   "Не удалось сохранить настройку автобэкапа: {0}": "Impossible d’enregistrer le réglage de sauvegarde auto : {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "le monde était en cours d’enregistrement pendant la copie, on réessaiera la prochaine fois"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "le monde était en cours d’enregistrement pendant la copie, on réessaiera la prochaine fois",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "Le lien ouvre une page web, pas un fichier de pack — il faut un lien direct vers pack.toml",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "C’est un lien vers un build Millida — installe-le via « Par code »",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "L’auteur ne partage le mod perso {0} qu’avec ses amis — connecte-toi à ton compte Millida",
+  "Мод, сборка или карта": "Mod, modpack ou carte",
+  "{n} запросов": "{n} requêtes",
+  "Запросы добавлены: {n}": "Requêtes ajoutées : {n}",
+  "Не удалось купить запросы": "Impossible d’acheter des requêtes",
+  "К рубинам": "Vers les rubis",
+  "Докупить запросы": "Acheter des requêtes"
 }

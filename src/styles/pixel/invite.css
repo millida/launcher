@@ -22,15 +22,6 @@
   align-items: center;
   gap: 10px;
 }
-.inv-earned {
-  margin-inline-start: auto;
-  padding: 4px 9px;
-  font-size: 12.5px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--px-on-accent, var(--m-bg));
-  background: var(--m-accent);
-}
 .inv-code-row,
 .inv-apply-row {
   display: flex;
@@ -60,103 +51,22 @@
   letter-spacing: 0.08em;
 }
 .inv-rule,
-.inv-next,
 .inv-by {
   margin: 0;
 }
 .inv-by {
   margin-bottom: 10px;
 }
-.inv-bar {
-  margin-top: 0;
-}
-.inv-ladder {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-/* Клетка: число друзей сверху, под ним награды по строке на каждую (не текст в 3–4 строки). */
-.inv-step {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 78px;
-  padding: 8px 10px 10px;
-  font-size: 12.5px;
-  color: var(--m-fg-subtle);
-  background: var(--m-inset);
-}
-.inv-step-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 22px;
-}
-.inv-step svg {
-  flex: none;
-  width: 16px;
-  height: 16px;
-}
-.inv-step-n {
-  flex: none;
-  min-width: 18px;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--m-fg-muted);
-}
-.inv-step-r {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-weight: 750;
-  line-height: 1.25;
-}
-.inv-step-r > span {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.inv-step-r > svg {
-  width: 14px;
-  height: 14px;
-  opacity: 0.8;
-}
-.inv-step.on {
-  color: var(--m-fg);
-  background: var(--m-accent-soft);
-}
-.inv-step.on .inv-step-n {
-  color: var(--m-accent);
-}
-.inv-step-ok {
-  margin-inline-start: auto;
-  color: var(--m-accent);
-}
 .fr-status.inv-st-qualified {
   color: var(--m-accent);
 }
 
-:root:root :is(.inv-code, .inv-step, .inv-earned) {
+:root:root .inv-code {
   border-radius: 0;
   --px-n: 5px;
   clip-path: var(--px-5);
 }
-:root:root .inv-earned {
-  --px-n: 4px;
-  clip-path: var(--px-4);
-}
 
-.inv-step-wait {
-  margin-inline-start: auto;
-  color: var(--m-fg-subtle);
-}
 .inv-gifts,
 .onb-ref-gifts {
   display: grid;
@@ -313,17 +223,65 @@
 .ico-tile.on small {
   color: var(--m-accent);
 }
-@media (prefers-reduced-motion: reduce) {
-  .ico-pic[data-id='legend']::after { animation: none; display: none; }
-}
 :root:root :is(.inv-gift, .onb-ref-gift, .ico-tile, .onb-ref-found, .onb-ref-miss) {
   border-radius: 0;
   --px-n: 5px;
   clip-path: var(--px-5);
 }
 
-/* Полоса «Засчитано»: плотный акцент без градиента старого кита (QA 06.10.2026). */
-.inv-bar > i {
-  border-radius: 0;
-  background: var(--m-accent);
+/* ---------- Лестница друзей лентой пропуска (InviteTrack.tsx) ----------
+   Колонки, узлы, карточки и стрелки — из pass.css (.bp-*): награды видно
+   картинкой, число друзей стоит на линии, линия залита по засчитанным. */
+.ivp { --ivp-w: 176px; --ivp-h: 200px; --bp-gold: var(--m-rarity-legendary); }
+.ivp-earned {
+  display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto; padding: 4px 10px 6px;
+  background: #ffc933; color: #3a2400; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums;
+  clip-path: var(--px-4); box-shadow: inset 0 -3px 0 #c98a00, inset 0 2px 0 #ffe79a;
 }
+.ivp-bar.bp-bar { flex: none; height: 12px; background: var(--m-inset); }
+.ivp-bar.bp-bar > i.wait { background: color-mix(in srgb, var(--m-accent) 38%, transparent); }
+.ivp .bp-scroll { padding: 6px 0 2px; scroll-padding-inline: 48px; }
+.ivp .bp-track { min-width: 100%; padding: 0 2px; }
+.ivp .bp-col { flex: 1 0 var(--ivp-w); grid-template-rows: var(--ivp-h) 40px; width: auto; }
+
+.ivp .bp-card { gap: 8px; padding: 14px 8px 12px; }
+.ivp .bp-card.free { background-color: var(--m-inset); }
+.ivp .bp-card.claimed { background-color: var(--m-inset); }
+.ivp .bp-card.claimed .bp-art { opacity: 0.5; filter: grayscale(0.6); }
+.ivp .bp-card.wait { --px-ol: var(--m-accent); --px-ol-w: 2px; }
+.ivp .bp-card.next { --px-ol: var(--m-accent); --px-ol-w: 3px; background-color: color-mix(in srgb, var(--m-accent) 16%, var(--m-inset)); }
+.ivp .bp-card.plus.next { background-color: #6a5a14; }
+.ivp .bp-slot.next { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--m-accent) 55%, transparent)); }
+.ivp .bp-art { gap: 6px; }
+.ivp-art { display: grid; place-items: center; }
+.ivp-icon { display: block; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35)); }
+.ivp-plus, .ivp-perk { display: grid; place-items: center; align-content: center; width: var(--ra-size); height: var(--ra-size); clip-path: var(--px-5); }
+.ivp-plus { gap: 2px; background: #ffc933; color: #3a2400; box-shadow: inset 0 -4px 0 #c98a00, inset 0 3px 0 #ffe79a; }
+.ivp-plus > b { font-size: calc(var(--ra-size) * 0.4); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.ivp-perk { background: rgba(0, 0, 0, 0.45); color: var(--m-rarity-rare); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35); }
+.ivp-perk.title { color: #ffc933; }
+.ivp-perk.frame { color: var(--m-accent); }
+.ivp-lines { position: relative; z-index: 1; display: grid; gap: 2px; width: 100%; }
+.ivp-lines > b {
+  overflow: hidden; font-size: 12px; font-weight: 800; line-height: 1.25; white-space: nowrap; text-overflow: ellipsis;
+  color: var(--m-fg); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.38);
+}
+.ivp .bp-card.plus .ivp-lines > b { color: #fff; }
+.ivp .bp-card.claimed .ivp-lines { opacity: 0.6; }
+.ivp-left {
+  position: absolute; z-index: 2; top: 8px; left: 8px; padding: 3px 8px 4px;
+  background: var(--m-accent); color: var(--px-on-accent); font-size: 12px; font-weight: 900; clip-path: var(--px-4);
+}
+.bp-mark.ivp-wait { background: rgba(0, 0, 0, 0.55); color: var(--m-fg); }
+
+/* Линия: своя заливка по доле засчитанных друзей, узел — число друзей. */
+.ivp .bp-node::before, .ivp .bp-node::after { display: none; }
+.ivp-line { position: absolute; left: -4px; right: -4px; top: 50%; height: 8px; margin-top: -4px; background: var(--m-inset); }
+.ivp .bp-col:first-child .ivp-line { left: 0; }
+.ivp .bp-col:last-child .ivp-line { right: 0; }
+.ivp-line > i { display: block; height: 100%; background: var(--m-accent); }
+.ivp .bp-day { display: inline-flex; align-items: center; gap: 5px; background-color: var(--m-surface-2); }
+.ivp .bp-day > .px-icon { opacity: 0.7; }
+.ivp .bp-node.done .bp-day { background-color: #24452a; }
+.ivp .bp-col.ms .bp-day { background-color: #ffc933; color: #3a2400; }
+.ivp .bp-col.today .bp-day { min-width: 44px; height: 36px; font-size: 18px; background-color: var(--m-accent); color: var(--px-on-accent); }

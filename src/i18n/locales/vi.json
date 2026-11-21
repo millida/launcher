@@ -6911,5 +6911,14 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Đã tính các mod nặng: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Card đồ họa tích hợp: để lại cho hệ thống +{0} GB",
   "Не удалось сохранить настройку автобэкапа: {0}": "Không lưu được cài đặt sao lưu tự động: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "thế giới đang được lưu trong lúc sao chép, lần sau sẽ thử lại"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "thế giới đang được lưu trong lúc sao chép, lần sau sẽ thử lại",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "Liên kết mở một trang web, không phải tệp gói — cần liên kết trực tiếp tới pack.toml",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "Đây là liên kết bản dựng Millida — hãy cài qua «Theo mã»",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "Tác giả chỉ chia sẻ mod riêng {0} cho bạn bè — hãy đăng nhập tài khoản Millida",
+  "Мод, сборка или карта": "Mod, modpack hoặc bản đồ",
+  "{n} запросов": "{n} yêu cầu",
+  "Запросы добавлены: {n}": "Đã thêm yêu cầu: {n}",
+  "Не удалось купить запросы": "Không mua được yêu cầu",
+  "К рубинам": "Đến hồng ngọc",
+  "Докупить запросы": "Mua thêm yêu cầu"
 }

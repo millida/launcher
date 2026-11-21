@@ -6908,5 +6908,14 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Ağır modlar hesaba katıldı: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Dahili ekran kartı: sisteme +{0} GB bırakıldı",
   "Не удалось сохранить настройку автобэкапа: {0}": "Otomatik yedekleme ayarı kaydedilemedi: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "dünya kopyalama sırasında kaydediliyordu, bir dahaki sefere deneyeceğiz"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "dünya kopyalama sırasında kaydediliyordu, bir dahaki sefere deneyeceğiz",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "Bağlantı bir paket dosyası değil, bir web sayfası açıyor — pack.toml’a doğrudan bağlantı gerekli",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "Bu bir Millida derleme bağlantısı — «Kodla» ile kur",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "Yazar kendi modu {0}’i yalnızca arkadaşlarıyla paylaşıyor — Millida hesabına giriş yap",
+  "Мод, сборка или карта": "Mod, mod paketi veya harita",
+  "{n} запросов": "{n} istek",
+  "Запросы добавлены: {n}": "İstek eklendi: {n}",
+  "Не удалось купить запросы": "İstekler satın alınamadı",
+  "К рубинам": "Yakutlara git",
+  "Докупить запросы": "Daha fazla istek al"
 }
