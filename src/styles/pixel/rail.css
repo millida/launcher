@@ -238,6 +238,13 @@ span.tb-rubies { cursor: default; }
   display: flex; gap: 6px; padding: 3px; background: var(--m-inset);
   --px-n: 5px; clip-path: var(--px-5);
 }
+/* Centred by absolute position, the tabs left the flow and a long label on the right
+   («Импорт · нашли 15») slid under «Каталог». The middle column of a grid keeps them
+   centred while there is room and moves them aside when there is not. */
+.topbar:has(> .tb-tabs) { display: grid; grid-template-columns: 1fr auto 1fr; }
+.topbar:has(> .tb-tabs) > .tb-tabs { position: static; transform: none; }
+.topbar:has(> .tb-tabs) > .tb-back-wrap { justify-self: start; }
+.topbar:has(> .tb-tabs) > .tb-right { justify-self: end; }
 .topbar .btn.md.tb-tab { height: 50px; padding: 0 30px; gap: 10px; font-size: 18px; font-weight: 800; }
 .topbar .tb-tab .px-icon { image-rendering: pixelated; }
 /* «Импорт» мельче «Новой сборки». */

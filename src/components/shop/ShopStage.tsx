@@ -1,6 +1,8 @@
 import { ShotImg } from './LoopShot'
+import { LOOK_EVENT } from '../../lib/gameProfile'
+import { useLookTick } from '../../lib/useLookTick'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 import { lobby3dAllowed, useIdle3d } from '../../lib/lazy3d'
 import { loadWardrobe } from '../../lib/gameProfile'
 import { nickSkinUrl } from '../../lib/characterStage'
@@ -26,17 +28,24 @@ import { rarityRank } from './rarity'
 // а живая фигура приходит после простоя; на слабом ПК — не приходит вообще.
 const LobbyCharacter = lazy(() => import('../lobby/LobbyCharacter').then((m) => ({ default: m.LobbyCharacter })))
 
-/** Скин игрока: из гардероба, иначе по нику. */
+/** Скин игрока: из гардероба, иначе по нику. Смена скина или аккаунта (LOOK_EVENT) читает его заново:
+ *  раньше первый ответ держался до перезапуска лаунчера. */
 let skinAsked: Promise<{ url: string; slim: boolean } | null> | null = null
+if (typeof window !== 'undefined') window.addEventListener(LOOK_EVENT, () => (skinAsked = null))
 export function usePlayerSkin(): { url: string; slim: boolean } | null {
   const signed = useHasMillida()
+  const lookTick = useLookTick()
   const [skin, setSkin] = useState<{ url: string; slim: boolean } | null>(null)
   useEffect(() => {
     let alive = true
     if (!skinAsked)
       skinAsked = loadWardrobe()
         .then((w) => (w.active.skinUrl ? { url: w.active.skinUrl, slim: w.active.model === 'slim' } : null))
-        .catch(() => null)
+        .catch(() => {
+          // A failed read is not remembered: the next screen asks again instead of the nick skin for good.
+          skinAsked = null
+          return null
+        })
     void skinAsked.then((r) => {
       if (!alive) return
       setSkin(r ?? { url: nickSkinUrl((getAccount() || { nick: '' }).nick || 'MHF_Steve'), slim: false })
@@ -44,7 +53,7 @@ export function usePlayerSkin(): { url: string; slim: boolean } | null {
     return () => {
       alive = false
     }
-  }, [signed])
+  }, [signed, lookTick])
   return skin
 }
 
@@ -91,7 +100,7 @@ export function SceneBack({ feet }: { feet: number }) {
 }
 
 /** Живая сцена набора. Засыпает, пока её не видно. */
-export function ShopStage({ on, items, className = '' }: { on: boolean; items: ItemRef[]; className?: string }) {
+export function ShopStage({ on, items, className = '', placeholder }: { on: boolean; items: ItemRef[]; className?: string; placeholder?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [vis, setVis] = useState(true)
   const [dressed, setDressed] = useState<{ key: string; n: number } | null>(null)
@@ -125,7 +134,7 @@ export function ShopStage({ on, items, className = '' }: { on: boolean; items: I
           <LobbyCharacter on={on && vis} shop dress={dress} onDressed={(n) => setDressed({ key, n })} />
         </Suspense>
       ) : null}
-      {flat ? <ItemsFallback items={items} /> : null}
+      {flat ? (placeholder ?? <ItemsFallback items={items} />) : null}
     </div>
   )
 }

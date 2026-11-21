@@ -559,11 +559,14 @@ where
         .filter(Value::is_object);
     let age = std::fs::metadata(copy).ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok());
     let Some(known) = cached else {
-        // Nothing to fall back on: the request runs the way it always did.
+        // Nothing to fall back on: the request runs the way it always did. Only an object is a
+        // description: a quoted string or an error text handed to the agent ends in the game as
+        // «Expected BEGIN_OBJECT but was STRING» (reports 13.11.2026).
         let live = fetch().await?;
-        if live.is_object() {
-            write_json_quiet(copy, &live);
+        if !live.is_object() {
+            return Err("сервер скинов ответил не описанием".into());
         }
+        write_json_quiet(copy, &live);
         return Ok(live);
     };
     if age.is_some_and(|a| a < fresh) {
@@ -665,6 +668,14 @@ mod meta_tests {
         let ok = meta_with_copy(&copy, YGG_FRESH, YGG_WAIT, || async { Ok(json!({"meta": {}})) }).await.unwrap();
         assert!(ok.is_object());
         assert!(copy.exists(), "the first good answer becomes the copy");
+    }
+
+    #[tokio::test]
+    async fn a_text_answer_is_not_handed_to_the_agent() {
+        let copy = copy_in("text", None, Duration::ZERO);
+        let err = meta_with_copy(&copy, YGG_FRESH, YGG_WAIT, || async { Ok(json!("Unauthorized")) }).await;
+        assert!(err.is_err(), "a JSON string reaches the game as «Expected BEGIN_OBJECT but was STRING»");
+        assert!(!copy.exists(), "and never becomes the copy");
     }
 
     #[test]

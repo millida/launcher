@@ -6,6 +6,7 @@ import { getLocale, getMarket } from '../i18n'
 import { hasMillidaSession } from './secure'
 import { sellsPaidPacks } from './paidPacks'
 import { shortfallMarker } from './money'
+import { webviewTimeZone } from './timeZone'
 import { DEMO_USER, ECONOMY_SHOWCASE, demoAnswer } from './demo'
 
 // Dev-приложение открыто с http://localhost:5173, а прод по CORS пускает только
@@ -21,6 +22,21 @@ export const LAUNCHER_API = API_OVERRIDE || (DEV_LOCAL ? '/papi/v2' : 'https://a
 /// Modrinth и CurseForge недоступны в России без VPN, поэтому и каталог, и
 /// картинки идут через наш API: он же отдаёт их с собственного адреса.
 export const MODRINTH_API = LAUNCHER_API + '/launcher/mr'
+
+const SHARED_PREFIXES = [MODRINTH_API + '/', LAUNCHER_API + '/launcher/cf/']
+
+/// Modrinth and CurseForge answers are the same for every player. In the app they go through the core, which sends
+/// them without the account token and with a conditional header: only such a request lets the shield cache the answer.
+export async function sharedFetch(url: string, init?: RequestInit): Promise<Response> {
+  if (!hasTauri() || !SHARED_PREFIXES.some((p) => url.startsWith(p))) return fetch(url, init)
+  try {
+    const body = await millidaApi(url.slice(LAUNCHER_API.length), 'GET')
+    return new Response(JSON.stringify(body ?? null), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  } catch (e) {
+    const status = /^http (\d{3})$/.exec(String(e))
+    return new Response(JSON.stringify({ error: String(e) }), { status: status ? Number(status[1]) : 502 })
+  }
+}
 
 const MIRRORED_ASSET_HOSTS = [
   'cdn.modrinth.com',
@@ -58,7 +74,8 @@ export function apiHeaders(): Record<string, string> {
 
 export function langHeaders(): Record<string, string> {
   const lang = getLocale()
-  return { 'Accept-Language': lang, 'X-Lang': lang }
+  const tz = webviewTimeZone()
+  return { 'Accept-Language': lang, 'X-Lang': lang, ...(tz ? { 'X-Tz': tz } : {}) }
 }
 
 /// The API keeps a separate server rating per market and picks it by header, the
@@ -105,7 +122,7 @@ export async function api<T = any>(pathname: string, opts?: RequestInit): Promis
       const method = ((opts && opts.method) || 'GET').toUpperCase()
       const market = marketFor(pathname)
       const lang = getLocale()
-      const run = () => millidaApi<T>(pathname, method, body, market, lang)
+      const run = () => millidaApi<T>(pathname, method, body, market, lang, webviewTimeZone() ?? undefined)
       return await (method === 'GET' ? sharedGet(pathname, (market ?? '') + '|' + (lang ?? ''), run) : run())
     } catch (e) {
       if (isUnauthorized(e)) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))

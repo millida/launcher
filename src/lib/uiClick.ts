@@ -19,6 +19,8 @@ export interface ClickInfo {
   pos?: number
   src?: string
   mode?: string
+  /** Плашка на карточке («popular», «best»): сравнить продажи с ней и без неё. */
+  badge?: string
 }
 
 export const CLICKABLE =
@@ -79,6 +81,8 @@ export function describeClick(target: TrackNode, screen: string): ClickInfo | nu
   if (src) info.src = src.slice(0, 24)
   const mode = attrUp(el, 'data-mode')
   if (mode) info.mode = mode.slice(0, 24)
+  const badge = attrUp(el, 'data-badge')
+  if (badge) info.badge = badge.slice(0, 16)
   return info
 }
 

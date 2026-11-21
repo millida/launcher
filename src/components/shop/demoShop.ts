@@ -36,6 +36,7 @@ import { rarityOfPrice } from './rarity'
 import { plusOf, tierPct, type Rarity } from '../../lib/rubies'
 import { variantCode, variantTitles } from '../../lib/variantNames'
 import { FLAGSHIP_SLOTS, FRAGMENTS_NEED, SHARD_CAP, SHARD_DAILY_LIMIT, WORKSHOP_COST, fragmentCap, fragmentOff, fragmentTopUp } from '../daily/chestDrops'
+import { subPrice } from './showcasePrice'
 import type { WeeklyPath, WeeklyReward } from './weekly'
 import type { WishEntry, WishHow, WishList } from './wish'
 
@@ -381,10 +382,13 @@ async function build(catalog: DemoCatalogItem[], wallet: { balance: number }, pa
       nightMarket: nightOn ? { endsAt: new Date(refresh + 7 * DAY).toISOString(), cards: night } : null,
       xray,
       // Стартовый набор (служба, 06.10.2026): разовый пакет первым, пока нет оплат. &starter=0 — уже куплен.
-      packs:
+      // «Берут чаще всего» решает служба по оплатам за 30 дней; в демо — средний пакет. &popular=0 — плашки нет.
+      packs: ((list) =>
+        p.get('popular') === '0' || list.some((x) => x.popular) ? list : list.map((x, i) => (i === Math.floor(list.length / 2) && !x.oneTime ? { ...x, popular: true } : x)))(
         p.get('starter') === '0' || packsLive.some((x) => x.oneTime)
           ? packsLive
           : [{ code: 'starter', title: 'Стартовый', rubies: 1490, kopecks: 9900, oneTime: true }, ...packsLive],
+      ),
       // Предложение месяца (служба 7e81279a7): до 1-го числа следующего месяца МСК. &month=0 — уже куплено.
       monthOffer:
         p.get('month') === '0'
@@ -554,7 +558,7 @@ export function demoEconomy(deps: {
     const all: ShopCard[] = [out.day.featured, out.day.deal, ...out.day.items, ...out.day.forYou, ...(out.nightMarket?.cards || []), ...(out.bundle?.items || [])].filter((c): c is ShopCard => !!c)
     for (const c of all) {
       if (c.owned) continue
-      if (pct) c.price = Math.max(10, Math.round((c.price * (100 - pct)) / 100 / 10) * 10)
+      if (pct) c.price = subPrice(c.price, pct)
       else c.plusPrice = plusOf(c.price)
     }
     return { ...out, plus: !!tier, plusTier: tier, plusPct: pct }

@@ -20,7 +20,7 @@ import { hasMillidaAccount, openExt } from '../../lib/api'
 import { loadDiscordReward, loadTelegramReward } from '../../lib/rubies'
 import { TIER_SERVER } from '../../state/tiers'
 import { openPvpArena } from '../playhub/hubTab'
-import { ARCANIA_SLUG, DISCORD_INVITE, PROMO_ROTATE_MS, TELEGRAM_CHAT, promoAt, promoSeed, promoSlides, promoStart } from './promo'
+import { ARCANIA_SLUG, DISCORD_INVITE, PROMO_ROTATE_MS, TELEGRAM_CHAT, promoAt, promoSeed, telegramChat, promoSlides, promoStart } from './promo'
 import { PRISON_BANNER, PRISON_CO, type PrisonFace } from '../playhub/PrisonTile'
 import { loadInvites } from '../../lib/referrals'
 import { pickFriendsTab } from '../friends/friendsView'
@@ -32,6 +32,10 @@ import { ArcaniaCover, ArcaniaFx, ArcaniaName } from '../arcania/ArcaniaCard'
 import { enterArcania } from '../arcania/transition'
 import { liveInterval } from '../../lib/liveInterval'
 import { ABONENT_SLUG } from '../abonent/content'
+import { collectionMembers, loadCollections } from '../shop/collectionData'
+import { Countdown } from '../shop/parts'
+import { loadCosmeticCatalog } from '../../lib/gameProfile'
+import { openShopAt } from '../../lib/openShopAt'
 
 type PackFace = PrisonFace
 
@@ -57,9 +61,10 @@ export function Recommend({ on }: { on: boolean }) {
   const swipe = useRef<{ x: number; moved: boolean } | null>(null)
   const rewards = useChatRewards(on && shown)
   const invite = useInviteOffer(on && shown)
-  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent, abonent: !!packs.abonent }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
+  const coll = useCollectionPromo(on && shown)
+  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent, abonent: !!packs.abonent, collection: !!coll }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
   const seed = promoSeed()
-  const start = slides ? (slides[0] === 'abonent' ? 0 : promoStart(slides.length, seed.day, seed.salt)) : 0
+  const start = slides ? (slides[0] === 'collection' || slides[0] === 'abonent' ? 0 : promoStart(slides.length, seed.day, seed.salt)) : 0
   const slide = slides ? promoAt(slides, start, step) : null
 
   useEffect(() => {
@@ -89,7 +94,7 @@ export function Recommend({ on }: { on: boolean }) {
 
   useEffect(() => {
     if (!on || !shown || !slide) return
-    const id = slide === 'anarchy' ? 'own_server:' + ANARCHY.mode : slide === 'abonent' ? 'pack:' + ABONENT_SLUG : slide === 'prisonrpg' || slide === 'arcania' ? 'pack:' + (slide === 'arcania' ? (packs?.arcaniaSlug ?? ARCANIA_SLUG) : PRISON_SLUG) : 'promo:' + slide
+    const id = slide === 'collection' ? 'collection:' + (coll?.id ?? '') : slide === 'anarchy' ? 'own_server:' + ANARCHY.mode : slide === 'abonent' ? 'pack:' + ABONENT_SLUG : slide === 'prisonrpg' || slide === 'arcania' ? 'pack:' + (slide === 'arcania' ? (packs?.arcaniaSlug ?? ARCANIA_SLUG) : PRISON_SLUG) : 'promo:' + slide
     trackImpression('recommend', [id], 'play')
   }, [on, shown, slide])
 
@@ -108,7 +113,8 @@ export function Recommend({ on }: { on: boolean }) {
   }
   const hover: Hover = {}
   let body: ReactNode
-  if (slide === 'prisonrpg' && packs?.prison) body = <PrisonRecommend pack={packs.prison} hover={hover} dots={null} />
+  if (slide === 'collection' && coll) body = <CollectionPromo coll={coll} />
+  else if (slide === 'prisonrpg' && packs?.prison) body = <PrisonRecommend pack={packs.prison} hover={hover} dots={null} />
   else if (slide === 'arcania' && packs?.arcania) body = <PackPromo slug={packs.arcaniaSlug} pack={packs.arcania} hover={hover} dots={null} />
   else if (slide === 'abonent' && packs?.abonent) body = <PackPromo slug={ABONENT_SLUG} pack={{ ...packs.abonent, title: t('Абонент') + ' ' + t('вышел') }} hover={hover} dots={null} />
   else if (slide === 'discord' || slide === 'telegram') body = <ChatPromo kind={slide} reward={rewards[slide]} />
@@ -203,6 +209,78 @@ function useInviteOffer(on: boolean): { plusDays: number } | null {
     }
   }, [on])
   return offer
+}
+
+type CollectionFace = { id: string; title: string; to: string; art: string; fallback: string }
+
+const SHOP_ART = 'https://millida.net/launcher-app/shop/art-solo/'
+
+const RARITY_RANK = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'RELIC']
+const MIN_COLLECTION_ITEMS = 3
+
+/** The timed cosmetics collection of the shop: the slide lives only while its clock runs. */
+function useCollectionPromo(on: boolean): CollectionFace | null {
+  const [face, setFace] = useState<CollectionFace | null>(null)
+  useEffect(() => {
+    if (!on) return
+    let alive = true
+    void Promise.all([loadCollections(), loadCosmeticCatalog()])
+      .then(([list, cat]) => {
+        if (!alive) return
+        const pick = list.flatMap((c) => {
+          if (!c.to) return []
+          const members = collectionMembers(c, cat.items).filter((i) => i.preview)
+          if (members.length < MIN_COLLECTION_ITEMS) return []
+          const top = [...members].sort((a, b) => RARITY_RANK.indexOf(b.rarity ?? '') - RARITY_RANK.indexOf(a.rarity ?? ''))[0]
+          return top?.preview ? [{ id: c.id, title: c.title, to: c.to, art: SHOP_ART + encodeURIComponent(top.baseId ?? top.id) + '.webp', fallback: top.preview }] : []
+        })[0]
+        setFace(pick ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [on])
+  return face
+}
+
+function CollectionPromo({ coll }: { coll: CollectionFace }) {
+  const t = useT()
+  return (
+    <button
+      className="lobby-rec lobby-an lobby-chat is-coll"
+      data-sound="open"
+      data-track="recommend"
+      data-section="recommend"
+      data-src="recommend"
+      data-kind="promo"
+      data-id={'collection:' + coll.id}
+      data-pos={0}
+      aria-label={t('Коллекция') + ' ' + coll.title}
+      onClick={() => openShopAt('shop-coll-' + coll.id)}
+    >
+      <img
+        className="lch-pile lco-art"
+        src={coll.art}
+        alt=""
+        draggable={false}
+        onError={(e) => {
+          if (e.currentTarget.src !== coll.fallback) e.currentTarget.src = coll.fallback
+        }}
+      />
+      <span className="lan-co">{t('Коллекция')}</span>
+      <span className="lan-title lco-title">{coll.title}</span>
+      <span className="lco-clock">
+        <Icon id="i-clock" />
+        {t('Уйдёт через')} <b><Countdown to={coll.to} /></b>
+      </span>
+      <span className="lan-foot">
+        <span className="lan-go">
+          <Icon id="i-play" /> {t('Смотреть')}
+        </span>
+      </span>
+    </button>
+  )
 }
 
 /** Открыть магазин на задании и подсветить его (блок грузится вместе с магазином — ждём до 4 с). */
@@ -303,8 +381,10 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
   const t = useT()
   const c = CHAT[kind]
   const market = useMarket()
+  const ruContent = useMarketOffers('ru-content')
   const copy = chatCopy(kind, market)
-  const paid = reward > 0
+  const url = kind === 'telegram' ? telegramChat(ruContent) : c.url
+  const paid = reward > 0 && (kind !== 'telegram' || ruContent)
   return (
     <button
       className={'lobby-rec lobby-an lobby-chat is-' + kind + (paid ? ' is-reward' : '')}
@@ -316,7 +396,7 @@ function ChatPromo({ kind, reward }: { kind: 'discord' | 'telegram'; reward: num
       data-id={kind + (paid ? '_reward' : '')}
       data-pos={0}
       aria-label={paid ? t('+{n} рубинов {what}', { n: reward, what: copy.what }) : copy.title + ' ' + copy.where}
-      onClick={() => (paid ? openShopTask(c.task) : openExt(c.url))}
+      onClick={() => (paid ? openShopTask(c.task) : openExt(url))}
     >
       {paid ? <img className="lch-pile" src="/packs/hoard.png" alt="" draggable={false} /> : null}
       <span className="lch-logo" aria-hidden="true">

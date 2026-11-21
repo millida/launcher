@@ -26,7 +26,7 @@ export async function topUpFragments(
     return null
   }
   try {
-    const res = await completeFragments(item.code)
+    const res = await completeFragments(item.code, price)
     result(true)
     return res
   } catch (e) {

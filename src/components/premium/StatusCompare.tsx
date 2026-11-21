@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { LOOK_EVENT } from '../../lib/gameProfile'
+import { useLookTick } from '../../lib/useLookTick'
 import { SkinBody } from '../SkinBody'
 import { loadWardrobe } from '../../lib/gameProfile'
 import { nickSkinUrl } from '../../lib/characterStage'
@@ -39,17 +41,25 @@ export function BadgeGlyph({ plus, size = 16 }: { plus?: boolean; size?: number 
 }
 
 let skinAsked: Promise<string | null> | null = null
+if (typeof window !== 'undefined') window.addEventListener(LOOK_EVENT, () => (skinAsked = null))
 function useOwnSkin(): string {
   const nick = (getAccount() || { nick: '' }).nick || 'MHF_Steve'
+  const lookTick = useLookTick()
   const [url, setUrl] = useState('')
   useEffect(() => {
     let alive = true
-    if (!skinAsked) skinAsked = loadWardrobe().then((w) => w.active.skinUrl || null).catch(() => null)
+    if (!skinAsked)
+      skinAsked = loadWardrobe()
+        .then((w) => w.active.skinUrl || null)
+        .catch(() => {
+          skinAsked = null
+          return null
+        })
     void skinAsked.then((u) => alive && setUrl(u || nickSkinUrl(nick)))
     return () => {
       alive = false
     }
-  }, [nick])
+  }, [nick, lookTick])
   return url
 }
 

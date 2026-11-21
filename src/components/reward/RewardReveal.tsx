@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { RarityChip } from '../shop/rarityUi'
+import { normRarity } from '../shop/rarity'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
 import { hasPx } from '../pxArt'
 import { Ruby } from '../Ruby'
 import { playSound } from '../../lib/sound'
+import { artFit } from '../../lib/artFit'
 import { intlTag, useT } from '../../i18n'
 import { itemTone, rarityWord, rewardTone, useReward, type RewardEntry, type RewardShown } from './rewardBus'
 import '../../styles/pixel/reward.css'
@@ -50,6 +52,8 @@ function Twinkles() {
 /** Картинка награды: превью вещи, рубины, свой рисунок или пиксельный значок. */
 function Art({ it, size }: { it: RewardEntry; size: number }) {
   const [broken, setBroken] = useState(false)
+  const [zoom, setZoom] = useState('')
+  const [cors, setCors] = useState(true)
   if (it.art) return <span className="rw-art-own">{it.art}</span>
   if (it.rubies != null)
     return (
@@ -61,13 +65,17 @@ function Art({ it, size }: { it: RewardEntry; size: number }) {
   if (it.preview && !broken)
     return (
       <img
+        key={cors ? 'c' : 'n'}
         className="rw-art-img"
         src={it.preview}
         alt=""
         draggable={false}
         width={size}
         height={size}
-        onError={() => setBroken(true)}
+        crossOrigin={cors && !it.preview.startsWith('data:') ? 'anonymous' : undefined}
+        style={zoom ? { transform: zoom } : undefined}
+        onLoad={(e) => cors && setZoom(artFit(e.currentTarget))}
+        onError={() => (cors ? setCors(false) : setBroken(true))}
       />
     )
   const name = (it.icon || 'gift').replace(/^i-/, '')
@@ -215,7 +223,7 @@ function BigReveal({ r, onClose }: { r: RewardShown; onClose: () => void }) {
                     <Plate>
                       <span className="rw-card-flash" />
                       <span className="rw-card-art">
-                        <Art it={it} size={many ? 96 : 176} />
+                        <Art it={it} size={many ? 96 : it.rubies == null && normRarity(it.rarity) ? 160 : 176} />
                         {it.rubies == null ? <RarityChip rarity={it.rarity} /> : null}
                       </span>
                       {many ? <b className="rw-card-name">{it.name}</b> : null}

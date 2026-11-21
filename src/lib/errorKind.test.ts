@@ -46,3 +46,9 @@ test('earlyExitSummary убирает шум authlib-injector', () => {
   expect(s).toBe('Игра не запустилась (код Some(1)). | Error: Could not create the Java Virtual Machine. | Unrecognized option: -p')
   expect(earlyExitSummary('x'.repeat(1000)).length).toBe(300)
 })
+
+test('ограничение скорости — отдельный класс, а не общий 4xx', () => {
+  expect(classifyError('Не скачались файлы сборки: CurseForge ограничил скорость скачивания — подожди 2 мин и повтори установку')).toBe('rate_limited')
+  expect(classifyError('X.jar (https://edge.forgecdn.net/x → 429 Too Many Requests; Retry-After: 60)')).toBe('rate_limited')
+  expect(classifyError('HTTP 404 Not Found')).toBe('http_4xx')
+})

@@ -1097,6 +1097,20 @@ const ART: Record<string, Art | Derived> = {
     '............',
     '............',
   ],
+  hosting: [
+    '............',
+    '.dddddddddd.',
+    '.dnnnnnnlld.',
+    '.dddddddddd.',
+    '............',
+    '......w.....',
+    '....wwwww...',
+    '....wwkww...',
+    '...wwk_kww..',
+    '....wskss...',
+    '....sssss...',
+    '......s.....',
+  ],
   blocks: [
     '............',
     '.llllllllll.',
@@ -1869,6 +1883,18 @@ export function pxRects(name: string): PxRect[] {
   }
   cache.set(name, out)
   return out
+}
+
+/**
+ * Рисунки ленивого экрана: кладутся в таблицу, когда приходит его чанк, и не
+ * едут в стартовый набор (новогодние крышки календаря — daily/adventArt.ts).
+ */
+export function addPxArt(more: Record<string, Art>): void {
+  for (const [name, art] of Object.entries(more)) {
+    if (name in ART) continue
+    ART[name] = art
+    PX_NAMES.push(name)
+  }
 }
 
 /** Все имена, у которых есть рисунок. */
