@@ -339,9 +339,21 @@ fn show_without_focus(win: &tauri::WebviewWindow) {
 }
 
 pub fn hide(app: &AppHandle) {
-    INTERACTIVE.store(false, Ordering::SeqCst);
+    hide_and_refocus(app, true);
+}
+
+/// `refocus`: the chat that held the keyboard over a running game hands the focus back to it,
+/// unless the caller is about to raise the launcher itself.
+fn hide_and_refocus(app: &AppHandle, refocus: bool) {
+    let was_interactive = INTERACTIVE.swap(false, Ordering::SeqCst);
     if crate::exiting() {
         return;
+    }
+    // Only while the chat still holds the keyboard: a player who has already switched to
+    // another window is not thrown back into the game.
+    let holds_focus = || app.get_webview_window(LABEL).is_some_and(|w| w.is_focused().unwrap_or(false));
+    if refocus && was_interactive && !crate::engine::running_games().is_empty() && holds_focus() {
+        crate::engine::focus_running_game();
     }
     stop_hit_watch(app);
     PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
@@ -472,7 +484,7 @@ pub fn rebind_hotkey(app: &AppHandle) {
 pub fn open_card(app: &AppHandle, payload: serde_json::Value, to_launcher: bool) -> Result<(), String> {
     let is_call = payload.get("open").and_then(|v| v.as_str()) == Some("call");
     if to_launcher || is_call || crate::engine::running_games().is_empty() {
-        hide(app);
+        hide_and_refocus(app, false);
         crate::tray::show_main(app);
         // An unloaded launcher is rebuilt by show_main; the card waits for its page.
         crate::background::emit_main(app, "overlay-open", payload);

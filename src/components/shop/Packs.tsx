@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { Ruby } from '../Ruby'
-import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type ChestTier, type MonthOffer, type ShopPack } from '../../lib/rubies'
+import { DIAMOND_ITEM_PCT, PLUS_ITEM_PCT, type ChestTier, type MonthOffer, type SecondOffer, type ShopPack } from '../../lib/rubies'
+import { offerPct, packArtAt, SECOND_ART, sortPacks } from './packMath'
 import { rubyPackPrice, rubyPackWas, useMoney } from '../../lib/useMoney'
 import { BoltArt, GemArt } from './shopArt'
 import { NickFlip } from '../premium/StatusCompare'
 import { PlusMark } from '../premium/PlusMark'
-import { PLUS_CHESTS } from './PlusBanner'
+import { usePlusPass } from '../daily/passTotals'
+import { daysWord } from '../daily/track'
 import { ChestArt } from '../daily/ChestArt'
 import { CHEST_DROPS, PLUS_PASS } from '../daily/chestDrops'
 import { Shard, Timer } from './parts'
@@ -15,22 +17,12 @@ import { useOffscreenPause } from './useOffscreen'
 import '../../styles/pixel/plus-bundle.css'
 import { formatNumber, intlTag, t, useT } from '../../i18n'
 
-/**
- * Рисунки пакетов от малого к большому. Кодов у сервера девять и они
- * меняются, поэтому рисунок берётся по месту пакета в ряду, а не по коду.
- */
-// Девять рисунков на девять пакетов службы: у каждого свой (chests — два сундука, 06.10.2026).
-const ART_ORDER = ['handful', 'pouch', 'purse', 'casket', 'chests', 'hoard', 'trove', 'treasury', 'vault']
-export const packArtAt = (i: number, n: number): string => '/packs/' + ART_ORDER[n < 2 ? 0 : Math.round((i * (ART_ORDER.length - 1)) / (n - 1))] + '.png'
-
-/** Пакеты по цене и код самого выгодного (рубин дешевле всех по живым ценам). */
-export function sortPacks<P extends ShopPack>(packs: P[]): { list: P[]; best: string } {
-  const list = [...packs].sort((x, y) => x.kopecks - y.kopecks)
-  const best = list.reduce(
-    (win, pack) => (pack.kopecks > 0 && pack.rubies / pack.kopecks > win.rate ? { code: pack.code, rate: pack.rubies / pack.kopecks } : win),
-    { code: '', rate: 0 },
-  ).code
-  return { list, best }
+/** Значок «+N%» в углу карточки; 0 — значка нет. */
+export function PctBadge({ pct, best }: { pct: number; best?: boolean }) {
+  const t = useT()
+  if (best) return <span className="pk-best">{t('Выгоднее всего')}{pct > 0 ? ' +' + pct + '%' : ''}</span>
+  if (pct <= 0) return null
+  return <span className="pk-pct">+{pct}%</span>
 }
 
 export interface PlusTile {
@@ -49,10 +41,13 @@ export interface PlusTile {
 
 type PlusTier = 'PLUS' | 'DIAMOND'
 
-/** Сундуки пропуска PLUS по уровням — как в треке службы (SEASON_TRACK: 3 редких, 5 эпических, легендарный). */
-const PASS_CHESTS = (['RARE', 'EPIC', 'LEGEND'] as ChestTier[])
-  .map((t) => ({ tier: t, n: PLUS_PASS.chests[t] ?? 0 }))
-  .filter((c) => c.n > 0)
+/**
+ * Сундуки строки PLUS по уровням. Числа — от службы через usePlusPass: в
+ * обычном сезоне 3 редких, 5 эпических, легендарный (SEASON_TRACK), в декабре —
+ * итоги новогоднего календаря.
+ */
+const passChests = (chests: Partial<Record<ChestTier, number>>) =>
+  (['COMMON', 'RARE', 'EPIC', 'LEGEND'] as ChestTier[]).map((t) => ({ tier: t, n: chests[t] ?? 0 })).filter((c) => c.n > 0)
 const CHEST_LABEL: Record<ChestTier, string> = {
   get COMMON() { return t('Обычный') },
   get RARE() { return t('Редкий') },
@@ -84,11 +79,11 @@ function Part({ art, n, cap, tone, wide, now, children }: { art: ReactNode; n: R
 }
 
 /** «Что внутри»: обычное содержимое сундука каждого уровня по таблице выпадения. */
-function ChestInside() {
+function ChestInside({ chests }: { chests: { tier: ChestTier; n: number }[] }) {
   const t = useT()
   return (
     <span className="pb-in" role="tooltip">
-      {PASS_CHESTS.map(({ tier, n }) => {
+      {chests.map(({ tier, n }) => {
         const d = CHEST_DROPS[tier]
         return (
           <span key={tier} className="pb-in-row">
@@ -129,6 +124,8 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
   const paused = useOffscreenPause<HTMLDivElement>()
   const [pick, setPick] = useState<PlusTier>('PLUS')
   const [inside, setInside] = useState(false)
+  const pass = usePlusPass()
+  const chests = passChests(pass.chests)
   const dia = tile.sub ? !!tile.diamond : pick === 'DIAMOND'
   const tier: PlusTier = dia ? 'DIAMOND' : 'PLUS'
   const pct = dia ? DIAMOND_ITEM_PCT : PLUS_ITEM_PCT
@@ -164,10 +161,10 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
             <>
               <BoltArt size={18} />
               {t('сразу:')} <Ruby size={18} />
-              <b>{nf(tile.rubies)}</b> + <b>{PLUS_CHESTS}</b> {t('сундуков')}
+              <b>{nf(tile.rubies)}</b> + <b>{pass.count}</b> {t('сундуков')}
             </>
           ) : (
-            <>{t('по дням, 28 дней')}</>
+            <>{t('по дням, {days}', { days: daysWord(pass.days) })}</>
           )}
         </span>
         <NickFlip />
@@ -181,7 +178,7 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
             tone="#a855f7"
             art={
               <span className="pb-chests">
-                {PASS_CHESTS.map(({ tier: t, n }) => (
+                {chests.map(({ tier: t, n }) => (
                   <span key={t} className={'pb-chest tier-' + t.toLowerCase()}>
                     <ChestArt ready={false} tier={t} size={t === 'LEGEND' ? 72 : 62} />
                     <b>×{n}</b>
@@ -189,13 +186,13 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
                 ))}
               </span>
             }
-            n={t('{n} сундуков', { n: PLUS_CHESTS })}
+            n={t('{n} сундуков', { n: pass.count })}
           >
             <span className={'pb-inside' + (inside ? ' is-open' : '')} onMouseLeave={() => setInside(false)}>
               <button className="pb-inside-btn" data-notip aria-expanded={inside} data-track="plus_tile_inside" onClick={() => setInside((v) => !v)}>
                 {t('что внутри')}
               </button>
-              <ChestInside />
+              <ChestInside chests={chests} />
             </span>
           </Part>
           <Part
@@ -246,7 +243,7 @@ export function usualKopecks(rubies: number, packs: ShopPack[]): number {
 export function MonthOfferBlock({ offer, packs, busy, onBuy, onEnd }: { offer: MonthOffer; packs: ShopPack[]; busy: boolean; onBuy: () => void; onEnd?: () => void }) {
   const t = useT()
   useMoney()
-  const was = usualKopecks(offer.rubies, packs)
+  const pct = offerPct(offer.rubies, offer.kopecks, packs, offer.badgePct)
   return (
     <section className="mo" data-section="month_offer" data-kind="ruby_pack" data-id={offer.code}>
       <button className="mo-art" aria-label={t('{n} рубинов', { n: offer.rubies })} data-track="buy_month_art" disabled={busy} onClick={onBuy}>
@@ -255,6 +252,7 @@ export function MonthOfferBlock({ offer, packs, busy, onBuy, onEnd }: { offer: M
       <div className="mo-mid">
         <span className="mo-tags">
           <b className="mo-once">{t('Один раз')}</b>
+          {pct > 0 ? <span className="pk-pct is-inline">+{pct}%</span> : null}
           <Timer to={offer.endsAt} onEnd={onEnd} />
         </span>
         <b className="mo-n">
@@ -264,8 +262,7 @@ export function MonthOfferBlock({ offer, packs, busy, onBuy, onEnd }: { offer: M
         <small className="mo-title">{offer.title}</small>
       </div>
       <button className="btn lg primary mo-btn" disabled={busy} data-track="buy_month" onClick={onBuy}>
-        {was > offer.kopecks ? <s>{rubyPackWas(offer.code, offer.kopecks, was)}</s> : null}
-        {rubyPackPrice(offer.code)}
+        {rubyPackPrice(offer.code, offer.kopecks)}
       </button>
     </section>
   )
@@ -304,30 +301,63 @@ export const PackCount = ({ n }: { n: number }) => (
 )
 
 /**
- * Рубины (ТЗ v3): первая плитка — PLUS (корона, ◆2100, цена), дальше пакеты:
- * картинка, число крупно, кнопка с ценой в рублях. Лучший — значок «выгодно».
+ * «Второй шаг» (разовый оффер первых 72 ч): карточка-пакет первой в ряду —
+ * «Только сейчас», таймер, итог рубинов крупно, значок выгоды, цена без
+ * зачёркнутой. Покупается тем же путём, что пакет.
  */
+export function SecondCard({ offer, packs, busy, onBuy, onEnd }: { offer: SecondOffer; packs: ShopPack[]; busy: boolean; onBuy: () => void; onEnd?: () => void }) {
+  const t = useT()
+  const pct = offerPct(offer.rubies, offer.kopecks, packs, offer.badgePct)
+  return (
+    <div className="sh-card pk is-second" data-kind="ruby_pack" data-id={offer.code}>
+      <span className="pk-promo is-now">{t('Только сейчас')}</span>
+      <button className="pk-pick" aria-label={t('{n} рубинов', { n: offer.rubies })} data-track="buy_second_art" disabled={busy} onClick={onBuy}>
+        <PackArt src={SECOND_ART} />
+      </button>
+      <PackCount n={offer.rubies} />
+      <span className="pk-second-meta">
+        {pct > 0 ? <span className="pk-pct is-inline">+{pct}%</span> : null}
+        <Timer to={offer.endsAt} onEnd={onEnd} />
+      </span>
+      <button className="btn md primary pk-btn pk-buy" disabled={busy} data-track="buy_second" onClick={onBuy}>
+        {rubyPackPrice(offer.code, offer.kopecks)}
+      </button>
+    </div>
+  )
+}
+
 export function Packs<P extends ShopPack>({
   packs,
   busy,
   onBuy,
   plusTile,
+  second,
+  onSecond,
+  onOfferEnd,
 }: {
   packs: P[] | null
   busy: string
   onBuy: (pack: P, art: string) => void
   /** Плитка подписки первой. Гостю её нет. */
   plusTile?: PlusTile
+  /** Разовый «Второй шаг» первой карточкой ряда. */
+  second?: SecondOffer | null
+  onSecond?: () => void
+  onOfferEnd?: () => void
 }) {
   const t = useT()
   useMoney()
   const starter = packs?.find((p) => p.oneTime) ?? null
-  const { list, best } = sortPacks((packs ?? []).filter((p) => !p.oneTime))
+  const { list, best: bestFallback } = sortPacks((packs ?? []).filter((p) => !p.oneTime))
+  const anyBest = list.some((p) => p.best)
   const starterWas = starter ? usualKopecks(starter.rubies, list) : 0
+  const showSecond = !!second && !!onSecond
+  const count = (packs === null ? 5 : list.length + (starter ? 1 : 0)) + (showSecond ? 1 : 0)
   return (
     <div className="pk-wrap" id="shopPacks" data-section="ruby_packs">
       {packs !== null && plusTile ? <PlusBundle tile={plusTile} /> : null}
-    <div className="pk-grid" style={{ ['--pk-n' as string]: packs === null ? 5 : list.length + (starter ? 1 : 0) }}>
+    <div className="pk-grid" style={{ ['--pk-n' as string]: count }}>
+      {showSecond ? <SecondCard offer={second!} packs={list} busy={busy === second!.code} onBuy={onSecond!} onEnd={onOfferEnd} /> : null}
       {/* Стартовый набор — такая же плитка пакета, с лентой акции и зачёркнутой ценой. */}
       {starter ? (
         <div className="sh-card pk is-promo" data-kind="ruby_pack" data-id={starter.code}>
@@ -350,18 +380,18 @@ export function Packs<P extends ShopPack>({
         ? [0, 1, 2, 3, 4].map((n) => <span key={n} className="skel pk-skel" />)
         : list.map((pack, i) => {
             const art = packArtAt(i, list.length)
+            const isBest = pack.best || (!anyBest && pack.code === bestFallback)
+            // «Берут чаще всего» (решает служба) важнее «выгодно»: на пакете одна плашка.
+            const popular = !!pack.popular
             return (
-              <div key={pack.code} className="sh-card pk" data-kind="ruby_pack" data-id={pack.code} data-pos={i}>
-                {pack.code === best ? <span className="pk-best">{t('выгодно')}</span> : null}
+              <div key={pack.code} className="sh-card pk" data-kind="ruby_pack" data-id={pack.code} data-pos={i} data-badge={popular ? 'popular' : isBest ? 'best' : undefined}>
+                {popular ? <span className="pk-best pk-pop">{t('Берут чаще всего')}</span> : <PctBadge pct={offerPct(pack.rubies, pack.kopecks, list, pack.badgePct)} best={isBest} />}
                 <button className="pk-pick" aria-label={t('{n} рубинов', { n: pack.rubies })} data-track="buy_pack_art" disabled={busy === pack.code} onClick={() => onBuy(pack, art)}>
                   <PackArt src={art} />
                 </button>
-                <button className="btn md primary pk-btn pk-topup" disabled={busy === pack.code} data-track="buy_pack" onClick={() => onBuy(pack, art)}>
-                  <b>
-                    +{pack.rubies.toLocaleString(intlTag())}
-                    <Ruby size={16} />
-                  </b>
-                  <small>{rubyPackPrice(pack.code, pack.kopecks)}</small>
+                <PackCount n={pack.rubies} />
+                <button className="btn md primary pk-btn pk-buy" disabled={busy === pack.code} data-track="buy_pack" onClick={() => onBuy(pack, art)}>
+                  {rubyPackPrice(pack.code, pack.kopecks)}
                 </button>
               </div>
             )

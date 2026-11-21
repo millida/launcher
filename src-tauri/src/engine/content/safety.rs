@@ -202,6 +202,21 @@ async fn blocklist() -> Result<HashMap<String, String>, String> {
     Ok(out)
 }
 
+const MILLIDA_SOURCE: &str = "millida";
+
+/// Only files named like our mod are hashed a second time: sha256 is what the
+/// signed version list carries, and reading every jar twice would slow the scan.
+fn own_mod_sha256(file: &str, path: &Path) -> Option<String> {
+    if !is_millida_mod_file(&file.to_ascii_lowercase()) {
+        return None;
+    }
+    std::fs::read(path).ok().map(|bytes| sha256_hex(&bytes).to_ascii_lowercase())
+}
+
+fn is_official(own_sha256: Option<&str>, official: &std::collections::HashSet<String>) -> bool {
+    own_sha256.is_some_and(|sha| official.contains(sha))
+}
+
 struct Jar {
     file: String,
     path: std::path::PathBuf,
@@ -289,28 +304,31 @@ pub async fn scan_safety(profile: String) -> Result<SafetyReport, String> {
     let manifest = load_content_manifest(&profile);
     let metas = local_meta_map(&profile, "mod");
 
-    let paths: Vec<std::path::PathBuf> = jars.iter().map(|j| j.path.clone()).collect();
-    let scanned: Vec<(Option<String>, Inspection)> =
+    let files: Vec<(String, std::path::PathBuf)> = jars.iter().map(|j| (j.file.clone(), j.path.clone())).collect();
+    let scanned: Vec<(Option<String>, Option<String>, Inspection)> =
         tauri::async_runtime::spawn_blocking(move || {
-            paths.iter().map(|p| (file_sha1(p), inspect_jar(p))).collect()
+            files.iter().map(|(name, p)| (file_sha1(p), own_mod_sha256(name, p), inspect_jar(p))).collect()
         })
         .await
         .map_err(|e| format!("фоновая задача прервалась: {e}"))?;
 
-    let hashes: Vec<String> = scanned.iter().filter_map(|(h, _)| h.clone()).collect();
+    let hashes: Vec<String> = scanned.iter().filter_map(|(h, ..)| h.clone()).collect();
     // The sha1 hashes of your jars go to Modrinth to find out if the file is known.
     let known_remote = versions_by_hash(&hashes).await;
+    let official = official_jar_sha256s().await;
     let (blocked, note) = match blocklist().await {
         Ok(map) => (map, String::new()),
         Err(e) => (HashMap::new(), format!("Список вредоносных файлов недоступен ({}) — проверка шла по каталогам и содержимому", e)),
     };
 
     let mut report = SafetyReport { profile: profile.clone(), checked_at: now_secs(), note, ..Default::default() };
-    for (jar, (sha1, inspected)) in jars.iter().zip(scanned) {
+    for (jar, (sha1, own, inspected)) in jars.iter().zip(scanned) {
         let sha1 = sha1.unwrap_or_default().to_ascii_lowercase();
         let entry = manifest.iter().find(|e| e.kind == "mod" && e.file_name == jar.file);
         let catalog = if known_remote.contains_key(&sha1) {
             Some("modrinth")
+        } else if is_official(own.as_deref(), &official) {
+            Some(MILLIDA_SOURCE)
         } else if entry.map(|e| !e.sha1.is_empty() && e.sha1.eq_ignore_ascii_case(&sha1)).unwrap_or(false) {
             Some(if entry.map(|e| e.project_id.starts_with("cf:")).unwrap_or(false) { "curseforge" } else { "modrinth" })
         } else {
@@ -354,8 +372,8 @@ impl SafetyReport {
 
 const MAX_PICKED_FILES: usize = 50;
 
-/// sha1, CurseForge fingerprint, jar findings and the system antivirus, per picked file.
-type PickedScan = (Option<String>, Option<u32>, Inspection, AvVerdict);
+/// sha1, CurseForge fingerprint, sha256 of a file named like our mod, jar findings and the system antivirus, per picked file.
+type PickedScan = (Option<String>, Option<u32>, Option<String>, Inspection, AvVerdict);
 
 /// The system antivirus outranks every other source: a hit is "blocked" even
 /// for a catalogue file, because a catalogue only proves where the bytes came from.
@@ -390,11 +408,11 @@ pub async fn scan_picked_files() -> Result<Option<SafetyReport>, String> {
         })
         .collect();
 
-    let paths: Vec<std::path::PathBuf> = jars.iter().map(|j| j.path.clone()).collect();
+    let files: Vec<(String, std::path::PathBuf)> = jars.iter().map(|j| (j.file.clone(), j.path.clone())).collect();
     let scanned: Vec<PickedScan> = tauri::async_runtime::spawn_blocking(move || {
-        paths
+        files
             .iter()
-            .map(|p| (file_sha1(p), fingerprint_file(p), inspect_jar(p), defender::scan_file(p)))
+            .map(|(name, p)| (file_sha1(p), fingerprint_file(p), own_mod_sha256(name, p), inspect_jar(p), defender::scan_file(p)))
             .collect()
     })
     .await
@@ -425,15 +443,18 @@ pub async fn scan_picked_files() -> Result<Option<SafetyReport>, String> {
     if let Some(AvVerdict::Unavailable(why)) = scanned.iter().map(|(.., av)| av).find(|av| matches!(av, AvVerdict::Unavailable(_))) {
         notes.push(why.clone());
     }
+    let official = official_jar_sha256s().await;
 
     let mut report = SafetyReport { checked_at: now_secs(), note: notes.join("
 "), ..Default::default() };
-    for (jar, (sha1, print, inspected, av)) in jars.iter().zip(scanned) {
+    for (jar, (sha1, print, own, inspected, av)) in jars.iter().zip(scanned) {
         let sha1 = sha1.unwrap_or_default().to_ascii_lowercase();
         let catalog = if modrinth.contains_key(&sha1) {
             Some("modrinth")
         } else if print.is_some_and(|p| curseforge.contains(&p)) {
             Some("curseforge")
+        } else if is_official(own.as_deref(), &official) {
+            Some(MILLIDA_SOURCE)
         } else {
             None
         };
@@ -638,6 +659,32 @@ mod tests {
             let (reasons, strong) = inspect_jar(&path);
             assert_eq!(reasons, case.want, "{}: причины {:?}; {}", case.name, reasons, case.why);
             assert_eq!(strong, case.want_strong, "{}: сильных признаков {}; {}", case.name, strong, case.why);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 21.11: the report called our own mod «Неизвестный» and told players to
+    /// check where it came from, because it lives on neither Modrinth nor CurseForge.
+    #[test]
+    fn our_mod_is_vouched_for_by_its_signed_hash_not_its_name() {
+        let dir = std::env::temp_dir().join(format!("millida-safety-own-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ours = dir.join("ours.jar");
+        let fake = dir.join("fake.jar");
+        std::fs::write(&ours, b"signed release").unwrap();
+        std::fs::write(&fake, b"something else").unwrap();
+        let official: std::collections::HashSet<String> = [sha256_hex(b"signed release")].into_iter().collect();
+        let cases: [(&str, &Path, &str, &str); 4] = [
+            ("millida-mod-fabric-1.21.11-0.2.51.jar", ours.as_path(), "ok", "the released jar is ours, not an unknown file"),
+            ("Millida-Mod-Fabric-1.21.11-0.2.51.jar", ours.as_path(), "ok", "a renamed case on Windows is still the same file"),
+            ("millida-mod-fabric-1.21.11-0.2.51.jar", fake.as_path(), "unknown", "a file named like ours with other bytes is not vouched for"),
+            ("other.jar", ours.as_path(), "unknown", "only files named like our mod are hashed for this check"),
+        ];
+        for (name, path, want, why) in cases {
+            let own = own_mod_sha256(name, path);
+            let catalog = is_official(own.as_deref(), &official).then_some(MILLIDA_SOURCE);
+            let v = verdict_for(&jar(name), "c".repeat(40), None, catalog, name.into(), (vec![], 0));
+            assert_eq!(v.verdict, want, "{name}: {why}");
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

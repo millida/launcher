@@ -82,4 +82,13 @@ describe('describeClick', () => {
     expect(info?.mode).toBe('BEDWARS')
     expect(info?.src).toBe('mode')
   })
+
+  test('плашка карточки уходит вместе с кликом по кнопке внутри', () => {
+    const card = node('div', { 'data-kind': 'ruby_pack', 'data-id': 'r500', 'data-badge': 'popular' })
+    const buy = node('button', { 'data-track': 'buy_pack' }, '', card)
+    const info = describeClick(buy, 'rubies')
+    expect(info?.el).toBe('buy_pack')
+    expect(info?.badge).toBe('popular')
+    expect(describeClick(node('button', { 'data-track': 'buy_pack' }), 'rubies')?.badge).toBeUndefined()
+  })
 })

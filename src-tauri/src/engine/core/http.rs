@@ -68,6 +68,7 @@ fn header_limit() -> Duration {
 /// mirror for the session (the mirror has its own rate limit). Only this file tries the next route.
 /// "timed out" is what the page's error classifier (errorKind.ts) reads as a timeout.
 fn stalled(url: &str) -> String {
+    super::edges::edge_failure(url);
     format!("{}: timed out — no data for {} s", url, stall_limit().as_secs().max(1))
 }
 
@@ -86,6 +87,7 @@ pub(crate) struct Via {
 struct Shared {
     client: reqwest::Client,
     proxy: String,
+    edges: u64,
     checked: std::time::Instant,
 }
 
@@ -220,19 +222,20 @@ pub(crate) fn spare_client() -> reqwest::Client {
 }
 
 fn shared_client(cell: &std::sync::Mutex<Option<Shared>>) -> reqwest::Client {
+    let edges = super::edges::generation();
     let mut slot = cell.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(shared) = slot.as_ref().filter(|s| s.checked.elapsed() < PROXY_RECHECK) {
+    if let Some(shared) = slot.as_ref().filter(|s| s.checked.elapsed() < PROXY_RECHECK && s.edges == edges) {
         return shared.client.clone();
     }
     let proxy = system_proxy();
-    if let Some(shared) = slot.as_mut().filter(|s| s.proxy == proxy) {
+    if let Some(shared) = slot.as_mut().filter(|s| s.proxy == proxy && s.edges == edges) {
         shared.checked = std::time::Instant::now();
         return shared.client.clone();
     }
     let client = build_client(true)
         .or_else(|_| build_client(false))
         .unwrap_or_else(|_| reqwest::Client::new());
-    *slot = Some(Shared { client: client.clone(), proxy, checked: std::time::Instant::now() });
+    *slot = Some(Shared { client: client.clone(), proxy, edges, checked: std::time::Instant::now() });
     client
 }
 
@@ -262,6 +265,11 @@ mod tls_roots_tests {
 /// reqwest's Display only yields "error sending request for url"; the actual
 /// cause is the deepest source() in the chain.
 pub(crate) fn net_err(e: &reqwest::Error) -> String {
+    if !e.is_builder() && !e.is_status() {
+        if let Some(url) = e.url() {
+            super::edges::edge_failure(url.as_str());
+        }
+    }
     let mut cause: &(dyn std::error::Error + 'static) = e;
     while let Some(next) = cause.source() {
         cause = next;
@@ -426,6 +434,20 @@ pub(crate) fn is_absent_answer(err: &str) -> bool {
         .any(|status| err.starts_with(&status_message("", status)))
 }
 
+/// A route that answered 400/404 gave a verdict on the address itself; a later
+/// route the network could not reach says nothing about it, and showing its
+/// «no connection» hid why the request really failed.
+fn keep_route_error(last: &mut String, err: String) {
+    let verdict = |e: &str| {
+        [reqwest::StatusCode::BAD_REQUEST, reqwest::StatusCode::NOT_FOUND]
+            .into_iter()
+            .any(|status| e.starts_with(&status_message("", status)))
+    };
+    if !verdict(last.as_str()) || verdict(&err) {
+        *last = err;
+    }
+}
+
 /// Marker of a download whose bytes arrived whole but hash to something else.
 pub(crate) const SUM_MISMATCH: &str = "контрольная сумма не сошлась";
 
@@ -442,6 +464,19 @@ pub(crate) fn urlencode(s: &str) -> String {
     out
 }
 
+/// Answers every player gets the same: the Modrinth and CurseForge proxies need no account.
+/// DDoS-Guard caches a JSON answer only for a request without Authorization that carries
+/// If-None-Match or If-Modified-Since, so these go without the token and always conditional.
+pub(crate) const SHARED_ANSWER_ROUTES: [&str; 2] = ["/launcher/mr/", "/launcher/cf/"];
+
+/// Older than any answer: the origin, which sets no Last-Modified, always sends the full body.
+pub(crate) const SHARED_SINCE: &str = "Thu, 01 Jan 1970 00:00:00 GMT";
+
+pub(crate) fn shared_answer_url(url: &str) -> bool {
+    url.strip_prefix(crate::engine::MILLIDA_API)
+        .is_some_and(|route| SHARED_ANSWER_ROUTES.iter().any(|prefix| route.starts_with(prefix)))
+}
+
 // Plain GET with JSON, retries on failure. Addresses come from the calling modules, mirror.rs picks mirrors.
 pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
     let mut last = String::new();
@@ -449,7 +484,11 @@ pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
         let attempt = retrying(|| {
             let target = target.clone();
             async move {
-                match client().get(&target).timeout(JSON_TIMEOUT).send().await {
+                let mut req = client().get(&target).timeout(JSON_TIMEOUT);
+                if shared_answer_url(&target) {
+                    req = req.header(reqwest::header::IF_MODIFIED_SINCE, SHARED_SINCE);
+                }
+                match req.send().await {
                     Ok(r) => read_json(&target, r).await,
                     Err(e) => Err(Attempt::Retry(format!("{} — {}", net_err(&e), target))),
                 }
@@ -458,7 +497,7 @@ pub(crate) async fn get_json(url: &str) -> Result<Value, String> {
         .await;
         match attempt {
             Ok(v) => return Ok(v),
-            Err(e) => last = e,
+            Err(e) => keep_route_error(&mut last, e),
         }
     }
     Err(last)
@@ -577,6 +616,8 @@ async fn fetch_if_changed(url: &str, sent: Option<&Validators>) -> Result<Revali
                 }
                 if let Some(since) = sent.and_then(|v| v.last_modified.as_deref()) {
                     req = req.header(reqwest::header::IF_MODIFIED_SINCE, since);
+                } else if sent.and_then(|v| v.etag.as_deref()).is_none() && shared_answer_url(&target) {
+                    req = req.header(reqwest::header::IF_MODIFIED_SINCE, SHARED_SINCE);
                 }
                 match req.send().await {
                     Ok(r) => read_if_changed(&target, r).await,
@@ -587,7 +628,7 @@ async fn fetch_if_changed(url: &str, sent: Option<&Validators>) -> Result<Revali
         .await;
         match attempt {
             Ok(v) => return Ok(v),
-            Err(e) => last = e,
+            Err(e) => keep_route_error(&mut last, e),
         }
     }
     Err(last)
@@ -1367,8 +1408,13 @@ pub(crate) async fn download_checked_progress(
     if let (Some(s), Some(total)) = (usable, size) {
         let single_route = super::mirror::routes(url).await.len() == 1;
         if total >= SEGMENTED_MIN_BYTES && single_route {
-            if let Segmented::Done = fetch_segmented(url, dest, s, total, cancel, on).await? {
-                return Ok(());
+            match fetch_segmented(url, dest, s, total, cancel, on).await {
+                Ok(Segmented::Done) => return Ok(()),
+                Ok(Segmented::Unsupported) => {}
+                Err(e) if e == CANCELLED || cancelled(cancel) => return Err(e),
+                // Один упавший кусок ронял всю установку платной сборки (жалоба
+                // 17.11.2026, Arcania 2.0): дальше качает один поток с докачкой.
+                Err(e) => eprintln!("[download] {}: segments failed, one resumable stream continues: {}", url, e),
             }
         }
         // A part file that outlives the call: an archive cut at 80% by a dropped
@@ -1491,12 +1537,20 @@ async fn fetch_span(
         match or_pause(req.send(), cancel).await {
             Err(e) if e == PAUSED => paused = true,
             Err(e) => return Err(SpanErr::Failed(e)),
+            Ok(Ok(resp)) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && shield_would_cache_whole(&resp, total) => {
+                return Err(SpanErr::Unsupported);
+            }
             Ok(Ok(resp)) if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT && range_starts_at(&resp, at) => {
                 let mut file = std::fs::OpenOptions::new().write(true).open(part).map_err(io)?;
                 file.seek(SeekFrom::Start(at)).map_err(io)?;
                 let mut stream = resp.bytes_stream();
                 while at < end {
-                    match or_pause(stream.next(), cancel).await {
+                    // Сегмент без данных не висит минуту до таймаута клиента: замолчал — повтор с того же байта.
+                    let Ok(next) = tokio::time::timeout(stall_limit(), or_pause(stream.next(), cancel)).await else {
+                        last = stalled(url);
+                        break;
+                    };
+                    match next {
                         Err(e) if e == PAUSED => {
                             paused = true;
                             break;
@@ -1669,6 +1723,24 @@ async fn resume_once(url: &str, part: &Path, have: u64, size: u64, cancel: &Halt
     Ok(())
 }
 
+/// The DDoS-Guard shield never fills its cache from a ranged request and keeps
+/// objects only up to 2 GiB. While it answers MISS, every range of a public
+/// archive costs the origin again; one plain GET stores it for every next player.
+pub(crate) const SHIELD_CACHE_MAX_BYTES: u64 = 2048 * 1024 * 1024;
+pub(crate) const SHIELD_CACHE_MISS: &str = "shield cache miss: the archive is fetched in one stream";
+
+pub(crate) fn shield_caches_only_whole(cache_status: Option<&str>, cache_control: Option<&str>, total: u64) -> bool {
+    let missed = cache_status.is_some_and(|s| s.trim().eq_ignore_ascii_case("MISS"));
+    let control = cache_control.unwrap_or("").to_ascii_lowercase();
+    let personal = control.contains("private") || control.contains("no-store");
+    missed && !personal && total <= SHIELD_CACHE_MAX_BYTES
+}
+
+pub(crate) fn shield_would_cache_whole(resp: &reqwest::Response, total: u64) -> bool {
+    let header = |name: &str| resp.headers().get(name).and_then(|v| v.to_str().ok());
+    shield_caches_only_whole(header("ddg-cache-status"), header("cache-control"), total)
+}
+
 fn range_starts_at(resp: &reqwest::Response, at: u64) -> bool {
     resp.headers()
         .get(reqwest::header::CONTENT_RANGE)
@@ -1744,6 +1816,39 @@ mod tests {
         ];
         for (err, have, want, why) in table {
             assert_eq!(resume_after(err, have), want, "{}", why);
+        }
+    }
+
+    #[test]
+    fn only_the_upstream_proxies_ask_the_shield_to_cache_for_everyone() {
+        let table: [(&str, bool, &str); 6] = [
+            ("https://api.millida.net/v2/launcher/mr/v2/search?limit=20", true, "Modrinth search is the same for every player"),
+            ("https://api.millida.net/v2/launcher/cf/v1/mods/search", true, "CurseForge proxy too"),
+            ("https://api.millida.net/v2/launcher/profile", false, "a personal answer must never be cached for others"),
+            ("https://api.millida.net/v2/launcher/mrx/v2/search", false, "a lookalike route is not the proxy"),
+            ("https://evil.example/v2/launcher/mr/v2/search", false, "another host is never ours"),
+            ("https://api.millida.net/v2/launcher/dl?url=x", false, "file mirror answers are cached by their own headers"),
+        ];
+        for (url, want, why) in table {
+            assert_eq!(shared_answer_url(url), want, "{}", why);
+        }
+    }
+
+    #[test]
+    fn ranges_give_way_to_one_stream_only_when_the_shield_can_cache_the_whole_file() {
+        type Case<'a> = (Option<&'a str>, Option<&'a str>, u64, bool, &'a str);
+        let gb = 1024 * 1024 * 1024;
+        let table: [Case; 7] = [
+            (Some("MISS"), Some("public, max-age=604800, immutable"), gb, true, "public archive not cached yet: one plain GET fills the shield for everyone"),
+            (Some("miss"), None, gb, true, "the header value is compared without case"),
+            (Some("HIT"), Some("public, max-age=604800"), gb, false, "already cached: ranges are served from the shield"),
+            (None, Some("public, max-age=604800"), gb, false, "no DDoS-Guard in front (RU-Transit): parallel ranges stay"),
+            (Some("MISS"), Some("private, no-store"), gb, false, "paid archive is never cached, a single stream would only be slower"),
+            (Some("MISS"), Some("public"), SHIELD_CACHE_MAX_BYTES + 1, false, "over 2 GiB the shield never caches"),
+            (Some("MISS"), Some("public"), SHIELD_CACHE_MAX_BYTES, true, "exactly 2 GiB still fits the shield cache"),
+        ];
+        for (status, control, total, want, why) in table {
+            assert_eq!(shield_caches_only_whole(status, control, total), want, "{}", why);
         }
     }
 
@@ -2459,6 +2564,32 @@ PK"),
         ];
         for (err, absent, why) in cases {
             assert_eq!(is_absent_answer(&err), absent, "{}: {}", why, err);
+        }
+    }
+
+    /// Errors of the routes in the order they were tried -> what the player is shown.
+    #[test]
+    fn a_route_verdict_outlives_a_later_dead_route() {
+        let mirror = "https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fmeta.fabricmc.net%2Fv2%2Fversions%2Floader%2F1.8.9";
+        let direct = "https://meta.fabricmc.net/v2/versions/loader/1.8.9";
+        let refused = format!("400 Bad Request от {}", mirror);
+        let absent = format!("404 Not Found от {}", mirror);
+        let dead = format!("нет связи (timeout) — {}", direct);
+        let down = format!("502 Bad Gateway от {}", mirror);
+        let direct_absent = format!("404 Not Found от {}", direct);
+        let cases: [([&String; 2], &String, &str); 5] = [
+            ([&refused, &dead], &refused, "the mirror's 400 is why it failed, the blocked direct route only hid it"),
+            ([&absent, &dead], &absent, "the same for a 404"),
+            ([&down, &dead], &dead, "an outage is no verdict: the last route speaks, as before"),
+            ([&dead, &refused], &refused, "a verdict after a dead route wins as well"),
+            ([&absent, &direct_absent], &direct_absent, "a later verdict replaces an earlier one"),
+        ];
+        for (tried, want, why) in cases {
+            let mut last = String::new();
+            for e in tried {
+                keep_route_error(&mut last, e.clone());
+            }
+            assert_eq!(&last, want, "{}", why);
         }
     }
 

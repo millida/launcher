@@ -1,0 +1,165 @@
+/* Новогодний календарь (декабрь 2026): лента пропуска (pass.css) с крышками.
+   Компонент — src/components/daily/AdventCalendar.tsx. Оформление — новогодняя
+   тема лаунчера внутри блока: .fx-scope из festive.css даёт её токены и красные
+   кнопки со снегом, снег и гирлянда — те же, что во всём окне.
+   Рамки карточек — общий слой «Слои рамки» (.bp-card); у крышки своей рамки нет,
+   её режет срез карточки.
+   Цвета — только из токенов --m-* (смеси через color-mix), без градиентов и теней: звёзды,
+   узор бумаги и вспышка — маски (SVG задаёт только форму, цвет берётся из токена). */
+
+.bp.av {
+  --av-gold: var(--m-rarity-legendary);
+  --av-gold-d: color-mix(in srgb, var(--m-rarity-legendary) 62%, var(--m-bg));
+  --av-gold-l: color-mix(in srgb, var(--m-rarity-legendary) 55%, var(--m-fg));
+  --av-ribbon: color-mix(in srgb, var(--m-danger) 78%, var(--m-bg));
+  --av-ribbon-d: color-mix(in srgb, var(--m-danger) 42%, var(--m-bg));
+  --av-night: color-mix(in srgb, var(--m-info) 26%, var(--m-inset));
+  /* Пиксель 1×1 для масок: размер и место каждой точки задаёт mask-size/mask-position. */
+  --av-px: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3Crect width='1' height='1'/%3E%3C/svg%3E");
+  /* Плитка узора бумаги 12×12: две точки 2×2. */
+  --av-snow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' shape-rendering='crispEdges'%3E%3Cpath d='M0 0H2V2H0ZM6 6H8V8H6Z'/%3E%3C/svg%3E");
+}
+.bp.av .av-col.last { --bp-w: 196px; width: 196px; }
+
+/* ---------- Зимняя ночь ---------- */
+.av-scene { background: var(--av-night); }
+.av-scene::after { background: color-mix(in srgb, var(--m-bg) 30%, transparent); }
+.av-stars {
+  position: absolute; inset: 0 0 40% 0; background: var(--m-fg);
+  -webkit-mask-image: var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px);
+  mask-image: var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px), var(--av-px);
+  -webkit-mask-size: 2px 2px, 2px 2px, 4px 4px, 2px 2px, 2px 2px, 4px 4px, 2px 2px, 2px 2px;
+  mask-size: 2px 2px, 2px 2px, 4px 4px, 2px 2px, 2px 2px, 4px 4px, 2px 2px, 2px 2px;
+  -webkit-mask-position: 6% 22%, 18% 64%, 31% 12%, 44% 48%, 57% 20%, 71% 70%, 83% 30%, 95% 56%;
+  mask-position: 6% 22%, 18% 64%, 31% 12%, 44% 48%, 57% 20%, 71% 70%, 83% 30%, 95% 56%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: av-twinkle 3.2s steps(1, end) infinite;
+}
+@keyframes av-twinkle { 50% { opacity: 0.55; } }
+.av-moon { position: absolute; top: 34px; right: 12%; color: var(--m-fg); opacity: 0.9; image-rendering: pixelated; }
+.av-moon path, .av-moon rect { shape-rendering: crispEdges; }
+.av-firs { position: absolute; left: 0; right: 0; bottom: 18px; height: 140px; }
+.av-fir { position: absolute; bottom: 0; filter: brightness(0.38) saturate(0.6); }
+.av-fir.f0 { left: 1%; } .av-fir.f1 { left: 14%; } .av-fir.f2 { left: 38%; }
+.av-fir.f3 { left: 61%; } .av-fir.f4 { left: 79%; } .av-fir.f5 { left: 92%; }
+.av-hills {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: var(--m-fg);
+  clip-path: polygon(0 40%, 8% 40%, 8% 20%, 22% 20%, 22% 50%, 36% 50%, 36% 10%, 52% 10%, 52% 40%, 68% 40%, 68% 24%, 84% 24%, 84% 46%, 100% 46%, 100% 100%, 0 100%);
+}
+.av-garland { position: absolute; top: 0; left: 0; right: 0; }
+
+/* ---------- Шапка ---------- */
+.bp.av .bp-kicker { color: var(--m-fg); }
+.bp.av .bp-bar > i.gone { background: color-mix(in srgb, var(--av-ribbon) 45%, transparent); }
+.bp.av .bp-bar > i.ms { background: color-mix(in srgb, var(--av-gold) 40%, transparent); }
+
+/* ---------- Клетка с крышкой ---------- */
+.av-door { isolation: isolate; }
+.av-door.free.future, .av-door.free.missed, .av-door.free.ready { background-color: color-mix(in srgb, var(--m-info) 22%, var(--m-bg)); }
+.av-door.plus.future, .av-door.plus.missed, .av-door.plus.ready, .av-door.plus.locked { background-color: color-mix(in srgb, var(--m-rarity-legendary) 32%, var(--m-bg)); }
+
+/* Крышка закрывает всю клетку; срез карточки режет её по ступенькам. */
+.av-lid {
+  position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; align-content: center; gap: 4px;
+  padding-bottom: 30px; transform-origin: 50% 0;
+}
+/* Узор бумаги: редкие светлые точки-снежинки, сетка 12 px. */
+.av-lid.paper-red::before, .av-lid.paper-green::before, .av-lid.paper-blue::before {
+  content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--m-fg) 20%, transparent);
+  -webkit-mask: var(--av-snow) 0 0 / 12px 12px repeat;
+  mask: var(--av-snow) 0 0 / 12px 12px repeat;
+}
+.av-lid.paper-red { background-color: var(--av-ribbon); }
+.av-lid.paper-green { background-color: color-mix(in srgb, var(--m-success) 58%, var(--m-bg)); }
+.av-lid.paper-blue { background-color: color-mix(in srgb, var(--m-info) 62%, var(--m-bg)); }
+/* PLUS: золотая обёртка, красная лента крестом (две полосы — псевдоэлементы). */
+.av-lid.paper-gold { background-color: var(--av-gold); }
+.av-lid.paper-gold::before, .av-lid.paper-gold::after { content: ''; position: absolute; background: var(--av-ribbon); }
+.av-lid.paper-gold::before { top: 0; bottom: 0; left: calc(50% - 7px); width: 14px; }
+.av-lid.paper-gold::after { left: 0; right: 0; top: 36%; height: 14px; }
+.av-ribbon {
+  position: absolute; top: calc(36% - 12px); left: 50%; width: 36px; height: 14px; margin-left: -18px; background: var(--av-ribbon);
+  clip-path: polygon(0 0, 30% 0, 50% 50%, 70% 0, 100% 0, 100% 100%, 0 100%);
+}
+.av-pic { position: relative; z-index: 1; }
+.av-door.plus .av-pic { margin-top: -6px; }
+.av-num {
+  position: relative; z-index: 1; min-width: 36px; padding: 2px 8px 4px; background: color-mix(in srgb, var(--m-inset) 58%, transparent); color: var(--m-fg);
+  font-size: 22px; font-weight: 900; line-height: 1; text-align: center; font-variant-numeric: tabular-nums;
+  clip-path: var(--px-4);
+}
+.av-door.plus .av-num { background: color-mix(in srgb, var(--m-rarity-legendary) 18%, var(--m-inset)); color: var(--av-gold-l); font-size: 26px; }
+.av-kick {
+  position: relative; z-index: 1; padding: 3px 8px 4px; background: var(--m-fg); color: var(--av-ribbon);
+  font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; clip-path: var(--px-4);
+}
+/* Подписи и значки — поверх крышки. */
+.av-door > .bp-tag, .av-door > .bp-take, .av-door > .bp-mark { z-index: 3; }
+
+/* Будущее — бумага чуть темнее, сегодня — светится (bp-slot.ready), сгоревшее — серое. */
+.av-door.future .av-lid { filter: brightness(0.72) saturate(0.8); }
+.av-door.locked .av-lid { filter: brightness(0.82); }
+.av-door.missed .av-lid { filter: grayscale(0.9) brightness(0.5); }
+.av-gone { color: color-mix(in srgb, var(--m-danger) 45%, var(--m-fg)); }
+.av-hint { font-size: 12px; white-space: normal; text-wrap: balance; }
+.av-door.ready .av-lid { animation: av-wiggle 2.4s steps(1, end) infinite; }
+@keyframes av-wiggle {
+  0%, 82%, 100% { transform: rotate(0); }
+  85% { transform: rotate(-2deg); }
+  88% { transform: rotate(2deg); }
+  91% { transform: rotate(-1deg); }
+}
+/* Ждём ответ службы: крышка дрожит. */
+.av-door.opening.ready .av-lid { animation: av-shake 240ms steps(4, end) infinite; }
+@keyframes av-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, -1px); }
+  50% { transform: translate(2px, 0); }
+  75% { transform: translate(-1px, 1px); }
+}
+
+/* Снятие: крышка поднимается и уходит вверх с поворотом, награда подпрыгивает. */
+.av-lid.off { animation: av-lid-off 620ms cubic-bezier(0.5, 0, 0.8, 0.4) both; }
+@keyframes av-lid-off {
+  0% { transform: translateY(0) rotate(0); }
+  20% { transform: translateY(6px) rotate(0); }
+  45% { transform: translateY(-24%) rotate(-6deg); }
+  100% { transform: translateY(-130%) rotate(-14deg); opacity: 0; }
+}
+.av-door.opening .av-prize { animation: av-pop 620ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+@keyframes av-pop {
+  0%, 30% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+/* Вспышка: восемь лучей и ядро из центра крышки, формы — маски, цвет — светлое золото. */
+.av-burst {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: color-mix(in srgb, var(--av-gold-l) 70%, transparent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M50 45L63.9 -33.8L77.4 -30.2ZM50 45L115.5 -0.9L122.5 11.2ZM50 45L128.8 58.9L125.2 72.4ZM50 45L95.9 110.5L83.8 117.5ZM50 45L36.1 123.8L22.6 120.2ZM50 45L-15.5 90.9L-22.5 78.8ZM50 45L-28.8 31.1L-25.2 17.6ZM50 45L4.1 -20.5L16.2 -27.5ZM42 37H58V53H42Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M50 45L63.9 -33.8L77.4 -30.2ZM50 45L115.5 -0.9L122.5 11.2ZM50 45L128.8 58.9L125.2 72.4ZM50 45L95.9 110.5L83.8 117.5ZM50 45L36.1 123.8L22.6 120.2ZM50 45L-15.5 90.9L-22.5 78.8ZM50 45L-28.8 31.1L-25.2 17.6ZM50 45L4.1 -20.5L16.2 -27.5ZM42 37H58V53H42Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  animation: av-burst 620ms steps(6, end) both;
+}
+@keyframes av-burst {
+  0% { opacity: 0; transform: scale(0.4); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* Забранная клетка — награда на месте крышки, как у пропуска. */
+.av-door.claimed .bp-art { opacity: 1; filter: none; }
+.av-door.claimed:not(.opening) .bp-art { opacity: 0.7; }
+
+/* 31 декабря — шире, золотая рамка у обеих строк. */
+.av-door.last { --px-ol: var(--av-gold); --px-ol-w: 3px; }
+.av-door.free.last .av-lid { background-color: var(--av-ribbon-d); gap: 2px; padding-bottom: 34px; }
+.av-door.free.last .av-num { font-size: 18px; }
+.bp-col.last .bp-day { background-color: var(--av-ribbon); color: var(--m-fg); --px-fb: var(--av-ribbon-d); }
+
+@media (prefers-reduced-motion: reduce) {
+  .av-stars, .av-door.ready .av-lid, .av-door.opening .av-lid, .av-lid.off, .av-door.opening .av-prize, .av-burst { animation: none; }
+  .av-lid.off, .av-burst { display: none; }
+}
+:root.m-lite .av-stars, :root.m-lite .av-door .av-lid, :root.m-lite .av-door .av-prize { animation: none; }
+:root.m-lite .av-lid.off, :root.m-lite .av-burst { display: none; }

@@ -39,6 +39,8 @@
   .nf { display: inline-flex; gap: 10px; }
   .nf-face { animation: none; }
 }
+html.m-lite .nf { display: inline-flex; gap: 10px; }
+html.m-lite .nf-face { animation: none; }
 
 /* ---------- Плитки ---------- */
 .pb2 .pb-body { grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 10px 16px 14px; }

@@ -46,12 +46,23 @@ pub(crate) async fn cf_get(path: &str, q: &[(String, String)]) -> Result<Value, 
             }
         }
     }
-    let r = client()
-        .get(format!("{}/{}", CF_MIRROR, path))
-        .query(q)
-        .send()
-        .await
-        .map_err(|_| unreachable_text())?;
+    let mirror = || client().get(format!("{}/{}", CF_MIRROR, path)).query(q).send();
+    let mut r = mirror().await.map_err(|_| unreachable_text())?;
+    // The public mirror limits by address too. A short wait is taken once, then one more try; a
+    // longer one is told to the player at once: search and the build page call this too, and a
+    // minute of a spinner there reads as a hung launcher.
+    if r.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        let asked = r.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse::<u64>().ok());
+        let wait = asked.unwrap_or(CF_GET_WAIT_SECS);
+        if wait > CF_GET_WAIT_SECS {
+            return Err(cf_throttled_text(&format!("; Retry-After: {}", wait)));
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+        r = mirror().await.map_err(|_| unreachable_text())?;
+    }
+    if r.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return Err(cf_throttled_text(""));
+    }
     if !r.status().is_success() {
         return Err(format!("CurseForge ответил {}", r.status()));
     }
@@ -263,21 +274,61 @@ pub(crate) async fn cf_fetch_manifest_files(
     let done = &done;
     let optional_failed = std::sync::Mutex::new(Vec::<String>::new());
     let optional_failed = &optional_failed;
-    futures::stream::iter(planned.into_iter().map(Ok::<CfPlanned, String>))
-        .try_for_each_concurrent(PACK_PARALLEL, |p| async move {
-            match cf_download_cancellable(&p.file, &p.name, &p.dest, cancel).await {
-                Ok(_) => {}
-                Err(e) if e == CANCELLED => return Err(e),
-                Err(e) if p.required => return Err(format!("{} ({})", p.name, e)),
-                Err(_) => optional_failed.lock().unwrap_or_else(|e| e.into_inner()).push(p.name),
+    // A required file CurseForge (or the mirror in front of it) refused for the rate or a dropped
+    // line waits for a later round instead of failing the whole pack: one 429 among 300 mods used to
+    // throw the install away (reports 13.11.2026). Rounds go slower and keep to the server's wait.
+    let later = std::sync::Mutex::new(Vec::<(CfPlanned, String)>::new());
+    let later = &later;
+    let mut todo = planned;
+    for round in 0..=CF_RETRY_ROUNDS {
+        if round > 0 {
+            let waiting: Vec<(CfPlanned, String)> = later.lock().unwrap_or_else(|e| e.into_inner()).drain(..).collect();
+            if waiting.is_empty() {
+                break;
             }
-            let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            on_file(n, total);
-            Ok(())
-        })
-        .await?;
+            let asked = waiting.iter().filter_map(|(_, e)| server_wait(e)).max();
+            let pause = throttle_pause(round as u32 + 1, asked, jitter_unit());
+            or_cancel(tokio::time::sleep(pause), cancel).await?;
+            todo = waiting.into_iter().map(|(p, _)| p).collect();
+        }
+        let parallel = if round == 0 { PACK_PARALLEL } else { CF_RETRY_PARALLEL };
+        futures::stream::iter(std::mem::take(&mut todo).into_iter().map(Ok::<CfPlanned, String>))
+            .try_for_each_concurrent(parallel, |p| async move {
+                match cf_download_cancellable(&p.file, &p.name, &p.dest, cancel).await {
+                    Ok(_) => {}
+                    Err(e) if e == CANCELLED => return Err(e),
+                    Err(e) if p.required && is_transient(&e) => {
+                        later.lock().unwrap_or_else(|e| e.into_inner()).push((p, e));
+                        return Ok(());
+                    }
+                    Err(e) if p.required => return Err(format!("{} ({})", p.name, e)),
+                    Err(_) => optional_failed.lock().unwrap_or_else(|e| e.into_inner()).push(p.name),
+                }
+                let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                on_file(n, total);
+                Ok(())
+            })
+            .await?;
+    }
+    if let Some((p, e)) = later.lock().unwrap_or_else(|e| e.into_inner()).first() {
+        return Err(if is_throttled(e) { cf_throttled_text(e) } else { format!("{} ({})", p.name, e) });
+    }
     skipped.extend(optional_failed.lock().unwrap_or_else(|e| e.into_inner()).drain(..));
     Ok(CfFetched { skipped })
+}
+
+/// The longest rate-limit wait one CurseForge API request sits through before telling the player.
+const CF_GET_WAIT_SECS: u64 = 3;
+
+/// Rounds after the first for required files refused for the rate or a dropped line.
+const CF_RETRY_ROUNDS: usize = 3;
+/// Files at once in those rounds: the limit is per address, so fewer at once is what lifts it.
+const CF_RETRY_PARALLEL: usize = 2;
+
+/// What the player reads when CurseForge kept refusing for the rate: no URL, the wait in minutes.
+pub(crate) fn cf_throttled_text(err: &str) -> String {
+    let minutes = server_wait(err).map(|d| d.as_secs().div_ceil(60).max(1)).unwrap_or(5);
+    format!("CurseForge ограничил скорость скачивания — подожди {} мин и повтори установку", minutes)
 }
 
 #[derive(serde::Serialize)]
@@ -1045,5 +1096,19 @@ mod tests {
         assert_eq!(world_folder_name("SCP: Blocktainment / Breach"), "SCP Blocktainment Breach");
         assert_eq!(world_folder_name("???"), "Карта");
         assert!(world_folder_name(&"я".repeat(200)).chars().count() <= 48);
+    }
+}
+
+#[cfg(test)]
+mod throttle_tests {
+    use super::cf_throttled_text;
+
+    #[test]
+    fn a_rate_limit_is_told_in_minutes_without_addresses() {
+        let raw = "X.jar (https://api.millida.net/v2/launcher/dl?url=https%3A%2F%2Fedge.forgecdn.net%2Fx → 429 Too Many Requests; Retry-After: 90)";
+        let text = cf_throttled_text(raw);
+        assert!(text.contains("2 мин"), "{text}");
+        assert!(!text.contains("http"), "no URL reaches the player: {text}");
+        assert!(cf_throttled_text("").contains("5 мин"), "no wait given: five minutes");
     }
 }

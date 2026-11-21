@@ -253,6 +253,15 @@ async fn mods_step(
             warn(&app, &format!("Буст FPS убрал из сборки мод, с которым игра не запускается: {}", gone.join("; ")));
         }
     }
+    // A mod with its own loading screen asks, in a window macOS never shows, to be named in
+    // fml.toml and exits the game when told yes: the build hangs before its window. One such mod
+    // is named here; with several only the player knows which to keep.
+    if touch_mods && matches!(loader.as_str(), "forge" | "neoforge") {
+        let dir = game_dir.clone();
+        if let Ok(EarlyWindow::Manual { jars }) = spawn_blocking_held(move |_| settle_early_window(&dir)).await {
+            warn_early_window(&app, &EarlyWindowNotice { profile: profile.clone(), mods: jars });
+        }
+    }
     if loader == "forge" {
         let off = resolve_legacy_duplicates(&profile, &game_version).await;
         if !off.is_empty() {
@@ -345,12 +354,13 @@ fn prepare_pack(
     let token: Node<Vec<String>> = if spec.needs_token {
         let (app, profile, slug) = (app.clone(), profile.to_string(), spec.slug.clone());
         g.spawn("pack-token", "pack", None, async move {
+            let installed = || installed_pack_body(&profile_settings(&profile), &slug);
             let got = match token_job {
                 Some(job) => match job.answer().await {
                     Some(done) => done,
-                    None => pack_launch_token(&slug).await,
+                    None => pack_launch_token(&slug, installed()).await,
                 },
-                None => pack_launch_token(&slug).await,
+                None => pack_launch_token(&slug, installed()).await,
             };
             match got {
                 Ok(t) => Ok(t),
@@ -437,8 +447,17 @@ fn prepare_pack(
         })
     };
     let spec = spec.clone();
+    let profile_id = profile.to_string();
     let ready = Node::from_future(async move {
         let (token, java, files, (assets_root, laid_out, index_id)) = futures::try_join!(token.get(), java.get(), files.get(), assets.get())?;
+        // Пока качались Java и файлы, одноразовый билет продавца мог истечь. Новый ключ
+        // просится с той же версией сборки: правило «только последняя» держится и тут.
+        let token = if spec.needs_token {
+            let installed = installed_pack_body(&profile_settings(&profile_id), &spec.slug);
+            fresh_launch_token(&spec.slug, token, installed).await
+        } else {
+            token
+        };
         let mut extra_jvm = token;
         extra_jvm.extend(files.module_args.iter().cloned());
         if let Some(arg) = &files.lwjgl {
@@ -495,7 +514,7 @@ pub(crate) async fn launch(app: AppHandle, ask: LaunchAsk, perf: LaunchPerf) -> 
         Err(e) if e == ALREADY_STARTING => return Ok(OUTCOME_STARTING.into()),
         Err(e) => return Err(e),
     };
-    if let Some(outcome) = bring_running_forward(&profile, true) {
+    if let Some(outcome) = super::launch::bring_forward_or_adopt(&app, &profile) {
         return Ok(outcome);
     }
 

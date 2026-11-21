@@ -18,6 +18,7 @@ import { initMusic } from '../../state/music'
 import { DailyChest } from './DailyChest'
 import type { DailyView } from './track'
 import { demoStatus } from './demoTrack'
+import { demoAdventClaim, demoAdventStatus } from './demoAdvent'
 
 initMusic()
 void initAccent()
@@ -36,7 +37,11 @@ const fresh = demoStatus({
   have: q.has('have') ? Number(q.get('have')) : undefined,
   days: q.has('days') ? Number(q.get('days')) : undefined,
 })
-const base: DailyView = legacy ? { ...fresh, track: undefined, weekItem: undefined, plusMultiplier: 2 } : fresh
+// `&advent=1` — новогодний календарь: `&day=1..31` — день декабря, `&missed=3,7` — сгоревшие дни.
+const advent = q.has('advent')
+const adventStatus = () =>
+  demoAdventStatus({ day: Number(q.get('day')) || 5, plus: state === 'plus', missed: (q.get('missed') || '').split(',').filter(Boolean).map(Number) })
+const base: DailyView = advent ? adventStatus() : legacy ? { ...fresh, track: undefined, weekItem: undefined, plusMultiplier: 2 } : fresh
 if (state !== 'live') {
   useDaily.setState({ status: base, load: async () => {} })
   usePlus.setState({ load: async () => {}, active: state === 'plus' })
@@ -50,6 +55,18 @@ if (state !== 'live') {
     .catch(() => undefined)
 }
 if (q.has('modal')) useDaily.setState({ modal: true })
+// Календарь: «Забрать» отвечает демо-службой на месте, с задержкой как у сети.
+if (advent)
+  useDaily.setState({
+    claim: async (target) => {
+      const cur = useDaily.getState().status
+      if (!cur || !target) return
+      useDaily.setState({ busy: 'claim', reveal: null, target })
+      await new Promise((r) => setTimeout(r, 450))
+      const res = demoAdventClaim(cur, 0, target)
+      useDaily.setState({ status: res, reveal: res, busy: '' })
+    },
+  })
 // `&hold=1` — «Забрать» не получает ответа: сундук трясётся, пока смотрим.
 if (q.has('hold')) useDaily.setState({ claim: async () => useDaily.setState({ busy: 'claim', reveal: null }) })
 if (q.has('claim')) setTimeout(() => void useDaily.getState().claim(), 600)

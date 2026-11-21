@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
@@ -32,10 +32,18 @@ import { ChestOpenHost } from './ChestOpen'
 import { PlusCard } from './PlusCard'
 import { SeasonPass } from './SeasonPass'
 import { CHEST_NAME, dayChestTier } from './rewards'
+import { isAdvent } from './advent'
+import { liteOn } from '../../lib/liteMode'
 import '../../styles/pixel/daily.css'
 import { wearNow } from '../../state/wearIntent'
 import { intlTag, t, useT } from '../../i18n'
 import { plusPrice, useMoney } from '../../lib/useMoney'
+
+/** Новогодний календарь — свой чанк: в остальные месяцы его не качают. */
+const AdventCalendar = lazy(() => import('./AdventCalendar'))
+
+/** Календарь: миг награды — после того, как снимется крышка (AdventCalendar, LID_MS). */
+const ADVENT_ANNOUNCE_MS = 700
 
 const real = (list: TrackReward[]) => list.filter((r): r is Reward => r.kind !== 'MYSTERY')
 
@@ -158,6 +166,7 @@ export function PassBody({
   const hasFuture = cols.some((c) => c.freeState === 'future')
   const left = useCountdown(nextResetAt(status), active && !!status && hasFuture, () => void useDaily.getState().load())
   const track = status?.track?.length ? status.track : null
+  const advent = isAdvent(status)
 
   useEffect(() => {
     if (!active) {
@@ -187,7 +196,9 @@ export function PassBody({
     setClaiming(false)
     const granted = reveal ? grantedOf(reveal) : []
     useDaily.getState().clearReveal()
-    announce(granted)
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches || liteOn()
+    if (advent && !calm) window.setTimeout(() => announce(granted), ADVENT_ANNOUNCE_MS)
+    else announce(granted)
   }, [claiming, busy, reveal])
 
   const season = status ? seasonOf(status) : null
@@ -208,6 +219,21 @@ export function PassBody({
       <>
         {!status ? (
           <span className="skel dp-skel bp-skel" aria-hidden="true" />
+        ) : advent ? (
+          <Suspense fallback={<span className="skel dp-skel bp-skel" aria-hidden="true" />}>
+            <AdventCalendar
+              compact
+              cols={cols}
+              own={own}
+              left={left}
+              busy={!!busy}
+              season={season}
+              price={price}
+              extra={extra}
+              onClaim={claim}
+              onPlus={plus}
+            />
+          </Suspense>
         ) : track ? (
           <SeasonPass
             compact
@@ -257,6 +283,35 @@ export function PassBody({
             tier={got.length ? dayChestTier(got) : undefined}
           />
         ) : null}
+        {plusJoy != null && mine ? <PlusCelebration items={plusJoy} onDone={() => useDaily.getState().endPlusJoy()} /> : null}
+        {mine ? <PlusCard cols={cols} /> : null}
+        <ChestOpenHost />
+      </>
+    )
+  }
+
+  if (track && status && advent) {
+    return (
+      <>
+        <Suspense fallback={<span className="skel dp-skel bp-skel" aria-hidden="true" />}>
+          <AdventCalendar
+            compact={inline}
+            cols={cols}
+            own={own}
+            left={left}
+            busy={!!busy}
+            season={season}
+            price={price}
+            onClaim={claim}
+            onPlus={plus}
+            onClose={onClose}
+            below={status.chests || pending ? (
+              <div className="bp-below">
+                <MyChests />
+              </div>
+            ) : null}
+          />
+        </Suspense>
         {plusJoy != null && mine ? <PlusCelebration items={plusJoy} onDone={() => useDaily.getState().endPlusJoy()} /> : null}
         {mine ? <PlusCard cols={cols} /> : null}
         <ChestOpenHost />

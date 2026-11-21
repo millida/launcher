@@ -19,6 +19,7 @@ import type { PopularVersion } from '../../lib/versionBuild'
 import { hasTauri } from '../../ipc/tauri'
 import { usePlayStats } from '../../state/playStats'
 import { useGuarded, useProfiles } from '../../state/profiles'
+import { useLobby } from '../../state/lobbyMode'
 import { openModal, showToast } from '../../state/ui'
 import { BuildIcon, IconPicker } from './BuildIcon'
 import { hoursText } from './Hours'
@@ -72,6 +73,7 @@ export function removeBuild(name: string, after?: () => void) {
     deleteProfile(name)
       .then(() => {
         if (useProfiles.getState().selected === name) useProfiles.getState().setSelected(null)
+        useLobby.getState().forgetBuild(name)
         void useProfiles.getState().refresh()
         showToast(t('Сборка удалена'), 'ok', 'delete')
         after?.()

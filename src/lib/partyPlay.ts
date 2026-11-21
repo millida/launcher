@@ -28,6 +28,7 @@ import {
   setPartyReady,
   setPartyTarget,
   startPartyLaunch,
+  VOICE_ONLY,
   usePartyStore,
   type PackConfirmAnswer,
 } from '../state/party'
@@ -332,6 +333,8 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
     if (!target) return
     const next = await setPartyTarget(target)
     if (!next) return
+    // Служба не приняла цель из-за голоса: лидер всё равно играет, а не смотрит на тост.
+    if (next === VOICE_ONLY) return goWithoutParty(target)
     current = next
   }
   if (!partyWithOthers(current)) return
@@ -342,7 +345,33 @@ export async function partyPlayPressed(mode: LobbyMode | null): Promise<void> {
   }
   if (!current.target) return
   if (!(await prepareTarget(current.target))) return
-  if (await startPartyLaunch(await leaderAddr(current.target))) maybeRunLaunch()
+  await launchTogether(current.target)
+}
+
+/**
+ * Старт пати лидером. Отказ службы про голос не отменяет игру: лидер запускает
+ * цель сам, остальные видят, что игра началась, и заходят по «Готов».
+ */
+async function launchTogether(target: PartyTarget): Promise<boolean> {
+  const addr = await leaderAddr(target)
+  if (!addr && (target.kind === 'premium' || target.kind === 'build')) {
+    // Без сервера каждый окажется в своём одиночном мире, и встроенный голос сборки
+    // скажет «только в сетевой игре». Говорим заранее, запуск не держим.
+    showToast(t('У пати нет сервера: каждый окажется в своём мире. Выбери сервер или открой мир по LAN'))
+  }
+  const res = await startPartyLaunch(addr)
+  if (!res) return false
+  if (res === VOICE_ONLY) {
+    await runLaunch({ seq: 0, at: Date.now(), addr, target })
+    return true
+  }
+  maybeRunLaunch()
+  return true
+}
+
+async function goWithoutParty(target: PartyTarget): Promise<void> {
+  if (!(await prepareTarget(target))) return
+  await runLaunch({ seq: 0, at: Date.now(), addr: await leaderAddr(target), target })
 }
 
 /**
@@ -355,9 +384,7 @@ export async function launchPartyTarget(): Promise<boolean> {
   if (!party || !isLeader(party, me) || !party.target || !partyWithOthers(party)) return false
   if (launchBlock(party)) return false
   if (!(await prepareTarget(party.target))) return false
-  if (!(await startPartyLaunch(await leaderAddr(party.target)))) return false
-  maybeRunLaunch()
-  return true
+  return launchTogether(party.target)
 }
 
 /** The server stores the address as host:port, the lobby keeps it as typed. */

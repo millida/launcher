@@ -52,6 +52,12 @@ fn warn(app: &AppHandle, msg: &str) {
     let _ = app.emit("launch-warning", msg.to_string());
 }
 
+/// The launch continues, but the build has several loading screens and the player has to keep one:
+/// a window that explains it, not a toast that is gone before the game hangs.
+fn warn_early_window(app: &AppHandle, notice: &game::EarlyWindowNotice) {
+    let _ = app.emit("launch-early-window", notice.clone());
+}
+
 pub mod core;
 pub mod game;
 pub mod profiles;
@@ -60,6 +66,7 @@ pub mod accounts;
 pub mod skins;
 pub mod media;
 pub mod cloud;
+pub mod cloud_backups;
 pub mod party_voice;
 pub mod rewind;
 pub mod uninstall_report;
@@ -72,4 +79,5 @@ pub use accounts::*;
 pub use skins::*;
 pub use media::*;
 pub use cloud::*;
+pub use cloud_backups::*;
 pub use uninstall_report::*;

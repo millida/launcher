@@ -18,14 +18,16 @@ export const THEME_TITLE: Record<SetTheme, string> = {
   get dark() { return t('Тьма') },
   get future() { return t('Будущее') },
   get cozy() { return t('Уют') },
+  get street() { return t('Улицы') },
 }
-export const THEME_ORDER: SetTheme[] = ['flame', 'dark', 'future', 'cozy']
+export const THEME_ORDER: SetTheme[] = ['flame', 'dark', 'future', 'cozy', 'street']
 /** Цвет темы: токены редкости, без своих оттенков. */
 export const THEME_TONE: Record<SetTheme, string> = {
   flame: 'var(--m-rarity-mythic)',
   dark: 'var(--m-rarity-epic)',
   future: 'var(--m-rarity-rare)',
   cozy: 'var(--m-rarity-uncommon)',
+  street: 'var(--m-ruby-hi)',
 }
 
 /** Превью вещи без подложки: перекрашено в свою расцветку, без картинки — значок слота. */

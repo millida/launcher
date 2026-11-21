@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  voiceOnlyRefusal,
   LAUNCH_FRESH_MS,
   launchAgreed,
   launchBlock,
@@ -225,4 +226,16 @@ describe('mateToAsk', () => {
     { why: 'a card already asked is not asked again on the next scan', cards: [card('a', 1, { requested: true })], mine: card('me', 5), me: 'me', want: null },
   ]
   for (const c of cases) test(c.why, () => expect(mateToAsk(c.cards, c.mine, c.me, MATE_TAGS)?.id ?? null).toBe(c.want))
+})
+
+describe('voiceOnlyRefusal', () => {
+  // 17.11.2026: отказ службы про голос обрывал запуск сборки в пати.
+  const cases: Array<[unknown, boolean, string]> = [
+    [new Error('Голосовой чат работает только в публичной игре'), true, 'примечание про голос не держит запуск'],
+    ['Voice chat is only available in a public game', true, 'английский текст службы — тоже про голос'],
+    [new Error('Сначала выбери цель'), false, 'настоящий отказ остаётся отказом'],
+    [new Error('http 403'), false, 'голый код не про голос'],
+    [null, false, 'пустая ошибка'],
+  ]
+  for (const [e, want, why] of cases) test(why, () => expect(voiceOnlyRefusal(e)).toBe(want))
 })

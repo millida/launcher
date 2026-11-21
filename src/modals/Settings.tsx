@@ -36,6 +36,7 @@ import { Icon } from '../components/Icon'
 import { Block, Group, Query, Row, Segs, Toggle } from '../components/SetKit'
 import { CloudSync } from '../components/CloudSync'
 import { SharedStore } from '../components/SharedStore'
+import { DiskUsage } from '../components/DiskUsage'
 import { BackupsFolderRow } from '../components/BackupsFolderRow'
 import { AmbienceRows } from '../components/lobby/AmbienceRows'
 import { openMcNews } from '../components/mcNewsStore'
@@ -58,13 +59,14 @@ import type { SoundMode } from '../lib/sound'
 import { notifyLevel, setNotifyLevel } from '../state/notifyPrefs'
 import { setDesktopToasts } from '../lib/desktopToast'
 import { setStreakRemind, streakRemindOn } from '../lib/streakReminder'
+import { affordNoticeOn, setAffordNotice } from '../components/shop/packNeed'
 import { autostartOn, setAutostart } from '../lib/autostart'
 import type { NotifyKind, NotifyLevel } from '../state/notifyPrefs'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
 import { type MarketFeature, marketOffers, t, useMarket, useT } from '../i18n'
 import { LangPicker } from '../components/LangPicker'
-import { writePref } from '../lib/prefs'
+import { readPref, writePref } from '../lib/prefs'
 import { musicAutostartOn, setMusicAutostart } from '../state/music'
 import { setTelemetryEnabled, telemetryEnabled, track, trackFailure } from '../lib/telemetry'
 import { getAccount, getMillidaAccount, useAccounts } from '../state/accounts'
@@ -101,6 +103,7 @@ import type { Accent } from '../lib/accent'
 import { canPickBackdrop, pickBackdrop } from '../lib/pickBackdrop'
 import { STILLS } from '../lib/wallpaper'
 import { useWallpaper } from '../state/wallpaper'
+import { openWallpaperLibrary } from '../components/wallpaperLibStore'
 import { TAB_MS_DEFAULT, useViewPrefs } from '../state/viewPrefs'
 import type { PerfMode } from '../state/viewPrefs'
 
@@ -225,6 +228,9 @@ const notifyLevels = (): [NotifyLevel, string][] => [
   ['off', t('Выкл')],
 ]
 
+/** Ядро читает этот ключ при запуске игры: engine/game/livelog.rs, HIDE_NICK_PREF. */
+const LOG_HIDE_NICK_PREF = 'm-log-hide-nick'
+
 export function Settings({ on }: { on: boolean }) {
   const t = useT()
   const market = useMarket()
@@ -253,11 +259,13 @@ export function Settings({ on }: { on: boolean }) {
   const [moving, setMoving] = useState(false)
   const [winMode, setWinMode] = useState<LaunchWindowMode>(launchWindowMode)
   const [trayClose, setTrayCloseOn] = useState(trayCloseEnabled)
+  const [logHideNick, setLogHideNick] = useState(() => readPref(LOG_HIDE_NICK_PREF, '0') === '1')
   const [telemetryOn, setTelemetryOn] = useState(telemetryEnabled)
   const [backAfterGame, setBackAfterGame] = useState(restoreOnGameExit)
   const [tray, setTray] = useState(hasTray)
   const [autostart, setAutostartOn] = useState(false)
   const [streakRemind, setStreakRemindOn] = useState(streakRemindOn)
+  const [afford, setAfford] = useState(affordNoticeOn)
   const [discord, setDiscord] = useState(() => localStorage.getItem('m-discord') !== '0')
   const [musicAuto, setMusicAuto] = useState(musicAutostartOn)
   const [soundMd, setSoundMd] = useState<SoundMode>(soundMode)
@@ -519,6 +527,17 @@ export function Settings({ on }: { on: boolean }) {
                 <img src={convertFileSrc(c.path)} alt="" />
                 <span>{c.name || t('Свой фон')}</span>
                 <button
+                  className="s2-wp-del s2-wp-pub"
+                  aria-label={t('Опубликовать в библиотеку')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (onlyApp(t('Публикация фона'))) return
+                    openWallpaperLibrary('mine', c)
+                  }}
+                >
+                  <Icon id="i-send" />
+                </button>
+                <button
                   className="s2-wp-del"
                   aria-label={t('Удалить фон')}
                   onClick={(e) => {
@@ -530,6 +549,12 @@ export function Settings({ on }: { on: boolean }) {
                 </button>
               </div>
             ))}
+            <button className="s2-wp-tile add" onClick={() => openWallpaperLibrary()}>
+              <span className="s2-wp-ph">
+                <Icon id="i-image" />
+              </span>
+              <span>{t('Библиотека')}</span>
+            </button>
             <button className="s2-wp-tile add" onClick={uploadBackdrop}>
               <span className="s2-wp-ph">
                 <Icon id="i-upload" />
@@ -730,6 +755,17 @@ export function Settings({ on }: { on: boolean }) {
                 setOverlay({ ...overlay, toasts: !next })
                 showToast(t('Не получилось — попробуй ещё раз'), 'error', false)
               })
+            }}
+          />
+        </Row>
+        <Row title={t('Подсказка «Теперь хватает»')} hint={t('В магазине, когда рубинов хватает на вещь из «Хочу»')} keys="уведомления магазин хочу хватает рубины">
+          <Toggle
+            label={t('Подсказка «Теперь хватает»')}
+            on={afford}
+            onChange={() => {
+              const next = !afford
+              setAfford(next)
+              setAffordNotice(next)
             }}
           />
         </Row>
@@ -973,6 +1009,9 @@ export function Settings({ on }: { on: boolean }) {
         <BackupsFolderRow />
         <Block keys="общее хранилище моды дубли место">
           <SharedStore />
+        </Block>
+        <Block keys="место на диске размер сборки логи вылеты очистить гигабайты">
+          <DiskUsage />
         </Block>
       </Group>
 
@@ -1298,6 +1337,17 @@ export function Settings({ on }: { on: boolean }) {
           <button className="btn sm secondary" onClick={startTour}>
             {t('Показать')}
           </button>
+        </Row>
+        <Row title={t('Скрывать ник в логе')} hint={t('В окне лога игры ник станет Player — удобно для стримов и скриншотов')} keys="лог ник стрим скриншот приватность скрыть">
+          <Toggle
+            label={t('Скрывать ник в логе')}
+            on={logHideNick}
+            onChange={() => {
+              const next = !logHideNick
+              setLogHideNick(next)
+              writePref(LOG_HIDE_NICK_PREF, next ? '1' : '0')
+            }}
+          />
         </Row>
         <Row
           title={t('Отчёт для поддержки')}

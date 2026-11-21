@@ -30,7 +30,7 @@ export type StoredShot = { blob: Blob; dressed: number; frames?: number; seconds
  * frame changes, and old shots are then ignored.
  */
 // v5: frame loops, no contact shadow under the feet.
-const SHOT_VER = 'v7'
+const SHOT_VER = 'v8'
 const DB = 'm-outfit-shots'
 /** The frame of a moving item has its own key; saving the loop removes it. */
 const STILL = '|still'

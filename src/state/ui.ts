@@ -50,6 +50,8 @@ export interface PrelaunchState {
   pct: number
   mode: 'launch' | 'repair'
   label?: string | null
+  /** Игра запущена, ждём её окно: сборка, кнопка карточки — «Остановить». */
+  waiting?: string
 }
 
 export type ToastKind = 'ok' | 'error'

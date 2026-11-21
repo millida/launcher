@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { PROMO_ORDER, promoAt, promoSlides, promoStart } from './promo'
+import { PROMO_ORDER, TELEGRAM_CHAT, TELEGRAM_CHAT_EN, promoAt, promoSlides, promoStart, telegramChat } from './promo'
 
 const RU = { partners: true, ruContent: true }
 
@@ -14,12 +14,13 @@ test('the invite slide shows only once the referral terms came from the server',
   expect(promoSlides({ arcania: false, prisonrpg: false, invite: true, ...RU }).slice(-1)[0], 'the friend offer closes the carousel after the owner-ordered slides').toBe('invite')
 })
 
-test('outside the Russian market partner servers and the Russian Telegram channel drop out', () => {
+test('outside the Russian market partner servers drop out and Telegram leads to the English channel', () => {
   const intl = promoSlides({ arcania: true, prisonrpg: true, invite: true, partners: false, ruContent: false })
   expect(intl, 'MCRU anarchy and MetaLabs prison are Russian partner servers, an English player has nowhere to talk to them').not.toContain('anarchy')
   expect(intl, 'the prison slide is a partner server even when its pack is in the catalogue').not.toContain('prisonrpg')
-  expect(intl, 'the Telegram channel posts in Russian only').not.toContain('telegram')
-  expect(intl, 'Millida own slides stay on every market').toEqual(['discord', 'arcania', 'smp', 'invite'])
+  expect(intl, 'Millida own slides stay on every market').toEqual(['discord', 'telegram', 'arcania', 'smp', 'invite'])
+  expect(telegramChat(false), 'an English player is sent to the English channel, not the Russian one').toBe(TELEGRAM_CHAT_EN)
+  expect(telegramChat(true), 'the Russian market keeps the channel the shop reward checks').toBe(TELEGRAM_CHAT)
 })
 
 test('rotation walks every slide and wraps', () => {
@@ -46,4 +47,11 @@ test('a fresh partner release opens the carousel only where partner packs are so
   expect(promoSlides({ arcania: true, prisonrpg: true, invite: false, abonent: true, ...RU })[0], 'the released pack must be the first slide players see').toBe('abonent')
   expect(promoSlides({ arcania: true, prisonrpg: true, invite: false, abonent: true, partners: false, ruContent: false }), 'abroad the partner pack is not on sale').not.toContain('abonent')
   expect(promoSlides({ arcania: true, prisonrpg: true, invite: false, abonent: false, ...RU }), 'no pack in the list, no slide').not.toContain('abonent')
+})
+
+test('a running cosmetics collection opens the carousel on every market', () => {
+  expect(promoSlides({ arcania: true, prisonrpg: true, invite: true, collection: true, ...RU })[0], 'the timed collection is the freshest news, it leads').toBe('collection')
+  expect(promoSlides({ arcania: true, prisonrpg: true, invite: true, collection: true, abonent: true, ...RU }).slice(0, 2), 'a partner release follows the collection').toEqual(['collection', 'abonent'])
+  expect(promoSlides({ arcania: false, prisonrpg: false, invite: false, collection: true, partners: false, ruContent: false })[0], 'cosmetics are Millida own, not a partner offer').toBe('collection')
+  expect(promoSlides({ arcania: true, prisonrpg: true, invite: true, ...RU }), 'without a running collection the slide does not appear').not.toContain('collection')
 })
