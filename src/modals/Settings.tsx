@@ -41,6 +41,7 @@ import { BackupsFolderRow } from '../components/BackupsFolderRow'
 import { AmbienceRows } from '../components/lobby/AmbienceRows'
 import { openMcNews } from '../components/mcNewsStore'
 import { A11yRows } from '../components/A11yRows'
+import { GiftsBlock } from '../components/gifts/GiftsBlock'
 import { uiChoice, uiConfirm } from '../state/confirm'
 import { ColorPicker } from '../components/ColorPicker'
 import { AppIconPicker } from '../components/AppIconPicker'
@@ -187,7 +188,7 @@ const sections = (): { id: SecId; label: string }[] => [
 
 /// Старые адреса вкладок (openSettings('notify') и сохранённый m-set-tab)
 /// ведут туда, куда переехало их содержимое.
-const MOVED: Record<string, SecId> = { window: 'game', notify: 'sound', privacy: 'account' }
+const MOVED: Record<string, SecId> = { window: 'game', notify: 'look', privacy: 'account' }
 
 function toSec(v: string | null | undefined): SecId | null {
   if (!v) return null
@@ -220,6 +221,7 @@ const notifyRows = (): [NotifyKind, string][] => [
   ['play', t('Друг зашёл в игру')],
   ['online', t('Друг в сети')],
   ['request', t('Заявки в друзья')],
+  ['gift', t('Подарки')],
 ]
 
 const notifyLevels = (): [NotifyLevel, string][] => [
@@ -277,6 +279,7 @@ export function Settings({ on }: { on: boolean }) {
     online: notifyLevel('online'),
     request: notifyLevel('request'),
     room: notifyLevel('room'),
+    gift: notifyLevel('gift'),
   }))
   const [ver, setVer] = useState('')
   const [diagBusy, setDiagBusy] = useState(false)
@@ -572,6 +575,98 @@ export function Settings({ on }: { on: boolean }) {
         </Group>
       </Block>
 
+      <GiftsBlock />
+
+      <Block keys="уведомления сообщения друг в сети заявки группы подарки в игре со звуком без звука">
+        <Group title={t('Уведомления')}>
+          <div className="s2-matrix" role="table">
+            <div className="s2-mx-head" role="row">
+              <span></span>
+              {notifyLevels().map(([v, label]) => (
+                <span key={v} role="columnheader" className="s2-mx-col">
+                  {label}
+                </span>
+              ))}
+            </div>
+            {notifyRows().map(([kind, label]) => (
+              <div className="s2-mx-row" role="row" key={kind}>
+                <span className="s2-mx-lab">{label}</span>
+                {notifyLevels().map(([v, seg]) => (
+                  <span key={v} className="s2-mx-cell">
+                    <button
+                      role="radio"
+                      aria-checked={notifyLv[kind] === v}
+                      aria-label={label + ': ' + seg}
+                      data-nosound
+                      className={'s2-dot' + (notifyLv[kind] === v ? ' on' : '') + (v === 'off' ? ' off' : '')}
+                      onClick={() => {
+                        setNotifyLv((prev) => ({ ...prev, [kind]: v }))
+                        setNotifyLevel(kind, v)
+                        if (v === 'sound') playSound('notify')
+                      }}
+                    ></button>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </Group>
+      </Block>
+      <Group>
+        <Row title={t('Карточки поверх всех окон')} hint={t('Даже когда лаунчер свёрнут')} keys="уведомления рабочий стол">
+          <Toggle
+            label={t('Карточки поверх всех окон')}
+            on={overlay.toasts}
+            onChange={() => {
+              const next = !overlay.toasts
+              setOverlay({ ...overlay, toasts: next })
+              setDesktopToasts(next).catch((err) => {
+                console.error('[settings] desktop toasts', err)
+                setOverlay({ ...overlay, toasts: !next })
+                showToast(t('Не получилось — попробуй ещё раз'), 'error', false)
+              })
+            }}
+          />
+        </Row>
+        <Row title={t('Подсказка «Теперь хватает»')} hint={t('В магазине, когда рубинов хватает на вещь из «Хочу»')} keys="уведомления магазин хочу хватает рубины">
+          <Toggle
+            label={t('Подсказка «Теперь хватает»')}
+            on={afford}
+            onChange={() => {
+              const next = !afford
+              setAfford(next)
+              setAffordNotice(next)
+            }}
+          />
+        </Row>
+        <Row title={t('Напоминать о серии')} hint={t('Вечером, если сундук не забран')} keys="серия сундук бонус напоминание уведомления">
+          <Toggle
+            label={t('Напоминать о серии')}
+            on={streakRemind}
+            onChange={() => {
+              const next = !streakRemind
+              setStreakRemindOn(next)
+              setStreakRemind(next)
+            }}
+          />
+        </Row>
+        <Row title={t('Сколько висит карточка')} keys="время уведомления секунды">
+          <Segs<number>
+            value={overlay.cardMs}
+            options={CARD_TTL_CHOICES.map((ms) => [ms, t('{n} с', { n: ms / 1000 })] as [number, string])}
+            onPick={(ms) => {
+              const prev = overlay.cardMs
+              setOverlay({ ...overlay, cardMs: ms })
+              overlaySetCardMs(ms).catch((err) => {
+                console.error('[settings] card ttl', err)
+                setOverlay({ ...overlay, cardMs: prev })
+                showToast(t('Не сохранилось'), 'error', false)
+              })
+            }}
+          />
+        </Row>
+      </Group>
+
       <A11yRows />
 
       <Block keys="анимация движение персонаж танцует фон переход между вкладками скорость плавность оптимизация качество слабый пк производительность лаги fps">
@@ -705,96 +800,6 @@ export function Settings({ on }: { on: boolean }) {
             </div>
           </Row>
         ) : null}
-      </Group>
-
-      <Block keys="уведомления сообщения друг в сети заявки группы в игре со звуком без звука">
-        <Group title={t('Уведомления')}>
-          <div className="s2-matrix" role="table">
-            <div className="s2-mx-head" role="row">
-              <span></span>
-              {notifyLevels().map(([v, label]) => (
-                <span key={v} role="columnheader" className="s2-mx-col">
-                  {label}
-                </span>
-              ))}
-            </div>
-            {notifyRows().map(([kind, label]) => (
-              <div className="s2-mx-row" role="row" key={kind}>
-                <span className="s2-mx-lab">{label}</span>
-                {notifyLevels().map(([v, seg]) => (
-                  <span key={v} className="s2-mx-cell">
-                    <button
-                      role="radio"
-                      aria-checked={notifyLv[kind] === v}
-                      aria-label={label + ': ' + seg}
-                      data-nosound
-                      className={'s2-dot' + (notifyLv[kind] === v ? ' on' : '') + (v === 'off' ? ' off' : '')}
-                      onClick={() => {
-                        setNotifyLv((prev) => ({ ...prev, [kind]: v }))
-                        setNotifyLevel(kind, v)
-                        if (v === 'sound') playSound('notify')
-                      }}
-                    ></button>
-                  </span>
-                ))}
-              </div>
-            ))}
-          </div>
-        </Group>
-      </Block>
-      <Group>
-        <Row title={t('Карточки поверх всех окон')} hint={t('Даже когда лаунчер свёрнут')} keys="уведомления рабочий стол">
-          <Toggle
-            label={t('Карточки поверх всех окон')}
-            on={overlay.toasts}
-            onChange={() => {
-              const next = !overlay.toasts
-              setOverlay({ ...overlay, toasts: next })
-              setDesktopToasts(next).catch((err) => {
-                console.error('[settings] desktop toasts', err)
-                setOverlay({ ...overlay, toasts: !next })
-                showToast(t('Не получилось — попробуй ещё раз'), 'error', false)
-              })
-            }}
-          />
-        </Row>
-        <Row title={t('Подсказка «Теперь хватает»')} hint={t('В магазине, когда рубинов хватает на вещь из «Хочу»')} keys="уведомления магазин хочу хватает рубины">
-          <Toggle
-            label={t('Подсказка «Теперь хватает»')}
-            on={afford}
-            onChange={() => {
-              const next = !afford
-              setAfford(next)
-              setAffordNotice(next)
-            }}
-          />
-        </Row>
-        <Row title={t('Напоминать о серии')} hint={t('Вечером, если сундук не забран')} keys="серия сундук бонус напоминание уведомления">
-          <Toggle
-            label={t('Напоминать о серии')}
-            on={streakRemind}
-            onChange={() => {
-              const next = !streakRemind
-              setStreakRemindOn(next)
-              setStreakRemind(next)
-            }}
-          />
-        </Row>
-        <Row title={t('Сколько висит карточка')} keys="время уведомления секунды">
-          <Segs<number>
-            value={overlay.cardMs}
-            options={CARD_TTL_CHOICES.map((ms) => [ms, t('{n} с', { n: ms / 1000 })] as [number, string])}
-            onPick={(ms) => {
-              const prev = overlay.cardMs
-              setOverlay({ ...overlay, cardMs: ms })
-              overlaySetCardMs(ms).catch((err) => {
-                console.error('[settings] card ttl', err)
-                setOverlay({ ...overlay, cardMs: prev })
-                showToast(t('Не сохранилось'), 'error', false)
-              })
-            }}
-          />
-        </Row>
       </Group>
 
       <Block keys="микрофон наушники динамики устройства звонок шумоподавление громкость голоса">

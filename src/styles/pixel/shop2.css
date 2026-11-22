@@ -357,6 +357,14 @@
 }
 .pp-head { position: relative; display: flex; flex-direction: column; gap: 4px; padding-right: 42px; }
 .pp-title { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }
+/* playhub.css styles the premium build page with the same .pp-head/.pp-title names; once that chunk is loaded it must not reach these windows. */
+:root:root .modal.pp .pp-head {
+  justify-content: flex-start; align-items: stretch; height: auto; padding: 0 42px 0 0;
+  overflow: visible; background: none; clip-path: none;
+}
+:root:root .modal.pp .pp-title {
+  display: block; max-width: none; padding: 0; background: none; clip-path: none;
+}
 .pp-sub { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: color-mix(in srgb, var(--m-fg) 80%, transparent); }
 .pp-x { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 34px; height: 34px; background: var(--m-inset); color: inherit; --px-n: 5px; clip-path: var(--px-5); }
 .pp-x > svg.icon { width: 18px; height: 18px; }
@@ -799,3 +807,9 @@ button.sv-ci:disabled { cursor: default; }
 .sv-try-items li.own { opacity: .6; }
 .sv-try-items li > svg { width: 14px; height: 14px; color: var(--m-accent); margin-inline-start: auto; }
 @media (max-width: 760px) { .sv-try { grid-template-columns: 1fr; } .sv-try-items { display: none; } }
+
+/* ---------- Записка к подарку ---------- */
+.bs-note { display: grid; }
+.gift-note { display: flex; align-items: center; gap: 8px; width: 100%; }
+.gift-note > input { flex: 1; min-width: 0; }
+.gift-note-n { flex: none; font-size: 12px; font-weight: 700; color: var(--m-fg-faint); font-variant-numeric: tabular-nums; }

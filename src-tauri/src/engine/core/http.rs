@@ -401,7 +401,8 @@ where
 async fn read_json(url: &str, resp: reqwest::Response) -> Result<Value, Attempt> {
     let status = resp.status();
     if !status.is_success() {
-        return Err(status_attempt(url, status));
+        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok());
+        return Err(answer_attempt(url, status, retry_after));
     }
     if resp.content_length().is_some_and(|n| n > JSON_MAX_BYTES as u64) {
         return Err(Attempt::Fatal(format!("ответ больше 16 МБ — {}", url)));
@@ -424,6 +425,22 @@ fn status_attempt(url: &str, status: reqwest::StatusCode) -> Attempt {
     } else {
         Attempt::Fatal(msg)
     }
+}
+
+/// Our proxy's 429 is a per-address window of a minute: retrying it within a
+/// second only spends the rest of that window, so it is final here and carries
+/// the server's wait for the caller to honour.
+fn answer_attempt(url: &str, status: reqwest::StatusCode, retry_after: Option<&str>) -> Attempt {
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS && shared_answer_url(url) {
+        let wait = retry_after.and_then(parse_retry_after).map(|d| format!("{}{}", RETRY_AFTER_MARK, d.as_secs())).unwrap_or_default();
+        return Attempt::Fatal(format!("{}{}", status_message(url, status), wait));
+    }
+    status_attempt(url, status)
+}
+
+/// The text `is_absent_answer` recognises, for a lookup refused before it went out.
+pub(crate) fn absent_answer(url: &str) -> String {
+    status_message(url, reqwest::StatusCode::NOT_FOUND)
 }
 
 /// The server answered that the address names nothing. Unlike a request the
@@ -2565,6 +2582,34 @@ PK"),
         for (err, absent, why) in cases {
             assert_eq!(is_absent_answer(&err), absent, "{}: {}", why, err);
         }
+    }
+
+    /// Status of a failed JSON answer -> retried in place, and the wait it carries.
+    #[test]
+    fn proxy_throttle_is_final_and_keeps_retry_after() {
+        let proxy = format!("{}/launcher/mr/v2/project/sodium/version", crate::engine::MILLIDA_API);
+        let direct = "https://api.modrinth.com/v2/project/sodium/version";
+        let too_many = reqwest::StatusCode::TOO_MANY_REQUESTS;
+        type Case<'a> = (&'a str, reqwest::StatusCode, Option<&'a str>, bool, Option<u64>, &'a str);
+        let cases: [Case; 5] = [
+            (proxy.as_str(), too_many, Some("37"), false, Some(37), "a quick retry of our proxy's 429 only spends the rest of the window"),
+            (proxy.as_str(), too_many, None, false, None, "no header: still final, the caller waits its default"),
+            (direct, too_many, Some("37"), true, None, "Modrinth's own limit keeps the old in-place retry"),
+            (proxy.as_str(), reqwest::StatusCode::BAD_GATEWAY, None, true, None, "an upstream outage is worth another try"),
+            (proxy.as_str(), reqwest::StatusCode::NOT_FOUND, None, false, None, "404 is final"),
+        ];
+        for (url, status, header, retried, wait, why) in cases {
+            let (is_retry, text) = match answer_attempt(url, status, header) {
+                Attempt::Retry(t) => (true, t),
+                Attempt::Fatal(t) => (false, t),
+            };
+            assert_eq!(is_retry, retried, "{}: {}", why, text);
+            if status == too_many && !retried {
+                assert!(is_throttled(&text), "{}: callers must still see a throttle: {}", why, text);
+                assert_eq!(server_wait(&text), wait.map(Duration::from_secs), "{}: {}", why, text);
+            }
+        }
+        assert!(is_absent_answer(&absent_answer(direct)), "a refused lookup reads as a final 404 to every caller");
     }
 
     /// Errors of the routes in the order they were tried -> what the player is shown.

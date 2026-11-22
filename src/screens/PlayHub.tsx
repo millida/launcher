@@ -674,6 +674,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   const ownSlides = !partners ? [] : heroSlides({
     prison: prisonPack || null,
     pixelmon: pixelmonPack,
+    oneblock: obPack,
     anarchyOnline,
     oneblockOnline: obOnline,
     anarchyName: anarchy.name,
@@ -781,8 +782,7 @@ export function PlayHub({ on }: { on?: boolean }) {
   return wrap(
     <div className="hub-pane">
       {/* Первый экран (владелец 30.09.2026), как на millida.net/katalog: поле,
-          крупная «Найти» и «Собрать с ИИ». Текст поля — запрос каталога или
-          просьба к Милли. */}
+          крупная «Найти». Текст поля — запрос каталога. */}
       {/* 1. Свои сборки обычными карточками с обложкой; нет сборок — полка
           версий Minecraft, как было. */}
       {mine.length

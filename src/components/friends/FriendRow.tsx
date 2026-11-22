@@ -23,7 +23,7 @@ export const hoursText = (seconds: number): string => {
 }
 
 const MENU_W = 220
-const MENU_H = 240
+const MENU_H = 280
 
 /**
  * Строка друга. Две крупные кнопки с подписью (владелец 24.09.2026: «"Пригласить
@@ -184,6 +184,9 @@ export function FriendRow({
                   <Icon id="i-phone" /> {callBusy ? t('Идёт звонок') : t('Позвонить')}
                 </button>
               ) : null}
+              <button data-track="friend_gift" onClick={pick(() => void import('../shop/giftPick').then((m) => m.giftToFriend({ userId: f.userId, nickname: nick || t('Друг') })))}>
+                <Icon id="i-gift" /> {t('Подарить')}
+              </button>
               <button data-track="friend_profile" onClick={pick(profile)}>
                 <Icon id="i-user" /> {t('Профиль')}
               </button>

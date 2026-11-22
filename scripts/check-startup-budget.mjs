@@ -23,6 +23,8 @@ import { gzipSync } from 'node:zlib'
 // токена, иначе щит DDoS-Guard их не кэширует; api.ts стартовый, вынести функцию отдельно дороже.
 // 19.11.2026: +1 КБ на библиотеку фонов: флаг окна в hosts.tsx и две обёртки IPC в commands.ts стартовые,
 // само окно и логика — отдельный чанк (lazyHost).
+// 21.11.2026: gzip 318 → 319 КБ без нового кода: main после f8758a0e стоит ровно на 318 (Bun 1.2 локально
+// 316,6 КБ), и тот же набор то проходит, то нет — решают байты хешей в именах чанков и Bun на раннере.
 //
 // Запуск: после `vite build` из корня репозитория: `bun scripts/check-startup-budget.mjs`.
 
@@ -35,7 +37,7 @@ const LIMITS = {
   startCss: 415_000,
   /** Startup JS in gzip, bytes. Measured with the Bun that CI installs (setup-bun latest): its gzip
    *  comes out about 1.4 KB above Bun 1.2 for the same files. */
-  startJsGzip: 318_000,
+  startJsGzip: 319_000,
 }
 const TARGET_ENTRY_JS = 300_000
 

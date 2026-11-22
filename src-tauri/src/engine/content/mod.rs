@@ -2,6 +2,7 @@
 mod modrinth;
 mod curseforge;
 mod cf_memo;
+mod mr_memo;
 mod updates;
 mod localmeta;
 mod scan;

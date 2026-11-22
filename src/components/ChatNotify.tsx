@@ -7,7 +7,7 @@ import { useChatNotify } from '../state/chatNotify'
 import type { ChatNotify as Notify } from '../state/chatNotify'
 import { useT } from '../i18n'
 
-const ICON: Record<string, string> = { play: 'i-play', request: 'i-user', room: 'i-users' }
+const ICON: Record<string, string> = { play: 'i-play', request: 'i-user', room: 'i-users', gift: 'i-gift' }
 
 function NotifyCard({ id, uid, nick, text, kind, actionLabel, action }: Notify) {
   const t = useT()

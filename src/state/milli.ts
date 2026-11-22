@@ -407,6 +407,14 @@ export function retryMilli() {
   void sendMilli(failedText, failedAction ? { action: failedAction } : {})
 }
 
+/** The player paid for more requests, so the message the limit stopped goes out without retyping. */
+export async function afterMilliCredits(): Promise<void> {
+  await refreshMilliStatus()
+  if (get().error?.kind !== 'limit') return
+  set({ error: null })
+  retryMilli()
+}
+
 // ─── Прогресс хода: long-poll /progress ──────────────────────────────────────
 
 /** Ход, для которого идёт опрос (0 — нет). */

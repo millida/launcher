@@ -40,6 +40,8 @@ export interface SheetSpec {
   run: () => Promise<SheetDone | null>
   /** Второй вариант под кнопками. */
   extra?: ReactNode
+  /** Поле над кнопками (записка к подарку). */
+  note?: ReactNode
   /** Выбор из нескольких вариантов бок о бок (PLUS / Diamond): у каждого своя картинка и кнопка. */
   choices?: { key: string; art: ReactNode; confirm: ReactNode; tone?: string; run: () => Promise<SheetDone | null> }[]
   /** Закрыли, не нажав главную кнопку (замер воронки). */
@@ -230,6 +232,7 @@ export function BuySheetHost() {
           </div>
         ) : null}
         {spec.name && !spec.choices ? <b className="bs-name">{spec.name}</b> : null}
+        {!isDone && spec.note ? <div className="bs-note">{spec.note}</div> : null}
         <div className={'bs-acts' + (spec.gift && !isDone && !spec.choices ? ' has-gift' : '')}>
           {isDone ? (
             done?.onWear ? (
