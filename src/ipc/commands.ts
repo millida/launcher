@@ -523,8 +523,21 @@ export const labelServer = (addr: string, name: string) => invoke<void>('label_s
 
 export const getProfileGroups = () => invoke<ProfileGroups>('get_profile_groups')
 
-export const importInstance = (path: string, name: string, version: string, loader: string) =>
-  invoke<Profile>('import_instance', { path, name, version, loader })
+export interface ImportExtra {
+  name: string
+  bytes: number
+  suggested: boolean
+}
+
+export interface ImportedInstance {
+  profile: Profile
+  left_behind: string[]
+}
+
+export const importExtras = (path: string) => invoke<ImportExtra[]>('import_extras', { path })
+
+export const importInstance = (path: string, name: string, version: string, loader: string, extras?: string[]) =>
+  invoke<ImportedInstance>('import_instance', { path, name, version, loader, extras: extras ?? null })
 
 export const importPackFile = (path?: string) => invoke<Profile>('import_pack_file', { path: path || null })
 

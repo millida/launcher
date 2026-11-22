@@ -20,6 +20,8 @@ import type { CosmeticItem } from '../../lib/gameProfile'
 import { useHasMillida } from '../../state/auth'
 import { getAccount, lookOwner, useAccounts } from '../../state/accounts'
 import { buildCosmetic } from '../../lib/cosmeticModel'
+import { wearParticles, type ParticleShow } from '../../lib/cosmeticParticles'
+import { hasParticles, particlesOf, particlesStill } from '../../lib/cosmeticParticleData'
 import { SHOP_YAW } from '../../lib/outfitSnapshot'
 import { hidesRegularCape, maskUrls, pieceCover } from '../../lib/cosmeticCover'
 import { maskedSkin } from '../../lib/maskedSkin'
@@ -341,6 +343,8 @@ export function LobbyCharacter({
   const charAnim = useViewPrefs((s) => s.charAnim)
   const lite = useLiteMode()
   const holdStill = !shop && lite && !charAnim
+  const liteRef = useRef(lite)
+  liteRef.current = lite
   const [m3d, setM3d] = useState<Mine3dModule | null>(null)
   // Номер живой сцены, 0 — сцены нет. Не флаг: при потере контекста WebGL
   // старая сцена гасит его, новая зажигает в том же кадре, React видел то же
@@ -823,6 +827,7 @@ export function LobbyCharacter({
     // «медленно надевается»). Кадр от вещей не зависит.
     let dressedCount = 0
     const emoteProps: { object: import('three').Object3D }[] = []
+    const shows: ParticleShow[] = []
     let settled = 0
     let revealed = false
     const reveal = () => {
@@ -875,6 +880,15 @@ export function LobbyCharacter({
       } catch {
         // Кривая модель не гасит главную: вещь просто не покажется.
       }
+      if (!hasParticles(got.item.slot)) return
+      const texture = got.texture
+      void particlesOf(got.item.model).then((raw) => {
+        if (!alive) return
+        const show = wearParticles(raw, geometry, texture, got.item.animation, particlesStill(liteRef.current), (anchor, object) =>
+          engine.attachCosmetic(anchor, object),
+        )
+        if (show) shows.push(show)
+      })
     }
     if (!worn.length) {
       reveal()
@@ -896,6 +910,7 @@ export function LobbyCharacter({
       alive = false
       clearTimeout(emoteDone)
       engine.clearCosmetics()
+      for (const show of shows) show.dispose()
     }
     // Вещи — по составу: смена одного адреса скина (сохранённая картинка → свежая) их не снимает и не мигает.
   }, [outfitKey(look), ready])

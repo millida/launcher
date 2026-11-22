@@ -248,7 +248,7 @@ pub fn build_manifest(profile: &str, with_overrides: bool) -> Result<(PackManife
     ))
 }
 
-fn code_ok(code: &str) -> bool {
+pub(crate) fn code_ok(code: &str) -> bool {
     let plain = normalize_code(code);
     plain.len() == CODE_LEN && plain.chars().all(|c| CODE_ALPHABET.contains(c))
 }
@@ -256,7 +256,9 @@ fn code_ok(code: &str) -> bool {
 /// Players paste the code with the dash, in lowercase, or as the whole link.
 /// All three mean the same pack.
 pub fn normalize_code(code: &str) -> String {
-    let tail = code.rsplit('/').next().unwrap_or(code);
+    // A link copied from the address bar may end in "/", "?…" or "#…".
+    let link = code.trim().split(['?', '#']).next().unwrap_or(code).trim_end_matches('/');
+    let tail = link.rsplit('/').next().unwrap_or(link);
     tail.trim().to_uppercase().chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
 
@@ -433,11 +435,23 @@ pub async fn unshare_profile(code: String) -> Result<(), String> {
 }
 
 /// A pack opened only to the author or the author's friends needs to know who
-/// is asking, so the account token goes along when there is one.
+/// is asking, so the account token goes along when there is one. A pack opened
+/// by link needs no account at all: when the signed request is refused (a stale
+/// or dead session answers 401 even for a public pack), it goes once more
+/// without the token, so a friend's link never fails on the reader's session.
 async fn pack_detail(code: &str) -> Result<Value, String> {
-    millida_api_auth(format!("{}/{}", PACKS_PATH, code), "GET".into(), None)
-        .await
-        .map_err(|e| if e == "http 403" { CLOSED_PACK.to_string() } else { e })
+    let path = format!("{}/{}", PACKS_PATH, code);
+    let signed_in = millida_token().is_some();
+    let res = match millida_api_auth(path.clone(), "GET".into(), None).await {
+        Err(e) if signed_in && pack_refused(&e) => millida_api(path, "GET".into(), None, None).await,
+        other => other,
+    };
+    res.map_err(|e| if pack_refused(&e) { CLOSED_PACK.to_string() } else { e })
+}
+
+/// The server's "not for you": no session, a dead one, or a pack closed to this account.
+fn pack_refused(e: &str) -> bool {
+    e == "http 401" || e == "http 403" || e == UNAUTHORIZED
 }
 
 const CLOSED_PACK: &str = "Автор открыл эту сборку только себе или друзьям — войди в аккаунт Millida, если ты его друг";
@@ -1171,7 +1185,13 @@ async fn fetch_own_jar(pdir: &Path, code: &str, rel: &str, jar: &PackJar) -> Res
     // The link is signed for this player only after the server checked they are the author's friend.
     let res = millida_api_auth(format!("{}/{}/jars/{}", PACKS_PATH, code, jar.sha512), "GET".into(), None)
         .await
-        .map_err(|e| format!("Свой мод {} не скачался: {}", name, e))?;
+        .map_err(|e| {
+            if pack_refused(&e) {
+                format!("Свой мод {} автор отдаёт только друзьям — войди в аккаунт Millida", name)
+            } else {
+                format!("Свой мод {} не скачался: {}", name, e)
+            }
+        })?;
     let url = res["url"]
         .as_str()
         .filter(|u| jar_url_allowed(u))
@@ -1425,7 +1445,8 @@ pub async fn shared_pack_sync(app: AppHandle, profile: String, apply: bool, appr
     let Some(sub) = subscription_of(&profile) else { return Ok(sync_status("none", "")) };
     let res = match pack_detail(&sub.code).await {
         Ok(r) => r,
-        Err(e) if e == "http 404" || e == CLOSED_PACK => return Ok(sync_status("gone", &sub.code)),
+        // Signed out, a closed pack is not gone: it opens again once the player signs back in.
+        Err(e) if e == "http 404" || (e == CLOSED_PACK && millida_token().is_some()) => return Ok(sync_status("gone", &sub.code)),
         Err(e) => return Err(e),
     };
     let updated_at = res["updatedAt"].as_str().unwrap_or("").to_string();
@@ -1640,10 +1661,24 @@ mod tests {
         assert_eq!(normalize_code("ab23-cd45"), "AB23CD45");
         assert_eq!(normalize_code("https://millida.net/p/AB23CD45"), "AB23CD45");
         assert_eq!(normalize_code("  AB23CD45  "), "AB23CD45");
+        assert_eq!(normalize_code("https://millida.net/p/AB23CD45/"), "AB23CD45", "ссылка со слешем в конце");
+        assert_eq!(normalize_code("millida.net/p/AB23CD45?from=tg#top"), "AB23CD45", "ссылка с хвостом из мессенджера");
         assert!(code_ok("AB23-CD45"));
         assert!(!code_ok("AB23CD4"), "короткий код не должен уходить в запрос");
         assert!(!code_ok("AB23CD4O"), "O и 0 путают, поэтому O в алфавит не входит");
         assert!(!code_ok("../secrets"), "код становится сегментом пути запроса");
+    }
+
+    /// error -> the server refused this reader. Only these send the request
+    /// again without the token and end as the "closed pack" message.
+    #[test]
+    fn refusals_are_told_apart_from_outages() {
+        for e in ["http 401", "http 403", UNAUTHORIZED] {
+            assert!(pack_refused(e), "{e}: сервер отказал этому читателю");
+        }
+        for e in ["http 404", "http 502", "Millida временно недоступна", ""] {
+            assert!(!pack_refused(e), "{e}: это не отказ в доступе, повтор без токена не поможет");
+        }
     }
 
     /// A manifest with hostile entries must come back stripped, not rejected in

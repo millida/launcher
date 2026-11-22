@@ -124,6 +124,8 @@ export interface MilliStatus {
   tier?: 'free' | 'plus' | 'diamond' | 'qa'
   day: MilliCounter
   month: MilliCounter
+  /** Bought requests left; they are spent only after the day and month counters run out. */
+  credits?: number
   /** `enhanced` — «Улучшенная сборка» (PLUS): второй проход проверки. Старый API поля не присылает. */
   features: { extras: boolean; server: boolean; enhanced?: boolean }
 }
@@ -403,7 +405,7 @@ export interface MilliPlans {
  * Тарифная сетка (владелец 05.10.2026) — пока не пришёл ответ `/catalog/milli/limits` или если он упал.
  * Считаются сообщения, где Милли думает; кнопки, «Принять», «Взять» — бесплатно.
  */
-export const MILLI_PLANS: MilliPlans = { free: { day: 10, month: 40 }, plus: { day: 100, month: 600 }, diamond: { day: 200, month: 1500 } }
+export const MILLI_PLANS: MilliPlans = { free: { day: 3, month: 15 }, plus: { day: 100, month: 600 }, diamond: { day: 200, month: 1500 } }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
@@ -502,8 +504,8 @@ export function refineMilliError(e: MilliError, s: MilliStatus | null): MilliErr
  * Исчерпанный счётчик отключает отправку, поэтому ответа сервера с лимитом при
  * открытии чата не будет: причину неактивной кнопки объясняет сам счётчик.
  */
-export function milliOutError(s: Pick<MilliStatus, 'day' | 'month'> | null): MilliError | null {
-  if (!s) return null
+export function milliOutError(s: Pick<MilliStatus, 'day' | 'month' | 'credits'> | null): MilliError | null {
+  if (!s || (s.credits ?? 0) > 0) return null
   if (s.month.remaining <= 0) return err('limit', 'month')
   return s.day.remaining <= 0 ? err('limit', 'day') : null
 }
@@ -527,13 +529,13 @@ export function milliPlanNumbers(p: MilliPlans): { free: number; plus: number; d
 }
 
 /** Сколько запросов осталось прямо сейчас: упирается в меньший из суточного и месячного. */
-export function milliLeft(s: Pick<MilliStatus, 'day' | 'month'> | null): number | null {
+export function milliLeft(s: Pick<MilliStatus, 'day' | 'month' | 'credits'> | null): number | null {
   if (!s) return null
-  return Math.max(0, Math.min(s.day.remaining, s.month.remaining))
+  return Math.max(0, Math.min(s.day.remaining, s.month.remaining)) + Math.max(0, s.credits ?? 0)
 }
 
 /** Счётчик в шапке Милли (владелец 30.09 16:11: «маленький счётчик "осталось 5"», без простыни про тарифы). */
-export function milliCounterChip(s: Pick<MilliStatus, 'day' | 'month'> | null): string | null {
+export function milliCounterChip(s: Pick<MilliStatus, 'day' | 'month' | 'credits'> | null): string | null {
   const left = milliLeft(s)
   return left === null ? null : t('осталось {n}', { n: left })
 }
@@ -699,6 +701,19 @@ export const milliStatus = () => request<MilliStatus>('/catalog/milli/status')
 export const milliGreeting = async (playerId?: string | null): Promise<MilliGreeting | null> =>
   milliGreetingOf(await request<unknown>('/catalog/milli/greeting' + (playerId ? '?playerId=' + encodeURIComponent(playerId) : '')))
 export const milliLimits = async (): Promise<MilliPlans> => milliPlans(await request<unknown>('/catalog/milli/limits'))
+export interface MilliCreditPack {
+  code: string
+  requests: number
+  rubies: number
+}
+export interface MilliCreditOffer {
+  credits: number
+  rubies: number
+  packs: MilliCreditPack[]
+}
+export const milliCreditOffer = () => request<MilliCreditOffer>('/catalog/milli/credits')
+export const milliBuyCredits = (pack: string, requestId: string) =>
+  request<{ credits: number; rubies: number; bought: number }>('/catalog/milli/credits', post({ pack, requestId }))
 export const milliSessions = () => request<{ items: MilliSessionHead[] }>('/catalog/milli/sessions')
 export const milliSession = (id: string) => request<MilliSession>('/catalog/milli/sessions/' + encodeURIComponent(id))
 export interface MilliSendExtra {

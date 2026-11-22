@@ -17,7 +17,7 @@ import { writePref } from '../lib/prefs'
 import { Slider } from './Slider'
 import { roomsUnreadTotal, useRooms } from '../state/rooms'
 import { openMessages } from '../state/chatScreen'
-import { PlayhubBar } from './hosts'
+import { GiftBellHost, PlayhubBar } from './hosts'
 import { PxIcon } from './PxIcon'
 import { openCatalogHome, useHubTab } from './playhub/hubTab'
 import { SKINS_IMPORT_EVENT, SKINS_TAKE_OFF_EVENT, SKINS_UPLOAD_EVENT, useTopBar } from '../state/topbar'
@@ -279,6 +279,7 @@ export function Sidebar({ onNav }: { onNav: (s: ScreenId) => void }) {
             </button>
             <QuickSound />
           </span>
+          <GiftBellHost />
         </div>
         <AccountMenu open={menuOpen} onClose={() => setMenuOpen(false)} chipRef={chipRef} />
       </header>

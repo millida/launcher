@@ -10,6 +10,7 @@ test('сообщения и заявки по умолчанию звучат', 
   expect(parseLevel('msg', null)).toBe('sound')
   expect(parseLevel('room', null)).toBe('sound')
   expect(parseLevel('request', null)).toBe('sound')
+  expect(parseLevel('gift', null)).toBe('sound')
 })
 
 test('сохранённый уровень выигрывает у значения по умолчанию', () => {

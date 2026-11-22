@@ -572,8 +572,20 @@ pub async fn tlauncher_nick() -> Result<Option<String>, String> {
 }
 
 #[tauri::command(async)]
-pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<engine::Profile, String> {
-    engine::import_instance(path, name, version, loader)
+pub fn import_instance(
+    path: String,
+    name: String,
+    version: String,
+    loader: String,
+    extras: Option<Vec<String>>,
+) -> Result<engine::ImportedInstance, String> {
+    engine::import_found(path, name, version, loader, extras)
+}
+
+/// Folders of a shared .minecraft that the player picks before its import.
+#[tauri::command]
+pub async fn import_extras(path: String) -> Result<Vec<engine::ImportExtra>, String> {
+    super::blocking(move || engine::import_extras(path)).await?
 }
 
 /// Builds of Prism, MultiMC and Modrinth App that can move into Millida whole.

@@ -122,19 +122,6 @@
 .mlf:hover { transform: translateY(-2px); }
 .mlf:active { transform: translateY(2px); }
 .mlf .milli { width: 60px; height: 60px; margin: -6px 0 -8px; }
-.msf-wrap { position: absolute; z-index: 60; right: 22px; bottom: 22px; }
-.msf {
-  position: relative; height: 44px; padding: 0 16px 4px 12px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-  font: 900 14px/1 var(--m-font);
-  color: var(--px-on-accent); background-color: var(--m-accent);
-  --px-n: 5px; clip-path: var(--px-5);
-  --px-ol: var(--px-btn-ol); --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fr: var(--px-btn-r);
-  transition: transform 120ms var(--m-ease-smooth), background-color var(--m-t-fast);
-}
-/* Меню «Помощь» открывается вверх: .ml-menu ниже по файлу ставит top — перебиваем вложенностью (живой тест 24.10). */
-.msf-wrap .msf-menu { top: auto; bottom: calc(100% + 8px); transform-origin: 100% 100%; }
-.msf:hover { transform: translateY(-2px); }
-.msf:active { transform: translateY(2px); }
 
 /* ── Панель чата ────────────────────────────────────────────────
    Живая панель (04.10.2026, владелец: «плоско и скучно»): глубина и свет —
@@ -436,6 +423,10 @@
 .ml-limit-text b { font: 900 15px/1.2 var(--m-font); color: var(--m-fg); }
 .ml-limit-text span { font-size: 12.5px; font-weight: 700; color: var(--m-fg-muted); }
 .ml-limit .ml-plus { flex: none; }
+.ml-limit:has(.ml-limit-buy) { flex-wrap: wrap; }
+.ml-limit-buy { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.ml-limit-buy .btn.sm { flex: 1 1 0; gap: 8px; }
+.ml-limit-price { display: inline-flex; align-items: center; gap: 4px; color: var(--m-fg-muted); font-variant-numeric: tabular-nums; }
 
 /* История: строки со значком, въезжают по очереди */
 .ml-hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }

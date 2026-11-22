@@ -65,6 +65,8 @@ import {
   PixelTip,
   PlayhubBar,
   RewardHost,
+  GiftOpenHost,
+  GiftForHost,
   RoomModals,
   ScreenshotsOverlay,
   ServerDetail,
@@ -474,6 +476,13 @@ export function App() {
       .catch(() => {})
     const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
+    let stopGiftWatch: (() => void) | null = null
+    let giftWatchOff = false
+    void import('./state/giftWatch')
+      .then((m) => {
+        if (!giftWatchOff) stopGiftWatch = m.initGiftWatch()
+      })
+      .catch((err) => console.warn('[gifts] watch', err))
     // The update never holds the start: screens warm up at once, the check runs next to them,
     // and only a release the manifest calls critical takes the window over (updater.ts).
     setUpdateBusyProbe(() => launchInProgress() || Object.values(useInstalls.getState().tasks).some((x) => x.state === 'run'))
@@ -588,6 +597,8 @@ export function App() {
       stopPlusReminder?.()
       stopStreakActivity()
       stopPromoServers()
+      giftWatchOff = true
+      stopGiftWatch?.()
       releaseRealtime()
       clearInterval(updPoll)
       clearInterval(msPoll)
@@ -1225,6 +1236,8 @@ export function App() {
         <LaunchToast />
         <Toast />
         <RewardHost />
+        <GiftOpenHost />
+        <GiftForHost />
         <Suspense fallback={null}>
           <ChestOpenHost />
         </Suspense>

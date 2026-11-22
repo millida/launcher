@@ -83,6 +83,7 @@ import { ItemShot, ItemStage, TodaySection, TrendSection, type TodayActs } from 
 import { CollectionsSection } from './Collections'
 import { BuyLabel, BuySheetHost, openSheet, useBuySheet } from './BuySheet'
 import { openGiftPicker, useGiftPick, type GiftTarget } from './giftPick'
+import { GiftNote } from './GiftNote'
 import { lazyHost } from '../../lib/lateMount'
 import { topUpFragments } from './topUp'
 import { FragBar } from './rarityUi'
@@ -315,14 +316,16 @@ export function useShop(on: boolean) {
       return
     }
     const requestId = newRequestId()
+    let note = ''
     openSheet({
       kind: 'gift',
       name: t('Подарить «{item}» другу {nick}', { item: item.name, nick: friend.nickname }),
       art: <ItemShot item={item} big />,
       confirm: <BuyLabel verb={t('Подарить за')} price={quote.price} />,
+      note: <GiftNote onChange={(text) => (note = text)} />,
       run: async () => {
         try {
-          const res = await giftShopItem(item.code, friend.userId, source, requestId)
+          const res = await giftShopItem(item.code, friend.userId, source, requestId, note)
           setDay((d) => (d ? { ...d, balance: res.balance } : d))
           showToast(t('Подарок отправлен {name}', { name: res.to?.nickname || friend.nickname }), 'ok')
           return null
