@@ -15,6 +15,7 @@ import { useLightbox } from './lightboxStore'
 import { useRooms } from '../state/rooms'
 import { usePaid } from './catalog/paidStore'
 import { useReward } from './reward/rewardBus'
+import { useGifts } from '../state/gifts'
 import { lateMount, lazyHost, lazyHostWith } from '../lib/lateMount'
 
 /*
@@ -58,6 +59,8 @@ export const RewardHost = lazyHost(
   () => import('./reward/RewardReveal').then((m) => ({ default: m.RewardHost })),
   () => useReward((s) => !!(s.big[0] || s.mid || s.small)) || import.meta.env.DEV,
 )
+
+export const GiftOpenHost = lazyHost(() => import('./gifts/GiftOpen').then((m) => ({ default: m.GiftOpen })), () => useGifts((s) => !!s.opening))
 
 /** Вход: нужен только тому, кто не вошёл (первый запуск, выход из аккаунта). */
 export const Login = lazyHostWith<{ on: boolean }>(

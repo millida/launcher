@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { daysText, friendStatusText, normalizeInviteCode, tierProgress, tierRewardText } from './referrals'
+import { colFill, trackPos } from '../components/friends/inviteTrackPos'
 
 const TWO_HOURS = 7200
 
@@ -29,4 +30,17 @@ test('Russian plural of days', () => {
   expect(daysText(3)).toBe('3 дня')
   expect(daysText(14)).toBe('14 дней')
   expect(daysText(21)).toBe('21 день')
+})
+
+test('invite track fills between steps by friends counted', () => {
+  const tiers = [1, 3, 5, 10, 25, 50].map((friends) => ({ friends }))
+  expect(trackPos(0, tiers)).toBe(-0.5)
+  expect(trackPos(1, tiers)).toBe(0)
+  expect(trackPos(2, tiers)).toBe(0.5)
+  expect(trackPos(50, tiers)).toBe(5.5)
+  expect(trackPos(80, tiers)).toBe(5.5)
+  const pos = trackPos(2, tiers)
+  expect([0, 1, 2].map((i) => colFill(pos, i))).toEqual([1, 0, 0])
+  expect(colFill(trackPos(4, tiers), 2)).toBe(0)
+  expect(colFill(trackPos(7, tiers), 2)).toBeCloseTo(0.9)
 })

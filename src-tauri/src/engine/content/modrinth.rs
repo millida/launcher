@@ -1,6 +1,8 @@
 // Install and search for mods, resource packs and shaders through Modrinth (api.modrinth.com).
 // The network gets project and version ids and the sha1 of files already on disk. Downloaded files are written to the modpack folder after the hash check.
 // The list of installed content is kept in millida-content.json next to the profile.
+use super::mr_memo::{versions_memo, Held};
+pub(crate) use super::mr_memo::is_modrinth_project;
 use crate::engine::*;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -199,10 +201,36 @@ pub(crate) async fn bulk_latest_by_hash(
     out
 }
 
+/// A project that is not Modrinth's, one Modrinth already answered 404 for,
+/// and any project while our proxy asks to wait are answered here without a
+/// request: the update check repeats them for every build on every pass.
 pub(crate) async fn project_versions(project: &str) -> Result<Vec<Value>, String> {
+    let url = format!("https://api.modrinth.com/v2/project/{}/version", project);
+    if !is_modrinth_project(project) {
+        return Err(absent_answer(&url));
+    }
+    if let Some(held) = versions_memo(|m, now| m.held(project, now)) {
+        return Err(match held {
+            Held::Absent(err) => err,
+            Held::Throttled(left) => modrinth_throttled_text(left),
+        });
+    }
     // Request to api.modrinth.com: version list of a project, the project id is sent.
-    let versions = get_json(&format!("https://api.modrinth.com/v2/project/{}/version", project)).await?;
-    Ok(versions.as_array().cloned().unwrap_or_default())
+    match get_json(&url).await {
+        Ok(versions) => Ok(versions.as_array().cloned().unwrap_or_default()),
+        Err(err) => {
+            if is_absent_answer(&err) {
+                versions_memo(|m, now| m.note_absent(project, &err, now));
+            } else if is_throttled(&err) {
+                versions_memo(|m, now| m.note_throttled(server_wait(&err), now));
+            }
+            Err(err)
+        }
+    }
+}
+
+fn modrinth_throttled_text(left: std::time::Duration) -> String {
+    format!("Modrinth просит подождать — повтори через {} с; Retry-After: {}", left.as_secs().max(1), left.as_secs().max(1))
 }
 
 fn has_str(v: &Value, key: &str, wanted: &str) -> bool {

@@ -12,6 +12,7 @@ import { track } from '../lib/telemetry'
 import { foundKey } from '../lib/imports'
 import { backdropClose } from '../lib/dismiss'
 import { usePackCode } from '../state/packCode'
+import { millidaPackCode } from '../lib/packLink'
 import { showReward } from '../components/reward/RewardReveal'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { trackImportFailure } from '../lib/importTrack'
@@ -42,6 +43,13 @@ export function ImportModal() {
   const fromLink = () => {
     const url = link.trim()
     if (!url || linkBusy) return
+    // A friend's millida.net/p/<code> link is a page of the site, not a pack.toml: it opens "by code".
+    const code = millidaPackCode(url)
+    if (code) {
+      close()
+      usePackCode.getState().show(code)
+      return
+    }
     if (!hasTauri()) {
       showToast(t('Доступно в приложении'), 'error')
       return

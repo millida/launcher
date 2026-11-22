@@ -65,6 +65,7 @@ import {
   PixelTip,
   PlayhubBar,
   RewardHost,
+  GiftOpenHost,
   RoomModals,
   ScreenshotsOverlay,
   ServerDetail,
@@ -248,6 +249,7 @@ import { initA11y } from './lib/a11y'
 import { initGameInvites } from './lib/gameInvite'
 import { initOverlayLink } from './lib/overlayLink'
 import { initStreakReminder } from './lib/streakReminder'
+import { initGiftWatch } from './state/gifts'
 import { initAutostart } from './lib/autostart'
 import { initStreakActivity } from './lib/streakActivity'
 import { useMods } from './state/mods'
@@ -474,6 +476,7 @@ export function App() {
       .catch(() => {})
     const stopStreakActivity = initStreakActivity()
     const stopPromoServers = watchPromoServers()
+    const stopGiftWatch = initGiftWatch()
     // The update never holds the start: screens warm up at once, the check runs next to them,
     // and only a release the manifest calls critical takes the window over (updater.ts).
     setUpdateBusyProbe(() => launchInProgress() || Object.values(useInstalls.getState().tasks).some((x) => x.state === 'run'))
@@ -588,6 +591,7 @@ export function App() {
       stopPlusReminder?.()
       stopStreakActivity()
       stopPromoServers()
+      stopGiftWatch()
       releaseRealtime()
       clearInterval(updPoll)
       clearInterval(msPoll)
@@ -1225,6 +1229,7 @@ export function App() {
         <LaunchToast />
         <Toast />
         <RewardHost />
+        <GiftOpenHost />
         <Suspense fallback={null}>
           <ChestOpenHost />
         </Suspense>

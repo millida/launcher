@@ -1,0 +1,93 @@
+.gfo .rw-stage {
+  isolation: isolate;
+}
+.gfo-box {
+  position: relative;
+  z-index: 2;
+  width: 176px;
+  height: 176px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  image-rendering: pixelated;
+  animation: gfo-idle 2.4s steps(1, end) infinite;
+}
+.gfo-box:disabled {
+  cursor: default;
+}
+.gfo-box:focus-visible {
+  outline: 3px solid var(--m-accent);
+  outline-offset: 8px;
+}
+.gfo-body,
+.gfo-lid {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.gfo-body svg,
+.gfo-lid svg {
+  display: block;
+}
+.gfo-body {
+  clip-path: inset(50% 0 0 0);
+}
+.gfo-lid {
+  clip-path: inset(0 0 50% 0);
+  transform-origin: 30% 50%;
+}
+.gfo-box:not(:disabled):hover {
+  animation: gfo-shake 240ms steps(4, end) infinite;
+}
+.gfo.is-shake .gfo-box {
+  animation: gfo-shake 200ms steps(4, end) infinite;
+}
+.gfo.is-open .gfo-box {
+  animation: none;
+}
+.gfo.is-open .gfo-lid {
+  animation: gfo-lid-off 560ms cubic-bezier(0.5, 0, 0.8, 0.4) both;
+}
+.gfo.is-open .gfo-body {
+  animation: gfo-body-drop 560ms var(--m-ease-smooth) both;
+}
+.gfo-from {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.gfo-from img {
+  image-rendering: pixelated;
+}
+@keyframes gfo-idle {
+  0%, 82%, 100% { transform: rotate(0); }
+  85% { transform: rotate(-3deg); }
+  88% { transform: rotate(3deg); }
+  91% { transform: rotate(-1deg); }
+}
+@keyframes gfo-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  25% { transform: translate(-4px, -2px) rotate(-3deg); }
+  50% { transform: translate(4px, 0) rotate(3deg); }
+  75% { transform: translate(-2px, 2px) rotate(-2deg); }
+}
+@keyframes gfo-lid-off {
+  0% { transform: translateY(0) rotate(0); }
+  20% { transform: translateY(8px) rotate(0); }
+  45% { transform: translateY(-30%) rotate(-8deg); }
+  100% { transform: translateY(-140%) rotate(-18deg); opacity: 0; }
+}
+@keyframes gfo-body-drop {
+  0%, 30% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.82) translateY(12%); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gfo-box,
+  .gfo-box:not(:disabled):hover,
+  .gfo.is-shake .gfo-box,
+  .gfo.is-open .gfo-lid,
+  .gfo.is-open .gfo-body {
+    animation: none;
+  }
+}
