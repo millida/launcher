@@ -726,10 +726,11 @@ export interface GiftQuote {
   discountPct: number
 }
 export const giftQuote = (code: string) => api<GiftQuote>('/rubies/shop/gift/quote?code=' + encodeURIComponent(code))
-export const giftShopItem = (code: string, to: string, source: ShopSource, requestId: string) =>
+export const GIFT_NOTE_MAX = 140
+export const giftShopItem = (code: string, to: string, source: ShopSource, requestId: string, message?: string) =>
   api<GiftQuote & { balance: number; to: { userId: string; nickname: string }; granted: ItemRef[] }>(
     '/rubies/shop/gift',
-    post({ code, to, source, requestId }),
+    post({ code, to, source, requestId, ...(message ? { message } : {}) }),
   )
 export const claimShopGift = () =>
   api<{ balance: number; shards: number; granted: ShopGift }>('/rubies/shop/gift/claim', { method: 'POST' })

@@ -32,6 +32,7 @@ const DURABLE = [
   'm-notify-online',
   'm-notify-request',
   'm-notify-room',
+  'm-notify-gift',
   'm-beta',
   'm-remote-ui-off',
   'm-anim-char',

@@ -230,8 +230,12 @@ const IDEMPOTENT_POSTS: [&str; 1] = ["/rubies/cases/open"];
 /// A daily or reward chest is opened by its id. Since 13.10.2026 the server
 /// answers a repeat with the rewards stored on the chest instead of «already
 /// opened» (millida-services #123), so the repeat is as safe as for a case.
+/// Unwrapping a friend's gift only stamps the first opening time and answers a
+/// repeat with the same gift; without the repeat a hung socket froze the gift box.
 fn idempotent_post(route: &str) -> bool {
-    IDEMPOTENT_POSTS.contains(&route) || (route.starts_with("/rubies/chests/") && route.ends_with("/open"))
+    IDEMPOTENT_POSTS.contains(&route)
+        || (route.starts_with("/rubies/chests/") && route.ends_with("/open"))
+        || (route.starts_with("/rubies/gifts/") && route.ends_with("/open"))
 }
 
 fn shared_answer(method: &str, path: &str) -> bool {
@@ -1096,8 +1100,9 @@ mod tests {
     #[test]
     fn only_reads_are_asked_twice() {
         // (method, path, repeatable, why this case is pinned)
-        let cases: [(&str, &str, bool, &str); 8] = [
+        let cases: [(&str, &str, bool, &str); 9] = [
             ("POST", "/rubies/cases/open", true, "the body carries an idempotency key: the server answers a repeat with the stored result"),
+            ("POST", "/rubies/gifts/abc/open", true, "opening a gift twice returns the same gift: a hung socket must not freeze the box"),
             ("POST", "/rubies/chests/abc/open", true, "the server answers a repeat with the rewards stored on the chest"),
             ("POST", "/rubies/chests/abc/reroll", false, "only the opening of a chest is answered twice the same way"),
             ("GET", "/launcher/wardrobe", true, "a read can be asked twice: the spare pool answers for a hung socket"),
