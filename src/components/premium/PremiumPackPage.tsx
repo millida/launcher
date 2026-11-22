@@ -266,7 +266,7 @@ export function PremiumPackPage(m: PremiumPackModel) {
     // Пока карточка доступа под круглой кнопкой поддержки (страница ещё не долистана
     // до липкого места) — кнопка прячется, чтобы не закрывать цены тарифов.
     const tuck = () => {
-      const fab = document.querySelector<HTMLElement>('.msf, .mlf')
+      const fab = document.querySelector<HTMLElement>('.mlf')
       if (!fab) return
       const a = el.getBoundingClientRect()
       const b = fab.getBoundingClientRect()
@@ -284,7 +284,7 @@ export function PremiumPackPage(m: PremiumPackModel) {
       ro.disconnect()
       window.clearTimeout(late)
       scroller.removeEventListener('scroll', tuck)
-      document.querySelector('.msf, .mlf')?.classList.remove('is-tucked')
+      document.querySelector('.mlf')?.classList.remove('is-tucked')
     }
   }, [])
 

@@ -6908,5 +6908,15 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Uračunati teški modovi: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Integrisana grafika: sistemu je ostavljeno +{0} GB",
   "Не удалось сохранить настройку автобэкапа: {0}": "Podešavanje automatskog bekapa nije sačuvano: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "svet se čuvao tokom kopiranja, pokušaćemo sledeći put"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "svet se čuvao tokom kopiranja, pokušaćemo sledeći put",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "Link otvara veb-stranicu, a ne fajl paketa — potreban je direktan link na pack.toml",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "Ovo je link ka Millida sklopu — instaliraj ga preko „Po kodu“",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "Sopstveni mod {0} autor deli samo sa prijateljima — prijavi se na Millida nalog",
+  "Мод, сборка или карта": "Мод, пакет или мапа",
+  "{n} запросов": "{n} захтева",
+  "Запросы добавлены: {n}": "Додато захтева: {n}",
+  "Не удалось купить запросы": "Куповина захтева није успела",
+  "К рубинам": "Ка рубинима",
+  "Докупить запросы": "Докупи захтеве",
+  "Modrinth просит подождать — повтори через {0} с; Retry-After: {1}": "Modrinth traži da sačekaš — pokušaj ponovo za {0} s; Retry-After: {1}"
 }

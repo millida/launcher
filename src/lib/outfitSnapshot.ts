@@ -53,7 +53,7 @@ const FOCUS: Record<ShotFocus, { fillY: number; offsetY: number; yaw: number }> 
   body: { fillY: 0.7, offsetY: 1 - 2 * 0.86 + 0.7, yaw: SHOP_YAW },
   head: { fillY: 1.15, offsetY: -0.24 - 0.75 * 1.15, yaw: SHOP_YAW },
   upper: { fillY: 1.0, offsetY: -0.05 - 0.375 * 1.0, yaw: SHOP_YAW },
-  legs: { fillY: 1.0, offsetY: 0.12 + 0.625 * 1.0, yaw: SHOP_YAW },
+  legs: { fillY: 1.0, offsetY: 0.3, yaw: SHOP_YAW },
   back: { fillY: 0.72, offsetY: -0.02 - 0.3 * 0.72, yaw: Math.PI - 0.62 },
 }
 

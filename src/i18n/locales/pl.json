@@ -6908,5 +6908,15 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Uwzględniono ciężkie mody: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Zintegrowana karta graficzna: zostawiono systemowi +{0} GB",
   "Не удалось сохранить настройку автобэкапа: {0}": "Nie udało się zapisać ustawienia autokopii: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "świat zapisywał się podczas kopiowania, spróbujemy następnym razem"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "świat zapisywał się podczas kopiowania, spróbujemy następnym razem",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "Link otwiera stronę internetową, a nie plik paczki — potrzebny jest bezpośredni link do pack.toml",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "To link do paczki Millida — zainstaluj ją przez „Za pomocą kodu”",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "Autor udostępnia własny mod {0} tylko znajomym — zaloguj się na konto Millida",
+  "Мод, сборка или карта": "Mod, modpack lub mapa",
+  "{n} запросов": "{n} próśb",
+  "Запросы добавлены: {n}": "Dodano prośby: {n}",
+  "Не удалось купить запросы": "Nie udało się kupić próśb",
+  "К рубинам": "Do rubinów",
+  "Докупить запросы": "Dokup prośby",
+  "Modrinth просит подождать — повтори через {0} с; Retry-After: {1}": "Modrinth prosi o chwilę cierpliwości — spróbuj ponownie za {0} s; Retry-After: {1}"
 }

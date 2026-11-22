@@ -6912,5 +6912,15 @@
   "Учтены тяжёлые моды: {0} (+{1} ГБ)": "Mod berat diperhitungkan: {0} (+{1} GB)",
   "Встроенная видеокарта: оставили системе +{0} ГБ": "Grafis terintegrasi: menyisakan +{0} GB untuk sistem",
   "Не удалось сохранить настройку автобэкапа: {0}": "Gagal menyimpan pengaturan cadangan otomatis: {0}",
-  "мир сохранялся во время копирования, попробуем в следующий раз": "dunia sedang disimpan saat disalin, kami coba lagi lain kali"
+  "мир сохранялся во время копирования, попробуем в следующий раз": "dunia sedang disimpan saat disalin, kami coba lagi lain kali",
+  "По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml": "Tautan membuka halaman web, bukan file pack — perlu tautan langsung ke pack.toml",
+  "Это ссылка на сборку Millida — поставь её через «По коду»": "Ini tautan build Millida — pasang lewat «Lewat kode»",
+  "Свой мод {0} автор отдаёт только друзьям — войди в аккаунт Millida": "Penulis hanya membagikan mod buatannya {0} ke teman — masuk ke akun Millida",
+  "Мод, сборка или карта": "Mod, modpack, atau peta",
+  "{n} запросов": "{n} permintaan",
+  "Запросы добавлены: {n}": "Permintaan ditambahkan: {n}",
+  "Не удалось купить запросы": "Gagal membeli permintaan",
+  "К рубинам": "Ke rubi",
+  "Докупить запросы": "Beli permintaan tambahan",
+  "Modrinth просит подождать — повтори через {0} с; Retry-After: {1}": "Modrinth meminta menunggu — coba lagi dalam {0} dtk; Retry-After: {1}"
 }

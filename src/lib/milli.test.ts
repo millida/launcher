@@ -152,8 +152,8 @@ describe('milliPlans — живые тарифы из /catalog/milli/limits', ()
     })
   })
 
-  it('чего нет или мусор — из сетки 10/40, 100/600, 200/1500', () => {
-    expect(milliPlans({ plus: { day: 120 } })).toEqual({ free: { day: 10, month: 40 }, plus: { day: 120, month: 600 }, diamond: { day: 200, month: 1500 } })
+  it('чего нет или мусор — из сетки 3/15, 100/600, 200/1500', () => {
+    expect(milliPlans({ plus: { day: 120 } })).toEqual({ free: { day: 3, month: 15 }, plus: { day: 120, month: 600 }, diamond: { day: 200, month: 1500 } })
     expect(milliPlans(null)).toEqual(MILLI_PLANS)
   })
 })
@@ -191,4 +191,18 @@ describe('milliOutError', () => {
       expect(got?.scope ?? null, why).toBe(scope)
     })
   }
+})
+
+describe('купленные запросы', () => {
+  const cases: Array<[string, MilliStatus, number, boolean]> = [
+    ['лимит кончился, купленные есть: чат открыт, в счётчике купленные', status(0, 20, { credits: 10 }), 10, false],
+    ['лимит есть: купленные добавляются к остатку', status(2, 20, { credits: 10 }), 12, false],
+    ['месяц кончился, купленные есть: они работают и после месячного лимита', status(3, 0, { credits: 1 }), 1, false],
+    ['купленных нет: карточка лимита как раньше', status(0, 20, { credits: 0 }), 0, true],
+  ]
+  for (const [why, s, left, out] of cases)
+    test(why, () => {
+      expect(milliLeft(s), why).toBe(left)
+      expect(milliOutError(s) !== null, why).toBe(out)
+    })
 })
