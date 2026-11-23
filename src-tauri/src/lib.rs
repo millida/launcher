@@ -533,6 +533,7 @@ pub fn run() {
             commands::profiles::pick_import_dir,
             commands::profiles::tlauncher_nick,
             commands::profiles::import_instance,
+            commands::profiles::import_extras,
             commands::profiles::plan_moves,
             commands::profiles::move_instance,
             commands::profiles::move_blockers,
