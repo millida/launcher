@@ -19,9 +19,11 @@ export type { RemoteUiBridge }
 export function makeRemoteBridge(host: {
   navigate?: (path: string) => boolean
   join: (server: RemoteJoinServer) => Promise<void> | void
+  startPath?: string
 }): RemoteUiBridge {
   return {
     v: 1,
+    ...(host.startPath ? { startPath: host.startPath } : {}),
     locale: getLocale(),
     // Phrase tables come from here; in dev the local site behind the Vite proxy has the same build.
     siteOrigin: import.meta.env.DEV ? location.origin + '/mlu-site' : REMOTE_UI_SITE,

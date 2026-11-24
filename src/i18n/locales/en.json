@@ -6952,8 +6952,27 @@
   "Подарить за {price}": "Gift for {price}",
   "Подарок для {nick}": "A gift for {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Paid from your Millida balance, no card binding and no auto-renewal",
-  "Рубины: {n}": "Rubies: {n}",
+  "Рубины: {n}": "Rubies: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Folders not moved: {list}. They stayed in the old launcher",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Mod folders in the shared .minecraft. Tick the ones to move into the modpack",
-  "Эту папку нельзя перенести: {0}": "This folder can't be moved: {0}"
+  "Эту папку нельзя перенести: {0}": "This folder can't be moved: {0}",
+  "Кейсы": "Cases",
+  "Приваты": "Land claims",
+  "Ивенты": "Events",
+  "Кастомные предметы": "Custom items",
+  "Кастомные мобы": "Custom mobs",
+  "Аукцион": "Auction house",
+  "Профессии": "Jobs",
+  "Кроссплей": "Crossplay",
+  "Донат не решает": "Not pay-to-win",
+  "Имя или адрес": "Name or address",
+  "Рекомендации": "Recommended",
+  "Заявлено {n}, по оценке Millida играют меньше": "Claims {n}, Millida estimates fewer are playing",
+  "Онлайн проверен Millida": "Player count verified by Millida",
+  "Баллы продвижения": "Promotion points",
+  "Голосов за 30 дней": "Votes in 30 days",
+  "По заявке": "By application",
+  "Размести свой сервер здесь": "Put your server here",
+  "Раскрутить сервер": "Promote server"
 }

@@ -1,0 +1,66 @@
+/* Строки рейтинга серверов (экран «Серверы» и блок на «Играть»): колонки как на millida.net/rating.
+   Подложка — .srv-row (срез 10px и сплошная рамка из 12-pixel.css), здесь только раскладка. */
+.rt-list { display: flex; flex-direction: column; gap: 8px; }
+.rt-row {
+  display: grid;
+  grid-template-columns: 34px 44px minmax(0, 1fr) minmax(0, 1fr) 84px 96px 64px 112px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  min-height: 68px;
+}
+.rt-row::after { display: none; }
+.rt-place { font: 800 16px/1 var(--m-font); color: var(--m-fg-faint); text-align: center; font-variant-numeric: tabular-nums; }
+.rt-place.top { color: var(--m-accent); }
+.rt-name { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rt-name > b { font: 700 15px/1.2 var(--m-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rt-title-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-boost { flex: none; display: inline-flex; align-items: center; gap: 3px; font: 800 11px/1 var(--m-font); color: var(--m-accent); font-variant-numeric: tabular-nums; }
+.rt-boost svg { width: 12px; height: 12px; }
+.rt-motd {
+  min-width: 0; padding: 7px 10px; overflow: hidden; white-space: nowrap; text-overflow: clip; font: 600 12px/1.2 var(--m-font); text-align: center;
+  background-color: rgba(0, 0, 0, 0.32); --px-n: 4px; clip-path: var(--px-4); min-height: 30px;
+}
+.rt-motd:empty { background: none; }
+.rt-tags { display: flex; gap: 5px; overflow: hidden; }
+.rt-tag {
+  flex: none; padding: 3px 7px 4px; font: 700 11px/1 var(--m-font);
+  color: var(--m-fg-subtle); background: color-mix(in srgb, var(--m-fg) 8%, transparent);
+  clip-path: var(--px-4); --px-n: 4px;
+}
+.rt-on { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rt-on b { font: 800 15px/1 var(--m-font); color: var(--m-fg); }
+.rt-on s { font: 600 12px/1 var(--m-font); color: var(--m-fg-faint); }
+.rt-on svg { width: 14px; height: 14px; align-self: center; color: var(--m-accent); }
+.rt-on.off { color: var(--m-fg-faint); font: 600 13px/1 var(--m-font); }
+.rt-ver { font: 600 13px/1 var(--m-font); color: var(--m-fg-subtle); white-space: nowrap; }
+.rt-votes { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; font: 700 13px/1 var(--m-font); color: var(--m-fg-subtle); font-variant-numeric: tabular-nums; }
+.rt-votes svg { width: 14px; height: 14px; }
+.rt-apply { font: 600 12px/1 var(--m-font); color: var(--m-fg-faint); text-align: center; }
+.rt-row .btn.srv-join { min-width: 0; width: 100%; justify-content: center; }
+@media (max-width: 1200px) {
+  .rt-row { grid-template-columns: 34px 44px minmax(0, 1fr) 84px 96px 64px 112px; }
+  .rt-motd { display: none; }
+}
+@media (max-width: 1060px) {
+  .rt-row { grid-template-columns: 30px 44px minmax(0, 1fr) 76px 64px 104px; }
+  .rt-ver { display: none; }
+}
+@media (max-width: 820px) {
+  .rt-row { grid-template-columns: 28px 44px minmax(0, 1fr) 70px 96px; }
+  .rt-votes { display: none; }
+}
+
+/* Блок «Серверы» на экране «Играть» и подвал со «Показать ещё». */
+.rt-foot { display: flex; justify-content: center; margin-top: 12px; }
+.rt-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.rt-tools .rt-find { flex: 1 1 260px; max-width: 420px; }
+
+/* «Рекомендации»: широкая плитка хостинга не оставляет дыр в конце ряда. */
+.hub-grid.fy-grid.fy-bare { grid-auto-flow: dense; }
+/* Место под сервер зрителя: первая строка списка. */
+.rt-row.rt-slot { display: flex; gap: 14px; min-height: 76px; background: color-mix(in srgb, var(--m-accent) 14%, var(--m-surface)); }
+.rt-slot-ic { flex: none; display: grid; place-items: center; width: 44px; height: 44px; color: var(--m-accent); }
+.rt-slot-ic svg { width: 26px; height: 26px; }
+.rt-slot-t { flex: 1; min-width: 0; font: 800 18px/1.2 var(--m-font); }

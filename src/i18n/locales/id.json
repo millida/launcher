@@ -6956,8 +6956,27 @@
   "Подарить за {price}": "Hadiahkan seharga {price}",
   "Подарок для {nick}": "Hadiah untuk {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Dibayar dari saldo Millida, tanpa mengikat kartu dan tanpa perpanjangan otomatis",
-  "Рубины: {n}": "Rubi: {n}",
+  "Рубины: {n}": "Rubi: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Folder yang tidak dipindahkan: {list}. Folder itu tetap di launcher lama",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Folder mod di .minecraft bersama. Centang yang mau dipindahkan ke modpack",
-  "Эту папку нельзя перенести: {0}": "Folder ini tidak bisa dipindahkan: {0}"
+  "Эту папку нельзя перенести: {0}": "Folder ini tidak bisa dipindahkan: {0}",
+  "Кейсы": "Peti",
+  "Приваты": "Klaim lahan",
+  "Ивенты": "Acara",
+  "Кастомные предметы": "Item khusus",
+  "Кастомные мобы": "Mob khusus",
+  "Аукцион": "Rumah lelang",
+  "Профессии": "Pekerjaan",
+  "Кроссплей": "Crossplay",
+  "Донат не решает": "Bukan pay-to-win",
+  "Имя или адрес": "Nama atau alamat",
+  "Рекомендации": "Rekomendasi",
+  "Заявлено {n}, по оценке Millida играют меньше": "Diklaim {n}, menurut Millida yang bermain lebih sedikit",
+  "Онлайн проверен Millida": "Jumlah online diverifikasi Millida",
+  "Баллы продвижения": "Poin promosi",
+  "Голосов за 30 дней": "Suara dalam 30 hari",
+  "По заявке": "Dengan aplikasi",
+  "Размести свой сервер здесь": "Pasang servermu di sini",
+  "Раскрутить сервер": "Promosikan server"
 }

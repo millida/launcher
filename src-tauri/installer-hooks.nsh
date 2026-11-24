@@ -7,6 +7,7 @@
 !endif
 
 !define MILLIDA_ASIDE ".millida-old"
+!define MILLIDA_STAGED ".millida-setup"
 
 Var MillidaAttempt
 Var MillidaProbe
@@ -167,13 +168,72 @@ Var MillidaWv2Entry
   ${EndIf}
 !macroend
 
+; Tauri's own File instruction opens the installed exe for writing first and fills it
+; only after the whole archive is unpacked: for 6 seconds on a fast machine, much longer
+; on an HDD, the launcher on disk is a 0-byte file. Updates go in when the player quits,
+; often right before the PC is turned off, and an installer killed in that window leaves
+; an exe Windows refuses to start («Невозможно запустить это приложение на вашем ПК»,
+; reports of 10.10-24.11.2026). So the new exe is written under another name while the
+; old one stays whole, is flushed to disk, and takes the name in one rename. The same
+; source named twice costs no size: NSIS stores equal data once.
+!macro MillidaStageMainExe
+  !ifdef MAINBINARYSRCPATH
+    SetOverwrite try
+    ClearErrors
+    File "/oname=${MILLIDA_MAIN_EXE}${MILLIDA_STAGED}" "${MAINBINARYSRCPATH}"
+    ${If} ${Errors}
+      ; Another installer holds the file. The installed launcher works: an update leaves it alone.
+      ${If} $UpdateMode = 1
+      ${AndIf} ${FileExists} "$INSTDIR\${MILLIDA_MAIN_EXE}"
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
+    ${Else}
+      System::Call 'kernel32::CreateFileW(w "$INSTDIR\${MILLIDA_MAIN_EXE}${MILLIDA_STAGED}", i 0x40000000, i 7, p 0, i 3, i 0x80, p 0) p .s'
+      Pop $MillidaProbe
+      ${If} $MillidaProbe <> -1
+        System::Call 'kernel32::FlushFileBuffers(p $MillidaProbe)'
+        System::Call 'kernel32::CloseHandle(p $MillidaProbe)'
+      ${EndIf}
+    ${EndIf}
+  !endif
+!macroend
+
+; 9 = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH. A scanner may still be reading
+; the fresh file, hence the retries. The file keeps the time stamp of the packed exe, so
+; «ifdiff» makes Tauri's own File skip it; if the rename never worked, the stamps differ
+; and File writes the exe the old way.
+!macro MillidaPlaceMainExe
+  !ifdef MAINBINARYSRCPATH
+    ${If} ${FileExists} "$INSTDIR\${MILLIDA_MAIN_EXE}${MILLIDA_STAGED}"
+      StrCpy $MillidaAttempt 0
+      ${Do}
+        System::Call 'kernel32::MoveFileExW(w "$INSTDIR\${MILLIDA_MAIN_EXE}${MILLIDA_STAGED}", w "$INSTDIR\${MILLIDA_MAIN_EXE}", i 9) i .s'
+        Pop $MillidaExitCode
+        ${If} $MillidaExitCode <> 0
+          ${Break}
+        ${EndIf}
+        IntOp $MillidaAttempt $MillidaAttempt + 1
+        ${If} $MillidaAttempt >= 10
+          ${Break}
+        ${EndIf}
+        Sleep 500
+      ${Loop}
+    ${EndIf}
+    SetOverwrite ifdiff
+  !endif
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
+  !insertmacro MillidaStageMainExe
   !insertmacro MillidaFreeInstallDir
+  !insertmacro MillidaPlaceMainExe
   !insertmacro MillidaEnsureWebView2
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
   Delete /REBOOTOK "$INSTDIR\*${MILLIDA_ASIDE}*"
+  Delete "$INSTDIR\${MILLIDA_MAIN_EXE}${MILLIDA_STAGED}"
 !macroend
 
 ; The game folder the player picked lives in game-root.txt inside the app data,
@@ -321,6 +381,7 @@ Var MillidaWv2Entry
 
 !macro NSIS_HOOK_POSTUNINSTALL
   Delete /REBOOTOK "$INSTDIR\*${MILLIDA_ASIDE}*"
+  Delete "$INSTDIR\${MILLIDA_MAIN_EXE}${MILLIDA_STAGED}"
   !insertmacro MillidaCleanTraces
   ${If} $MillidaWipe = 1
     SetShellVarContext current

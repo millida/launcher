@@ -17,6 +17,7 @@ import { targetsAnarchy } from '../lib/ownServer'
 import { PixelField } from '../components/lobby/PixelField'
 import { LobbyAmbience } from '../components/lobby/LobbyAmbience'
 import { HubTile } from '../components/lobby/HubTile'
+import { ServersTile } from '../components/lobby/ServersTile'
 import { useHeroWallpaper } from '../components/HeroWallpaper'
 import { LOADER_NAME, fmtN, fmtPlaytime } from '../lib/format'
 import { VIDEOS } from '../lib/wallpaper'
@@ -275,6 +276,7 @@ export function Play({ on }: { on: boolean }) {
           {TIERS_SECTION_PUBLIC ? <HubTile kind="pvp" /> : null}
           <HubTile kind="wardrobe" />
           <HubTile kind="server" />
+          <ServersTile on={!!on} />
         </nav>
       </div>
       {/* Кнопки пати стоят над «Играть» всегда: «Найти пати» на том же месте становится «Отменой». */}
@@ -290,7 +292,6 @@ export function Play({ on }: { on: boolean }) {
         {/* Над рядом — подпись и мелкие действия сборки; сам ряд — плашка
             режима и «Играть» одной высоты, как в Brawl Stars. */}
         <div className="lobby-side-top">
-          <span />
           <span className="lobby-tools" />
         </div>
         <div className="lobby-row">
