@@ -8,7 +8,7 @@ import { showToast } from '../state/ui'
 import { INVITER_STEP, ONBOARDING_STEPS, finishOnboarding, onboardingBack, onboardingNext, useOnboarding } from '../state/onboarding'
 import { TOUR_STEPS } from '../state/tour'
 import { getAccount, isOfflineNick, useAccounts } from '../state/accounts'
-import { foundKey } from '../lib/imports'
+import { foundKey, leftBehindNote } from '../lib/imports'
 import { setSoundMode, soundMode } from '../lib/sound'
 import { musicAutostartOn, setMusicAutostart, useMusic } from '../state/music'
 import { track } from '../lib/telemetry'
@@ -188,10 +188,12 @@ function ImportStep() {
 
   const runImport = async (list: FoundInstance[] = selected) => {
     let ok = 0
+    const leftBehind: string[] = []
     for (const it of list) {
       setBusy(foundKey(it))
       try {
-        const p = await importInstance(it.path, it.name, it.version, it.loader)
+        const { profile: p, left_behind } = await importInstance(it.path, it.name, it.version, it.loader)
+        leftBehind.push(...left_behind)
         track('build_import', { source: it.source, mc: it.version, loader: it.loader })
         setDone((d) => ({ ...d, [foundKey(it)]: true }))
         useProfiles.getState().setSelected(p.name)
@@ -205,6 +207,8 @@ function ImportStep() {
     setBusy('')
     void useProfiles.getState().refresh()
     if (ok) showToast(ok === 1 ? t('Импортирована 1 сборка') : t('Импортировано сборок: {n}', { n: ok }))
+    const note = leftBehindNote(leftBehind)
+    if (note) showToast(note, 'error')
   }
 
   const tlBuilds = importable.filter(fromTlauncher)

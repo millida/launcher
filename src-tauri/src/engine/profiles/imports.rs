@@ -761,22 +761,152 @@ const SHARED_ROOT_KEPT: [&str; 13] = [
     "servers.dat",
 ];
 
+/// The launcher's own part of a shared .minecraft or of a version folder:
+/// the game, its libraries and runtimes, which Millida downloads itself, and
+/// `home/` of Legacy Launcher, where every entry is a build found separately.
+const LAUNCHER_OWNED: [&str; 16] = [
+    "versions", "libraries", "assets", "runtime", "bin", "natives", "home", "jre", "java", "cache", "updates",
+    "launcher", "installer", "temp", "tmp", "debug",
+];
+
+/// Folders that mods keep their content and progress in outside `config/`:
+/// gun packs of TACZ and Flan's, maps and waypoints, schematics. Losing them
+/// makes their items vanish from the worlds, so they are offered already picked.
+const KNOWN_MOD_DATA: [&str; 17] = [
+    "tacz", "flan", "flansmod", "journeymap", "xaerowaypoints", "xaeroworldmap", "xaerominimap", "voxelmap",
+    "schematics", "figura", "customnpcs", "mts", "openloader", "global_packs", "emotes", "fancymenu_data", "local",
+];
+
+/// Account files of the launcher that owns a shared folder carry sign-in
+/// tokens; whatever their exact name, they never reach a build.
+fn is_foreign_launcher_file(low: &str) -> bool {
+    low.starts_with("launcher_")
+        || low.starts_with("tlauncher")
+        || ["account", "credential", "token", "session"].iter().any(|w| low.contains(w))
+}
+
 /// A game folder the launcher's own infrastructure lives in next to the game
 /// files: a shared .minecraft, or a client folder with its versions inside.
 fn is_shared_root(game: &Path) -> bool {
     ["versions", "libraries", "assets"].iter().any(|d| game.join(d).is_dir())
 }
 
-fn import_entry_kept(name: &str, shared: bool) -> bool {
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum GameLayout<'a> {
+    /// A folder of one build (Prism, MultiMC, a client folder): all of it is the build.
+    Instance,
+    /// `versions/<id>/` of TLauncher running the game in place: the build and
+    /// the version files the launcher put beside it.
+    VersionFolder(&'a str),
+    /// A .minecraft shared by every version of its launcher.
+    SharedRoot,
+}
+
+fn layout_of(game: &Path) -> GameLayout<'_> {
+    if is_shared_root(game) {
+        return GameLayout::SharedRoot;
+    }
+    match game.file_name().and_then(|n| n.to_str()) {
+        Some(id) if is_version_folder(game) => GameLayout::VersionFolder(id),
+        _ => GameLayout::Instance,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum EntryFate {
+    Copy,
+    /// A folder of a shared .minecraft that is neither the game's nor the
+    /// launcher's: most often a mod's data, possibly another build's. The
+    /// player decides.
+    Offer,
+    Drop,
+}
+
+fn entry_fate(name: &str, layout: GameLayout, is_dir: bool) -> EntryFate {
     let low = name.to_ascii_lowercase();
-    if is_launcher_service_file(&low) {
-        return false;
+    if is_launcher_service_file(&low) || SKIPPED_ON_IMPORT.contains(&low.as_str()) {
+        return EntryFate::Drop;
     }
-    if shared {
-        SHARED_ROOT_KEPT.contains(&low.as_str())
-    } else {
-        !SKIPPED_ON_IMPORT.contains(&low.as_str())
+    let launchers = LAUNCHER_OWNED.contains(&low.as_str()) || is_foreign_launcher_file(&low);
+    match layout {
+        GameLayout::Instance => EntryFate::Copy,
+        GameLayout::VersionFolder(id) => {
+            let version_file = low == format!("{}.json", id.to_ascii_lowercase()) || (!is_dir && low.ends_with(".jar"));
+            if launchers || version_file { EntryFate::Drop } else { EntryFate::Copy }
+        }
+        GameLayout::SharedRoot if SHARED_ROOT_KEPT.contains(&low.as_str()) => EntryFate::Copy,
+        GameLayout::SharedRoot if launchers || low.starts_with('.') || !is_dir => EntryFate::Drop,
+        GameLayout::SharedRoot => EntryFate::Offer,
     }
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct ImportExtra {
+    pub name: String,
+    pub bytes: u64,
+    pub suggested: bool,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct ImportedInstance {
+    pub profile: Profile,
+    /// Folders of the source that stayed where they were, for the player to know before entering a world.
+    pub left_behind: Vec<String>,
+}
+
+/// Links are not followed, as in the copy itself: a size must not count what
+/// the import would never take.
+fn tree_bytes(path: &Path) -> u64 {
+    let Ok(meta) = std::fs::symlink_metadata(path) else { return 0 };
+    if meta.file_type().is_symlink() {
+        return 0;
+    }
+    if !meta.is_dir() {
+        return meta.len();
+    }
+    std::fs::read_dir(path).map(|rd| rd.flatten().map(|e| tree_bytes(&e.path())).sum()).unwrap_or(0)
+}
+
+fn is_suggested_extra(name: &str) -> bool {
+    KNOWN_MOD_DATA.contains(&name.to_ascii_lowercase().as_str())
+}
+
+fn offered_names(game: &Path) -> Vec<String> {
+    let layout = layout_of(game);
+    let Ok(rd) = std::fs::read_dir(game) else { return Vec::new() };
+    let mut out: Vec<String> = rd
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_str()?.to_string();
+            let meta = std::fs::symlink_metadata(e.path()).ok()?;
+            let offered = !meta.file_type().is_symlink() && entry_fate(&name, layout, meta.is_dir()) == EntryFate::Offer;
+            offered.then_some(name)
+        })
+        .collect();
+    out.sort_by_key(|n| (!is_suggested_extra(n), n.to_lowercase()));
+    out
+}
+
+fn source_game_dir(src: &Path) -> Result<PathBuf, String> {
+    match instance_game_dir(src) {
+        Some(g) => Ok(g),
+        None if has_game_dir_entry(src) => Err("Папка игры этой сборки — ссылка на другое место на диске. Millida по ссылкам не копирует: открой сборку в её лаунчере и укажи обычную папку".into()),
+        None => Ok(src.to_path_buf()),
+    }
+}
+
+/// Folders of a shared .minecraft the import asks about, with their size.
+/// Empty for a build in a folder of its own: it is carried over whole.
+pub fn import_extras(path: String) -> Result<Vec<ImportExtra>, String> {
+    let src = PathBuf::from(&path);
+    if !is_vouched(&src) {
+        return Err("Импортировать можно только сборку из списка найденных или выбранную в проводнике".into());
+    }
+    let game = source_game_dir(&src)?;
+    Ok(offered_names(&game)
+        .into_iter()
+        .map(|name| ImportExtra { bytes: tree_bytes(&game.join(&name)), suggested: is_suggested_extra(&name), name })
+        .collect())
 }
 
 /// A folder of `versions/` holds the version json under its own name. Some
@@ -792,13 +922,24 @@ fn version_folder_is_game_dir(dir: &Path) -> bool {
 
 /// `except` names top-level entries the caller brings in some other way.
 pub(crate) fn copy_game_files(game: &Path, dst: &Path, except: &[&str]) -> Result<usize, String> {
-    let shared = is_shared_root(game) || is_version_folder(game);
+    copy_game_files_with(game, dst, except, &[]).map(|c| c.copied)
+}
+
+struct GameCopy {
+    copied: usize,
+    left_behind: Vec<String>,
+}
+
+/// `extras` are the offered folders of a shared .minecraft the player chose to take.
+fn copy_game_files_with(game: &Path, dst: &Path, except: &[&str], extras: &[String]) -> Result<GameCopy, String> {
+    let layout = layout_of(game);
     let rd = std::fs::read_dir(game).map_err(|e| format!("Не удалось прочитать папку сборки: {}", e))?;
     let mut copied = 0;
+    let mut left_behind = Vec::new();
     for entry in rd {
         let entry = entry.map_err(|e| format!("Не удалось прочитать папку сборки: {}", e))?;
         let Some(name) = entry.file_name().to_str().map(str::to_string) else { continue };
-        if !import_entry_kept(&name, shared) || except.iter().any(|x| x.eq_ignore_ascii_case(&name)) {
+        if except.iter().any(|x| x.eq_ignore_ascii_case(&name)) {
             continue;
         }
         let src = entry.path();
@@ -807,6 +948,15 @@ pub(crate) fn copy_game_files(game: &Path, dst: &Path, except: &[&str]) -> Resul
         let Ok(meta) = std::fs::symlink_metadata(&src) else { continue };
         if meta.file_type().is_symlink() {
             continue;
+        }
+        match entry_fate(&name, layout, meta.is_dir()) {
+            EntryFate::Copy => {}
+            EntryFate::Offer if extras.contains(&name) => {}
+            EntryFate::Offer => {
+                left_behind.push(name);
+                continue;
+            }
+            EntryFate::Drop => continue,
         }
         let Ok(to) = safe_join(dst, &name) else { continue };
         let r = if meta.is_dir() {
@@ -819,7 +969,8 @@ pub(crate) fn copy_game_files(game: &Path, dst: &Path, except: &[&str]) -> Resul
         r.map_err(|e| format!("Не удалось скопировать {}: {}", name, e))?;
         copied += 1;
     }
-    Ok(copied)
+    left_behind.sort_by_key(|n| n.to_lowercase());
+    Ok(GameCopy { copied, left_behind })
 }
 
 /// Per-instance settings of Prism and MultiMC that Millida has a place for:
@@ -906,6 +1057,18 @@ pub(crate) fn apply_instance_cfg(instance_dir: &Path, profile: &str) {
 }
 
 pub fn import_instance(path: String, name: String, version: String, loader: String) -> Result<Profile, String> {
+    import_found(path, name, version, loader, None).map(|r| r.profile)
+}
+
+/// `extras` is the player's pick among `import_extras`; without a pick the
+/// folders of known mods are taken, as the list offers them.
+pub fn import_found(
+    path: String,
+    name: String,
+    version: String,
+    loader: String,
+    extras: Option<Vec<String>>,
+) -> Result<ImportedInstance, String> {
     let src = PathBuf::from(&path);
     if !is_vouched(&src) {
         return Err("Импортировать можно только сборку из списка найденных или выбранную в проводнике".into());
@@ -915,21 +1078,26 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
         return Err("Неизвестный загрузчик сборки".into());
     }
     if super::client_imports::is_client_mods_dir(&src) {
-        return import_client_mods(&src, &name, version);
+        let profile = import_client_mods(&src, &name, version)?;
+        return Ok(ImportedInstance { profile, left_behind: Vec::new() });
     }
-    let game = match instance_game_dir(&src) {
-        Some(g) => g,
-        None if has_game_dir_entry(&src) => {
-            return Err("Папка игры этой сборки — ссылка на другое место на диске. Millida по ссылкам не копирует: открой сборку в её лаунчере и укажи обычную папку".into());
+    let game = source_game_dir(&src)?;
+    let offered = offered_names(&game);
+    let extras = match extras {
+        Some(picked) => {
+            if let Some(bad) = picked.iter().find(|n| !offered.contains(n)) {
+                return Err(format!("Эту папку нельзя перенести: {}", bad));
+            }
+            picked
         }
-        None => src.clone(),
+        None => offered.into_iter().filter(|n| is_suggested_extra(n)).collect(),
     };
     let mut all = load_profiles();
     let nm = unique_profile_name(&name);
     let dst = profile_dir(&nm);
     std::fs::create_dir_all(&dst).map_err(|e| e.to_string())?;
-    match copy_game_files(&game, &dst, &[]) {
-        Ok(0) => {
+    let left_behind = match copy_game_files_with(&game, &dst, &[], &extras) {
+        Ok(GameCopy { copied: 0, .. }) => {
             // Import failed: delete the half-copied folder of the new modpack inside the launcher data. The source is not touched.
             let _ = std::fs::remove_dir_all(&dst);
             return Err("В выбранной папке нет файлов игры (mods, config, saves…)".into());
@@ -938,8 +1106,8 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
             let _ = std::fs::remove_dir_all(&dst);
             return Err(e);
         }
-        Ok(_) => {}
-    }
+        Ok(c) => c.left_behind,
+    };
     let loader = if loader == "vanilla" { loader_from_mods_dir(&dst).unwrap_or(loader) } else { loader };
     let loader_version = if loader == "vanilla" { None } else { loader_version_of(&src).filter(|v| check_loader_version(v).is_ok()) };
     let prof = Profile { name: nm, version, fabric: loader == "fabric", loader: Some(loader), loader_version, icon: None };
@@ -951,7 +1119,7 @@ pub fn import_instance(path: String, name: String, version: String, loader: Stri
     if game != src {
         apply_instance_cfg(&src, &prof.name);
     }
-    Ok(prof)
+    Ok(ImportedInstance { profile: prof, left_behind })
 }
 
 fn import_client_mods(src: &Path, name: &str, version: String) -> Result<Profile, String> {
@@ -1266,21 +1434,90 @@ mod tests {
         }
     }
 
+    /// Папки модов в общей .minecraft (паки оружия TACZ и Flan's) не входили в
+    /// список файлов игры и молча оставались у старого лаунчера: предметы из
+    /// этих паков исчезали из мира. Теперь их предлагают, а не выбрасывают.
+    #[test]
+    fn shared_minecraft_offers_mod_folders_and_reports_the_rest() {
+        let game = tmp("shared-extras");
+        for rel in [
+            "mods/tacz.jar",
+            "tacz/gunpack/a.zip",
+            "Flan/content.zip",
+            "screenshots/1.png",
+            "versions/1.20.1/1.20.1.json",
+            "home/Other/mods/a.jar",
+            "TLauncher/cache.bin",
+            ".tlauncher/x.json",
+            "launcher_accounts.json",
+            "usercache.json",
+        ] {
+            put(&game, rel);
+        }
+        assert_eq!(
+            offered_names(&game),
+            vec!["Flan".to_string(), "tacz".to_string(), "screenshots".to_string()],
+            "предлагаются только папки вне игры и вне лаунчера, известные моды первыми"
+        );
+
+        let dst = tmp("shared-extras-dst");
+        let copy = copy_game_files_with(&game, &dst, &[], &["tacz".to_string()]).unwrap();
+        assert!(dst.join("tacz/gunpack/a.zip").is_file(), "выбранная папка мода переносится");
+        assert!(!dst.join("Flan").exists(), "невыбранная остаётся на месте");
+        assert_eq!(copy.left_behind, vec!["Flan".to_string(), "screenshots".to_string()], "о каждой невыбранной папке игроку сообщают");
+
+        let cases: [(&str, bool, EntryFate, &str); 9] = [
+            ("tacz", true, EntryFate::Offer, "данные мода — решает игрок"),
+            ("saves", true, EntryFate::Copy, "файлы игры берутся всегда"),
+            ("versions", true, EntryFate::Drop, "версии принадлежат лаунчеру"),
+            ("home", true, EntryFate::Drop, "в home/ Legacy Launcher лежат другие сборки"),
+            ("TLauncher", true, EntryFate::Drop, "папка самого лаунчера"),
+            ("accounts", true, EntryFate::Drop, "токены входа ни под каким именем"),
+            (".tlauncher", true, EntryFate::Drop, "скрытые служебные папки"),
+            ("usercache.json", false, EntryFate::Drop, "одиночные файлы общей папки — кэш игры и лаунчера"),
+            ("logs", true, EntryFate::Drop, "логи пересоздаются"),
+        ];
+        for (name, is_dir, want, why) in cases {
+            assert_eq!(entry_fate(name, GameLayout::SharedRoot, is_dir), want, "{}: {}", name, why);
+        }
+    }
+
+    /// Выбор игрока проверяется по тому, что ядро предложило само: имя из
+    /// вебвью не должно увести в сборку версии, библиотеки или файлы аккаунтов.
+    #[test]
+    fn a_pick_outside_the_offer_is_refused() {
+        let game = tmp("shared-pick");
+        put(&game, "versions/1.20.1/1.20.1.json");
+        put(&game, "tacz/a.zip");
+        put(&game, "libraries/x.jar");
+        vouch(&game);
+        let path = game.to_string_lossy().to_string();
+        for bad in ["libraries", "versions", "../secret", "launcher_accounts.json"] {
+            let r = import_found(path.clone(), "Pick".into(), "1.20.1".into(), "forge".into(), Some(vec![bad.to_string()]));
+            assert!(r.is_err(), "«{}» не предлагался и не может быть перенесён", bad);
+        }
+        let listed: Vec<(String, bool)> = import_extras(path).unwrap().into_iter().map(|e| (e.name, e.suggested)).collect();
+        assert_eq!(listed, vec![("tacz".to_string(), true)], "TACZ предлагается уже отмеченным");
+    }
+
     /// Сборка TLauncher живёт прямо в versions/<имя>/. Импорт брал общую
     /// .minecraft, и сборка приезжала без своих конфигов и ресурспаков.
     #[test]
     fn a_version_folder_with_its_own_game_files_is_the_build() {
         let root = tmp("tl-pack");
         let pack = root.join("versions").join("Pack");
-        let cases: [(&str, bool, &str); 8] = [
+        let cases: [(&str, bool, &str); 11] = [
             ("mods/a.jar", true, "моды сборки"),
             ("config/jei.toml", true, "конфиги сборки"),
             ("resourcepacks/pack.zip", true, "ресурспаки сборки"),
             ("saves/W/level.dat", true, "миры сборки"),
             ("options.txt", true, "настройки игры, в них включённые ресурспаки"),
+            ("tacz/gunpack/a.zip", true, "паки оружия TACZ: без них предметы исчезают из мира"),
+            ("Flan/content.zip", true, "паки Flan's"),
             ("Pack.jar", false, "клиент версии скачивается заново"),
             ("natives/lwjgl.dll", false, "нативные библиотеки чужого лаунчера"),
             ("TLauncherAdditional.json", false, "служебный файл чужого лаунчера"),
+            ("launcher_accounts.json", false, "токены входа"),
         ];
         for (rel, _, _) in cases {
             put(&pack, rel);

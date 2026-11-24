@@ -1,7 +1,7 @@
 import { readPref, writePref } from '../lib/prefs'
 import type { PrefKey } from '../lib/prefs'
 
-export type NotifyKind = 'msg' | 'play' | 'online' | 'request' | 'room'
+export type NotifyKind = 'msg' | 'play' | 'online' | 'request' | 'room' | 'gift'
 export type NotifyLevel = 'sound' | 'silent' | 'off'
 
 const KEYS: Record<NotifyKind, PrefKey> = {
@@ -10,6 +10,7 @@ const KEYS: Record<NotifyKind, PrefKey> = {
   online: 'm-notify-online',
   request: 'm-notify-request',
   room: 'm-notify-room',
+  gift: 'm-notify-gift',
 }
 
 const DEFAULTS: Record<NotifyKind, NotifyLevel> = {
@@ -18,6 +19,7 @@ const DEFAULTS: Record<NotifyKind, NotifyLevel> = {
   online: 'silent',
   request: 'sound',
   room: 'sound',
+  gift: 'sound',
 }
 
 export function parseLevel(kind: NotifyKind, raw: string | null): NotifyLevel {

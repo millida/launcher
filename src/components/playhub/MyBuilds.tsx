@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { LOADER_NAME } from '../../lib/format'
+import { leftBehindNote } from '../../lib/imports'
 import { deleteProfile, importInstance, importPackFile, openProfileFolder, scanImports, setProfileIcon } from '../../ipc/commands'
 import { uiConfirm } from '../../state/confirm'
 import { openBuildSettings } from '../../state/instance'
@@ -405,9 +406,10 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
     setBusy(true)
     setDone(0)
     let ok = 0
+    const leftBehind: string[] = []
     for (const it of list) {
       try {
-        if (hasTauri()) await importInstance(it.path, it.name, it.version, it.loader)
+        if (hasTauri()) leftBehind.push(...(await importInstance(it.path, it.name, it.version, it.loader)).left_behind)
         else
           useProfiles.setState((s) => ({
             profiles: [...s.profiles, { name: it.name, version: it.version, fabric: it.loader === 'fabric', loader: it.loader, icon: null }],
@@ -424,6 +426,8 @@ export function TakeAllCard({ have, bar }: { have: string[]; bar?: boolean }) {
     setBusy(false)
     if (ok) showToast(t('Забрали {what}', { what: plural(ok, t('{n} сборку', { n: ok }), t('{n} сборки', { n: ok }), t('{n} сборок', { n: ok })) }), 'ok', 'achievement')
     else showToast(t('Не получилось забрать сборки'), 'error')
+    const note = leftBehindNote(leftBehind)
+    if (note) showToast(note, 'error')
   }
 
   // «Импорт» — файл сборки (.mrpack, CurseForge .zip и др.) сразу в «Мои

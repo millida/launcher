@@ -22,6 +22,7 @@ import { PxArt } from '../milli/px'
 import { installFromCatalog } from '../../lib/catalogInstall'
 import { openExt } from '../../lib/api'
 import { openModal, setScreen } from '../../state/ui'
+import { openMilli } from '../../state/milli'
 import { capFirst, plural } from './site'
 import type { SiteSection } from './site'
 import { activeFilters, setSectionScope, useServerSite, useSite } from './siteStore'
@@ -555,6 +556,17 @@ const GROUP_ART: Record<string, string> = {
 
 type FeedView = 'list' | 'gallery'
 
+/** The only standing entry to the AI builder: a toolbar button of the modpack feed, not a mascot on every screen. */
+function AiBuildEntry() {
+  const t = useT()
+  return (
+    <button type="button" className="btn sm secondary" data-sound="open" data-track="ai_builder_open" data-src="catalog" onClick={() => openMilli({ src: 'catalog' })}>
+      <Icon id="i-sparkle" />
+      {t('Собрать с ИИ')}
+    </button>
+  )
+}
+
 /** Вид ленты на раздел (как у Modrinth: список или карточки с картинкой), запоминается. */
 function useFeedView(sec: SiteSection): [FeedView, (v: FeedView) => void] {
   const key = 'catalog-view:' + sec.slug
@@ -815,7 +827,12 @@ function SectionPane({ sec, narrow, onOpenPack }: { sec: SiteSection; narrow: bo
       }
       count={count}
       note={loading && s.slow ? t('сервер отвечает дольше обычного…') : null}
-      sort={<ViewToggle view={view} onPick={setView} />}
+      sort={
+        <>
+          {packsFeed ? <AiBuildEntry /> : null}
+          <ViewToggle view={view} onPick={setView} />
+        </>
+      }
       refreshing={s.busy && s.page > 0}
     >
       {s.failed ? (

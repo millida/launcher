@@ -66,6 +66,12 @@ fn steady_update<'a>(installed_id: &str, newest: Option<&'a Value>, steady: Opti
     }
 }
 
+/// Only a Modrinth project has a version list to fall back to: a CurseForge or
+/// catalogue file the bulk answer did not know is left as it is.
+fn per_project_lookup(e: &ContentEntry, resolved: &std::collections::HashMap<String, Value>) -> bool {
+    !resolved.contains_key(&e.file_name) && is_modrinth_project(&e.project_id)
+}
+
 /// Resolves the update of every file in two bulk sha1 requests; entries without
 /// a stored hash, and the few whose channel decides the answer, fall back to
 /// per-project lookups. An update stays on the channel the file is on, see
@@ -93,7 +99,7 @@ async fn latest_versions(
     }
     let rest: Vec<(String, String, String)> = entries
         .iter()
-        .filter(|e| !out.contains_key(&e.file_name))
+        .filter(|e| per_project_lookup(e, &out))
         .map(|e| (e.file_name.clone(), e.project_id.clone(), e.version_id.clone()))
         .collect();
     if !rest.is_empty() {
@@ -382,6 +388,23 @@ mod channel_tests {
         assert_eq!(steady_update("b1", Some(&beta), None), Some(Step::Take(&beta)), "no release for this build: the project ships betas only");
         assert_eq!(steady_update("x", None, Some(&old)), Some(Step::Take(&old)));
         assert_eq!(steady_update("x", None, None), None, "Modrinth does not know the file: per-project lookup");
+    }
+
+    /// (manifest entry, settled by the bulk answer) -> asked for its version list.
+    #[test]
+    fn only_unsettled_modrinth_files_fall_back_to_a_version_list() {
+        let entry = |file: &str, project: &str| ContentEntry { file_name: file.into(), project_id: project.into(), ..Default::default() };
+        let mut settled = std::collections::HashMap::new();
+        settled.insert("sodium.jar".to_string(), json!({ "id": "x" }));
+        let cases: [(ContentEntry, bool, &str); 4] = [
+            (entry("lithium.jar", "gvQqBUqZ"), true, "a Modrinth file the bulk answer missed"),
+            (entry("sodium.jar", "AANobbMI"), false, "already settled by the bulk answer"),
+            (entry("jei.jar", "cf:238222"), false, "a CurseForge file sent here was a 404 on every check of every build"),
+            (entry("cosmetica.jar", "millida:cosmetica"), false, "a catalogue file is not Modrinth's either"),
+        ];
+        for (e, want, why) in cases {
+            assert_eq!(per_project_lookup(&e, &settled), want, "{} ({}): {}", e.file_name, e.project_id, why);
+        }
     }
 
     /// (content kind, build settings) -> are its files offered as updates.

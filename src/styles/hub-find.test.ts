@@ -2,32 +2,18 @@ import { expect, test } from 'bun:test'
 
 const kit = await Bun.file(new URL('./02-kit.css', import.meta.url)).text()
 const hub = await Bun.file(new URL('./pixel/playhub.css', import.meta.url)).text()
-const intro = await Bun.file(new URL('./pixel/hub-ai-intro.css', import.meta.url)).text()
 
 const classCount = (selector: string): number => (selector.match(/\.[\w-]+/g) ?? []).length
 
 const KIT_CLASSES = 2
 
-test('кнопка кита .btn.lg задаёт высоту, поля и размер значка — из-за этого пины ниже и нужны', () => {
+test('кнопка кита .btn.lg задаёт высоту и поля — из-за этого пины ниже и нужны', () => {
   expect(kit, 'кит больше не задаёт .btn.lg высоту и поля — пины строки поиска можно пересмотреть').toMatch(
     /^\.btn\.lg\{height:52px;padding:0 28px/m,
-  )
-  expect(kit, 'кит больше не жмёт значок в .btn.lg до 18px — пин размера Милли можно снять').toMatch(
-    /^\.btn\.lg svg\{width:18px;height:18px\}/m,
   )
 })
 
 const cases: Array<{ why: string; css: string; rule: RegExp }> = [
-  {
-    why: 'поле слева под окошко Милли: без него текст «Собрать с ИИ» начинается под окошком',
-    css: intro,
-    rule: /^([^{}\n]*\.hub-find-ai)\s*\{\s*padding-left:\s*92px/m,
-  },
-  {
-    why: 'Милли в окошке 64px: иначе кит сжимает её до значка 18px',
-    css: intro,
-    rule: /^([^{}\n]*\.hub-ai-who svg)\s*\{\s*width:\s*64px/m,
-  },
   {
     why: 'кнопки строки поиска одной высоты с полем — 60px',
     css: hub,
@@ -52,3 +38,8 @@ for (const { why, css, rule } of cases) {
     ).toBeGreaterThan(KIT_CLASSES)
   })
 }
+
+test('на главной нет кнопки ИИ-сборщика с Милли: вход в него только в каталоге сборок', async () => {
+  const src = await Bun.file(new URL('../components/playhub/HubFind.tsx', import.meta.url)).text()
+  expect(src, 'заметная кнопка ИИ рядом с «Найти» вернулась — она гнала лишние запросы к модели').not.toMatch(/openMilli|hub-find-ai|<Milli\b/)
+})

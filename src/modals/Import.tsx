@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { hasTauri } from '../ipc/tauri'
-import { importInstance, importPackFile, importPackwiz, pickImportDir, scanImports } from '../ipc/commands'
+import { importExtras, importInstance, importPackFile, importPackwiz, pickImportDir, scanImports } from '../ipc/commands'
 import { apiErrorText } from '../lib/apiError'
 import '../styles/pixel/build-extras.css'
 import { FtbBrowser } from '../components/build/FtbBrowser'
-import type { FoundInstance } from '../ipc/commands'
+import type { FoundInstance, ImportExtra } from '../ipc/commands'
 import { useProfiles } from '../state/profiles'
 import { closeModal, openModal, showToast, useUi } from '../state/ui'
 import { track } from '../lib/telemetry'
-import { foundKey } from '../lib/imports'
+import { foundKey, leftBehindNote } from '../lib/imports'
+import { fmtSize } from '../lib/format'
 import { backdropClose } from '../lib/dismiss'
 import { usePackCode } from '../state/packCode'
+import { millidaPackCode } from '../lib/packLink'
 import { showReward } from '../components/reward/RewardReveal'
 import { BuildIcon } from '../components/playhub/BuildIcon'
 import { trackImportFailure } from '../lib/importTrack'
@@ -26,6 +28,11 @@ const SOURCES = ['Prism', 'MultiMC', 'CurseForge', 'GDLauncher', 'ATLauncher', '
 
 type RowState = 'idle' | 'busy' | 'done'
 
+interface ExtrasPick {
+  extras: ImportExtra[]
+  chosen: Record<string, boolean>
+}
+
 export function ImportModal() {
   const t = useT()
   const modal = useUi((s) => s.modals.impModal)
@@ -33,6 +40,7 @@ export function ImportModal() {
   const [list, setList] = useState<FoundInstance[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [rows, setRows] = useState<Record<number, RowState>>({})
+  const [picks, setPicks] = useState<Record<number, ExtrasPick>>({})
   const [fileBusy, setFileBusy] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [link, setLink] = useState('')
@@ -42,6 +50,13 @@ export function ImportModal() {
   const fromLink = () => {
     const url = link.trim()
     if (!url || linkBusy) return
+    // A friend's millida.net/p/<code> link is a page of the site, not a pack.toml: it opens "by code".
+    const code = millidaPackCode(url)
+    if (code) {
+      close()
+      usePackCode.getState().show(code)
+      return
+    }
     if (!hasTauri()) {
       showToast(t('Доступно в приложении'), 'error')
       return
@@ -110,6 +125,7 @@ export function ImportModal() {
     setList(null)
     setFailed(false)
     setRows({})
+    setPicks({})
     ;(hasTauri() ? scanImports() : Promise.resolve([] as FoundInstance[]))
       .then((l) => setList(l))
       .catch((e) => {
@@ -124,6 +140,44 @@ export function ImportModal() {
   }, [modal.open])
 
   const existing = new Set(profiles.map((p) => p.name))
+
+  const dropPick = (i: number) => setPicks((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => k !== String(i))))
+
+  const runImport = (i: number, it: FoundInstance, extras?: string[]) => {
+    setRows((r) => ({ ...r, [i]: 'busy' }))
+    importInstance(it.path, it.name, it.version, it.loader, extras)
+      .then(({ profile: p, left_behind }) => {
+        track('build_import', { source: it.source, mc: it.version, loader: it.loader })
+        setRows((r) => ({ ...r, [i]: 'done' }))
+        dropPick(i)
+        useProfiles.getState().setSelected(p.name)
+        void useProfiles.getState().refresh()
+        imported(p)
+        const note = leftBehindNote(left_behind)
+        if (note) showToast(note, 'error')
+      })
+      .catch((err) => {
+        trackImportFailure(it.source, err, it)
+        setRows((r) => ({ ...r, [i]: 'idle' }))
+        showToast('' + err, 'error')
+      })
+  }
+
+  /// A shared .minecraft holds folders of mods next to the game's own: the
+  /// player picks them before the copy, the known ones already ticked.
+  const startImport = (i: number, it: FoundInstance) => {
+    setRows((r) => ({ ...r, [i]: 'busy' }))
+    importExtras(it.path)
+      .then((extras) => {
+        if (!extras.length) return runImport(i, it)
+        setRows((r) => ({ ...r, [i]: 'idle' }))
+        setPicks((cur) => ({ ...cur, [i]: { extras, chosen: Object.fromEntries(extras.map((x) => [x.name, x.suggested])) } }))
+      })
+      .catch((err) => {
+        setRows((r) => ({ ...r, [i]: 'idle' }))
+        showToast('' + err, 'error')
+      })
+  }
   const toMove = (list || []).filter((it) => it.movable && !existing.has(it.name))
   const toCopy = (list || []).filter((it) => !it.movable)
 
@@ -181,8 +235,10 @@ export function ImportModal() {
             {toCopy.map((it, i) => {
               const state = rows[i] || 'idle'
               const already = state === 'done' || existing.has(it.name)
+              const pick = picks[i]
               return (
-                <div className="mod-line" key={foundKey(it)}>
+                <Fragment key={foundKey(it)}>
+                <div className="mod-line">
                   <span className="mod-mini">
                     <Icon id="i-box2" />
                   </span>
@@ -195,27 +251,47 @@ export function ImportModal() {
                     className={'btn sm imp-go ' + (already ? 'ghost' : 'primary')}
                     data-i={i}
                     style={{ marginLeft: '8px' }}
-                    disabled={state !== 'idle' || already}
-                    onClick={() => {
-                      setRows((r) => ({ ...r, [i]: 'busy' }))
-                      importInstance(it.path, it.name, it.version, it.loader)
-                        .then((p) => {
-                          track('build_import', { source: it.source, mc: it.version, loader: it.loader })
-                          setRows((r) => ({ ...r, [i]: 'done' }))
-                          useProfiles.getState().setSelected(p.name)
-                          void useProfiles.getState().refresh()
-                          imported(p)
-                        })
-                        .catch((err) => {
-                          trackImportFailure(it.source, err, it)
-                          setRows((r) => ({ ...r, [i]: 'idle' }))
-                          showToast('' + err, 'error')
-                        })
-                    }}
+                    disabled={state !== 'idle' || already || !!pick}
+                    onClick={() => startImport(i, it)}
                   >
                     {state === 'busy' ? t('Добавляем…') : already ? <><Icon id="i-check" /> {t('Уже есть')}</> : t('Добавить')}
                   </button>
                 </div>
+                {pick ? (
+                  <div>
+                    <div className="faint-note">{t('Папки модов в общей .minecraft. Отметь, какие перенести в сборку')}</div>
+                    <div className="onb-scroll" style={{ marginTop: '8px' }}>
+                      {pick.extras.map((x) => (
+                        <label className="onb-row" key={x.name}>
+                          <input
+                            type="checkbox"
+                            checked={!!pick.chosen[x.name]}
+                            onChange={(e) =>
+                              setPicks((cur) => ({ ...cur, [i]: { ...pick, chosen: { ...pick.chosen, [x.name]: e.target.checked } } }))
+                            }
+                          />
+                          <span className="onb-row-main">
+                            <b>{x.name}</b>
+                            {x.bytes ? <small>{fmtSize(x.bytes)}</small> : null}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="bx-link-row" style={{ justifyContent: 'flex-end' }}>
+                      <button className="btn sm secondary" disabled={state === 'busy'} onClick={() => dropPick(i)}>
+                        {t('Отмена')}
+                      </button>
+                      <button
+                        className="btn sm primary"
+                        disabled={state === 'busy'}
+                        onClick={() => runImport(i, it, pick.extras.filter((x) => pick.chosen[x.name]).map((x) => x.name))}
+                      >
+                        {t('Добавить')}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                </Fragment>
               )
             })}
             </>

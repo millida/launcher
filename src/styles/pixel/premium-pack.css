@@ -822,8 +822,8 @@ div.ppx-frame { cursor: default; }
     linear-gradient(90deg, rgba(6, 6, 8, 0.9) 0%, rgba(6, 6, 8, 0.72) 32%, rgba(6, 6, 8, 0.25) 52%, rgba(6, 6, 8, 0) 64%);
 }
 /* Кнопка поддержки уступает место карточке доступа (PremiumPackPage tuck) */
-.msf, .mlf { transition: transform 120ms var(--m-ease-smooth), opacity 160ms var(--m-ease-smooth), background-color var(--m-t-fast); }
-.msf.is-tucked, .mlf.is-tucked { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.mlf { transition: transform 120ms var(--m-ease-smooth), opacity 160ms var(--m-ease-smooth), background-color var(--m-t-fast); }
+.mlf.is-tucked { opacity: 0; transform: translateY(12px); pointer-events: none; }
 
 /* Вкладки «Описание | Галерея | Требования» и мини-плеер — как у страниц каталога (06.10.2026) */
 .ppx .segs.ci-tabs { justify-content: flex-start; margin: 0; }

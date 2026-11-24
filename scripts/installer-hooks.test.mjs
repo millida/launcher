@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from 'bun:test'
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -228,4 +229,109 @@ test.skipIf(!READY)('галка «удалить данные» перехват
     readFileSync(join(dir, 'verdict.txt'), 'utf8'),
     'Tauri получил галку — RmDir /r снесёт сборки и миры вместе с папкой данных',
   ).toBe('0/1')
+}, 120_000)
+
+// Обращения 10.10–24.11.2026 («Невозможно запустить это приложение на вашем ПК» после
+// обновления): File из шаблона Tauri обнуляет exe и пишет его секунды спустя, выключенный
+// в этот момент ПК оставляет битый файл. Прерванная установка обязана оставить целый exe.
+const PAYLOAD_BYTES = 24 * 1024 * 1024
+const PACKED_AT = new Date('2026-11-01T00:00:00Z')
+const OLD = Buffer.alloc(1024 * 1024, 'OLD-PAYLOAD')
+
+const ATOMIC_HARNESS = `Unicode true
+SetCompressor /SOLID lzma
+OutFile "\${OUT}"
+SilentInstall silent
+RequestExecutionLevel user
+Var UpdateMode
+!define MAINBINARYSRCPATH "\${PAYLOAD}"
+!include "\${HOOKS}"
+Section
+  StrCpy $UpdateMode 1
+  StrCpy $INSTDIR "\${TESTDIR}"
+  SetOutPath $INSTDIR
+  !insertmacro NSIS_HOOK_PREINSTALL
+  File "/oname=\${MILLIDA_MAIN_EXE}" "\${MAINBINARYSRCPATH}"
+  !insertmacro NSIS_HOOK_POSTINSTALL
+SectionEnd
+`
+
+const buildAtomic = (name) => {
+  const dir = join(root, name)
+  const payload = join(root, `${name}-payload.bin`)
+  const script = join(root, `${name}.nsi`)
+  const out = join(root, `${name}.exe`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(payload, randomBytes(PAYLOAD_BYTES))
+  utimesSync(payload, PACKED_AT, PACKED_AT)
+  writeFileSync(script, ATOMIC_HARNESS)
+  const built = spawnSync(
+    MAKENSIS,
+    ['/V2', `/DOUT=${out}`, `/DHOOKS=${HOOKS}`, `/DTESTDIR=${dir}`, `/DPAYLOAD=${payload}`, '/DMAINBINARYNAME=millida-hooktest', script],
+    { encoding: 'utf8', env: { ...process.env, NSISDIR: NSIS_DIR } },
+  )
+  expect(built.stderr + built.stdout, 'хук не компилируется — установщик не соберётся').not.toContain('Error')
+  expect(built.status, 'makensis завершился с ошибкой').toBe(0)
+  return { installer: out, dir, target: join(dir, EXE), payload: readFileSync(payload) }
+}
+
+test.skipIf(!READY)('установка, прерванная в любой момент, оставляет целый exe', async () => {
+  const { installer, dir, target, payload } = buildAtomic('interrupted')
+  writeFileSync(target, OLD)
+  const started = Date.now()
+  install(installer)
+  const full = Date.now() - started
+  expect(readFileSync(target).equals(payload), 'обновление не встало').toBe(true)
+  let interrupted = 0
+  for (let step = 1; step <= 12; step++) {
+    writeFileSync(target, OLD)
+    const child = spawn(installer, [], { stdio: 'ignore' })
+    const gone = new Promise((resolve) => child.once('exit', resolve))
+    await Bun.sleep((full * step) / 13)
+    if (child.exitCode === null) {
+      interrupted++
+      child.kill('SIGKILL')
+    }
+    await gone
+    const now = readFileSync(target)
+    expect(now.equals(OLD) || now.equals(payload), `прервали на шаге ${step}: exe ${now.length} байт, лаунчер не запустится`).toBe(true)
+  }
+  expect(interrupted, 'ни одна установка не прервана — тест ничего не проверил').toBeGreaterThan(3)
+  writeFileSync(target, OLD)
+  install(installer)
+  expect(readFileSync(target).equals(payload), 'после прерванной установки следующая обязана пройти').toBe(true)
+  expect(readdirSync(dir), 'остался недописанный файл').toEqual([EXE])
+}, 180_000)
+
+test.skipIf(!READY)('exe упакован один раз: подготовленный файл не увеличивает установщик', () => {
+  const { installer, target, payload } = buildAtomic('size')
+  install(installer)
+  expect(readFileSync(target).equals(payload), 'первая установка (файла ещё нет) не положила exe').toBe(true)
+  expect(statSync(installer).size, 'exe упакован дважды').toBeLessThan(PAYLOAD_BYTES * 1.2)
+}, 120_000)
+
+test.skipIf(!READY)('второй установщик обновления не трогает exe, пока файл готовит первый', async () => {
+  const { installer, target } = buildAtomic('two')
+  writeFileSync(target, OLD)
+  const staged = `${target}.millida-setup`
+  writeFileSync(staged, 'first installer')
+  const release = await holdOpenLikeRunningExe(staged)
+  try {
+    install(installer)
+    expect(readFileSync(target).equals(OLD), 'второй установщик тронул рабочий exe').toBe(true)
+  } finally {
+    release()
+  }
+}, 120_000)
+
+test.skipIf(!READY)('занятый exe заменяется и через подготовленный файл', async () => {
+  const { installer, target, payload } = buildAtomic('busy')
+  writeFileSync(target, OLD)
+  const release = await holdOpenLikeRunningExe(target)
+  try {
+    install(installer)
+    expect(readFileSync(target).equals(payload), 'обновление не встанет при запущенном лаунчере').toBe(true)
+  } finally {
+    release()
+  }
 }, 120_000)

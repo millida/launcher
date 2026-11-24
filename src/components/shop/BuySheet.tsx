@@ -40,12 +40,16 @@ export interface SheetSpec {
   run: () => Promise<SheetDone | null>
   /** Второй вариант под кнопками. */
   extra?: ReactNode
+  /** Поле над кнопками (записка к подарку). */
+  note?: ReactNode
   /** Выбор из нескольких вариантов бок о бок (PLUS / Diamond): у каждого своя картинка и кнопка. */
   choices?: { key: string; art: ReactNode; confirm: ReactNode; tone?: string; run: () => Promise<SheetDone | null> }[]
   /** Закрыли, не нажав главную кнопку (замер воронки). */
   onCancel?: () => void
   /** «Подарить» рядом с главной кнопкой: окно закрывается и открывается выбор друга. */
   gift?: () => void
+  /** «Подарить» с подписью, отдельной строкой под главной кнопкой. */
+  giftWide?: boolean
   /** Расцветки вещи: кружки под картинкой, выбранная подменяет картинку, имя, кнопку, покупку и подарок. */
   tones?: SheetTone[]
 }
@@ -176,6 +180,24 @@ export function BuySheetHost() {
   }
 
   const isDone = phase === 'done'
+  const giftInRow = !!spec.gift && !spec.giftWide
+  const giftButton = (cls: string, label: boolean) => (
+    <button
+      className={'btn lg secondary ' + cls}
+      disabled={phase === 'busy'}
+      aria-label={t('Подарить')}
+      title={label ? undefined : t('Подарить')}
+      data-track={'sheet_gift_' + spec.kind}
+      onClick={() => {
+        const gift = spec.gift
+        shut()
+        gift?.()
+      }}
+    >
+      <Icon id="i-gift" />
+      {label ? t('Подарить') : null}
+    </button>
+  )
   return createPortal(
     <div className="modal-bg open vis bs-bg" onClick={() => phase !== 'busy' && close()}>
       <div
@@ -230,7 +252,8 @@ export function BuySheetHost() {
           </div>
         ) : null}
         {spec.name && !spec.choices ? <b className="bs-name">{spec.name}</b> : null}
-        <div className={'bs-acts' + (spec.gift && !isDone && !spec.choices ? ' has-gift' : '')}>
+        {!isDone && spec.note ? <div className="bs-note">{spec.note}</div> : null}
+        <div className={'bs-acts' + (giftInRow && !isDone ? ' has-gift' : '')}>
           {isDone ? (
             done?.onWear ? (
               <button className="btn lg primary" data-track={'sheet_wear_' + spec.kind} onClick={() => (close(), done.onWear?.())}>
@@ -257,28 +280,14 @@ export function BuySheetHost() {
                   {phase === 'busy' ? <span className="bs-spin" aria-label={t('Ждём')} /> : spec.confirm}
                 </button>
               )}
-              {spec.gift && !spec.choices ? (
-                <button
-                  className="btn lg secondary bs-gift"
-                  disabled={phase === 'busy'}
-                  aria-label={t('Подарить')}
-                  title={t('Подарить')}
-                  data-track={'sheet_gift_' + spec.kind}
-                  onClick={() => {
-                    const gift = spec.gift
-                    shut()
-                    gift?.()
-                  }}
-                >
-                  <Icon id="i-gift" />
-                </button>
-              ) : null}
+              {giftInRow ? giftButton('bs-gift', !!spec.choices) : null}
               <button className="btn lg secondary" disabled={phase === 'busy'} data-track={'sheet_cancel_' + spec.kind} onClick={close}>
                 {t('Отмена')}
               </button>
             </>
           )}
         </div>
+        {!isDone && spec.gift && spec.giftWide ? giftButton('bs-gift-wide', true) : null}
         {!isDone && spec.extra ? <div className="bs-extra">{spec.extra}</div> : null}
       </div>
     </div>,

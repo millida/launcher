@@ -15,6 +15,8 @@ import { useLightbox } from './lightboxStore'
 import { useRooms } from '../state/rooms'
 import { usePaid } from './catalog/paidStore'
 import { useReward } from './reward/rewardBus'
+import { useGifts } from '../state/gifts'
+import { useGiftFor } from '../state/giftFor'
 import { lateMount, lazyHost, lazyHostWith } from '../lib/lateMount'
 
 /*
@@ -58,6 +60,14 @@ export const RewardHost = lazyHost(
   () => import('./reward/RewardReveal').then((m) => ({ default: m.RewardHost })),
   () => useReward((s) => !!(s.big[0] || s.mid || s.small)) || import.meta.env.DEV,
 )
+
+/** Unopened gifts under the settings gear: the chunk (pixel art included) loads only when a gift waits. */
+export const GiftBellHost = lazyHost(
+  () => import('./gifts/GiftBell').then((m) => ({ default: m.GiftBell })),
+  () => useGifts((s) => (s.history?.unopened ?? 0) > 0),
+)
+export const GiftForHost = lazyHost(() => import('./gifts/GiftFor').then((m) => ({ default: m.GiftFor })), () => useGiftFor((s) => !!s.friend))
+export const GiftOpenHost = lazyHost(() => import('./gifts/GiftOpen').then((m) => ({ default: m.GiftOpen })), () => useGifts((s) => !!s.opening))
 
 /** Вход: нужен только тому, кто не вошёл (первый запуск, выход из аккаунта). */
 export const Login = lazyHostWith<{ on: boolean }>(

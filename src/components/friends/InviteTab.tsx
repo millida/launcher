@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
 import { Head } from '../Head'
 import { copyText } from '../../lib/clipboard'
@@ -13,15 +13,16 @@ import {
   loadInvites,
   normalizeInviteCode,
   takeInviteCode,
-  tierProgress,
-  tierRewardParts,
-  tierRewardText,
 } from '../../lib/referrals'
-import type { InviteOverview, InvitePerk } from '../../lib/referrals'
+import type { InviteOverview } from '../../lib/referrals'
 import { FRIENDS_TAB_EVENT } from './friendsView'
 import { INVITEE_GIFTS } from '../../lib/inviteGifts'
 import '../../styles/pixel/invite.css'
 import { useT } from '../../i18n'
+
+// The track pulls the pass styles and reward art: its own chunk, so the Friends screen's
+// preload list in the startup bundle does not grow with it.
+const InviteTrack = lazy(() => import('./InviteTrack').then((m) => ({ default: m.InviteTrack })))
 
 function Skeleton() {
   return (
@@ -179,7 +180,6 @@ export function InviteTab({ on }: { on: boolean }) {
   }
 
   const hours = Math.round(data.rules.playSeconds / 3600)
-  const nextTier = data.next ? data.tiers.find((t) => t.friends === data.next?.friends) : null
 
   return (
     <>
@@ -214,60 +214,23 @@ export function InviteTab({ on }: { on: boolean }) {
         </p>
       </div>
 
-      <div className="card inv-card">
-        <div className="inv-head">
-          <span className="inv-title">
-            <Icon id="i-trophy" />
-            {t('Засчитано: {friends}', { friends: friendsText(data.qualified) })}
-          </span>
-          {data.earned.plusDays ? <span className="inv-earned">{'+' + daysText(data.earned.plusDays) + ' PLUS'}</span> : null}
-        </div>
-        {data.next && nextTier ? (
-          <>
-            <div className="bar inv-bar">
-              <i style={{ width: Math.round(tierProgress(data.qualified, data.tiers) * 100) + '%' }} />
-            </div>
-            <p className="faint-note inv-next">{t('Ещё {friends} — {reward}', { friends: friendsText(data.next.left), reward: tierRewardText(nextTier) })}</p>
-          </>
-        ) : null}
-        <ol className="inv-ladder">
-          {data.tiers.map((t) => (
-            // Клетка лестницы (QA 06.10.2026: «Иконка «Аметист» + Эпический сундук» в 3–4 строки):
-            // число друзей сверху, каждая награда — своя строка со своим значком, одна строка на награду.
-            <li key={t.friends} className={'inv-step' + (t.reached ? ' on' : '')}>
-              <span className="inv-step-top">
-                <span className="inv-step-n">{t.friends}</span>
-                {t.granted ? (
-                  <Icon id="i-check" className="icon inv-step-ok" />
-                ) : t.reached ? (
-                  // Reached and not yet given: a lit step without a mark read as «done, nothing came».
-                  <Icon id="i-clock" className="icon inv-step-wait" />
-                ) : null}
-              </span>
-              {stepLines(t).map((line) => (
-                <span key={line.text} className="inv-step-r">
-                  <Icon id={line.icon} />
-                  <span>{line.text}</span>
-                </span>
-              ))}
-            </li>
-          ))}
-        </ol>
-        {data.tiers.some((step) => step.reached && !step.granted) ? (
-          <p className="faint-note inv-rule">
-            {t('Награда за ступень приходит сама, нажимать ничего не нужно: сундуки — в «Мои сундуки», PLUS — на аккаунт. Ступени с часами выдаются через 72 часа. Прошло больше трёх дней — напиши в поддержку.')}
-          </p>
-        ) : null}
-        {data.pending > 0 ? (
-          <p className="faint-note inv-rule">
-            {t('Ещё не засчитаны: {friends}. Друг засчитывается, когда наиграет {hours} ч за {n} дня.', {
-              friends: friendsText(data.pending),
-              hours,
-              n: data.rules.playDays,
-            })}
-          </p>
-        ) : null}
-      </div>
+      <Suspense fallback={<div className="card inv-card fr-skel" style={{ height: 300 }} />}>
+        <InviteTrack data={data} />
+      </Suspense>
+      {data.tiers.some((step) => step.reached && !step.granted) ? (
+        <p className="faint-note inv-rule">
+          {t('Награда за ступень приходит сама, нажимать ничего не нужно: сундуки — в «Мои сундуки», PLUS — на аккаунт. Ступени с часами выдаются через 72 часа. Прошло больше трёх дней — напиши в поддержку.')}
+        </p>
+      ) : null}
+      {data.pending > 0 ? (
+        <p className="faint-note inv-rule">
+          {t('Ещё не засчитаны: {friends}. Друг засчитывается, когда наиграет {hours} ч за {n} дня.', {
+            friends: friendsText(data.pending),
+            hours,
+            n: data.rules.playDays,
+          })}
+        </p>
+      ) : null}
 
       {data.friends.length ? (
         <>
@@ -297,14 +260,4 @@ export function InviteTab({ on }: { on: boolean }) {
       )}
     </>
   )
-}
-
-/** Строки клетки лестницы: первая особая награда, сундук, дни PLUS — не больше двух. */
-function stepLines(t: { perks: { kind: string; name: string }[]; chest?: string | null; chestName?: string | null; plusDays: number }): { icon: string; text: string }[] {
-  const out: { icon: string; text: string }[] = []
-  const perk = t.perks[0]
-  if (perk) out.push({ icon: perk.kind === 'icon' ? 'i-image' : 'i-crown', text: tierRewardParts({ plusDays: 0, chestName: null, perks: [perk] as InvitePerk[] })[0]! })
-  if (t.chestName) out.push({ icon: 'i-chest', text: t.chestName })
-  if (t.plusDays > 0) out.push({ icon: 'i-crown', text: daysText(t.plusDays) + ' PLUS' })
-  return out.slice(0, 2)
 }

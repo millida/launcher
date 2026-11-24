@@ -18,6 +18,9 @@ import { useDaily } from '../state/daily'
 import { useUi } from '../state/ui'
 import { onRealtime } from '../lib/realtime'
 import { liveInterval } from '../lib/liveInterval'
+import { showLogin } from '../lib/session'
+import { openProductGift } from '../components/shop/giftPick'
+import { GiftPickerHost } from '../components/shop/giftPickerHost'
 
 /**
  * Экран Millida PLUS в лаунчере. Пересобран 30.09.2026 вместе с
@@ -225,6 +228,10 @@ export function Plus({ on }: { on: boolean }) {
     ? new Date(plus.paidUntil).toLocaleDateString(intlTag(), { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
     : ''
   const buy = (tier: 'PLUS' | 'DIAMOND' = 'PLUS') => void useDaily.getState().startPlus(tier)
+  const gift = (tier: 'PLUS' | 'DIAMOND') => {
+    if (!hasMillidaAccount()) return showLogin()
+    openProductGift(tier === 'DIAMOND' ? t('PLUS Diamond на месяц') : t('PLUS на месяц'), { kind: 'PLUS', product: tier })
+  }
   const waiting = !!pay && Date.now() - pay.at < 15 * 60_000
 
   const cta = active ? (
@@ -625,6 +632,10 @@ export function Plus({ on }: { on: boolean }) {
                   {t('Зарубежной картой')}
                 </button>
               ) : null}
+              <button className="btn lg" data-track={'plus_gift_' + tier.toLowerCase()} onClick={() => gift(tier)}>
+                <Icon id="i-gift" />
+                {t('Подарить')}
+              </button>
             </div>
           ))}
           <div className="lp-buy-card">
@@ -667,6 +678,7 @@ export function Plus({ on }: { on: boolean }) {
           ))}
         </div>
       </Block>
+      {on ? <GiftPickerHost /> : null}
     </section>
   )
 }

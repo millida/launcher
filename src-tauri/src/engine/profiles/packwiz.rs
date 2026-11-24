@@ -115,6 +115,31 @@ pub(crate) fn pack_url_ok(raw: &str) -> bool {
     }
 }
 
+/// A Millida share link (millida.net/p/<code>) is a page of the site, not a pack.toml:
+/// the player meant "install by code", so the import says so instead of reading HTML as TOML.
+pub(crate) fn millida_pack_link(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    let with_scheme = if raw.contains("://") { raw.to_string() } else { format!("https://{}", raw) };
+    let u = url::Url::parse(&with_scheme).ok()?;
+    let host = u.host_str()?.to_ascii_lowercase();
+    if host != "millida.net" && host != "www.millida.net" {
+        return None;
+    }
+    let mut seg = u.path_segments()?.filter(|s| !s.is_empty());
+    if seg.next()? != "p" {
+        return None;
+    }
+    let code = super::share::normalize_code(seg.next()?);
+    (seg.next().is_none() && super::share::code_ok(&code)).then_some(code)
+}
+
+/// TOML never starts with "<": a body that does is a web page (a login wall, a
+/// site's own 404, a file host's download page) handed back with status 200.
+fn looks_like_html(body: &[u8]) -> bool {
+    let text = body.strip_prefix("\u{feff}".as_bytes()).unwrap_or(body);
+    text.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'<')
+}
+
 fn jar_url_ok(raw: &str) -> bool {
     url::Url::parse(raw)
         .ok()
@@ -142,6 +167,9 @@ async fn fetch_text(url: &str, base: &str) -> Result<Vec<u8>, String> {
     let bytes = resp.bytes().await.map_err(|e| format!("Пак оборвал ответ: {}", e))?;
     if bytes.len() > TEXT_CAP {
         return Err("Файл пака слишком большой".into());
+    }
+    if looks_like_html(&bytes) {
+        return Err("По ссылке открывается веб-страница, а не файл пака — нужна прямая ссылка на pack.toml".into());
     }
     Ok(bytes.to_vec())
 }
@@ -299,6 +327,9 @@ async fn place(pdir: &Path, url: &str, plan: &Plan, job: &Job, app: &AppHandle) 
 
 pub async fn import_packwiz(app: AppHandle, url: String) -> Result<PackwizResult, String> {
     let url = url.trim().to_string();
+    if millida_pack_link(&url).is_some() {
+        return Err("Это ссылка на сборку Millida — поставь её через «По коду»".into());
+    }
     if !pack_url_ok(&url) {
         return Err("Нужна https-ссылка на pack.toml".into());
     }
@@ -386,6 +417,31 @@ mod tests {
         for (raw, want, why) in cases {
             assert_eq!(pack_url_ok(raw), want, "{}: {}", raw, why);
         }
+    }
+
+    /// (pasted text) -> the share code, when it is a Millida pack link and not a pack.toml.
+    #[test]
+    fn millida_share_links_are_not_read_as_pack_toml() {
+        let cases: [(&str, Option<&str>, &str); 7] = [
+            ("https://millida.net/p/YQPPAYWG", Some("YQPPAYWG"), "ссылка из «Поделиться»"),
+            ("millida.net/p/yqppaywg/", Some("YQPPAYWG"), "без схемы, строчными, со слешем"),
+            ("https://www.millida.net/p/YQPP-AYWG?from=tg", Some("YQPPAYWG"), "www, дефис и хвост мессенджера"),
+            ("https://millida.net/p/YQPPAYWG/pack.toml", None, "файл внутри — уже не ссылка на сборку"),
+            ("https://millida.net/play/YQPPAYWG", None, "другая страница сайта"),
+            ("https://evil.example/p/YQPPAYWG", None, "чужой сайт"),
+            ("https://example.org/pack/pack.toml", None, "обычный packwiz"),
+        ];
+        for (raw, want, why) in cases {
+            assert_eq!(millida_pack_link(raw).as_deref(), want, "{}: {}", raw, why);
+        }
+    }
+
+    #[test]
+    fn a_web_page_is_not_taken_for_toml() {
+        assert!(looks_like_html(b"<!DOCTYPE html><html>"), "страница сайта вместо pack.toml");
+        assert!(looks_like_html("\u{feff}\n  <html>".as_bytes()), "BOM и пробелы перед тегом");
+        assert!(!looks_like_html(b"name = \"pack\"\n[index]\nfile = \"index.toml\""), "настоящий pack.toml");
+        assert!(!looks_like_html(b""), "пустой ответ разбирает TOML со своей ошибкой");
     }
 
     #[test]

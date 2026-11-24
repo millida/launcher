@@ -21,7 +21,7 @@ export const EXE_NAME = 'millida-launcher.exe'
 /// A patch bigger than this share of the executable saves too little to be worth a second road.
 export const MAX_PATCH_SHARE = 0.6
 /// Files that are rewritten by every NSIS build and say nothing about what the release changed.
-const NOISE = [/^uninstall\.exe$/i, /^\$PLUGINSDIR\//i, /^\[NSIS\]/i, /^\$\d+\//i]
+const NOISE = [/^uninstall\.exe$/i, /^\$PLUGINSDIR\//i, /^\[NSIS\]/i, /^\$\d+\//i, /\.millida-setup$/i]
 
 export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex')
 
