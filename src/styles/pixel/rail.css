@@ -299,3 +299,35 @@ span.tb-rubies { cursor: default; }
 .lb-quick-tg svg { width: 17px; height: 17px; }
 .lb-quick-tg.off { color: var(--m-fg-subtle); }
 @media (hover: hover) and (pointer: fine) { .lb-quick-tg:hover { background-color: var(--m-accent); color: #06200e; } }
+
+/* Unopened friend gifts: a button right under the settings gear, only while something waits. */
+.topbar.is-lobby .lb-btns { position: relative; }
+.lb-gift-bell { position: absolute; top: calc(100% + 10px); right: 0; }
+.lb-gift-bell .lb-gift { animation: lb-gift-wiggle 2.4s steps(1, end) infinite; }
+@keyframes lb-gift-wiggle {
+  0%, 82%, 100% { transform: rotate(0); }
+  85% { transform: rotate(-4deg); }
+  88% { transform: rotate(4deg); }
+  91% { transform: rotate(-2deg); }
+}
+@media (prefers-reduced-motion: reduce) { .lb-gift-bell .lb-gift { animation: none; } }
+.lb-gift-card {
+  position: absolute; z-index: 30; top: calc(100% + 10px); right: 0;
+  display: flex; align-items: center; gap: 10px;
+  width: min(400px, calc(100vw - 32px)); padding: 10px 12px;
+  background: var(--m-surface); color: var(--m-fg);
+  --px-n: 5px; clip-path: var(--px-5);
+  --px-ol: rgba(0, 0, 0, 0.4); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 2px; --px-fb: var(--px-btn-b); --px-fb-w: 4px;
+  animation: lb-gift-in 220ms var(--m-ease-smooth) both;
+}
+.lb-gift-art { display: grid; place-items: center; flex: none; animation: lb-gift-wiggle 2.4s steps(1, end) infinite; }
+.lb-gift-txt { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.lb-gift-txt > b { font: 800 15px/1.1 var(--m-font); }
+.lb-gift-txt > i { display: inline-flex; align-items: center; gap: 5px; font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--m-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-gift-txt > i img { image-rendering: pixelated; flex: none; }
+.lb-gift-card > .btn { flex: none; }
+@keyframes lb-gift-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .lb-gift-card, .lb-gift-art { animation: none; } }

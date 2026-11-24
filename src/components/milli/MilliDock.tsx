@@ -23,7 +23,6 @@ import {
   closeMilli,
   loadMilliGreeting,
   newMilliChat,
-  openMilli,
   openMilliSession,
   pickMilliGreeting,
   refreshMilliPlans,
@@ -33,15 +32,13 @@ import {
   showMilliHistory,
   useMilli,
 } from '../../state/milli'
-import { showToast, useUi } from '../../state/ui'
-import { useLobby } from '../../state/lobbyMode'
-import { openProfileFolder } from '../../ipc/commands'
-import { NOTHING_TO_REPAIR, repairChangedFiles, runRepair } from '../../lib/repair'
+import { useUi } from '../../state/ui'
 import { openAccountAdd } from '../../state/accountAdd'
 import { useHubTab } from '../playhub/hubTab'
 import { usePlus } from '../../state/plus'
 import { isMilliScreen } from '../../lib/milliScreens'
 import { MilliPlan } from './MilliPlan'
+import { MilliCreditsBuy } from './MilliCredits'
 import '../../styles/pixel/milli.css'
 
 // Анимации ленты и карточки (моушн-дизайнер): подключаются, как только файл появится.
@@ -230,7 +227,7 @@ function Composer() {
   const [text, setText] = useState('')
   const pending = useMilli((s) => s.pending)
   // Счётчик на нуле — отправка ждёт сброса (карточка лимита уже сказала когда).
-  const out = useMilli((s) => !!s.status && (s.status.day.remaining <= 0 || s.status.month.remaining <= 0))
+  const out = useMilli((s) => milliLeft(s.status) === 0)
   const focusSeq = useMilli((s) => s.focusSeq)
   const preset = useMilli((s) => s.preset)
   const hasMessages = useMilli((s) => s.messages.length > 0)
@@ -459,6 +456,7 @@ function ErrorCard({ e }: { e: MilliError }) {
             {t('Больше с PLUS')}
           </button>
         ) : null}
+        <MilliCreditsBuy />
       </div>
     )
   }
@@ -869,100 +867,9 @@ function Panel() {
   )
 }
 
-function Fab() {
-  const t = useT()
-  return (
-    <button type="button" className="mlf milli-wave-hover" data-sound="open" data-track="milli_fab" aria-label={t('Милли')} onClick={() => openMilli({ src: 'fab' })}>
-      <Milli size={60} mode="idle" />
-      <span className="mlf-lab">{t('Милли')}</span>
-    </button>
-  )
-}
-
 /**
- * Вне каталога угол — «Помощь» словом: починить сборку, открыть папку с логами или
- * написать в поддержку (раньше — одна иконка-наушники, ведущая на вход сайта).
- */
-function SupportFab() {
-  const t = useT()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const picked = useLobby((s) => s.picked)
-  const build = picked && picked.kind === 'build' ? picked.name : ''
-  useEffect(() => {
-    if (!open) return
-    const down = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('mousedown', down)
-    document.addEventListener('keydown', key)
-    return () => {
-      document.removeEventListener('mousedown', down)
-      document.removeEventListener('keydown', key)
-    }
-  }, [open])
-  const run = (fn: () => void) => () => {
-    setOpen(false)
-    fn()
-  }
-  const needBuild = () => showToast(t('Выбери свою сборку в «Сегодня играем» — тогда починим её'), 'error')
-  return (
-    <div className="msf-wrap" ref={ref}>
-      {open ? (
-        <div className="ml-menu msf-menu" role="menu">
-          <button
-            type="button"
-            className="ml-menu-item"
-            role="menuitem"
-            data-track="help_repair"
-            onClick={run(() => {
-              if (!build) return needBuild()
-              void runRepair(build).then((r) => {
-                if (r && !repairChangedFiles(r)) showToast(NOTHING_TO_REPAIR, 'error')
-              })
-            })}
-          >
-            <PxIcon name="restart" size={16} />
-            {t('Починить')}
-          </button>
-          <button
-            type="button"
-            className="ml-menu-item"
-            role="menuitem"
-            data-track="help_logs"
-            onClick={run(() => (build ? void openProfileFolder(build) : needBuild()))}
-          >
-            <PxIcon name="folder" size={16} />
-            {t('Логи')}
-          </button>
-          <button type="button" className="ml-menu-item" role="menuitem" data-track="help_write" onClick={run(() => openExt(SUPPORT_URL))}>
-            <PxIcon name="msg" size={16} />
-            {t('Написать')}
-          </button>
-        </div>
-      ) : null}
-      <button
-        type="button"
-        className="msf"
-        data-sound="open"
-        data-track="support_fab"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <PxIcon name="headset" size={20} />
-        {t('Помощь')}
-      </button>
-    </div>
-  )
-}
-
-const SUPPORT_SCREENS = new Set<string>(['play', 'settings'])
-
-/**
- * Угол лаунчера: в каталоге («Ресурсы», карточки материалов) — Милли и её
- * панель, на главной и в настройках — кнопка поддержки.
+ * Угол лаунчера: в каталоге («Ресурсы», карточки материалов) — панель Милли.
+ * There is no floating mascot: the panel opens from the small catalog button and in-context entries only.
  */
 export function MilliDock() {
   const logged = useUi((s) => s.logged)
@@ -980,10 +887,9 @@ export function MilliDock() {
     else void refreshMilliPlans()
   }, [here])
   if (!logged) return null
-  if (!here) return SUPPORT_SCREENS.has(screen) ? <SupportFab /> : null
+  if (!here) return null
   return (
     <>
-      {open ? null : <Fab />}
       {/* Панель остаётся в DOM после первого открытия: прогресс установки и
           галочки в карточке сборки не теряются при сворачивании. */}
       {seen || open ? <Panel /> : null}

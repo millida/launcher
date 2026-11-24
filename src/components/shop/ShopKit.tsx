@@ -82,8 +82,9 @@ import { PlusChip } from './PlusBanner'
 import { ItemShot, ItemStage, TodaySection, TrendSection, type TodayActs } from './Today'
 import { CollectionsSection } from './Collections'
 import { BuyLabel, BuySheetHost, openSheet, useBuySheet } from './BuySheet'
-import { openGiftPicker, useGiftPick, type GiftTarget } from './giftPick'
-import { lazyHost } from '../../lib/lateMount'
+import { openGiftPicker, openProductGift, type GiftTarget } from './giftPick'
+import { GiftPickerHost } from './giftPickerHost'
+import { GiftNote } from './GiftNote'
 import { topUpFragments } from './topUp'
 import { FragBar } from './rarityUi'
 import { THEME_TONE } from './Sets'
@@ -101,11 +102,6 @@ const err = () => t('Магазин не ответил, попробуй поз
 /** Вещь каталога — плашка мига награды. */
 const entry = (it: ItemRef): RewardEntry => ({ name: it.name, preview: it.preview, rarity: it.rarity })
 /** «Надеть» — сразу на фигуру (владелец 24.09.2026, 19:56). */
-const GiftPickerHost = lazyHost(
-  () => import('./GiftFriends').then((m) => ({ default: m.GiftPickerHost })),
-  () => useGiftPick((s) => !!s.ask),
-)
-
 const wearItems = (list: ItemRef[]) => wearNow(list.map((it) => ({ code: it.code, variant: it.variant })))
 
 import { ShardsSection } from './Shards'
@@ -315,14 +311,16 @@ export function useShop(on: boolean) {
       return
     }
     const requestId = newRequestId()
+    let note = ''
     openSheet({
       kind: 'gift',
       name: t('Подарить «{item}» другу {nick}', { item: item.name, nick: friend.nickname }),
       art: <ItemShot item={item} big />,
       confirm: <BuyLabel verb={t('Подарить за')} price={quote.price} />,
+      note: <GiftNote onChange={(text) => (note = text)} />,
       run: async () => {
         try {
-          const res = await giftShopItem(item.code, friend.userId, source, requestId)
+          const res = await giftShopItem(item.code, friend.userId, source, requestId, note)
           setDay((d) => (d ? { ...d, balance: res.balance } : d))
           showToast(t('Подарок отправлен {name}', { name: res.to?.nickname || friend.nickname }), 'ok')
           return null
@@ -610,6 +608,11 @@ export function useShop(on: boolean) {
     }
   }
 
+  const giftPlus = (want: PlusTier) => {
+    if (!signedIn) return showLogin()
+    openProductGift(want === 'DIAMOND' ? t('PLUS Diamond на месяц') : t('PLUS на месяц'), { kind: 'PLUS', product: want })
+  }
+
   /**
    * PLUS / DIAMOND: окно с короной и «◆2100 каждый месяц», кнопка с ценой ведёт
    * в тот же путь оплаты, что и раньше (useDaily.startPlus: шлюз, ожидание,
@@ -629,7 +632,7 @@ export function useShop(on: boolean) {
     })
     // Два тарифа бок о бок (владелец 06.10.2026): PLUS — награды по дням, Diamond — те же сразу.
     // Знак у ника в игре (мод, BadgeMark) — под тарифами (владелец 06.10.2026).
-    openSheet({ kind: 'plus', name: 'Millida PLUS', confirm: null, art: null, choices: [choice('PLUS'), choice('DIAMOND')], extra: <StatusCompare row />, run: async () => null })
+    openSheet({ kind: 'plus', name: 'Millida PLUS', confirm: null, art: null, choices: [choice('PLUS'), choice('DIAMOND')], extra: <StatusCompare row />, gift: () => giftPlus('PLUS'), run: async () => null })
   }
   // Настройки → «Тема лаунчера» → закрытый PLUS / Diamond: окно покупки здесь.
   const wantPlus = usePremiumTheme((st) => st.wantPlus)
@@ -660,6 +663,8 @@ export function useShop(on: boolean) {
     if (!signedIn) return showLogin()
     const result = purchaseFlow('ruby_pack', pack.code, promo?.kopecks ?? pack.kopecks, 'kopecks')
     const quote = promo ? (isQuote(promo.quote) ? promo.quote : scaleQuote(rubyQuote(pack.code), pack.kopecks, promo.kopecks)) : rubyQuote(pack.code)
+    // One-time offers (starter, second step, month) are sold to their owner only, the gift service has no such product.
+    const giftable = !!day?.packs.some((p) => p.code === pack.code && !p.oneTime)
     let missing: MoneyShortfall | null = null
     if (affords(quote) === false) {
       await refreshMoney()
@@ -676,6 +681,13 @@ export function useShop(on: boolean) {
       confirm: missing?.topup
         ? t('Пополнить {sum}', { sum: formatMoney(missing.topup.amountMinor, missing.topup.currency) })
         : ((promo ? quoteText(quote) : rubyPackPrice(pack.code, pack.kopecks)) ?? ''),
+      giftWide: true,
+      gift: giftable
+        ? () => {
+            result(false, 'cancel')
+            openProductGift(t('{n} рубинов', { n: pack.rubies.toLocaleString(intlTag()) }), { kind: 'RUBIES', product: pack.code })
+          }
+        : undefined,
       extra: <PackPromoField key={promo?.code ?? ''} pack={pack.code} applied={promo} onApplied={(next) => void doPack(pack, art, next, picked)} />,
       onCancel: () => result(false, 'cancel'),
       run: async () => {
@@ -865,15 +877,16 @@ export function useShop(on: boolean) {
    *  Апгрейд PLUS → Diamond показывает состав Diamond: плитка продаёт то, что на кнопке. */
   const plusTile = plus
     ? tier === 'DIAMOND'
-      ? { rubies: PLUS_PASS.rubies, label: t('Продлить Diamond'), onOpen: doManage, sub: true, diamond: true }
+      ? { rubies: PLUS_PASS.rubies, label: t('Продлить Diamond'), onOpen: doManage, sub: true, diamond: true, onGift: giftPlus }
       : tier === 'PLUS'
-        ? { rubies: PLUS_PASS.rubies, label: 'Diamond · ' + (plusPrice('DIAMOND') ?? ''), onOpen: () => doPlus('DIAMOND'), sub: true, diamond: true }
+        ? { rubies: PLUS_PASS.rubies, label: 'Diamond · ' + (plusPrice('DIAMOND') ?? ''), onOpen: () => doPlus('DIAMOND'), sub: true, diamond: true, onGift: giftPlus }
         : {
             rubies: PLUS_PASS.rubies,
             label: t('Купить · {price}', { price: plusPrice('PLUS') ?? '' }),
             onOpen: () => doPlus('PLUS'),
             prices: { PLUS: plusPrice('PLUS') ?? '', DIAMOND: plusPrice('DIAMOND') ?? '' },
             onPick: (picked: PlusTier) => doPlus(picked),
+            onGift: giftPlus,
           }
     : undefined
 

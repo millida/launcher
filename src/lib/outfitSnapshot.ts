@@ -53,7 +53,7 @@ const FOCUS: Record<ShotFocus, { fillY: number; offsetY: number; yaw: number }> 
   body: { fillY: 0.7, offsetY: 1 - 2 * 0.86 + 0.7, yaw: SHOP_YAW },
   head: { fillY: 1.15, offsetY: -0.24 - 0.75 * 1.15, yaw: SHOP_YAW },
   upper: { fillY: 1.0, offsetY: -0.05 - 0.375 * 1.0, yaw: SHOP_YAW },
-  legs: { fillY: 1.0, offsetY: 0.12 + 0.625 * 1.0, yaw: SHOP_YAW },
+  legs: { fillY: 1.0, offsetY: 0.3, yaw: SHOP_YAW },
   back: { fillY: 0.72, offsetY: -0.02 - 0.3 * 0.72, yaw: Math.PI - 0.62 },
 }
 
@@ -392,6 +392,7 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     if (playing) playing.paused = true
 
     const worn: import('three').Object3D[][] = []
+    const poses: (() => void)[] = []
     let clipSeconds = 0
     all.forEach((r, i) => {
       const file = files[i]
@@ -414,7 +415,9 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
           r.variant?.emissive ?? r.item.emissive,
         )
         for (const piece of pieces) e.attachCosmetic(piece.anchor, piece.object)
-        if (pieces.length) worn.push(pieces.map((p) => p.object))
+        if (!pieces.length) return
+        worn.push(pieces.map((p) => p.object))
+        poses.push(pieces[0]!.pose)
       } catch {
         // Кривая модель не роняет снимок: вещь просто не встанет.
       }
@@ -460,10 +463,17 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     // Частицы эффекта и ауры в начале клипа только разгораются: окно петли берём из середины
     // длинного клипа, где их уже полно (13.11.2026: на плитке эффект был почти не виден).
     const glow = !playing && wear.some((r) => GLOW_SLOTS.has(r.item.slot))
-    const lead = glow ? Math.max(0, (full - seconds) / 2) : 0
+    // An emote that plays once opens with a wind-up (the mug of "Hot cocoa" is still behind the back),
+    // so its window is the middle of the clip too.
+    const once = !!sequence && sequence.main.endless !== true
+    const lead = glow || once ? Math.max(0, (full - seconds) / 2) : 0
     const at = (t: number) => {
-      if (playing) playing.progress = intro + t
+      if (playing) playing.progress = intro + (once ? lead : 0) + t
       cosmeticClock.now = () => lead + t
+    }
+    const draw = () => {
+      for (const pose of poses) pose()
+      e.renderFrame()
     }
     try {
       if (!moving || mode === 'first') {
@@ -471,7 +481,7 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
         e.fitPlayerToFrame({ fillY: frame.fillY, offsetY: frame.offsetY })
         // A worn item's clip starts in its authored rest pose; mid-clip, flapping wings can be folded behind the body.
         if (playing) at(seconds / 2)
-        e.renderFrame()
+        draw()
         // No await inside try: cosmeticClock is global and must be reset before yielding.
         return canvasBlob(e.canvas, 'image/png').then((blob) => (blob ? { blob, dressed, partial, moving } : null))
       }
@@ -497,7 +507,7 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
         for (let k = 0; k < n; k += 1) {
           // The middle of a step: right at the seam of intro and loop a prop can still hold its intro pose.
           at((seconds * (k + 0.5)) / n)
-          e.renderFrame()
+          draw()
           ctx.drawImage(e.canvas, 0, 0, fw0, fh0, k * fw, 0, fw, fh)
         }
         // WebP where available (Chromium/WebView2) makes the strip far lighter; PNG otherwise. A worker

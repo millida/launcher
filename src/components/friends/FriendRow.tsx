@@ -7,6 +7,7 @@ import { rememberServerName } from '../../state/playStats'
 import { openChat, openFriendProfile } from '../../state/friends'
 import { callFriend, callSupported } from '../../state/call'
 import { invitePlay } from '../../state/playInvite'
+import { openGiftFor } from '../../state/giftFor'
 import type { Friend } from '../../state/friends'
 import { useFriendStreaks } from '../../state/friendStreaks'
 import { StreakFire } from './StreakFire'
@@ -23,7 +24,7 @@ export const hoursText = (seconds: number): string => {
 }
 
 const MENU_W = 220
-const MENU_H = 240
+const MENU_H = 280
 
 /**
  * Строка друга. Две крупные кнопки с подписью (владелец 24.09.2026: «"Пригласить
@@ -184,6 +185,9 @@ export function FriendRow({
                   <Icon id="i-phone" /> {callBusy ? t('Идёт звонок') : t('Позвонить')}
                 </button>
               ) : null}
+              <button data-track="friend_gift" onClick={pick(() => openGiftFor({ userId: f.userId, nickname: nick || t('Друг') }))}>
+                <Icon id="i-gift" /> {t('Подарить')}
+              </button>
               <button data-track="friend_profile" onClick={pick(profile)}>
                 <Icon id="i-user" /> {t('Профиль')}
               </button>

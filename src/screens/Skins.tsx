@@ -79,6 +79,9 @@ import { loadMillidaProfile, showLogin } from '../lib/session'
 import { ensureMsAuth } from '../state/msLogin'
 import { apiErrorText } from '../lib/apiError'
 import { buildCosmetic } from '../lib/cosmeticModel'
+import { wearParticles, type ParticleShow } from '../lib/cosmeticParticles'
+import { hasParticles, particlesOf, particlesStill } from '../lib/cosmeticParticleData'
+import { liteOn } from '../lib/liteMode'
 import { hidesRegularCape, maskUrls, pieceCover } from '../lib/cosmeticCover'
 import { maskedSkin } from '../lib/maskedSkin'
 import { sectionTakeOff } from '../lib/sectionTakeOff'
@@ -2151,6 +2154,7 @@ export function Skins({ on }: { on: boolean }) {
     if (!engine || !engineReady || typeof engine.clearCosmetics !== 'function') return
     let alive = true
     let emoteDone: ReturnType<typeof setTimeout> | undefined
+    const shows: ParticleShow[] = []
     engine.clearCosmetics()
     const partnerReady = typeof engine.setPartner === 'function'
     if (partnerReady) void engine.setPartner(null)
@@ -2224,6 +2228,7 @@ export function Skins({ on }: { on: boolean }) {
             })
         }
         const emoteProps: { object: { parent: { remove(o: unknown): void } | null } }[] = []
+        const still = particlesStill(liteOn())
         for (const got of loaded) {
           if (!got.file) continue
           const skin = textureOf(got.item)
@@ -2247,6 +2252,13 @@ export function Skins({ on }: { on: boolean }) {
             // Кривая модель не должна гасить весь экран: вещь просто не
             // покажется на фигуре, картинка в каталоге у неё остаётся.
           }
+          if (!hasParticles(got.item.slot)) continue
+          const { item } = got
+          void particlesOf(item.model).then((raw) => {
+            if (!alive) return
+            const show = wearParticles(raw, geometry, skin, item.animation, still, (anchor, object) => engine.attachCosmetic(anchor, object))
+            if (show) shows.push(show)
+          })
         }
         // Кадр движок держит по телу — примерка персонажа не сдвигает; пересчёт
         // нужен только нику, чтобы встать над новой шляпой.
@@ -2260,6 +2272,7 @@ export function Skins({ on }: { on: boolean }) {
       clearTimeout(emoteDone)
       setFitLoading([])
       engine.clearCosmetics()
+      for (const show of shows) show.dispose()
       if (partnerReady) void engine.setPartner(null)
     }
   }, [dressed, variant, variantById, engineReady])

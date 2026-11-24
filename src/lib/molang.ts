@@ -14,6 +14,8 @@ export interface MolangClock {
   animTime: number
   /** Seconds since the figure began animating at all. */
   lifeTime: number
+  vars?: Record<string, number>
+  random?: () => number
 }
 
 export type Molang = (clock: MolangClock) => number
@@ -47,6 +49,21 @@ const MATH: Record<string, (...args: number[]) => number> = {
   random_integer: (low, high) => Math.round(((low ?? 0) + (high ?? 1)) / 2),
   die_roll: (count, low, high) => ((count ?? 0) * ((low ?? 0) + (high ?? 1))) / 2,
   die_roll_integer: (count, low, high) => Math.round(((count ?? 0) * ((low ?? 0) + (high ?? 1))) / 2),
+}
+
+const LIVE_RANDOM: Record<string, (roll: () => number, ...args: number[]) => number> = {
+  random: (roll, low, high) => (low ?? 0) + ((high ?? 1) - (low ?? 0)) * roll(),
+  random_integer: (roll, low, high) => Math.floor((low ?? 0) + ((high ?? 1) - (low ?? 0) + 1) * roll()),
+  die_roll: (roll, count, low, high) => {
+    let sum = 0
+    for (let i = 0; i < (count ?? 0); i += 1) sum += (low ?? 0) + ((high ?? 1) - (low ?? 0)) * roll()
+    return sum
+  },
+  die_roll_integer: (roll, count, low, high) => {
+    let sum = 0
+    for (let i = 0; i < (count ?? 0); i += 1) sum += Math.floor((low ?? 0) + ((high ?? 1) - (low ?? 0) + 1) * roll())
+    return sum
+  },
 }
 
 const CONSTANTS: Record<string, number> = { 'math.pi': Math.PI, true: 1, false: 0 }
@@ -243,9 +260,17 @@ class Parser {
       }
     }
     const fn = name.startsWith('math.') ? MATH[name.slice(5)] : undefined
+    const live = name.startsWith('math.') ? LIVE_RANDOM[name.slice(5)] : undefined
+    if (fn && live) {
+      return (clock) => {
+        const values = args.map((arg) => arg(clock))
+        return clock.random ? live(clock.random, ...values) : fn(...values)
+      }
+    }
     if (fn) return (clock) => fn(...args.map((arg) => arg(clock)))
     const query = QUERIES[name]
     if (query) return query
+    if (name.startsWith('variable.') || name.startsWith('temp.')) return (clock) => clock.vars?.[name] ?? 0
     const constant = CONSTANTS[name] ?? 0
     return () => constant
   }

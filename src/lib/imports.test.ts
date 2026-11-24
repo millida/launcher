@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { foundKey } from './imports'
+import { foundKey, leftBehindNote } from './imports'
 import type { FoundInstance } from '../ipc/commands'
 
 const at = (name: string, path: string, source = 'TLauncher / Minecraft'): FoundInstance => ({
@@ -26,4 +26,14 @@ test('the same instance name in two launchers stays two rows', () => {
 
 test('the same row keeps a stable key across rescans', () => {
   expect(foundKey(at('1.21.1', 'C:\\mc'))).toBe(foundKey(at('1.21.1', 'C:\\mc')))
+})
+
+test('a folder left behind by several builds is named once', () => {
+  const note = leftBehindNote(['tacz', 'Flan', 'tacz'])
+  expect(note, 'the player must see every folder that stayed behind').toContain('Flan')
+  expect(note?.split('tacz').length, 'a folder repeated across builds is listed once').toBe(2)
+})
+
+test('nothing left behind says nothing', () => {
+  expect(leftBehindNote([]), 'an import that took everything must not show a warning').toBeNull()
 })
