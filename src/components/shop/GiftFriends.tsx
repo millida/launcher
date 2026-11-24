@@ -7,6 +7,7 @@ import { matchFriends } from './friendMatch'
 import { useGiftPick } from './giftPick'
 import { setScreen } from '../../state/ui'
 import { useT } from '../../i18n'
+import '../../styles/pixel/shop2.css'
 
 export function GiftPickerHost() {
   const t = useT()

@@ -269,7 +269,7 @@ export function isBoundingBox(boneName: unknown): boolean {
  * на теле: без неё одежда спорит за глубину со скином игрока и вместо ткани
  * видно рябь из кожи и костюма вперемешку.
  */
-export function readCosmeticMesh(source: unknown, extraInflate = 0): CosmeticMesh | null {
+function geometryBody(source: unknown): Record<string, unknown> | null {
   const root = source as Record<string, unknown>
   if (!root || typeof root !== 'object') return null
   const wrapped = (root['minecraft:geometry'] ?? root['geometry']) as unknown
@@ -278,6 +278,30 @@ export function readCosmeticMesh(source: unknown, extraInflate = 0): CosmeticMes
     : wrapped && typeof wrapped === 'object' && 'minecraft:geometry' in (wrapped as object)
       ? ((wrapped as Record<string, unknown>)['minecraft:geometry'] as unknown[])[0] as Record<string, unknown>
       : (root as Record<string, unknown>)
+  return geometry ?? null
+}
+
+export type BoneLocators = Record<string, Record<string, [number, number, number]>>
+
+export function readLocators(source: unknown): BoneLocators {
+  const bones = geometryBody(source)?.['bones']
+  const out: BoneLocators = {}
+  if (!Array.isArray(bones)) return out
+  for (const bone of bones as (RawBone & { locators?: unknown })[]) {
+    if (!bone || typeof bone.name !== 'string' || !bone.locators || typeof bone.locators !== 'object') continue
+    const own: Record<string, [number, number, number]> = {}
+    for (const [name, raw] of Object.entries(bone.locators as Record<string, unknown>)) {
+      const point = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw as { offset?: unknown }).offset : null
+      if (!Array.isArray(point)) continue
+      own[name] = [Number(point[0]) || 0, flipY(Number(point[1]) || 0), Number(point[2]) || 0]
+    }
+    if (Object.keys(own).length) out[bone.name] = own
+  }
+  return out
+}
+
+export function readCosmeticMesh(source: unknown, extraInflate = 0): CosmeticMesh | null {
+  const geometry = geometryBody(source)
   if (!geometry) return null
 
   const description = (geometry['description'] ?? {}) as Record<string, number>

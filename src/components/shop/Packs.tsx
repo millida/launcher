@@ -37,6 +37,7 @@ export interface PlusTile {
   prices?: Record<PlusTier, string>
   /** Покупка выбранного тарифа (без него — onOpen). */
   onPick?: (tier: PlusTier) => void
+  onGift?: (tier: PlusTier) => void
 }
 
 type PlusTier = 'PLUS' | 'DIAMOND'
@@ -218,6 +219,12 @@ function PlusBundle({ tile }: { tile: PlusTile }) {
             {dia ? <GemArt size={22} /> : <Icon id="i-crown" />}
             {label}
           </button>
+          {tile.onGift ? (
+            <button className="btn md secondary" data-track="plus_tile_gift" onClick={() => tile.onGift?.(tier)}>
+              <Icon id="i-gift" />
+              {t('Подарить')}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
