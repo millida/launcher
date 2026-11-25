@@ -9,6 +9,8 @@ import { maskUrls, pieceCover } from './cosmeticCover'
 import { maskedSkin } from './maskedSkin'
 import { textureSource } from './textureSource'
 import { loadCosmeticCatalog, type CosmeticItem } from './gameProfile'
+import { wearParticles, type ParticleShow } from './cosmeticParticles'
+import { SHOWCASE_WARM_SECONDS, hasParticles, particlesOf } from './cosmeticParticleData'
 import { gpuLite } from './gpuLite'
 import { pickJob, shotRank } from './shotQueue'
 import { textured } from './shotTextures'
@@ -280,6 +282,7 @@ async function getEngine(): Promise<SkinViewEngine | null> {
     enableControls: false,
     enableEffects: false,
     preserveDrawingBuffer: true,
+    premultipliedAlpha: true,
   })
   e.applyLightSettings(SHOP_LIGHT)
   // Без пятна-тени под ногами: на карточке оно читалось серой полосой (владелец 06.10.2026).
@@ -345,6 +348,13 @@ const LOOP_MAX = 16
 /** Дольше трёх секунд не снимаем: длинный клип (ореол частиц — 10 с) шёл бы двумя кадрами в секунду. */
 const LOOP_WINDOW = 3
 const loopFrames = (seconds: number) => Math.max(LOOP_MIN, Math.min(LOOP_MAX, Math.round(seconds * 8)))
+/** Particles have no clip: their loop is a window of this length, in more frames than a swing of a prop needs. */
+const PARTICLE_WINDOW = 2.4
+const PARTICLE_FRAMES = 24
+/** A wider picture is refused by some webviews. */
+const STRIP_MAX = 16000
+/** Last frames dissolve into the first ones: a particle field never returns to where it started. */
+const SEAM = 0.3
 /** Высота кадра ленты в пикселях: плотнее не нужно, лента и так широкая. */
 const LOOP_FRAME_H = 480
 /** Render density of strip frames: enough to shrink to LOOP_FRAME_H with anti-aliasing. */
@@ -381,7 +391,10 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     e.clearCape()
     e.clearCosmetics()
     const all = emoteRef ? [...wear, emoteRef] : wear
-    const files = await Promise.all(all.map((r) => cosmeticModel(r.item.model as string)))
+    const [files, packs] = await Promise.all([
+      Promise.all(all.map((r) => cosmeticModel(r.item.model as string))),
+      Promise.all(all.map((r) => (hasParticles(r.item.slot) ? particlesOf(r.item.model) : null))),
+    ])
 
     // Эмоция двигает самого игрока: её клип вместо позы покоя, её реквизит (кот,
     // телефон) идёт по тем же часам.
@@ -392,6 +405,8 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     if (playing) playing.paused = true
 
     const worn: import('three').Object3D[][] = []
+    const poses: (() => void)[] = []
+    const shows: ParticleShow[] = []
     let clipSeconds = 0
     all.forEach((r, i) => {
       const file = files[i]
@@ -403,8 +418,9 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
         if (clip && clip.length > clipSeconds) clipSeconds = clip.length
       }
       try {
+        const geometry = slim && file.geometrySlim ? file.geometrySlim : file.geometry
         const pieces = buildCosmetic(
-          slim && file.geometrySlim ? file.geometrySlim : file.geometry,
+          geometry,
           texture,
           r.item.slot,
           file.animations,
@@ -414,7 +430,17 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
           r.variant?.emissive ?? r.item.emissive,
         )
         for (const piece of pieces) e.attachCosmetic(piece.anchor, piece.object)
-        if (pieces.length) worn.push(pieces.map((p) => p.object))
+        const objects: import('three').Object3D[] = pieces.map((p) => p.object)
+        const show = packs[i]
+          ? wearParticles(packs[i], geometry, texture, r.item.animation, { still: true, lit: true, warm: SHOWCASE_WARM_SECONDS }, (anchor, object) => {
+              e.attachCosmetic(anchor, object)
+              objects.push(object)
+            })
+          : null
+        if (show) shows.push(show)
+        if (!objects.length) return
+        worn.push(objects)
+        if (pieces.length) poses.push(pieces[0]!.pose)
       } catch {
         // Кривая модель не роняет снимок: вещь просто не встанет.
       }
@@ -454,16 +480,26 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     // лента кадров текстуры.
     const intro = sequence?.intro ? sequence.intro.length : 0
     const atlas = atlasCount(e)
-    const full = sequence ? sequence.main.length : clipSeconds > 0 ? clipSeconds : atlas > 1 ? atlas / ATLAS_FPS : 0
+    const own = sequence ? sequence.main.length : clipSeconds > 0 ? clipSeconds : atlas > 1 ? atlas / ATLAS_FPS : 0
+    const full = shows.length ? Math.max(own, PARTICLE_WINDOW) : own
     const seconds = Math.min(full, LOOP_WINDOW)
     const moving = seconds > 0.2
     // Частицы эффекта и ауры в начале клипа только разгораются: окно петли берём из середины
     // длинного клипа, где их уже полно (13.11.2026: на плитке эффект был почти не виден).
     const glow = !playing && wear.some((r) => GLOW_SLOTS.has(r.item.slot))
-    const lead = glow ? Math.max(0, (full - seconds) / 2) : 0
+    // An emote that plays once opens with a wind-up (the mug of "Hot cocoa" is still behind the back),
+    // so its window is the middle of the clip too.
+    const once = !!sequence && sequence.main.endless !== true
+    const lead = glow || once ? Math.max(0, (full - seconds) / 2) : 0
     const at = (t: number) => {
-      if (playing) playing.progress = intro + t
+      if (playing) playing.progress = intro + (once ? lead : 0) + t
       cosmeticClock.now = () => lead + t
+    }
+    const draw = () => {
+      for (const pose of poses) pose()
+      // Particles write their buffers while the frame is drawn, so the frame that shows them is the next one.
+      if (shows.length) e.renderFrame()
+      e.renderFrame()
     }
     try {
       if (!moving || mode === 'first') {
@@ -471,11 +507,10 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
         e.fitPlayerToFrame({ fillY: frame.fillY, offsetY: frame.offsetY })
         // A worn item's clip starts in its authored rest pose; mid-clip, flapping wings can be folded behind the body.
         if (playing) at(seconds / 2)
-        e.renderFrame()
+        draw()
         // No await inside try: cosmeticClock is global and must be reset before yielding.
         return canvasBlob(e.canvas, 'image/png').then((blob) => (blob ? { blob, dressed, partial, moving } : null))
       }
-      const n = loopFrames(seconds)
       // The strip shrinks a frame to LOOP_FRAME_H. Density 3 on Retina (960 px tall) renders four
       // times the pixels that reach the strip; density 2 is enough with anti-aliasing (640 to 480),
       // and lower would leave the silhouette jagged without supersampling.
@@ -489,16 +524,22 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
         const fh0 = e.canvas.height
         const fh = Math.min(fh0, LOOP_FRAME_H)
         const fw = Math.round((fw0 * fh) / fh0)
+        const n = Math.min(shows.length ? PARTICLE_FRAMES : loopFrames(seconds), Math.floor(STRIP_MAX / fw))
         const strip = document.createElement('canvas')
         strip.width = fw * n
         strip.height = fh
         const ctx = strip.getContext('2d')
         if (!ctx) return null
-        for (let k = 0; k < n; k += 1) {
+        const seam = shows.length ? Math.round(n * SEAM) : 0
+        if (seam) ctx.globalCompositeOperation = 'lighter'
+        for (let k = 0; k < n + seam; k += 1) {
           // The middle of a step: right at the seam of intro and loop a prop can still hold its intro pose.
           at((seconds * (k + 0.5)) / n)
-          e.renderFrame()
-          ctx.drawImage(e.canvas, 0, 0, fw0, fh0, k * fw, 0, fw, fh)
+          for (const show of shows) show.advance(seconds / n)
+          draw()
+          const share = (k % n) < seam ? ((k % n) + 1) / (seam + 1) : 1
+          ctx.globalAlpha = k < n ? share : 1 - share
+          ctx.drawImage(e.canvas, 0, 0, fw0, fh0, (k % n) * fw, 0, fw, fh)
         }
         // WebP where available (Chromium/WebView2) makes the strip far lighter; PNG otherwise. A worker
         // encodes it: a long strip's PNG in WebKit held the main thread.
@@ -509,6 +550,7 @@ async function shoot(a: ShotAsk, mode: 'first' | 'loop'): Promise<Shot | null> {
     } finally {
       cosmeticClock.now = null
       e.clearCosmetics()
+      for (const show of shows) show.dispose()
     }
   } finally {
     sleepLater()

@@ -4567,6 +4567,7 @@
   "Подарок за первый код автора": "Quà cho mã nhà sáng tạo đầu tiên",
   "Часть с твоих покупок — автору": "Một phần từ giao dịch của bạn dành cho nhà sáng tạo",
   "Поддержи автора": "Ủng hộ nhà sáng tạo",
+  "Поддержать": "Ủng hộ",
   "Автор получит деньги с твоих покупок": "Nhà sáng tạo nhận tiền từ giao dịch của bạn",
   "Убрать код": "Gỡ mã",
   "КОД": "MÃ",
@@ -6955,8 +6956,27 @@
   "Подарить за {price}": "Tặng với giá {price}",
   "Подарок для {nick}": "Quà cho {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Trừ từ số dư Millida, không liên kết thẻ, không tự gia hạn",
-  "Рубины: {n}": "Hồng ngọc: {n}",
+  "Рубины: {n}": "Hồng ngọc: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Các thư mục chưa được chuyển: {list}. Chúng vẫn ở launcher cũ",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Thư mục mod trong .minecraft dùng chung. Đánh dấu những thư mục cần chuyển vào modpack",
-  "Эту папку нельзя перенести: {0}": "Không thể chuyển thư mục này: {0}"
+  "Эту папку нельзя перенести: {0}": "Không thể chuyển thư mục này: {0}",
+  "Кейсы": "Rương quà",
+  "Приваты": "Chiếm đất",
+  "Ивенты": "Sự kiện",
+  "Кастомные предметы": "Vật phẩm tùy chỉnh",
+  "Кастомные мобы": "Mob tùy chỉnh",
+  "Аукцион": "Nhà đấu giá",
+  "Профессии": "Nghề nghiệp",
+  "Кроссплей": "Chơi đa nền tảng",
+  "Донат не решает": "Không pay-to-win",
+  "Имя или адрес": "Tên hoặc địa chỉ",
+  "Рекомендации": "Đề xuất",
+  "Заявлено {n}, по оценке Millida играют меньше": "Công bố {n}, theo Millida số người chơi ít hơn",
+  "Онлайн проверен Millida": "Số người chơi đã được Millida xác minh",
+  "Баллы продвижения": "Điểm quảng bá",
+  "Голосов за 30 дней": "Lượt bình chọn trong 30 ngày",
+  "По заявке": "Theo đơn đăng ký",
+  "Размести свой сервер здесь": "Đặt máy chủ của bạn ở đây",
+  "Раскрутить сервер": "Quảng bá máy chủ"
 }

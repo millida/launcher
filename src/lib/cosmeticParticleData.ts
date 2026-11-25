@@ -1,6 +1,9 @@
 /** Seconds a still figure's effect is run ahead, so a reduced-motion or lite frame shows a formed aura instead of an empty one. */
 export const PARTICLE_WARM_SECONDS = 1.2
 
+/** The same for a showcase: the slowest effects take this long to fill up. */
+export const SHOWCASE_WARM_SECONDS = 2.6
+
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 // A lite PC keeps the aura but not its per-frame simulation: up to thousands of CPU-built quads every frame is the cost it opted out of.

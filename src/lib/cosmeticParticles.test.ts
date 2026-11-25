@@ -109,7 +109,7 @@ describe('the engine stays within its limits', () => {
   for (const [name, raw] of Object.entries(BOOK as unknown as Record<string, unknown>)) {
     it(`${name} starts, shows particles and stays under the cap`, () => {
       const pack = particlePack(raw)
-      const show = pack ? startParticles(pack, null, `${name}.png`, undefined, true) : null
+      const show = pack ? startParticles(pack, null, `${name}.png`, undefined, { still: true }) : null
       expect(show, `${name}: a shipped effect must be playable by the engine`).not.toBeNull()
       let peak = 0
       for (let second = 0; second < 8; second += 0.1) {

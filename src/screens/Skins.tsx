@@ -2066,6 +2066,7 @@ export function Skins({ on }: { on: boolean }) {
         autoDetectModel: false,
         transparent: true,
         enableControls: false,
+        premultipliedAlpha: true,
       })
     } catch {
       canvas.removeEventListener('webglcontextlost', onLost)
@@ -2256,7 +2257,7 @@ export function Skins({ on }: { on: boolean }) {
           const { item } = got
           void particlesOf(item.model).then((raw) => {
             if (!alive) return
-            const show = wearParticles(raw, geometry, skin, item.animation, still, (anchor, object) => engine.attachCosmetic(anchor, object))
+            const show = wearParticles(raw, geometry, skin, item.animation, { still }, (anchor, object) => engine.attachCosmetic(anchor, object))
             if (show) shows.push(show)
           })
         }

@@ -1,0 +1,40 @@
+/* Плитка «Серверы» в лобби (src/components/lobby/ServersTile.tsx): рецепт и размер — hubtile.css, здесь цвет и герой. */
+.ht-servers {
+  --ht-h: 124px;
+  --ht-bg: #7a3fe0;
+  --ht-bg-hi: #8a52ec;
+  --ht-ol: #22084f;
+  --ht-band: #45199a;
+  --ht-ray: rgba(214, 180, 255, 0.4);
+  --ht-ray-x: 120px; --ht-ray-y: 30px;
+  /* Портрет по пояс, как у соседей: над кромкой 22px. */
+  --ht-art-h: 226px; --ht-art-x: -46%; --ht-over: 24px;
+}
+.ht-servers .ht-art { bottom: auto; top: -26px; }
+.ht-servers .px-run-ring.ht-run { --run-lo: #45199a; --run-mid: #ffb13b; --run-hi: #fff1c4; }
+
+/* Логотип на табличке: проекция на её лицевую грань (углы сняты с servers@2x.png), под ним жёлтый самой таблички,
+   свет и тон — как у неё. Логотипы просто сменяют друг друга. */
+.svt-sign { position: absolute; left: 0; top: 0; width: 48px; height: 48px; transform-origin: 0 0; transform: matrix3d(0.448888, 0.011183, 0, -0.001374, 0.04496, 0.573325, 0, 0.002559, 0, 0, 1, 0, 53.294467, -4.700675, 0, 1); background: #fbf06a; backface-visibility: hidden; }
+.svt-sign > * { position: absolute; inset: 4px; width: 40px !important; height: 40px !important; margin: 0; overflow: hidden; opacity: 0; transition: opacity 260ms linear; background: none; clip-path: none; border: 0; border-radius: 0; box-shadow: none; }
+.svt-sign > .is-on { opacity: 1; }
+.svt-sign .srv-ava { display: block; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0; clip-path: none; box-shadow: none; background: none; }
+.svt-sign img { display: block; width: 100% !important; height: 100% !important; object-fit: cover; filter: saturate(0.94) brightness(0.98) sepia(0.06); }
+.svt-sign::after { content: ''; position: absolute; inset: 0; background: #fff0b8; mix-blend-mode: multiply; opacity: 0.45; pointer-events: none; }
+.ht-servers:hover .svt-sign { translate: 0 -4px; }
+
+/* Лента «столько-то играют»: красный огонёк мигает ступенями. */
+.ht-servers .svt-live { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.svt-live i { width: 8px; height: 8px; background: #e8202a; animation: svt-live 1.2s steps(1, end) infinite; }
+@keyframes svt-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+/* Строка-факт: сервер и его онлайн, сменяется ступенькой. */
+.ht-servers .svt-fact { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; animation: svt-fact 160ms steps(3, end); }
+.svt-fact-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.svt-fact b { flex: none; font-weight: 900; color: #ffd36b; font-variant-numeric: tabular-nums; }
+@keyframes svt-fact { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .svt-live i, .ht-servers .svt-fact { animation: none; }
+  .svt-sign > * { transition: none; }
+}

@@ -48,8 +48,6 @@ type PackFace = PrisonFace
 export function Recommend({ on }: { on: boolean }) {
   const t = useT()
   const shown = usePromo((s) => s.promo.lobby === ANARCHY.mode)
-  const partners = useMarketOffers('partners')
-  const ruContent = useMarketOffers('ru-content')
   const arc2 = useArcania2Live()
   const [packs, setPacks] = useState<{ prison: PackFace | null; arcania: PackFace | null; arcaniaSlug: string; abonent: PackFace | null } | undefined>(undefined)
   const [step, setStep] = useState(0)
@@ -62,9 +60,9 @@ export function Recommend({ on }: { on: boolean }) {
   const rewards = useChatRewards(on && shown)
   const invite = useInviteOffer(on && shown)
   const coll = useCollectionPromo(on && shown)
-  const slides = packs ? promoSlides({ arcania: !!packs.arcania, prisonrpg: !!packs.prison, invite: !!invite, partners, ruContent, abonent: !!packs.abonent, collection: !!coll }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
+  const slides = packs ? promoSlides({ arcania: !!packs.arcania, invite: !!invite, collection: !!coll }).filter((s) => TIERS_SECTION_PUBLIC || s !== 'smp') : null
   const seed = promoSeed()
-  const start = slides ? (slides[0] === 'collection' || slides[0] === 'abonent' ? 0 : promoStart(slides.length, seed.day, seed.salt)) : 0
+  const start = slides ? (slides[0] === 'collection' || slides[0] === 'arcania' ? 0 : promoStart(slides.length, seed.day, seed.salt)) : 0
   const slide = slides ? promoAt(slides, start, step) : null
 
   useEffect(() => {
@@ -120,7 +118,7 @@ export function Recommend({ on }: { on: boolean }) {
   else if (slide === 'discord' || slide === 'telegram') body = <ChatPromo kind={slide} reward={rewards[slide]} />
   else if (slide === 'smp') body = <SmpPromo hover={hover} dots={null} />
   else if (slide === 'invite' && invite) body = <InvitePromo plusDays={invite.plusDays} />
-  else body = <AnarchyPromo on={on} hover={hover} dots={null} />
+  else if (slide === 'anarchy') body = <AnarchyPromo on={on} hover={hover} dots={null} />
 
   return (
     <div

@@ -1,3 +1,4 @@
+import { honestOnline } from '../lib/onlineHonest'
 import { useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n'
 import { Icon } from './Icon'
@@ -105,7 +106,7 @@ export function ServerDetail() {
                 {on ? (
                   <span className="pill acc">
                     <span className="dot"></span> {sv.onlineApprox ? '~' : ''}
-                    {t('{n} онлайн', { n: fmtN(sv.online) })}
+                    {t('{n} онлайн', { n: fmtN(honestOnline(sv)) })}
                   </span>
                 ) : (
                   <span className="pill">{t('офлайн')}</span>

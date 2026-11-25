@@ -4,10 +4,12 @@ import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
 import { Ruby } from '../Ruby'
 import { GiftNote } from '../shop/GiftNote'
+import { giftQuote } from './giftQuote'
 import { apiErrorText } from '../../lib/apiError'
 import { giveFriendGift, loadFriendGiftOffers, type FriendGiftOffer } from '../../lib/gifts'
 import { newRequestId } from '../../lib/rubies'
-import { balanceText, moneyText, refreshMoney, showMoneyError } from '../../lib/useMoney'
+import { moneyShortfall, shortfallOf, shortfallText, type MoneyShortfall } from '../../lib/money'
+import { balanceText, moneyText, openTopup, refreshMoney, useMoney } from '../../lib/useMoney'
 import { closeGiftFor, useGiftFor } from '../../state/giftFor'
 import { showToast } from '../../state/ui'
 import { intlTag, useT } from '../../i18n'
@@ -25,6 +27,8 @@ export function GiftFor() {
   const [failed, setFailed] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [refusal, setRefusal] = useState<{ text: string; short: MoneyShortfall | null } | null>(null)
+  const { view, prices } = useMoney()
   const note = useRef('')
   const requestId = useRef(newRequestId())
   const body = useRef<HTMLDivElement>(null)
@@ -33,6 +37,7 @@ export function GiftFor() {
     if (!friend) return
     setPicked(want ? keyOf(want) : null)
     setBusy(false)
+    setRefusal(null)
     note.current = ''
     requestId.current = newRequestId()
     let alive = true
@@ -48,10 +53,13 @@ export function GiftFor() {
       e.stopPropagation()
       closeGiftFor()
     }
+    const onFocus = () => void refreshMoney().then(() => alive && setRefusal((was) => (was?.short ? null : was)))
     window.addEventListener('keydown', onKey, true)
+    window.addEventListener('focus', onFocus)
     return () => {
       alive = false
       window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('focus', onFocus)
     }
   }, [friend, want])
 
@@ -65,10 +73,15 @@ export function GiftFor() {
 
   if (!friend) return null
   const balance = balanceText()
+  const quote = choice ? giftQuote(choice.priceMinor, choice.currency, view?.rubPerUsd ?? prices?.rubPerUsd ?? null) : null
+  const short = shortfallOf(quote, view) ?? refusal?.short ?? null
+  const problem = short ? shortfallText(short) : (refusal?.text ?? null)
 
   const send = async () => {
     if (!choice || busy) return
+    if (short) return openTopup(short.topup)
     setBusy(true)
+    setRefusal(null)
     try {
       await giveFriendGift({
         kind: choice.kind,
@@ -82,7 +95,9 @@ export function GiftFor() {
       closeGiftFor()
     } catch (err) {
       setBusy(false)
-      if (!showMoneyError(err)) showToast(apiErrorText(err, t('Не удалось подарить. Попробуй ещё раз')), 'error')
+      const miss = moneyShortfall(err)
+      if (miss) void refreshMoney()
+      setRefusal({ text: apiErrorText(err, t('Не удалось подарить. Попробуй ещё раз')), short: miss })
     }
   }
 
@@ -95,7 +110,10 @@ export function GiftFor() {
         className={'gfr-tile' + (on ? ' on' : '') + (o.kind === 'PLUS' ? ' is-plus' : '')}
         aria-pressed={on}
         data-track={'gift_for_' + o.kind.toLowerCase()}
-        onClick={() => setPicked(keyOf(o))}
+        onClick={() => {
+          setPicked(keyOf(o))
+          setRefusal(null)
+        }}
       >
         <span className="gfr-art" aria-hidden="true">
           {o.kind === 'PLUS' ? <Icon id={o.product === 'DIAMOND' ? 'i-gem' : 'i-crown'} /> : <Ruby size={30} />}
@@ -147,15 +165,18 @@ export function GiftFor() {
           </>
         )}
         {choice ? <GiftNote onChange={(text) => (note.current = text)} /> : null}
-        <button className="btn lg primary gfr-send" disabled={!choice || busy} data-track="gift_for_send" onClick={() => void send()}>
+        <button className="btn lg primary gfr-send" disabled={!choice || busy} data-track={short ? 'gift_for_topup' : 'gift_for_send'} onClick={() => void send()}>
           {busy ? (
             <span className="bs-spin" aria-label={t('Ждём')} />
+          ) : short ? (
+            short.topup ? t('Пополнить {sum}', { sum: moneyText(short.topup.amountMinor, short.topup.currency) ?? '' }) : t('Пополнить')
           ) : choice ? (
             t('Подарить за {price}', { price: moneyText(choice.priceMinor, choice.currency) ?? '' })
           ) : (
             t('Выбери подарок')
           )}
         </button>
+        {problem ? <p className="gfr-err" role="alert">{problem}</p> : null}
         <p className="gfr-hint">{t('Списывается с баланса Millida, без привязки карты и автопродления')}</p>
       </div>
     </div>,

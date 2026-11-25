@@ -1,4 +1,5 @@
 .gfr-bg { z-index: 925; }
+.gfr > :not(.gfr-grid) { flex: none; }
 .gfr-shop {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left;
   background: var(--m-inset); color: var(--m-fg); --px-n: 5px; clip-path: var(--px-5);
@@ -9,7 +10,7 @@
 .gfr-shop small { font-size: 12.5px; color: var(--m-fg-muted); }
 .gfr-shop > svg.icon { width: 16px; height: 16px; color: var(--m-fg-faint); }
 .gfr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; overflow-y: auto; max-height: 300px; }
-.gfr-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gfr-grid.two { flex: none; max-height: none; overflow: visible; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .gfr-tile {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; text-align: center;
   background: var(--m-inset); color: var(--m-fg); --px-n: 5px; clip-path: var(--px-5);
@@ -24,4 +25,5 @@
 .gfr-skel { display: block; height: 84px; }
 .gfr-none { margin: 4px 0; font-size: 14px; color: var(--m-fg-faint); text-align: center; }
 .gfr-send { width: 100%; }
+.gfr-err { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--m-danger); text-align: center; }
 .gfr-hint { margin: 0; font-size: 12px; color: var(--m-fg-faint); text-align: center; }

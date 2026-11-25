@@ -45,6 +45,8 @@ export interface EngineOptions {
   /** Лог диагностики shadow frustum (только для отладки) */
   debugShadows?: boolean;
   preserveDrawingBuffer?: boolean;
+  /** The frame holds colour already multiplied by coverage: needed where see-through light is drawn over the page. */
+  premultipliedAlpha?: boolean;
   /**
    * Частицы и эффект «переоделся».
    * false — для мини-превью карточек (по умолчанию true).

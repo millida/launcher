@@ -487,6 +487,44 @@ export async function loadRemoteUi(): Promise<RemoteUiLoad | null> {
   return { module, version: current.manifest.version, source }
 }
 
+/** The file a lazy screen starts from: `c-<screen>-<hash>.js`, not a longer name that merely begins the same. */
+export function screenChunk(m: RemoteUiManifest, screen: string): RemoteUiChunk | null {
+  const re = new RegExp(`^c-${screen}-[\\w-]{8}\\.js$`)
+  return (m.chunks ?? []).find((c) => re.test(chunkName(m, c))) ?? null
+}
+
+/**
+ * Puts a lazy screen's files (and the live bundle itself) on disk ahead of the click. Only verified text is
+ * stored and nothing is executed, so it costs a few reads while the lobby is idle.
+ */
+export async function prefetchRemoteScreen(screen: string): Promise<boolean> {
+  try {
+    if (!remoteUiEnabled()) return false
+    const disk = await idbGet<RemoteUiBundle>('current')
+    const ok = await bundleOk(disk)
+    const b = (await refreshRemoteUi(ok ? disk : null)) ?? (ok ? disk : null)
+    if (!b) return false
+    const m = b.manifest
+    const known = new Map((m.chunks ?? []).map((c) => [chunkName(m, c), c]))
+    const first = screenChunk(m, screen)
+    if (!first) return false
+    const seen = new Set<string>()
+    const pull = async (name: string): Promise<void> => {
+      if (seen.has(name)) return
+      seen.add(name)
+      const c = known.get(name)
+      if (!c) return
+      const text = await chunkText(c)
+      if (name.endsWith('.js')) await Promise.all(staticDeps(text, (n) => known.has(n)).map(pull))
+    }
+    await Promise.all([pull(chunkName(m, first)), pull('ui-ext.css')])
+    return true
+  } catch (e) {
+    console.warn('[remote-ui] prefetch', e)
+    return false
+  }
+}
+
 /**
  * The running version lost a chunk or its screen gave up: fetch the live manifest and make the live bundle
  * current. true = a different, verified version is ready to mount; false = nothing newer, use the built-in screen.

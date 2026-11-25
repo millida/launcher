@@ -172,7 +172,7 @@ export function CreatorCode() {
               />
             </span>
             <button type="submit" className="btn lg primary" disabled={!code.trim() || busy} data-track="creator_apply">
-              {t('Ок')}
+              {t('Поддержать')}
             </button>
           </form>
         )}

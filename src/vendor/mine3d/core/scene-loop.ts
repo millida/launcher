@@ -406,7 +406,7 @@ export class SkinViewEngine {
       antialias: options.antialias ?? true,
       preserveDrawingBuffer: options.preserveDrawingBuffer === true,
       alpha: true,
-      premultipliedAlpha: false,
+      premultipliedAlpha: options.premultipliedAlpha === true,
       powerPreference: "high-performance",
     });
     // Имя видеокарты нужно до выбора плотности и частоты кадров: по нему

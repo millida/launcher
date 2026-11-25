@@ -21,7 +21,8 @@ import { useHasMillida } from '../../state/auth'
 import { getAccount, lookOwner, useAccounts } from '../../state/accounts'
 import { buildCosmetic } from '../../lib/cosmeticModel'
 import { wearParticles, type ParticleShow } from '../../lib/cosmeticParticles'
-import { hasParticles, particlesOf, particlesStill } from '../../lib/cosmeticParticleData'
+import { SHOWCASE_WARM_SECONDS, hasParticles, particlesOf, particlesStill } from '../../lib/cosmeticParticleData'
+import { turntable } from '../../lib/turntable'
 import { SHOP_YAW } from '../../lib/outfitSnapshot'
 import { hidesRegularCape, maskUrls, pieceCover } from '../../lib/cosmeticCover'
 import { maskedSkin } from '../../lib/maskedSkin'
@@ -381,6 +382,7 @@ export function LobbyCharacter({
     () => (baseLook && shop ? { ...baseLook, items: dressItems.items, show: [], dressKey: dressItems.key } : baseLook),
     [baseLook, dressItems, shop],
   )
+  const showsEffect = !!shop && !!look && look.items.length === 1 && look.items.some((x) => hasParticles(x.item.slot))
   // Показываем только одетого персонажа с окончательным кадром: иначе он
   // появлялся голым, а потом кадр перескакивал под плащ и вещи.
   const [skinFor, setSkinFor] = useState('')
@@ -622,7 +624,9 @@ export function LobbyCharacter({
       // Кадр — по одному телу: крылья, питомец и плащ его не двигают. Ник —
       // над самой высокой вещью в нейтральной стойке, по центру тела.
       const scene = g.scene || h
-      const frame = shop ? { fillY: 0.6, offsetY: 1 - 2 * 0.86 + 0.6 } : lobbyFrame(h, g.top, scene)
+      // An effect reaches past the figure: rings of flame and lightning need room above the head.
+      const fill = showsEffect ? 0.53 : 0.6
+      const frame = shop ? { fillY: fill, offsetY: 1 - 2 * 0.86 + fill } : lobbyFrame(h, g.top, scene)
       // Размер фигуры всегда один, при любых вещах (владелец 22:35).
       const r = engine.fitPlayerToFrame(frame)
       if (!shop) geomRef.current = { w, h, top: g.top, scene }
@@ -681,6 +685,7 @@ export function LobbyCharacter({
         autoDetectModel: false,
         transparent: true,
         enableControls: false,
+        premultipliedAlpha: true,
       })
     } catch (e) {
       console.warn('[lobby] engine: нет контекста WebGL, пока плоская фигурка', e)
@@ -836,7 +841,7 @@ export function LobbyCharacter({
       fit()
       setDressedFor(outfitKey(look))
     }
-    const dressOne = (got: (typeof worn)[number] & { file: Awaited<ReturnType<typeof cosmeticModel>> }) => {
+    const dressOne = async (got: (typeof worn)[number] & { file: Awaited<ReturnType<typeof cosmeticModel>> }): Promise<void> => {
       if (got.item.slot === 'EMOTE' && !wornEmoteLoops(!!shop)) return
       let emote: { sequence: ReturnType<typeof emoteSequence>; playing: CosmeticEmote | null } | null = null
       if (got.item.slot === 'EMOTE' && got.file?.animations) {
@@ -876,28 +881,41 @@ export function LobbyCharacter({
           if (emote?.playing) emoteProps.push(piece)
           dressed = true
         }
-        if (dressed) dressedCount += 1
       } catch {
         // Кривая модель не гасит главную: вещь просто не покажется.
       }
-      if (!hasParticles(got.item.slot)) return
-      const texture = got.texture
-      void particlesOf(got.item.model).then((raw) => {
+      if (hasParticles(got.item.slot)) {
+        const raw = await particlesOf(got.item.model)
         if (!alive) return
-        const show = wearParticles(raw, geometry, texture, got.item.animation, particlesStill(liteRef.current), (anchor, object) =>
-          engine.attachCosmetic(anchor, object),
+        const still = particlesStill(liteRef.current)
+        const show = wearParticles(
+          raw,
+          geometry,
+          got.texture,
+          got.item.animation,
+          shop ? { still, lit: true, warm: SHOWCASE_WARM_SECONDS } : { still },
+          (anchor, object) => engine.attachCosmetic(anchor, object),
         )
-        if (show) shows.push(show)
-      })
+        // Most effects are particles alone, without a single cube: they are worn all the same.
+        if (show) {
+          shows.push(show)
+          dressed = true
+        }
+      }
+      if (dressed) dressedCount += 1
     }
     if (!worn.length) {
       reveal()
       if (shop && look.dressKey === dressKeyRef.current) onDressedRef.current?.(0)
     }
     for (const x of worn) {
-      void cosmeticModel(x.item.model as string).then((file) => {
+      void cosmeticModel(x.item.model as string).then(async (file) => {
         if (!alive) return
-        dressOne({ ...x, file })
+        const dressing = dressOne({ ...x, file })
+        // In the lobby the figure does not wait for the particles of an effect.
+        if (!shop) reveal()
+        await dressing
+        if (!alive) return
         reveal()
         settled += 1
         if (settled === worn.length) {
@@ -1097,6 +1115,11 @@ export function LobbyCharacter({
   }, [glFail])
 
   const drag = useRef<{ x: number; yaw: number } | null>(null)
+  useEffect(() => {
+    const engine = viewerRef.current
+    if (!engine || !showsEffect || !awake || !shown || particlesStill(lite)) return
+    return turntable(engine, () => drag.current !== null)
+  }, [showsEffect, awake, shown, lite, ready])
   const stageParty = usePartyStage(ready ? viewerRef.current : null, m3d, ready, !shop && on)
 
   // Возврат в лобби: сцена, потерявшая контекст вне лобби, собирается заново.

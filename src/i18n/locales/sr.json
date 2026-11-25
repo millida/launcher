@@ -4566,6 +4566,7 @@
   "Подарок за первый код автора": "Poklon za prvi kod autora",
   "Часть с твоих покупок — автору": "Deo tvojih kupovina — autoru",
   "Поддержи автора": "Podrži autora",
+  "Поддержать": "Podrži",
   "Автор получит деньги с твоих покупок": "Autor će dobiti novac od tvojih kupovina",
   "Убрать код": "Ukloni kod",
   "КОД": "KOD",
@@ -6952,8 +6953,27 @@
   "Подарить за {price}": "Pokloni za {price}",
   "Подарок для {nick}": "Poklon za {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Plaća se sa Millida stanja, bez vezivanja kartice i automatskog obnavljanja",
-  "Рубины: {n}": "Rubini: {n}",
+  "Рубины: {n}": "Rubini: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Folderi koji nisu prebačeni: {list}. Ostali su u starom launcheru",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Folderi modova u zajedničkom .minecraft. Označi koje da prebaciš u modpak",
-  "Эту папку нельзя перенести: {0}": "Ovaj folder ne može da se prebaci: {0}"
+  "Эту папку нельзя перенести: {0}": "Ovaj folder ne može da se prebaci: {0}",
+  "Кейсы": "Kovčezi",
+  "Приваты": "Posedovanje zemlje",
+  "Ивенты": "Događaji",
+  "Кастомные предметы": "Prilagođeni predmeti",
+  "Кастомные мобы": "Prilagođena bića",
+  "Аукцион": "Aukcijska kuća",
+  "Профессии": "Poslovi",
+  "Кроссплей": "Crossplay",
+  "Донат не решает": "Nije pay-to-win",
+  "Имя или адрес": "Ime ili adresa",
+  "Рекомендации": "Preporuke",
+  "Заявлено {n}, по оценке Millida играют меньше": "Prijavljeno {n}, po proceni Millida igra manje",
+  "Онлайн проверен Millida": "Broj igrača proverila Millida",
+  "Баллы продвижения": "Poeni promocije",
+  "Голосов за 30 дней": "Glasova za 30 dana",
+  "По заявке": "Prijavom",
+  "Размести свой сервер здесь": "Postavi svoj server ovde",
+  "Раскрутить сервер": "Promoviši server"
 }

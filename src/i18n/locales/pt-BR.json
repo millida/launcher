@@ -2974,6 +2974,7 @@
   "Поддержать автора": "Apoie o autor",
   "Поддержать автора · {platform}": "Apoie o autor · {platform}",
   "Поддержи автора": "Apoie um criador",
+  "Поддержать": "Apoiar",
   "Поддержка": "Suporte",
   "Поддержка модов": "Suporte a mods",
   "Поделиться": "Compartilhar",
@@ -6952,8 +6953,27 @@
   "Подарить за {price}": "Presentear por {price}",
   "Подарок для {nick}": "Um presente para {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Pago com o saldo Millida, sem vincular cartão e sem renovação automática",
-  "Рубины: {n}": "Rubis: {n}",
+  "Рубины: {n}": "Rubis: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Pastas não movidas: {list}. Elas ficaram no launcher antigo",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Pastas de mods no .minecraft compartilhado. Marque as que devem ir para o modpack",
-  "Эту папку нельзя перенести: {0}": "Esta pasta não pode ser movida: {0}"
+  "Эту папку нельзя перенести: {0}": "Esta pasta não pode ser movida: {0}",
+  "Кейсы": "Caixas",
+  "Приваты": "Claims de terreno",
+  "Ивенты": "Eventos",
+  "Кастомные предметы": "Itens personalizados",
+  "Кастомные мобы": "Mobs personalizados",
+  "Аукцион": "Leilão",
+  "Профессии": "Profissões",
+  "Кроссплей": "Crossplay",
+  "Донат не решает": "Sem pay-to-win",
+  "Имя или адрес": "Nome ou endereço",
+  "Рекомендации": "Recomendações",
+  "Заявлено {n}, по оценке Millida играют меньше": "Declara {n}; segundo a Millida, jogam menos",
+  "Онлайн проверен Millida": "Jogadores online verificados pela Millida",
+  "Баллы продвижения": "Pontos de promoção",
+  "Голосов за 30 дней": "Votos em 30 dias",
+  "По заявке": "Por inscrição",
+  "Размести свой сервер здесь": "Coloque seu servidor aqui",
+  "Раскрутить сервер": "Divulgar servidor"
 }

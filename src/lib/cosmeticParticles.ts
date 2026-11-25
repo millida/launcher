@@ -1,5 +1,4 @@
 import {
-  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   DoubleSide,
@@ -9,6 +8,7 @@ import {
   NearestFilter,
   NormalBlending,
   Object3D,
+  PointLight,
   Quaternion,
   SRGBColorSpace,
   TextureLoader,
@@ -22,6 +22,7 @@ import { readCosmeticMesh, readLocators } from './cosmeticGeometry'
 import { anchorShift, buildRig, type CosmeticAnchor } from './cosmeticPlacement'
 import { poseJoint } from './cosmeticModel'
 import { PARTICLE_WARM_SECONDS } from './cosmeticParticleData'
+import { LightMap, haloTexture, lightMaterial, type Rgb } from './cosmeticGlow'
 
 export interface ParticlePack {
   effects: Record<string, unknown>
@@ -47,6 +48,23 @@ const MAX_EMITTERS = 96
 const TRANSIENT_SECONDS = 5
 const MAX_STEP = 0.1
 const WARM_STEP = 1 / 30
+
+/** Soft light around a bright particle: how far it reaches past the sprite, and how strong it is. */
+const HALO_REACH = 1.7
+const HALO_PAD = 0.06
+const HALO_POWER = 0.34
+/** Sprites this big (blocks) are light by themselves: a halo around them would only wash the figure out. */
+const HALO_FULL = 0.16
+const HALO_NONE = 0.9
+/** Effects drawn with plain transparency that are fire all the same. */
+const HOT = /magma|blaze|ember|demonic/
+const COLD = /smoke|dust|ash/
+/** The light an effect throws on the figure and on the floor in a showcase. */
+const LAMP_POWER = 2.6
+const LAMP_REACH = 64
+const LAMP_EASE = 5
+const FLOOR_RADIUS = 1.35
+const FLOOR_POWER = 0.5
 
 const roll = () => Math.random()
 const DEG = Math.PI / 180
@@ -355,6 +373,7 @@ type Uv =
 interface Def {
   id: string
   additive: boolean
+  glow: number
   cutout: boolean
   curves: Curve[]
   init: Step | null
@@ -467,6 +486,7 @@ function readDef(id: string, raw: unknown): Def | null {
   return {
     id,
     additive: material.includes('add'),
+    glow: material.includes('add') ? 1 : HOT.test(id) && !COLD.test(id) ? 0.6 : 0,
     cutout: material === 'particles_alpha',
     curves: readCurves(effect['curves']),
     init: program(init?.['creation_expression']),
@@ -616,28 +636,107 @@ export function particlePack(raw: unknown): ParticlePack | null {
   return { effects: effects as Record<string, unknown>, animations: animations as Record<string, unknown>, triggers }
 }
 
+/** Buffers for `size` quads: corners, picture coordinates, colours. */
+function quads(size: number): BufferGeometry {
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(new Float32Array(size * 12), 3))
+  geometry.setAttribute('uv', new BufferAttribute(new Float32Array(size * 8), 2))
+  geometry.setAttribute('color', new BufferAttribute(new Float32Array(size * 16), 4))
+  const index = new Uint32Array(size * 6)
+  for (let i = 0; i < size; i += 1) index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6)
+  geometry.setIndex(new BufferAttribute(index, 1))
+  geometry.setDrawRange(0, 0)
+  return geometry
+}
+
+class Halo {
+  readonly mesh: Mesh
+  private capacity = 64
+  private n = 0
+
+  constructor(spot: Texture) {
+    this.mesh = new Mesh(this.fresh(), lightMaterial(spot))
+    this.mesh.frustumCulled = false
+    this.mesh.renderOrder = 9
+  }
+
+  private fresh(): BufferGeometry {
+    const geometry = quads(this.capacity)
+    const uv = geometry.getAttribute('uv').array as Float32Array
+    for (let i = 0; i < this.capacity; i += 1) uv.set([0, 0, 1, 0, 1, 1, 0, 1], i * 8)
+    return geometry
+  }
+
+  begin(count: number): void {
+    this.n = 0
+    if (count <= this.capacity) return
+    while (this.capacity < count) this.capacity *= 2
+    this.mesh.geometry.dispose()
+    this.mesh.geometry = this.fresh()
+  }
+
+  put(at: Vector3, reach: number, light: Rgb, power: number, right: Vector3, up: Vector3): void {
+    const p = this.mesh.geometry.getAttribute('position').array as Float32Array
+    const c = this.mesh.geometry.getAttribute('color').array as Float32Array
+    for (let corner = 0; corner < 4; corner += 1) {
+      const x = corner === 1 || corner === 2 ? reach : -reach
+      const y = corner > 1 ? reach : -reach
+      const o = this.n * 12 + corner * 3
+      p[o] = at.x + right.x * x + up.x * y
+      p[o + 1] = at.y + right.y * x + up.y * y
+      p[o + 2] = at.z + right.z * x + up.z * y
+      const k = this.n * 16 + corner * 4
+      c[k] = light[0]
+      c[k + 1] = light[1]
+      c[k + 2] = light[2]
+      c[k + 3] = power
+    }
+    this.n += 1
+  }
+
+  end(): void {
+    ;(this.mesh.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true
+    ;(this.mesh.geometry.getAttribute('color') as BufferAttribute).needsUpdate = true
+    this.mesh.geometry.setDrawRange(0, this.n * 6)
+  }
+
+  dispose(): void {
+    this.mesh.geometry.dispose()
+    ;(this.mesh.material as MeshBasicMaterial).dispose()
+  }
+}
+
 class Batch {
   readonly mesh: Mesh
+  readonly halo: Halo | null
+  /** Light of this batch in the last drawn frame: the sum of colours and its weight. */
+  readonly shed: Rgb = [0, 0, 0]
+  weight = 0
   private capacity = 0
   private geometry = new BufferGeometry()
 
   constructor(
     readonly def: Def,
     texture: Texture,
+    private readonly lights: LightMap,
   ) {
-    const material = new MeshBasicMaterial({
-      map: texture,
-      vertexColors: true,
-      transparent: !def.cutout,
-      alphaTest: def.cutout ? 0.5 : 0.01,
-      depthWrite: def.cutout,
-      side: DoubleSide,
-      blending: def.additive ? AdditiveBlending : NormalBlending,
-    })
+    const material = def.additive
+      ? lightMaterial(texture)
+      : new MeshBasicMaterial({
+          map: texture,
+          vertexColors: true,
+          transparent: !def.cutout,
+          alphaTest: def.cutout ? 0.5 : 0.01,
+          depthWrite: def.cutout,
+          side: DoubleSide,
+          blending: NormalBlending,
+        })
     this.mesh = new Mesh(this.geometry, material)
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 10
     this.grow(64)
+    const spot = def.glow > 0 ? haloTexture() : null
+    this.halo = spot ? new Halo(spot) : null
   }
 
   private grow(count: number): void {
@@ -645,14 +744,7 @@ class Batch {
     let size = Math.max(64, this.capacity)
     while (size < count) size *= 2
     this.capacity = size
-    const geometry = new BufferGeometry()
-    geometry.setAttribute('position', new BufferAttribute(new Float32Array(size * 12), 3))
-    geometry.setAttribute('uv', new BufferAttribute(new Float32Array(size * 8), 2))
-    geometry.setAttribute('color', new BufferAttribute(new Float32Array(size * 16), 4))
-    const index = new Uint32Array(size * 6)
-    for (let i = 0; i < size; i += 1) index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6)
-    geometry.setIndex(new BufferAttribute(index, 1))
-    geometry.setDrawRange(0, 0)
+    const geometry = quads(size)
     this.geometry.dispose()
     this.geometry = geometry
     this.mesh.geometry = geometry
@@ -675,6 +767,11 @@ class Batch {
     const u = new Vector3()
     const dir = new Vector3()
     let n = 0
+    const halo = this.lights.ready ? this.halo : null
+    const light: Rgb = [1, 1, 1]
+    this.shed.fill(0)
+    this.weight = 0
+    halo?.begin(total)
     for (const emitter of emitters) {
       if (emitter.def !== def) continue
       for (const particle of emitter.particles) {
@@ -719,8 +816,21 @@ class Batch {
         const k = n * 16
         for (let corner = 0; corner < 4; corner += 1) c.set(rgba, k + corner * 4)
         n += 1
+        if (!halo) continue
+        const bright = this.lights.at(u0, v0, u1, v1, light) * rgba[3]
+        if (bright < 0.01) continue
+        const size = Math.max(Math.abs(w), Math.abs(h))
+        const near = Math.min(1, Math.max(0, (HALO_NONE - size) / (HALO_NONE - HALO_FULL)))
+        const share = bright * def.glow * size
+        for (let i = 0; i < 3; i += 1) {
+          light[i] = (light[i] as number) * (rgba[i] as number)
+          this.shed[i] = (this.shed[i] as number) + (light[i] as number) * share
+        }
+        this.weight += share
+        if (near > 0) halo.put(center, size * HALO_REACH + HALO_PAD, light, Math.min(1, Math.sqrt(bright)) * def.glow * near * HALO_POWER, right, up)
       }
     }
+    halo?.end()
     position.needsUpdate = true
     uv.needsUpdate = true
     color.needsUpdate = true
@@ -730,6 +840,51 @@ class Batch {
   dispose(): void {
     this.geometry.dispose()
     ;(this.mesh.material as MeshBasicMaterial).dispose()
+    this.halo?.dispose()
+  }
+}
+
+/** The light an effect throws: on the figure (a lamp at the chest) and on the floor (a spot under the feet). */
+class Lamp {
+  readonly light = new PointLight(0xffffff, 0, LAMP_REACH, 1)
+  readonly floor: Halo | null
+  private readonly color: Rgb = [1, 1, 1]
+  private power = 0
+  private readonly at = new Vector3(0, 0.02, 0)
+  private readonly right = new Vector3(1, 0, 0)
+  private readonly ahead = new Vector3(0, 0, -1)
+
+  constructor(home: Group) {
+    const spot = haloTexture()
+    this.floor = spot ? new Halo(spot) : null
+    this.light.position.set(0, 0.9, 1.15)
+    home.add(this.light)
+    if (this.floor) home.add(this.floor.mesh)
+  }
+
+  /** Eases to the light of the frame, so single particles do not make it flicker; a negative step jumps to it. */
+  follow(batches: readonly Batch[], dt: number): void {
+    let weight = 0
+    const sum: Rgb = [0, 0, 0]
+    for (const batch of batches) {
+      weight += batch.weight
+      for (let i = 0; i < 3; i += 1) sum[i] = (sum[i] as number) + (batch.shed[i] as number)
+    }
+    const k = dt < 0 ? 1 : 1 - Math.exp(-dt * LAMP_EASE)
+    const top = Math.max(sum[0], sum[1], sum[2])
+    if (top > 0) for (let i = 0; i < 3; i += 1) this.color[i] = (this.color[i] as number) + ((sum[i] as number) / top - (this.color[i] as number)) * k
+    this.power += (Math.min(1, Math.sqrt(weight)) - this.power) * k
+    this.light.color.setRGB(this.color[0], this.color[1], this.color[2])
+    this.light.intensity = this.power * LAMP_POWER
+    if (!this.floor) return
+    this.floor.begin(1)
+    this.floor.put(this.at, FLOOR_RADIUS, this.color, this.power * FLOOR_POWER, this.right, this.ahead)
+    this.floor.end()
+  }
+
+  dispose(): void {
+    this.light.dispose()
+    this.floor?.dispose()
   }
 }
 
@@ -803,6 +958,15 @@ function context(parent?: Record<string, number>): Ctx {
   return { animTime: 0, lifeTime: 0, vars: Object.create(parent ?? null) as Record<string, number>, random: roll }
 }
 
+export interface ParticleOptions {
+  /** Nobody runs the effect but `advance`: a still frame, or a shot taken step by step. */
+  still?: boolean
+  /** The effect also lights the figure and the floor: the shop window, card shots. */
+  lit?: boolean
+  /** Seconds the effect has already run when it is first seen. */
+  warm?: number
+}
+
 export class ParticleShow {
   readonly pieces: ParticlePiece[] = []
   readonly usable: boolean
@@ -824,6 +988,10 @@ export class ParticleShow {
   private holding = false
   private last = 0
   private warm: number
+  private readonly frozen: boolean
+  private readonly lights = new LightMap()
+  private readonly lamp: Lamp | null = null
+  private lampAt = -1
   private readonly right = new Vector3(1, 0, 0)
   private readonly up = new Vector3(0, 1, 0)
   private readonly back = new Vector3(0, 0, 1)
@@ -833,10 +1001,10 @@ export class ParticleShow {
     geometry: unknown,
     textureUrl: string,
     clipName?: string,
-    private readonly frozen = false,
-    warmSeconds = 1,
+    options: ParticleOptions = {},
   ) {
-    this.warm = frozen ? 0 : warmSeconds
+    this.frozen = options.still === true
+    this.warm = this.frozen ? 0 : (options.warm ?? 1)
     for (const [id, raw] of Object.entries(pack.effects)) {
       const def = readDef(id, raw)
       if (def) this.defs.set(id, def)
@@ -863,11 +1031,13 @@ export class ParticleShow {
     this.entity.position.y = -FEET_BELOW_NECK
     this.entity.scale.setScalar(PIXELS_PER_BLOCK)
     for (const def of this.defs.values()) {
-      const batch = new Batch(def, this.texture)
+      const batch = new Batch(def, this.texture, this.lights)
       batch.mesh.onBeforeRender = (_renderer, _scene, camera) => this.frame(batch, camera)
       this.batches.push(batch)
       this.entity.add(batch.mesh)
+      if (batch.halo) this.entity.add(batch.halo.mesh)
     }
+    if (options.lit && this.batches.some((batch) => batch.halo)) this.lamp = new Lamp(this.entity)
     this.pieces.push({ anchor: 'root', object: this.entity })
   }
 
@@ -932,6 +1102,10 @@ export class ParticleShow {
   }
 
   private draw(batch: Batch, camera: Camera): void {
+    if (batch === this.batches[0]) {
+      this.lights.read(this.texture.image)
+      this.shine()
+    }
     if (!this.frozen && batch === this.batches[0]) {
       const now = performance.now()
       if (this.warm > 0) {
@@ -951,6 +1125,13 @@ export class ParticleShow {
     this.up.set(0, 1, 0).applyQuaternion(turn)
     this.back.set(0, 0, 1).applyQuaternion(turn)
     batch.fill(this.emitters, this.right, this.up, this.back)
+  }
+
+  private shine(): void {
+    if (!this.lamp) return
+    const now = performance.now()
+    this.lamp.follow(this.batches, this.frozen || this.lampAt < 0 ? -1 : (now - this.lampAt) / 1000)
+    if (this.batches.some((batch) => batch.weight > 0)) this.lampAt = now
   }
 
   private where(locator: string | null): (out: Vector3) => Vector3 {
@@ -1239,14 +1420,15 @@ export class ParticleShow {
 
   dispose(): void {
     for (const batch of this.batches) batch.dispose()
+    this.lamp?.dispose()
     this.texture.dispose()
     this.emitters.length = 0
   }
 }
 
-export function startParticles(pack: ParticlePack, geometry: unknown, textureUrl: string, clipName?: string, frozen = false): ParticleShow | null {
+export function startParticles(pack: ParticlePack, geometry: unknown, textureUrl: string, clipName?: string, options: ParticleOptions = {}): ParticleShow | null {
   try {
-    const show = new ParticleShow(pack, geometry, textureUrl, clipName, frozen)
+    const show = new ParticleShow(pack, geometry, textureUrl, clipName, options)
     if (show.usable) return show
     show.dispose()
     return null
@@ -1260,13 +1442,13 @@ export function wearParticles(
   geometry: unknown,
   textureUrl: string,
   clipName: string | undefined,
-  still: boolean,
+  options: ParticleOptions,
   attach: (anchor: CosmeticAnchor, object: Object3D) => void,
 ): ParticleShow | null {
   const pack = particlePack(raw)
-  const show = pack ? startParticles(pack, geometry, textureUrl, clipName, still) : null
+  const show = pack ? startParticles(pack, geometry, textureUrl, clipName, options) : null
   if (!show) return null
   for (const piece of show.pieces) attach(piece.anchor, piece.object)
-  if (still) show.advance(PARTICLE_WARM_SECONDS)
+  if (options.still) show.advance(options.warm ?? PARTICLE_WARM_SECONDS)
   return show
 }

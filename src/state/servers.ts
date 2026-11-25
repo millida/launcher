@@ -9,7 +9,7 @@ import { trackFailure } from '../lib/telemetry'
 import { DEFAULT_FILTERS, pageUrl, type ServerFilters } from '../lib/serverQuery'
 import { t } from '../i18n'
 
-const catName = (): Record<string, string> => ({
+export const catName = (): Record<string, string> => ({
   SURVIVAL: t('Выживание'),
   VANILLA: t('Ванилла'),
   MMORPG: t('РПГ'),
@@ -97,6 +97,13 @@ export interface RatingServer {
   categories?: string[]
   motd?: string
   license?: string
+  onlineReal?: number | null
+  onlineSuspect?: boolean
+  onlineVerified?: boolean
+  votes30d?: number
+  features?: string[]
+  createdAt?: string
+  boostPoints?: number
 }
 
 /**
@@ -125,6 +132,9 @@ export const toCard = (sv: RatingServer, rank: number): SnapshotServer => ({
   cat: catName()[(sv.categories || ['OTHER'])[0]] || t('Разное'),
   motd: (sv.motd || '').slice(0, 120),
   lic: sv.license || '',
+  onlineReal: sv.onlineReal ?? null,
+  onlineSuspect: sv.onlineSuspect === true,
+  onlineVerified: sv.onlineVerified === true,
 })
 
 interface RatingPage {
