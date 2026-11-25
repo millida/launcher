@@ -6952,8 +6952,27 @@
   "Подарить за {price}": "Darovať za {price}",
   "Подарок для {nick}": "Darček pre {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Platí sa zo zostatku Millida, bez viazania karty a bez automatického obnovenia",
-  "Рубины: {n}": "Rubíny: {n}",
+  "Рубины: {n}": "Rubíny: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Nepresunuté priečinky: {list}. Zostali v starom launcheri",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Priečinky módov v spoločnom .minecraft. Označ, ktoré presunúť do modpacku",
-  "Эту папку нельзя перенести: {0}": "Tento priečinok sa nedá presunúť: {0}"
+  "Эту папку нельзя перенести: {0}": "Tento priečinok sa nedá presunúť: {0}",
+  "Кейсы": "Crates",
+  "Приваты": "Nároky na pozemky",
+  "Ивенты": "Eventy",
+  "Кастомные предметы": "Vlastné predmety",
+  "Кастомные мобы": "Vlastné moby",
+  "Аукцион": "Aukčný dom",
+  "Профессии": "Práce",
+  "Кроссплей": "Crossplay",
+  "Донат не решает": "Nie pay-to-win",
+  "Имя или адрес": "Názov alebo adresa",
+  "Рекомендации": "Odporúčané",
+  "Заявлено {n}, по оценке Millida играют меньше": "Uvádza {n}, podľa Millida hrá menej",
+  "Онлайн проверен Millida": "Počet hráčov overený Millida",
+  "Баллы продвижения": "Propagačné body",
+  "Голосов за 30 дней": "Hlasy za 30 dní",
+  "По заявке": "Na základe prihlášky",
+  "Размести свой сервер здесь": "Umiestni sem svoj server",
+  "Раскрутить сервер": "Propagovať server"
 }

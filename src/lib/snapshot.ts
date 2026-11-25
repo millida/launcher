@@ -14,4 +14,15 @@ export interface SnapshotServer {
   cat: string
   motd: string
   lic: string
+  /** Честный онлайн (поля рейтинга): оценка Millida и признаки, логика как на millida.net/rating. */
+  onlineReal?: number | null
+  onlineSuspect?: boolean
+  onlineVerified?: boolean
+  votes?: number
+  tags?: string[]
+  createdAt?: string
+  /** Промо-баллы (boostPoints): ракета рядом с именем. */
+  boost?: number
+  /** Первая строка MOTD с §-кодами, без эмодзи. */
+  motdLine?: string
 }

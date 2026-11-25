@@ -122,6 +122,12 @@ export function pickClip(
 export interface CosmeticPiece {
   anchor: CosmeticAnchor
   object: Object3D
+  /**
+   * Puts the bones of the whole item where its clock says. Drawing does this too, but only after
+   * the matrices of that frame are computed, so a single shot taken without it shows the props one
+   * frame behind the player.
+   */
+  pose(): void
 }
 
 function boneGeometry(bone: RigBone): BufferGeometry | null {
@@ -282,51 +288,51 @@ export function buildCosmetic(
 
   if (!drawn) return []
 
+  const started = performance.now()
+  const pose = () => {
+    const seconds = cosmeticClock.now ? cosmeticClock.now() : (performance.now() - started) / 1000
+    if (frames > 1) {
+      const at = Math.floor(seconds * ATLAS_FPS) % frames
+      const offset = 1 - (at + 1) / frames
+      if (texture.offset.y !== offset) {
+        texture.offset.y = offset
+        texture.needsUpdate = true
+        if (glow) {
+          glow.offset.y = offset
+          glow.needsUpdate = true
+        }
+      }
+    }
+    const at = timeline ? timeline.clock() : seconds
+    const playing = timeline ? timeline.sequence.clipAt(at) : clip
+    const time = timeline ? timeline.sequence.timeAt(at) : seconds
+    if (!playing) return
+    for (let i = 0; i < rig.bones.length; i += 1) {
+      const bone = rig.bones[i] as RigBone
+      const joint = joints[i] as Object3D
+      const bonePose = poseOf(playing, bone.name, time)
+      if (!bonePose) continue
+      poseJoint(joint, bone.rotation, bonePose.rotation)
+      joint.position.set(
+        bone.offset[0] + bonePose.position[0],
+        bone.offset[1] + bonePose.position[1],
+        bone.offset[2] + bonePose.position[2],
+      )
+      joint.scale.set(bonePose.scale[0], bonePose.scale[1], bonePose.scale[2])
+    }
+  }
+
   // A hidden joint is never rendered, so the clock must hang on a drawn one.
   const first = joints.find((joint, index) => !hidden[index] && joint.children.some((child) => (child as Mesh).isMesh))
   const ticker = first ? (first.children.find((child) => (child as Mesh).isMesh) as Mesh) : null
-  if (ticker) {
-    const started = performance.now()
-    ticker.onBeforeRender = () => {
-      const seconds = cosmeticClock.now ? cosmeticClock.now() : (performance.now() - started) / 1000
-      if (frames > 1) {
-        const at = Math.floor(seconds * ATLAS_FPS) % frames
-        const offset = 1 - (at + 1) / frames
-        if (texture.offset.y !== offset) {
-          texture.offset.y = offset
-          texture.needsUpdate = true
-          if (glow) {
-            glow.offset.y = offset
-            glow.needsUpdate = true
-          }
-        }
-      }
-      const at = timeline ? timeline.clock() : seconds
-      const playing = timeline ? timeline.sequence.clipAt(at) : clip
-      const time = timeline ? timeline.sequence.timeAt(at) : seconds
-      if (!playing) return
-      for (let i = 0; i < rig.bones.length; i += 1) {
-        const bone = rig.bones[i] as RigBone
-        const joint = joints[i] as Object3D
-        const pose = poseOf(playing, bone.name, time)
-        if (!pose) continue
-        poseJoint(joint, bone.rotation, pose.rotation)
-        joint.position.set(
-          bone.offset[0] + pose.position[0],
-          bone.offset[1] + pose.position[1],
-          bone.offset[2] + pose.position[2],
-        )
-        joint.scale.set(pose.scale[0], pose.scale[1], pose.scale[2])
-      }
-    }
-  }
+  if (ticker) ticker.onBeforeRender = pose
 
   // An emote file carries the whole player skeleton, its empty `cape` group
   // included. Handed to the figure, that group counted as a worn cape and hid
   // the account cape, and nothing brought it back once the emote ended.
   return Array.from(roots.entries())
     .filter(([, object]) => holdsMesh(object))
-    .map(([anchor, object]) => ({ anchor, object }))
+    .map(([anchor, object]) => ({ anchor, object, pose }))
 }
 
 function holdsMesh(root: Object3D): boolean {

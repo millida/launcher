@@ -2,12 +2,12 @@ import { RECS_UID_KEY, dayIndex, hashStr } from '../../lib/recsMix'
 
 /**
  * Баннер справа в лобби — карусель (владелец 11.10.2026: «реклама, которая раз
- * в минуту меняется»): чат игроков в Discord, подписка на Telegram, наша анархия, Аркания, PrisonRPG и
- * сервер PvP-тиров. Порядок — как сказал владелец.
+ * в минуту меняется»). С 25.11.2026 из сборок и серверов в ней только Аркания, она и открывает карусель:
+ * Анархию, PrisonRPG и «Абонент» владелец убрал, карточки их слайдов остались в Recommend.tsx.
  */
 export type PromoSlide = 'collection' | 'abonent' | 'discord' | 'telegram' | 'anarchy' | 'arcania' | 'prisonrpg' | 'smp' | 'invite'
 
-export const PROMO_ORDER: PromoSlide[] = ['discord', 'telegram', 'anarchy', 'arcania', 'prisonrpg', 'smp', 'invite']
+export const PROMO_ORDER: PromoSlide[] = ['arcania', 'discord', 'telegram', 'smp', 'invite']
 /** Слайд держится 7 секунд (владелец 11.10.2026: «минута — слишком долго»); наведение держит. */
 export const PROMO_ROTATE_MS = 7_000
 
@@ -22,16 +22,10 @@ export const telegramChat = (ruContent: boolean) => (ruContent ? TELEGRAM_CHAT :
 export { ARCANIA_SLUG } from '../../lib/arcaniaRelease'
 
 /** Слайды, которые сейчас можно показать: сборка без карточки в каталоге выпадает. */
-/** A fresh release of a partner pack opens the carousel (Abonent, 10.11.2026), ahead of the owner-ordered slides. */
-export function promoSlides(ready: { arcania: boolean; prisonrpg: boolean; invite: boolean; partners: boolean; ruContent: boolean; abonent?: boolean; collection?: boolean }): PromoSlide[] {
-  const release: PromoSlide[] = [...(ready.collection ? (['collection'] as const) : []), ...(ready.abonent && ready.partners ? (['abonent'] as const) : [])]
-  return release.concat(PROMO_ORDER.filter((s) =>
-    s === 'arcania' ? ready.arcania
-    : s === 'prisonrpg' ? ready.prisonrpg && ready.partners
-    : s === 'anarchy' ? ready.partners
-    : s === 'invite' ? ready.invite
-    : true,
-  ))
+/** A running cosmetics collection is the freshest news: it opens the carousel ahead of the owner-ordered slides. */
+export function promoSlides(ready: { arcania: boolean; invite: boolean; collection?: boolean }): PromoSlide[] {
+  const release: PromoSlide[] = ready.collection ? ['collection'] : []
+  return release.concat(PROMO_ORDER.filter((s) => (s === 'arcania' ? ready.arcania : s === 'invite' ? ready.invite : true)))
 }
 
 /** С какого слайда начать: у каждого игрока свой день — так все слайды получают показы поровну. */

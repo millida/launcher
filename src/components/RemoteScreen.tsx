@@ -20,7 +20,10 @@ declare global {
   }
 }
 
-export function RemoteScreen({ screen, bridge, onFail }: { screen: string; bridge: () => RemoteUiBridge; onFail: () => void }) {
+const late = (ms: number) => new Promise<null>((r) => setTimeout(() => r(null), ms))
+
+/** `deadlineMs`: the parent has a screen of its own, so a module that is still loading by then is not waited for. */
+export function RemoteScreen({ screen, bridge, onFail, deadlineMs }: { screen: string; bridge: () => RemoteUiBridge; onFail: () => void; deadlineMs?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const bridgeRef = useRef(bridge)
   const failRef = useRef(onFail)
@@ -54,7 +57,8 @@ export function RemoteScreen({ screen, bridge, onFail }: { screen: string; bridg
     const stopStale = onRemoteUiStale((version) => {
       if (version === running) recover()
     })
-    void loadRemoteUi()
+    const loading = loadRemoteUi()
+    void (deadlineMs ? Promise.race([loading, late(deadlineMs)]) : loading)
       .then((r) => {
         if (off) return
         const loadMs = Math.round(performance.now() - t0)
@@ -92,7 +96,7 @@ export function RemoteScreen({ screen, bridge, onFail }: { screen: string; bridg
       handle = null
       if (h) queueMicrotask(() => h.unmount())
     }
-  }, [screen, attempt])
+  }, [screen, attempt, deadlineMs])
 
   // The host tokens sit on the wrapper: on the mount node itself they would point at themselves.
   return (

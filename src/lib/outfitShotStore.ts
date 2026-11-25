@@ -29,8 +29,8 @@ export type StoredShot = { blob: Blob; dressed: number; frames?: number; seconds
  * Shots on disk: IndexedDB, keyed by skin, items, frame and proportions. SHOT_VER grows when the
  * frame changes, and old shots are then ignored.
  */
-// v5: frame loops, no contact shadow under the feet.
-const SHOT_VER = 'v8'
+// v5: frame loops, no contact shadow under the feet. v9: props no longer a frame behind the player.
+const SHOT_VER = 'v9'
 const DB = 'm-outfit-shots'
 /** The frame of a moving item has its own key; saving the loop removes it. */
 const STILL = '|still'

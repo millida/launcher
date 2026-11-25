@@ -1,4 +1,4 @@
-import { cloneElement, useEffect, useMemo, useState } from 'react'
+import { cloneElement, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import { Icon } from '../Icon'
 import { PxIcon } from '../PxIcon'
@@ -16,13 +16,15 @@ import { ONEBLOCK_PACK, exclusiveOrder, isExclusive, isOwnServerPack, ownServerT
 import { ANARCHY, OWN_SERVER_MODE } from '../../lib/ownServer'
 import { AnarchyArt, anarchyOnlineShown } from './AnarchyTile'
 import { headCells, libraryShelf } from './placement'
-import type { FeaturedSpot } from './featured'
+import { PRISON_SLUG, type FeaturedSpot } from './featured'
 import { useAnarchy } from '../../lib/anarchy'
 import { usePromo, type ForYouCard } from '../../state/promo'
 import type { HubPack } from './data'
 import { ArcaniaCard, PremiumSkinCard } from '../arcania/ArcaniaCard'
 import { isArcania2, useArcania2Live } from '../../lib/arcaniaRelease'
 import { PackTileArt } from './packArt'
+import { HostTile } from './HubHero'
+import { ABONENT_SLUG } from '../abonent/content'
 import { trackImpression } from '../../lib/uiTrack'
 import { track } from '../../lib/telemetry'
 import { loadListing } from '../catalog/site'
@@ -209,6 +211,8 @@ export function ForYou({
   oneblockOnline,
   anarchyOnline,
   featured = { kind: 'anarchy' },
+  partners = false,
+  oneblock = false,
   onPack,
   onMode,
   onItem,
@@ -230,6 +234,10 @@ export function ForYou({
   anarchyOnline: number | null
   /** Whose turn the anarchy card is: on PrisonRPG's turn its pack takes the cell. */
   featured?: FeaturedSpot<HubPack>
+  /** Блок «Рекомендации» (bare): наши серверы идут первыми, пока партнёры включены. */
+  partners?: boolean
+  /** Карточка OneBlock в каталоге опубликована — плитка есть. */
+  oneblock?: boolean
   /** Запуск своего сервера — сейчас баннер ведёт в хостинг, оставлено для совместимости. */
   onPlay?: (m: LobbyMode) => void
   onPack: (p: HubPack) => void
@@ -244,6 +252,18 @@ export function ForYou({
   const an = useAnarchy()
   const [list, setList] = useState<HostServer[] | 'none' | null>(null)
   const [picker, setPicker] = useState(false)
+  // Колонок в сетке сейчас: ряды «Рекомендаций» заполняются целиком вместе с «Ещё».
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [cols, setCols] = useState(6)
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el || !bare) return
+    const read = () => setCols(Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length))
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [bare])
   const [cards, setCards] = useState<Record<string, SiteCard[]>>({})
   const load = async () => {
     if (!hasMillidaAccount()) {
@@ -325,53 +345,49 @@ export function ForYou({
   const rest0 = exclusives.filter((p) => p !== arcania && p.id !== arcania?.id)
   const rot = rest0.length ? Math.floor(rng(hashStr(ab.seed + ':head'))() * rest0.length) : 0
   const head = [arcania, ...pinned, ...exclusiveOrder(rest0, rot)].filter((p): p is HubPack => !!p).slice(0, EXCL + pinned.length)
-  const labs: ReactNode[] = head.length
-    ? head.map((p, i) =>
-        p === arcania && isArcania2(p.slug || p.id, arc2) ? (
-          <ArcaniaCard key={'excl:' + p.id} meta={priceLabel(p) || t('Премиум')} pos={fyHead.length + i} onClick={() => onPack(p)} />
-        ) : p.premium && p.premiumCard ? (
-          <PremiumSkinCard
-            key={'excl:' + p.id}
-            id={p.slug || p.id}
-            title={p.title}
-            meta={priceLabel(p) || t('Премиум')}
-            video={p.coverVideo}
-            poster={p.coverUrl}
-            pos={fyHead.length + i}
-            onClick={() => onPack(p)}
-          />
-        ) : p.premium ? (
-          <Card
-            key={'excl:' + p.id}
-            kind="premium"
-            id={p.slug || p.id}
-            pos={fyHead.length + i}
-            tag="Arcania Labs"
-            gold
-            excl
-            art={packArt(p)}
-            title={p.title}
-            meta={priceLabel(p) || t('Премиум')}
-            onClick={() => onPack(p)}
-          />
-        ) : (
-          <Card
-            key={'pin:' + p.id}
-            kind="pack"
-            id={p.slug || p.id}
-            pos={fyHead.length + i}
-            tag={t('Сборка')}
-            section="modpacks"
-            art={packArt(p)}
-            title={p.title}
-            meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
-            onClick={() => onPack(p)}
-          />
-        ),
-      )
-    : premiumWait
-      ? [<Skel key="labs" />]
-      : []
+  const packNode = (p: HubPack, i: number): ReactNode =>
+    p === arcania && isArcania2(p.slug || p.id, arc2) ? (
+      <ArcaniaCard key={'excl:' + p.id} meta={priceLabel(p) || t('Премиум')} pos={fyHead.length + i} onClick={() => onPack(p)} />
+    ) : p.premium && p.premiumCard ? (
+      <PremiumSkinCard
+        key={'excl:' + p.id}
+        id={p.slug || p.id}
+        title={p.title}
+        meta={priceLabel(p) || t('Премиум')}
+        video={p.coverVideo}
+        poster={p.coverUrl}
+        pos={fyHead.length + i}
+        onClick={() => onPack(p)}
+      />
+    ) : p.premium ? (
+      <Card
+        key={'excl:' + p.id}
+        kind="premium"
+        id={p.slug || p.id}
+        pos={fyHead.length + i}
+        tag="Arcania Labs"
+        gold
+        excl
+        art={packArt(p)}
+        title={p.title}
+        meta={priceLabel(p) || t('Премиум')}
+        onClick={() => onPack(p)}
+      />
+    ) : (
+      <Card
+        key={'pin:' + p.id}
+        kind="pack"
+        id={p.slug || p.id}
+        pos={fyHead.length + i}
+        tag={t('Сборка')}
+        section="modpacks"
+        art={packArt(p)}
+        title={p.title}
+        meta={[p.loader, p.mcVersion].filter(Boolean).join(' · ') || p.tagline}
+        onClick={() => onPack(p)}
+      />
+    )
+  const labs: ReactNode[] = head.length ? head.map(packNode) : premiumWait ? [<Skel key="labs" />] : []
 
   // Лента — смеситель (lib/recsMix.ts): интерес к разделам, исследование,
   // новизна по дням и журналу показов, не больше двух одного раздела подряд.
@@ -462,12 +478,17 @@ export function ForYou({
 
   // Хостинг занимает две клетки, OneBlock и «Ещё» — по одной.
   // Без головы — ровно два ряда по шесть: премиум, лента и «Ещё».
-  const rest = (bare ? 12 : SHOWN - headCells(fyHead)) - 1 - labs.length
+  // «Рекомендации» (bare, владелец 25.11.2026): «Свой сервер» на две клетки, Arcania, OneBlock, Абонент, PrisonRPG, дальше популярные сборки. Анархии здесь нет.
+  const abonent = bare ? [...exclusives, ...packs].find((p) => (p.slug || p.id) === ABONENT_SLUG) || null : null
+  const prison = bare && partners ? packs.find((p) => p.slug === PRISON_SLUG) || null : null
+  const lead = bare ? [arcania || premiumWait, partners && oneblock, abonent, prison].filter(Boolean).length + 2 : 0
+  const tailLabs = bare ? head.filter((p) => p !== arcania && p !== abonent).map((p) => packNode(p, 0)) : []
+  const rest = bare ? cols * 3 - lead - tailLabs.length - 1 : SHOWN - headCells(fyHead) - 1 - labs.length
   // Без головы (библиотека): наши сборки по популярности подряд, без смесителя разделов — он резал ряд до двух.
   const plain = useMemo<Pick[]>(() => {
     if (!bare) return []
     const taken = new Set(head.map((p) => p.id))
-    return libraryShelf(packs.filter((p) => !taken.has(p.id) && !isOwnServerPack(p.slug) && p.slug !== ONEBLOCK_PACK))
+    return libraryShelf(packs.filter((p) => !taken.has(p.id) && p.id !== abonent?.id && !isOwnServerPack(p.slug) && p.slug !== ONEBLOCK_PACK))
       .map((p): Pick => ({
         key: 'modpacks/' + (p.slug || p.id),
         why: p.preview ? 'preview' : 'popular',
@@ -486,9 +507,9 @@ export function ForYou({
         ),
       }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bare, packs, headKey])
+  }, [bare, packs, headKey, abonent?.id])
   const shown = (bare ? plain : rotated).slice(0, rest)
-  const off = (bare ? 0 : fyHead.length) + labs.length
+  const off = bare ? lead + tailLabs.length : fyHead.length + labs.length
 
   // OneBlock — наш сервер, первым в ряду (владелец 30.09.2026, 21:04): он не
   // эксклюзив-сборка, у него своя зелёная метка.
@@ -516,30 +537,34 @@ export function ForYou({
         />
       )
 
+  const prisonNode = (p: HubPack) => (
+    <Card
+      key="prisonrpg"
+      pos={fyHead.indexOf(ANARCHY.mode)}
+      kind="pack"
+      id={p.slug || p.id}
+      tag={t('Наш сервер')}
+      own
+      section="modpacks"
+      art={img(p.coverUrl)}
+      title={p.title}
+      meta={
+        anarchyOnlineShown(p.online) ? (
+          <>
+            <span className="ph-dot" aria-hidden="true"></span>
+            {t('{n} играют', { n: fmtN(p.online) })}
+          </>
+        ) : (
+          ownServerTagline(p.slug) || p.tagline
+        )
+      }
+      onClick={() => onPack(p)}
+    />
+  )
+
   const anNode =
     featured.kind === 'prisonrpg' ? (
-      <Card
-        key="prisonrpg"
-        pos={fyHead.indexOf(ANARCHY.mode)}
-        kind="pack"
-        id={featured.pack.slug || featured.pack.id}
-        tag={t('Наш сервер')}
-        own
-        section="modpacks"
-        art={img(featured.pack.coverUrl)}
-        title={featured.pack.title}
-        meta={
-          anarchyOnlineShown(featured.pack.online) ? (
-            <>
-              <span className="ph-dot" aria-hidden="true"></span>
-              {t('{n} играют', { n: fmtN(featured.pack.online) })}
-            </>
-          ) : (
-            ownServerTagline(featured.pack.slug) || featured.pack.tagline
-          )
-        }
-        onClick={() => onPack(featured.pack)}
-      />
+      prisonNode(featured.pack)
     ) : featured.kind === 'wait' ? (
       <Skel key="anarchy" />
     ) : (
@@ -596,9 +621,22 @@ export function ForYou({
 
   return (
     <>
-      <div className="hub-grid fy-grid" data-section="foryou" onClickCapture={onClickCapture}>
-        {bare ? null : fyHead.map((k) => headNodes[k])}
-        {labs}
+      <div ref={gridRef} className={'hub-grid fy-grid' + (bare ? ' fy-bare' : '')} data-section="foryou" onClickCapture={onClickCapture}>
+        {bare ? (
+          <>
+            <HostTile key="host" />
+            {arcania ? packNode(arcania, 0) : premiumWait ? <Skel key="arc" /> : null}
+            {partners && oneblock ? obNode : null}
+            {abonent ? packNode(abonent, 2) : null}
+            {prison ? prisonNode(prison) : null}
+            {tailLabs}
+          </>
+        ) : (
+          <>
+            {fyHead.map((k) => headNodes[k])}
+            {labs}
+          </>
+        )}
         {shown.map((x, i) => cloneElement(x.node, { pos: off + i }))}
         {onMore ? (
           <button className="ph-card fy-card fy-more" data-sound="nav" data-track="foryou_more" onClick={onMore}>
