@@ -43,6 +43,7 @@ import { useHubTab } from '../components/playhub/hubTab'
 import type { HubSection } from '../components/playhub/hubTab'
 import { ALL_CATEGORIES, ANY_LOADER, ANY_VERSION, useMods } from '../state/mods'
 import { ForYou } from '../components/playhub/ForYou'
+import { HubServers } from '../components/playhub/HubServers'
 import { PlayTogether } from '../components/playhub/PlayTogether'
 import { CatalogPane } from './Mods'
 import { track } from '../lib/telemetry'
@@ -75,6 +76,9 @@ import { enterArcania } from '../components/arcania/transition'
  * «Новая сборка» и «Импорт» — в верхней полосе хаба (PlayhubBar).
  * «Продолжить» здесь нет: продолжение — кнопка «Играть» в лобби.
  */
+
+/** Сетка плиток режимов на экране «Играть»: выключена по приказу владельца, код оставлен. */
+const SHOW_MODES = false
 
 function CardSkel({ n }: { n: number }) {
   return (
@@ -845,7 +849,7 @@ export function PlayHub({ on }: { on?: boolean }) {
       {/* 3. Рекомендуем: хостинг, эксклюзивы, OneBlock, дальше лента в четыре ряда. */}
       {head(
         'foryou',
-        t('Сборки'),
+        t('Рекомендации'),
         <ForYou
           bare
           on={!!on}
@@ -856,6 +860,8 @@ export function PlayHub({ on }: { on?: boolean }) {
           oneblockOnline={obOnline}
           anarchyOnline={anarchyOnline}
           featured={featured}
+          partners={partners}
+          oneblock={!!obPack}
           onPlay={launch}
           onPack={openPack}
           onMode={(cat) => pickMode(cat, 'foryou')}
@@ -868,13 +874,16 @@ export function PlayHub({ on }: { on?: boolean }) {
           }}
         />,
       )}
-      {/* Во что играть: свои серверы первым рядом, потом режимы — после сборок (08.10.2026: сначала сборки, потом серверы). */}
+      {/* Плитки режимов с экрана убраны (24.11.2026): наши серверы — в «Рекомендациях», остальные — строками в «Серверах». Код режимов и страницы входа живут: ModePage, pickMode. */}
+      {SHOW_MODES ? head('modes', t('Режимы'), modesPane) : null}
+      {/* «Серверы» — сразу под рекомендациями: строки рейтинга, как на millida.net/rating (24.11.2026). */}
       {head(
-        'modes',
-        t('Режимы'),
-        <>
-          {modesPane}
-        </>,
+        'servers',
+        t('Серверы'),
+        <HubServers on={!!on} />,
+        <button className="btn sm secondary" data-sound="nav" data-track="hub_all_servers" onClick={() => setScreen('servers')}>
+          {t('Все серверы')} <Icon id="i-chev-r" />
+        </button>,
       )}
       {/* Полка «Сборки» убрана: каталог — во вкладке «Ресурсы» (17:31). */}
       {/* Играть вдвоём — сборки и карты «С другом» из разных тем, как на сайте. */}
@@ -899,22 +908,6 @@ export function PlayHub({ on }: { on?: boolean }) {
             requestAnimationFrame(() => openItem({ kind: 'card', section, card }))
           }}
         />,
-      )}
-      {/* Под режимами — вся лента серверов Millida (владелец 24.09.2026, 18:29). */}
-      {head(
-        'servers',
-        t('Серверы'),
-        <>
-          <ServerFeed
-            limit={6}
-            className="ph-st-grid is-shelf"
-            skeleton={() => <ServerTileSkel />}
-            render={(s, i) => <ServerTile s={s} pos={i} on={sameMode(current, serverMode(s))} src="hub_card" onPlay={(x) => launch(serverMode(x))} />}
-          />
-          <button className="btn md secondary hub-srv-more" data-sound="nav" data-track="hub_all_servers" onClick={() => setScreen('servers')}>
-            {t('Все серверы')} <Icon id="i-chev-r" />
-          </button>
-        </>,
       )}
       {/* «Зайти на сервер» и «Недавние» убраны из библиотеки (17:50). */}
     </div>,

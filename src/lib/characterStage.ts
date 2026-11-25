@@ -82,11 +82,15 @@ export const MODEL_CACHE = new Map<string, Promise<CosmeticModelFile | null>>()
  * - обновляется в фоне. Новая вещь качается как раньше.
  */
 const MODEL_REFRESH_MS = 6 * 3600_000
+// A copy older than this holds the mug of "Hot cocoa" with a wrong texture size; the shop stores its
+// shots for good, so such a copy is replaced before it is drawn instead of in the background.
+const MODEL_FIXED = 'geometry.hot_cocoa'
+const MODEL_FIXED_AT = Date.UTC(2026, 10, 24, 18)
 
 async function storedModel(modelId: string): Promise<CosmeticModelFile> {
   const key = 'cosmetic-model:' + modelId
   const row = await idbGet<CosmeticModelFile>(key)
-  if (row && row.value && row.value.geometry) {
+  if (row && row.value && row.value.geometry && (row.at >= MODEL_FIXED_AT || modelId !== MODEL_FIXED)) {
     if (Date.now() - row.at > MODEL_REFRESH_MS) {
       void loadCosmeticModel(modelId)
         .then((m) => m && m.geometry && idbSet(key, m))

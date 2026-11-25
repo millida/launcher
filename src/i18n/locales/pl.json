@@ -6952,8 +6952,27 @@
   "Подарить за {price}": "Podaruj za {price}",
   "Подарок для {nick}": "Prezent dla {nick}",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Płatne z salda Millida, bez przypisywania karty i bez automatycznego odnawiania",
-  "Рубины: {n}": "Rubiny: {n}",
+  "Рубины: {n}": "Rubiny: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Nieprzeniesione foldery: {list}. Zostały w starym launcherze",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Foldery modów we wspólnym .minecraft. Zaznacz, które przenieść do modpacka",
-  "Эту папку нельзя перенести: {0}": "Tego folderu nie można przenieść: {0}"
+  "Эту папку нельзя перенести: {0}": "Tego folderu nie można przenieść: {0}",
+  "Кейсы": "Skrzynie",
+  "Приваты": "Działki",
+  "Ивенты": "Eventy",
+  "Кастомные предметы": "Własne przedmioty",
+  "Кастомные мобы": "Własne moby",
+  "Аукцион": "Dom aukcyjny",
+  "Профессии": "Prace",
+  "Кроссплей": "Crossplay",
+  "Донат не решает": "Bez pay-to-win",
+  "Имя или адрес": "Nazwa lub adres",
+  "Рекомендации": "Polecane",
+  "Заявлено {n}, по оценке Millida играют меньше": "Podano {n}, według Millida gra mniej osób",
+  "Онлайн проверен Millida": "Liczba graczy sprawdzona przez Millida",
+  "Баллы продвижения": "Punkty promocji",
+  "Голосов за 30 дней": "Głosy z 30 dni",
+  "По заявке": "Przez podanie",
+  "Размести свой сервер здесь": "Dodaj tutaj swój serwer",
+  "Раскрутить сервер": "Promuj serwer"
 }

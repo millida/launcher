@@ -6952,8 +6952,27 @@
   "Подарить за {price}": "{price} karşılığında hediye et",
   "Подарок для {nick}": "{nick} için hediye",
   "Списывается с баланса Millida, без привязки карты и автопродления": "Millida bakiyesinden ödenir, kart bağlama ve otomatik yenileme yok",
-  "Рубины: {n}": "Yakut: {n}",
+  "Рубины: {n}": "Yakut: {n}"
+,
   "Не перенесли папки: {list}. Они остались в старом лаунчере": "Taşınmayan klasörler: {list}. Eski başlatıcıda kaldılar",
   "Папки модов в общей .minecraft. Отметь, какие перенести в сборку": "Ortak .minecraft içindeki mod klasörleri. Mod paketine taşınacakları işaretle",
-  "Эту папку нельзя перенести: {0}": "Bu klasör taşınamaz: {0}"
+  "Эту папку нельзя перенести: {0}": "Bu klasör taşınamaz: {0}",
+  "Кейсы": "Sandıklar",
+  "Приваты": "Arazi sahipliği",
+  "Ивенты": "Etkinlikler",
+  "Кастомные предметы": "Özel eşyalar",
+  "Кастомные мобы": "Özel yaratıklar",
+  "Аукцион": "Açık artırma",
+  "Профессии": "Meslekler",
+  "Кроссплей": "Çapraz oyun",
+  "Донат не решает": "Pay-to-win değil",
+  "Имя или адрес": "Ad veya adres",
+  "Рекомендации": "Öneriler",
+  "Заявлено {n}, по оценке Millida играют меньше": "Bildirilen {n}, Millida tahminine göre daha az kişi oynuyor",
+  "Онлайн проверен Millida": "Oyuncu sayısı Millida tarafından doğrulandı",
+  "Баллы продвижения": "Tanıtım puanları",
+  "Голосов за 30 дней": "30 günlük oylar",
+  "По заявке": "Başvuruyla",
+  "Размести свой сервер здесь": "Sunucunu buraya ekle",
+  "Раскрутить сервер": "Sunucuyu öne çıkar"
 }

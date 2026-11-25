@@ -16,6 +16,8 @@ export interface RemoteUiBridge {
   v: 1
   locale: string
   siteOrigin: string
+  /** Where the screen starts (a server's page opened from the library); older site bundles ignore it. */
+  startPath?: string
   api<T = unknown>(path: string, init?: { method?: string; body?: unknown }): Promise<T>
   navigate(path: string): void
   install(
@@ -41,8 +43,9 @@ const API_ALLOW = [/^\/hosting\//, /^\/catalog\//, /^\/rating\//, /^\/vds\//, /^
 // Paid packs: the showcase and a pack's access card (read), checkout links for a subscription or a one-time buy (create).
 const API_PREMIUM_READ = [/^\/launcher\/premium(?:\/[\w-]+)?$/]
 const API_PREMIUM_POST = [/^\/launcher\/premium\/subscribe$/, /^\/launcher\/premium\/[\w-]+\/buy$/]
-// Read-only: the material's article and reviews, the Modrinth and CurseForge search proxies, the pack launch check.
-const API_READ = [/^\/forum\/articles\/[\w-]+(?:\/reviews)?$/, /^\/launcher\/mr\/v2\/search\?/, /^\/launcher\/cf\/v1\/mods\/search\?/, /^\/launcher\/pack-health\?/]
+// Read-only: public audience counters of the rating head, the day's exchange rate of the price list,
+// the material's article and reviews, the Modrinth and CurseForge search proxies, the pack launch check.
+const API_READ = [/^\/presence\/active$/, /^\/launcher\/stats$/, /^\/pricing\?lang=[a-z]{2}$/, /^\/forum\/articles\/[\w-]+(?:\/reviews)?$/, /^\/launcher\/mr\/v2\/search\?/, /^\/launcher\/cf\/v1\/mods\/search\?/, /^\/launcher\/pack-health\?/]
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
 export class RemoteApiError extends Error {

@@ -57,4 +57,16 @@ describe('the props of an emote follow the emote', () => {
     const raised = heightAt(1)
     expect(Math.abs(raised - still), 'в секунду эмоции цифра поднята на 10 пикселей - по её часам').toBeCloseTo(10, 3)
   })
+
+  it('stand there before the first frame is drawn when the shot asks for it', () => {
+    const at = (clock: number) => {
+      const clips = readAnimations(ANIMATIONS)
+      const sequence = emoteSequence(clips, clips['animation.test.loop']!)!
+      const [piece] = buildCosmetic(MODEL, 'x.png', 'EMOTE', ANIMATIONS, 'animation.test.loop', { sequence, clock: () => clock })
+      piece!.pose()
+      piece!.object.updateMatrixWorld(true)
+      return new Box3().setFromObject(piece!.object).getCenter(new Vector3()).y
+    }
+    expect(Math.abs(at(1) - at(0)), 'a still of the shop is one frame: the prop must not wait for the next one').toBeCloseTo(10, 3)
+  })
 })

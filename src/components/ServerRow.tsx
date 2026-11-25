@@ -66,7 +66,7 @@ function Banner({ sv }: { sv: SnapshotServer }) {
 }
 
 /** Логотип сервера; нет его или не загрузился — блок Minecraft на цвете от имени (как в «Ресурсах»). */
-function Logo({ sv }: { sv: SnapshotServer }) {
+export function Logo({ sv }: { sv: SnapshotServer }) {
   const [bad, setBad] = useState(false)
   const key = sv.slug || sv.name || sv.ip
   if (sv.logo && !bad)
@@ -88,14 +88,13 @@ function Logo({ sv }: { sv: SnapshotServer }) {
   )
 }
 
-export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: boolean; pos?: number }) {
+/** «Играть» строки сервера: лобби запоминает выбор, дальше обычный вход лаунчера. */
+export function useServerJoin(sv: SnapshotServer) {
   const t = useT()
   const on = sv.isOnline
   const wakes = useWakeOnJoin(sv.ip ? joinAddr(sv) : null, !on)
   const [label, setLabel] = useState('Играть')
   const busy = useRef(false)
-  const range = versionRange(sv.versions)
-
   const join = () => {
     if (busy.current) return
     busy.current = true
@@ -109,6 +108,14 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
         busy.current = false
       })
   }
+  return { join, label, wakes, busy: busy.current }
+}
+
+export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: boolean; pos?: number }) {
+  const t = useT()
+  const on = sv.isOnline
+  const { join, label, wakes, busy } = useServerJoin(sv)
+  const range = versionRange(sv.versions)
 
   return (
     <div
@@ -166,7 +173,7 @@ export function ServerRow({ sv, hidden, pos }: { sv: SnapshotServer; hidden?: bo
           )}
         </span>
         {sv.ip ? (
-          <button className="btn sm primary srv-join" disabled={(!on && !wakes) || busy.current} data-track={wakes ? 'join_wake' : 'join'} onClick={join}>
+          <button className="btn sm primary srv-join" disabled={(!on && !wakes) || busy} data-track={wakes ? 'join_wake' : 'join'} onClick={join}>
             {wakes && label === 'Играть' ? t('Включить и зайти') : t(label)}
           </button>
         ) : (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { REMOTE_UI_PUBLIC_KEY, chunksText, rewriteChunk, staticDeps, sha256Hex, signedText, verifyManifest, type RemoteUiManifest } from './remoteUi'
+import { REMOTE_UI_PUBLIC_KEY, chunksText, rewriteChunk, screenChunk, staticDeps, sha256Hex, signedText, verifyManifest, type RemoteUiManifest } from './remoteUi'
 
 const b64 = (buf: ArrayBuffer) => Buffer.from(buf).toString('base64')
 
@@ -100,5 +100,14 @@ describe('site off-switch', () => {
     } finally {
       globalThis.fetch = real
     }
+  })
+})
+
+describe('the chunk a screen starts from', () => {
+  const m = { version: 'v1', chunks: ['c-rating-entry-DOccvqnS.js', 'c-rating-formula-info-D1234567.js', 'c-rating-BTfni6Vo.js', 'ui-ext.css'].map((f) => ({ file: 'v1/' + f, sha256: '0'.repeat(64) })) } as unknown as RemoteUiManifest
+
+  it('is the screen itself, not a longer name with the same start', () => {
+    expect(screenChunk(m, 'rating')?.file).toBe('v1/c-rating-BTfni6Vo.js')
+    expect(screenChunk(m, 'catalog')).toBeNull()
   })
 })
