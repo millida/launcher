@@ -170,16 +170,17 @@
 
 /* ---------- Импорт ---------- */
 .imp-list { max-height: 300px; overflow-y: auto; margin-top: 4px; }
-.imp-ways { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px; }
+.imp-ways { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .imp-way {
-  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center;
+  flex: 1 1 145px; min-width: 0;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; align-items: center;
   padding: 12px 14px; text-align: start; background: var(--m-surface-2); color: var(--m-fg);
   box-shadow: var(--px-btn, inset 0 0 0 1px var(--m-border)); --px-ol: var(--px-btn-ol); --px-ol-w: 2px; --px-ft: var(--px-btn-t); --px-ft-w: 3px; --px-fb: var(--px-btn-b); --px-fb-w: 5px; --px-fl: var(--px-btn-l); --px-fl-w: 3px; --px-fr: var(--px-btn-r); --px-fr-w: 3px;
   transition: background-color var(--m-t-fast), transform var(--m-t-fast);
 }
 .imp-way > svg.icon { grid-row: 1 / 3; width: 22px; height: 22px; color: var(--m-accent); }
-.imp-way b { font-size: 14px; font-weight: 750; }
-.imp-way span { font-size: 11.5px; color: var(--m-fg-subtle); font-family: var(--m-mono); }
+.imp-way b { font-size: 14px; font-weight: 750; min-width: 0; }
+.imp-way span { font-size: 11.5px; color: var(--m-fg-subtle); font-family: var(--m-mono); min-width: 0; }
 .imp-way:disabled { opacity: 0.6; }
 @media (hover: hover) and (pointer: fine) { .imp-way:hover:not(:disabled) { background: var(--m-raised); transform: translateY(-1px); } }
 .imp-way:active:not(:disabled) { transform: translateY(2px); box-shadow: var(--px-btn-press, none); --px-ol: rgba(0, 0, 0, 0.2); --px-ol-w: 2px; --px-ft: rgba(0, 0, 0, 0.22); --px-ft-w: 3px; --px-fb: rgba(0, 0, 0, 0.22); --px-fb-w: 2px; --px-fl: transparent; --px-fr: transparent; }

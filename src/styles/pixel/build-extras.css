@@ -83,10 +83,8 @@
 .build-group-cap.bx-drop { padding: 6px 8px; background: var(--m-surface-2); transition: background-color var(--m-t-fast), color var(--m-t-fast); }
 .build-group-cap.bx-drop.over { color: var(--m-accent); background: color-mix(in srgb, var(--m-accent) 14%, transparent); }
 
-.imp-ways:has(> .imp-way:nth-child(4)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .bx-link-row { display: flex; gap: 8px; margin-top: 10px; }
 
-.imp-ways:has(> .imp-way:nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .bx-ftb { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--m-surface-2); }
 .bx-ftb-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .bx-ftb-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
